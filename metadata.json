@@ -1,0 +1,8 @@
+{
+  "name": "QUEERSPACE — A Sapphic Space for Women",
+  "description": "Your space. Your people. Your possibilities. A dedicated sapphic platform for women to discover meaningful and unexpected connections.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

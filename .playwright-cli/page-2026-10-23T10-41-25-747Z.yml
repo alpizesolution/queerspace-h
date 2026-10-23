@@ -1,0 +1,174 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: Esmeringle
+      - generic [ref=e7]:
+        - button "Mute sounds" [ref=e8]
+        - button "Community guidelines and privacy" [ref=e9]
+    - generic [ref=e13]:
+      - heading "Esmeringle with Random Filipinos Online" [level=1] [ref=e14]
+      - paragraph [ref=e15]: Hindi pwede makipag esmeringhoy pero pwedeng makipag esmeringle
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - button "1-on-1 Chat" [ref=e18]
+          - button "Group Chat" [ref=e22]
+        - generic [ref=e29]:
+          - generic [ref=e30]:
+            - generic [ref=e31]: "Gender:"
+            - generic [ref=e35]: Optional
+          - generic [ref=e36]:
+            - button "👦 Male" [ref=e37]:
+              - generic [ref=e38]: 👦
+              - generic [ref=e39]: Male
+            - button "👧 Female" [ref=e40]:
+              - generic [ref=e41]: 👧
+              - generic [ref=e42]: Female
+            - button "🏳️‍🌈 LGBTQ+" [ref=e43]:
+              - generic [ref=e44]: 🏳️‍🌈
+              - generic [ref=e45]: LGBTQ+
+        - generic [ref=e46]:
+          - generic [ref=e47]:
+            - generic [ref=e48]: "Location:"
+            - generic [ref=e52]: Optional
+          - combobox [ref=e54] [cursor=pointer]:
+            - option "🇵🇭 Any City / Philippines (Default)" [selected]
+            - option "Angeles City"
+            - option "Antipolo"
+            - option "Bacolod"
+            - option "Bacoor"
+            - option "Baguio"
+            - option "Batangas City"
+            - option "Biñan"
+            - option "Butuan"
+            - option "Cabanatuan"
+            - option "Cabuyao"
+            - option "Cadiz"
+            - option "Cagayan de Oro"
+            - option "Calamba"
+            - option "Calapan"
+            - option "Caloocan"
+            - option "Cavite City"
+            - option "Cebu City"
+            - option "Cotabato City"
+            - option "Dagupan"
+            - option "Danao"
+            - option "Dasmariñas"
+            - option "Davao City"
+            - option "Digos"
+            - option "Dipolog"
+            - option "Dumaguete"
+            - option "General Santos"
+            - option "Gingoog"
+            - option "Ilagan"
+            - option "Iligan"
+            - option "Iloilo City"
+            - option "Imus"
+            - option "Iriga"
+            - option "Isabela"
+            - option "Kabankalan"
+            - option "Kidapawan"
+            - option "Koronadal"
+            - option "La Carlota"
+            - option "Lamitan"
+            - option "Laoag"
+            - option "Lapu-Lapu"
+            - option "Las Piñas"
+            - option "Legazpi"
+            - option "Ligao"
+            - option "Lipa"
+            - option "Lucena"
+            - option "Makati"
+            - option "Malabon"
+            - option "Malaybalay"
+            - option "Malolos"
+            - option "Mandaluyong"
+            - option "Mandaue"
+            - option "Manila"
+            - option "Marawi"
+            - option "Marikina"
+            - option "Mati"
+            - option "Meycauayan"
+            - option "Muntinlupa"
+            - option "Naga (Camarines Sur)"
+            - option "Naga (Cebu)"
+            - option "Navotas"
+            - option "Olongapo"
+            - option "Ormoc"
+            - option "Oroquieta"
+            - option "Ozamiz"
+            - option "Pagadian"
+            - option "Palayan"
+            - option "Panabo"
+            - option "Parañaque"
+            - option "Pasay"
+            - option "Pasig"
+            - option "Passi"
+            - option "Puerto Princesa"
+            - option "Quezon City"
+            - option "Roxas City"
+            - option "Sagay"
+            - option "Samal"
+            - option "San Carlos (Negros Occidental)"
+            - option "San Carlos (Pangasinan)"
+            - option "San Fernando (La Union)"
+            - option "San Fernando (Pampanga)"
+            - option "San Jose"
+            - option "San Jose del Monte"
+            - option "San Juan"
+            - option "San Pablo"
+            - option "San Pedro"
+            - option "Santa Rosa"
+            - option "Santiago"
+            - option "Silay"
+            - option "Sipalay"
+            - option "Sorsogon City"
+            - option "Surigao City"
+            - option "Tabaco"
+            - option "Tabuk"
+            - option "Tacloban"
+            - option "Tacurong"
+            - option "Tagaytay"
+            - option "Tagbilaran"
+            - option "Taguig"
+            - option "Tagum"
+            - option "Talisay (Cebu)"
+            - option "Talisay (Negros Occidental)"
+            - option "Tanauan"
+            - option "Tandag"
+            - option "Tangub"
+            - option "Tanjay"
+            - option "Tarlac City"
+            - option "Tayabas"
+            - option "Toledo"
+            - option "Trece Martires"
+            - option "Tuguegarao"
+            - option "Urdaneta"
+            - option "Valencia"
+            - option "Valenzuela"
+            - option "Victorias"
+            - option "Vigan"
+            - option "Zamboanga City"
+        - generic [ref=e55]:
+          - generic [ref=e56]:
+            - generic [ref=e57]: "Optional Topics:"
+            - generic [ref=e61]: 0/5 added
+          - generic [ref=e62]:
+            - textbox "Type a topic and press Enter (e.g. Gaming, BGC, College)..." [ref=e63]
+            - button "Add topic" [disabled] [ref=e64]
+        - button "Start Esmeringling" [ref=e66]
+        - generic [ref=e68]:
+          - generic [ref=e69]:
+            - generic [ref=e73]: 100% Anonymous
+            - generic [ref=e74]: Please don't be bastos
+          - generic [ref=e75]:
+            - generic [ref=e78]: Bembang Out
+            - generic [ref=e79]: Esmeringhoy In
+          - generic [ref=e80]:
+            - generic [ref=e84]: For Filipinos
+            - generic [ref=e85]: Pwede tagalog at bisaya
+        - paragraph [ref=e87]:
+          - text: This is just a parody project inspired by the viral “Esmeringhoy” trend. Learn more or contact the creator
+          - link "here" [ref=e88] [cursor=pointer]:
+            - /url: https://raveflores.vercel.app
+          - text: .
+  - alert [ref=e89]

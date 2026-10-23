@@ -1,0 +1,55 @@
+- main [ref=e39]:
+  - generic [ref=e586]:
+    - generic [ref=e587]:
+      - generic [ref=e588]:
+        - generic [ref=e589]: M
+        - generic [ref=e590]:
+          - generic [ref=e591]:
+            - heading "Maya Lark" [level=3] [ref=e592]
+            - generic [ref=e593]: she/her
+          - generic [ref=e594]:
+            - generic [ref=e595]: Connected
+            - generic [ref=e598]: •
+            - generic [ref=e599]: WLW Books & Poetry, Plants & Coffee
+      - generic [ref=e600]:
+        - button "Next" [ref=e601] [cursor=pointer]
+        - button "Leave conversation" [ref=e605]
+        - button "Report or block participant" [ref=e609]
+    - generic [ref=e612]:
+      - generic [ref=e613]:
+        - generic [ref=e618]:
+          - text: "Looking for:"
+          - strong [ref=e619]: friendship
+        - generic [ref=e620]: North America
+      - generic [ref=e621]: You are connected with Maya Lark (she/her). Say hello and please be respectful!
+      - generic [ref=e623]:
+        - generic [ref=e624]:
+          - paragraph [ref=e625]: Hi there! Hope you're having a gentle day. Love seeing other sapphic folks on here! 🌸
+          - generic [ref=e626]: 12:32 PM
+        - generic [ref=e628]:
+          - button "🌸" [ref=e629] [cursor=pointer]
+          - button "❤️" [ref=e630] [cursor=pointer]
+          - button "✨" [ref=e631] [cursor=pointer]
+          - button "☕" [ref=e632] [cursor=pointer]
+      - generic [ref=e633]:
+        - generic [ref=e634]:
+          - paragraph [ref=e635]: Hey Maya! Happy to be here :)
+          - generic [ref=e636]: 12:33 PM
+        - generic [ref=e641]:
+          - button "🌸" [ref=e642] [cursor=pointer]
+          - button "❤️" [ref=e643] [cursor=pointer]
+          - button "✨" [ref=e644] [cursor=pointer]
+          - button "☕" [ref=e645] [cursor=pointer]
+    - generic [ref=e647]:
+      - generic [ref=e648]: "Icebreakers:"
+      - generic [ref=e652]:
+        - button "What sapphic book or movie altered your brain chemistry?" [ref=e653] [cursor=pointer]
+        - button "Comfort song or artist on heavy rotation right now?" [ref=e654] [cursor=pointer]
+        - button "What does your ideal gentle Sunday look like?" [ref=e655] [cursor=pointer]
+        - button "Are you a coffee or tea person, and how do you take it?" [ref=e656] [cursor=pointer]
+        - button "Favorite small joy or win from this week?" [ref=e657] [cursor=pointer]
+        - button "Do you have pets or house plants you love?" [ref=e658] [cursor=pointer]
+    - generic [ref=e660]:
+      - button "Open emoji picker" [ref=e661] [cursor=pointer]
+      - textbox "Message Maya Lark... (Enter to send)" [active] [ref=e665]
+      - button "Send message" [disabled] [ref=e666] [cursor=pointer]

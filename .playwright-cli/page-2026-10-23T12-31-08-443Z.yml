@@ -1,0 +1,140 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "QUEERSPACE Home" [ref=e6]:
+        - generic [ref=e11]:
+          - generic [ref=e12]:
+            - generic [ref=e13]: QUEERSPACE
+            - generic [ref=e14]: WLW
+          - paragraph [ref=e15]: A Sapphic Space for Women
+      - navigation "Main navigation" [ref=e16]:
+        - button "Home" [ref=e17]
+        - button "1-on-1 Chat" [ref=e18]
+        - button "Public Room" [ref=e19]
+        - button "Community Posts" [active] [ref=e25]
+        - button "Safety" [ref=e26]
+      - generic [ref=e29]:
+        - button "Mute chat sounds" [ref=e30]
+        - button "Start Chatting" [ref=e35]
+  - main [ref=e39]:
+    - generic [ref=e271]:
+      - generic [ref=e272]:
+        - generic [ref=e273]:
+          - button "Back to home" [ref=e274] [cursor=pointer]
+          - generic [ref=e277]:
+            - heading "Sapphic Community Posts" [level=1] [ref=e278]
+            - paragraph [ref=e279]: Thoughts, cozy book recommendations, friend finders, and heartfelt advice.
+        - button "New Post" [ref=e281] [cursor=pointer]
+      - generic [ref=e284]:
+        - button "All Posts" [ref=e285] [cursor=pointer]
+        - button "Cozy Vents" [ref=e286] [cursor=pointer]
+        - button "Books & Media" [ref=e287] [cursor=pointer]
+        - button "Friend Finder" [ref=e288] [cursor=pointer]
+        - button "Dating & Advice" [ref=e289] [cursor=pointer]
+        - button "General" [ref=e290] [cursor=pointer]
+      - generic [ref=e291]:
+        - article [ref=e292]:
+          - generic [ref=e293]:
+            - generic [ref=e294]:
+              - generic [ref=e295]: V
+              - generic [ref=e296]:
+                - generic [ref=e297]:
+                  - generic [ref=e298]: Velvet Wren
+                  - generic [ref=e299]: she/her
+                - text: 11:45 AM
+            - generic [ref=e300]: media
+          - heading "Comfort Sapphic Books for Rainy Days ☕📚" [level=3] [ref=e301]
+          - paragraph [ref=e302]: Just finished reading "Legends & Lattes" and "The Priory of the Orange Tree". Looking for recommendations that have that warm, sweet, low-angst sapphic romance feeling. What are your holy grail cozy comfort reads?
+          - generic [ref=e303]:
+            - generic [ref=e304]: "#Books"
+            - generic [ref=e305]: "#Cozy"
+            - generic [ref=e306]: "#Fantasy"
+          - generic [ref=e307]:
+            - generic [ref=e308]:
+              - button "Like post" [ref=e309] [cursor=pointer]:
+                - generic [ref=e312]: "24"
+              - button "2 replies" [ref=e313] [cursor=pointer]
+            - button "Share" [ref=e317] [cursor=pointer]
+        - article [ref=e325]:
+          - generic [ref=e326]:
+            - generic [ref=e327]:
+              - generic [ref=e328]: C
+              - generic [ref=e329]:
+                - generic [ref=e330]:
+                  - generic [ref=e331]: Clover Song
+                  - generic [ref=e332]: they/them
+                - text: 10:30 AM
+            - generic [ref=e333]: vents
+          - heading "Coming out to yourself in your late 20s is weirdly beautiful" [level=3] [ref=e334]
+          - paragraph [ref=e335]: Spent years wondering why romance felt like an exhausting performance. Admitting to myself that I love women felt like exhaling after holding my breath for ten years. If anyone else here is a "late bloomer", I see you and it gets so much softer.
+          - generic [ref=e336]:
+            - generic [ref=e337]: "#Late Bloomer"
+            - generic [ref=e338]: "#Personal"
+            - generic [ref=e339]: "#Healing"
+          - generic [ref=e340]:
+            - generic [ref=e341]:
+              - button "Like post" [ref=e342] [cursor=pointer]:
+                - generic [ref=e345]: "58"
+              - button "1 replies" [ref=e346] [cursor=pointer]
+            - button "Share" [ref=e350] [cursor=pointer]
+        - article [ref=e358]:
+          - generic [ref=e359]:
+            - generic [ref=e360]:
+              - generic [ref=e361]: I
+              - generic [ref=e362]:
+                - generic [ref=e363]:
+                  - generic [ref=e364]: Iris Dusk
+                  - generic [ref=e365]: she/they
+                - text: 8:30 AM
+            - generic [ref=e366]: friends
+          - heading "Looking for fellow sapphic gamer / anime buddies!" [level=3] [ref=e367]
+          - paragraph [ref=e368]: Anyone playing Baldur's Gate 3, Stardew Valley, or FFXIV? Would love to form a cozy discord circle or just gush over Shadowheart and Karlach. Drop your favorite cozy games!
+          - generic [ref=e369]:
+            - generic [ref=e370]: "#Gaming"
+            - generic [ref=e371]: "#Anime"
+            - generic [ref=e372]: "#Friendship"
+          - generic [ref=e373]:
+            - generic [ref=e374]:
+              - button "Like post" [ref=e375] [cursor=pointer]:
+                - generic [ref=e378]: "31"
+              - button "0 replies" [ref=e379] [cursor=pointer]
+            - button "Share" [ref=e383] [cursor=pointer]
+        - article [ref=e391]:
+          - generic [ref=e392]:
+            - generic [ref=e393]:
+              - generic [ref=e394]: S
+              - generic [ref=e395]:
+                - generic [ref=e396]:
+                  - generic [ref=e397]: Saffron Mist
+                  - generic [ref=e398]: she/her
+                - text: 6:30 AM
+            - generic [ref=e399]: advice
+          - heading "How do you ask out a woman in person without panicking?" [level=3] [ref=e400]
+          - paragraph [ref=e401]: There is a barista at the local bookstore cafe who always compliments my enamel pins and gives me extra oat foam. How do I casually slip her my number without dissolving into a puddle of awkwardness? Need sapphic bravery advice please!
+          - generic [ref=e402]:
+            - generic [ref=e403]: "#Dating"
+            - generic [ref=e404]: "#Advice"
+            - generic [ref=e405]: "#Wholesome"
+          - generic [ref=e406]:
+            - generic [ref=e407]:
+              - button "Like post" [ref=e408] [cursor=pointer]:
+                - generic [ref=e411]: "42"
+              - button "1 replies" [ref=e412] [cursor=pointer]
+            - button "Share" [ref=e416] [cursor=pointer]
+  - contentinfo [ref=e247]:
+    - generic [ref=e248]:
+      - generic [ref=e249]:
+        - generic [ref=e250]:
+          - generic [ref=e251]: QUEERSPACE
+          - paragraph [ref=e257]: A Sapphic Space for Women. Your space. Your people. Your possibilities.
+        - generic [ref=e258]:
+          - button "About" [ref=e259] [cursor=pointer]
+          - button "Community Guidelines" [ref=e260] [cursor=pointer]
+          - button "Privacy & Anonymity" [ref=e261] [cursor=pointer]
+          - button "Terms of Service" [ref=e262] [cursor=pointer]
+          - button "Contact & Support" [ref=e263] [cursor=pointer]
+      - generic [ref=e264]:
+        - paragraph [ref=e265]: © 2026 QUEERSPACE. Built for the sapphic community.
+        - generic [ref=e266]:
+          - generic [ref=e267]: Made with
+          - generic [ref=e270]: for women who love women.

@@ -1,0 +1,58 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "QUEERSPACE Home" [ref=e6]:
+        - generic [ref=e11]:
+          - generic [ref=e12]:
+            - generic [ref=e13]: QUEERSPACE
+            - generic [ref=e14]: WLW
+          - paragraph [ref=e15]: A Sapphic Space for Women
+      - navigation "Main navigation" [ref=e16]:
+        - button "Home" [ref=e17] [cursor=pointer]
+        - button "1-on-1 Chat" [ref=e18] [cursor=pointer]
+        - button "Public Room" [ref=e19] [cursor=pointer]
+        - button "Community Posts" [ref=e25] [cursor=pointer]
+        - button "Filters" [ref=e26] [cursor=pointer]
+        - button "Safety" [ref=e29] [cursor=pointer]
+      - generic [ref=e32]:
+        - button "Mute chat sounds" [ref=e33]
+        - button "Start Chatting" [ref=e38]
+  - main [ref=e42]:
+    - generic [ref=e470]:
+      - heading "Finding a Compatible Match..." [level=3] [ref=e477]
+      - paragraph [ref=e478]: Looking for an active sapphic peer ready to talk freely and respectfully.
+      - generic [ref=e479]:
+        - generic [ref=e480]:
+          - generic [ref=e481]: "Your Persona:"
+          - generic [ref=e482]: Clover Petal (she/her)
+        - generic [ref=e483]:
+          - generic [ref=e484]: "Looking for:"
+          - generic [ref=e485]: open
+        - generic [ref=e486]:
+          - generic [ref=e487]: "Topics:"
+          - generic [ref=e488]: WLW Books & Poetry, Plants & Coffee
+        - generic [ref=e489]:
+          - generic [ref=e490]: "Expression Filter:"
+          - generic [ref=e491]: Soft Masc
+        - generic [ref=e492]:
+          - generic [ref=e493]: "Time searching:"
+          - generic [ref=e494]: 0s
+      - generic [ref=e495]: Anonymous & protected session
+      - button "Cancel Search" [ref=e499] [cursor=pointer]
+  - contentinfo [ref=e250]:
+    - generic [ref=e251]:
+      - generic [ref=e252]:
+        - generic [ref=e253]:
+          - generic [ref=e254]: QUEERSPACE
+          - paragraph [ref=e260]: A Sapphic Space for Women. Your space. Your people. Your possibilities.
+        - generic [ref=e261]:
+          - button "About" [ref=e262] [cursor=pointer]
+          - button "Community Guidelines" [ref=e263] [cursor=pointer]
+          - button "Privacy & Anonymity" [ref=e264] [cursor=pointer]
+          - button "Terms of Service" [ref=e265] [cursor=pointer]
+          - button "Contact & Support" [ref=e266] [cursor=pointer]
+      - generic [ref=e267]:
+        - paragraph [ref=e268]: © 2026 QUEERSPACE. Built for the sapphic community.
+        - generic [ref=e269]:
+          - generic [ref=e270]: Made with
+          - generic [ref=e273]: for women who love women.
