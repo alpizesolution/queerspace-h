@@ -2,6 +2,8 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
+  where,
   setDoc,
   addDoc,
   updateDoc,
@@ -32,6 +34,8 @@ export function getDeterministicConvId(uidA: string, uidB: string): string {
 
 /**
  * Opens or creates a 1-on-1 Firestore conversation between current user and partner.
+ * Uses a primary deterministic active ID (`active_${minUid}_${maxUid}`) to converge concurrent
+ * initial creation attempts into a single document, with query and auto-ID fallback for re-matches.
  */
 export async function startOrCreateConversation(partnerUid: string): Promise<ConversationSession> {
   const currentUser = auth?.currentUser;
@@ -47,30 +51,74 @@ export async function startOrCreateConversation(partnerUid: string): Promise<Con
   }
 
   const myUid = currentUser.uid;
-  let baseConvId = getDeterministicConvId(myUid, partnerUid);
+  const sortedParticipants = [myUid, partnerUid].sort();
+  const primaryConvId = `active_${getDeterministicConvId(myUid, partnerUid)}`;
 
   try {
-    const convRef = doc(db, 'conversations', baseConvId);
-    const snap = await getDoc(convRef);
+    // 1. Try primary deterministic document reference to prevent concurrent creation duplication
+    const primaryRef = doc(db, 'conversations', primaryConvId);
+    const primarySnap = await getDoc(primaryRef);
 
-    if (snap.exists()) {
-      const data = snap.data();
+    if (primarySnap.exists()) {
+      const data = primarySnap.data();
       if (data.status === 'active') {
         return {
-          convId: baseConvId,
+          convId: primaryConvId,
           isCloud: true,
           reused: true,
-          participants: data.participants || [myUid, partnerUid],
+          participants: data.participants || sortedParticipants,
         };
-      } else {
-        // If an existing conversation was ended/blocked, append timestamp for fresh session
-        baseConvId = `${baseConvId}_${Date.now()}`;
+      }
+      // If primary doc was ended/blocked in a previous session, proceed to check active secondary doc
+    } else {
+      // Primary document does not exist yet; attempt to create it.
+      // If two participants call this concurrently, both setDoc calls target the exact same primary path.
+      try {
+        await setDoc(primaryRef, {
+          participants: sortedParticipants,
+          status: 'active',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        return {
+          convId: primaryConvId,
+          isCloud: true,
+          reused: false,
+          participants: sortedParticipants,
+        };
+      } catch (err) {
+        // If setDoc failed due to a race or existing document state change, fall through to query lookup
+        console.warn('[ChatService] Primary setDoc notice, falling back to query lookup:', err);
       }
     }
 
-    // Create new active conversation
-    const sortedParticipants = [myUid, partnerUid].sort();
-    await setDoc(doc(db, 'conversations', baseConvId), {
+    // 2. Secondary Lookup: Search for existing active conversation (e.g. for re-matches after ended sessions)
+    const conversationsRef = collection(db, 'conversations');
+    const q = query(
+      conversationsRef,
+      where('participants', 'array-contains', myUid),
+      where('status', '==', 'active')
+    );
+    const querySnap = await getDocs(q);
+
+    const activeDoc = querySnap.docs.find((docSnap) => {
+      const p = docSnap.data().participants || [];
+      return Array.isArray(p) && p.includes(partnerUid);
+    });
+
+    if (activeDoc) {
+      return {
+        convId: activeDoc.id,
+        isCloud: true,
+        reused: true,
+        participants: activeDoc.data().participants || sortedParticipants,
+      };
+    }
+
+    // 3. Fallback: Create new active conversation with auto-generated ID for re-matches
+    const newConvRef = doc(collection(db, 'conversations'));
+    await setDoc(newConvRef, {
       participants: sortedParticipants,
       status: 'active',
       createdAt: serverTimestamp(),
@@ -78,7 +126,7 @@ export async function startOrCreateConversation(partnerUid: string): Promise<Con
     });
 
     return {
-      convId: baseConvId,
+      convId: newConvRef.id,
       isCloud: true,
       reused: false,
       participants: sortedParticipants,

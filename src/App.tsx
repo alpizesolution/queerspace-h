@@ -170,7 +170,10 @@ export default function App() {
     showToast('Conversation closed safely. Transcripts cleared.');
   };
 
-  const handleBlockAndReport = (reason: string) => {
+  const handleBlockAndReport = (
+    reason: string,
+    statusOutcome?: { reportSent?: boolean; convEnded?: boolean; isCloud?: boolean }
+  ) => {
     if (activePartner) {
       const updated = [...blockedPartnerIds, activePartner.id];
       setBlockedPartnerIds(updated);
@@ -194,7 +197,17 @@ export default function App() {
         // Fallback
       }
 
-      showToast(`User reported for "${reason}" and blocked.`);
+      if (statusOutcome?.isCloud) {
+        if (statusOutcome.reportSent && statusOutcome.convEnded) {
+          showToast(`Report submitted to safety team and user blocked.`);
+        } else if (statusOutcome.reportSent && !statusOutcome.convEnded) {
+          showToast(`Report submitted, but cloud conversation termination failed. User blocked locally.`);
+        } else {
+          showToast(`Cloud report submission failed. User blocked locally.`);
+        }
+      } else {
+        showToast(`User reported for "${reason}" and blocked locally (Local Demo Mode).`);
+      }
     }
     setActivePartner(null);
     setCurrentView('home');

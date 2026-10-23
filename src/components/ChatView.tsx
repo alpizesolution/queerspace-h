@@ -37,7 +37,10 @@ interface ChatViewProps {
   onToggleSound: () => void;
   onNextMatch: () => void;
   onLeaveChat: () => void;
-  onBlockAndReport: (reason: string) => void;
+  onBlockAndReport: (
+    reason: string,
+    statusOutcome?: { reportSent?: boolean; convEnded?: boolean; isCloud?: boolean }
+  ) => void;
   onOpenSetup?: () => void;
   onOpenDonationModal?: () => void;
 }
@@ -67,6 +70,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [inputError, setInputError] = useState<string | null>(null);
   const [cloudConvId, setCloudConvId] = useState<string | null>(null);
   const [isCloudActive, setIsCloudActive] = useState<boolean>(false);
+  const [isSending, setIsSending] = useState<boolean>(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +96,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
   useEffect(() => {
     let unsubscribeCloud: (() => void) | null = null;
     let cancelled = false;
+
+    // Reset messages and cloud state on partner switch to prevent stale message leakage
+    setMessages([]);
+    setCloudConvId(null);
+    setIsCloudActive(false);
 
     if (partnerSource === 'cloud' && partner.id) {
       startOrCreateConversation(partner.id).then((session) => {
@@ -177,7 +186,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isPartnerTyping]);
 
-  const handleSendMessage = (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string) => {
+    if (isSending) return;
+
     const raw = textToSend !== undefined ? textToSend : inputText;
     if (raw.trim() === '/donate') {
       setInputText('');
@@ -197,67 +208,72 @@ export const ChatView: React.FC<ChatViewProps> = ({
       return;
     }
 
-    // Real-Time Cloud Message Path
-    if (isCloudActive && cloudConvId) {
-      setInputText('');
-      setInputError(null);
-      if (!isSoundMuted) {
-        soundEffects.playMessageSent();
-      }
+    setIsSending(true);
 
-      sendCloudMessage(cloudConvId, sanitized.cleanText).then((res) => {
+    try {
+      // Real-Time Cloud Message Path
+      if (isCloudActive && cloudConvId) {
+        setInputText('');
+        setInputError(null);
+        if (!isSoundMuted) {
+          soundEffects.playMessageSent();
+        }
+
+        const res = await sendCloudMessage(cloudConvId, sanitized.cleanText);
         if (!res.success) {
           setInputError(res.error || 'Cloud send failed.');
           setTimeout(() => setInputError(null), 3500);
         }
-      });
-      return;
-    }
+        return;
+      }
 
-    // Local Demo Mode Path
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      sender: 'user',
-      text: sanitized.cleanText,
-      timestamp: Date.now(),
-      status: 'delivered',
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
-    setInputText('');
-    setInputError(null);
-
-    if (!isSoundMuted) {
-      soundEffects.playMessageSent();
-    }
-
-    const typingDelay = 1100 + Math.random() * 800;
-    const replyDelay = typingDelay + 1400 + Math.random() * 1100;
-
-    const partnerReply = getPartnerReply(partner, sanitized.cleanText, messages.length);
-
-    setTimeout(() => {
-      chatEventManager.emitPartnerStatus(partner.id, 'typing');
-    }, typingDelay);
-
-    setTimeout(() => {
-      chatEventManager.emitPartnerStatus(partner.id, 'online');
-      const partnerMsg: ChatMessage = {
-        id: `partner-${Date.now()}`,
-        sender: 'partner',
-        text: partnerReply.text,
+      // Local Demo Mode Path
+      const userMsg: ChatMessage = {
+        id: `user-${Date.now()}`,
+        sender: 'user',
+        text: sanitized.cleanText,
         timestamp: Date.now(),
         status: 'delivered',
-        reactions: partnerReply.reaction
-          ? [{ emoji: partnerReply.reaction, count: 1, userReacted: false }]
-          : undefined,
       };
-      setMessages((prev) => [...prev, partnerMsg]);
+
+      setMessages((prev) => [...prev, userMsg]);
+      setInputText('');
+      setInputError(null);
 
       if (!isSoundMuted) {
-        soundEffects.playMessageReceived();
+        soundEffects.playMessageSent();
       }
-    }, replyDelay);
+
+      const typingDelay = 1100 + Math.random() * 800;
+      const replyDelay = typingDelay + 1400 + Math.random() * 1100;
+
+      const partnerReply = getPartnerReply(partner, sanitized.cleanText, messages.length);
+
+      setTimeout(() => {
+        chatEventManager.emitPartnerStatus(partner.id, 'typing');
+      }, typingDelay);
+
+      setTimeout(() => {
+        chatEventManager.emitPartnerStatus(partner.id, 'online');
+        const partnerMsg: ChatMessage = {
+          id: `partner-${Date.now()}`,
+          sender: 'partner',
+          text: partnerReply.text,
+          timestamp: Date.now(),
+          status: 'delivered',
+          reactions: partnerReply.reaction
+            ? [{ emoji: partnerReply.reaction, count: 1, userReacted: false }]
+            : undefined,
+        };
+        setMessages((prev) => [...prev, partnerMsg]);
+
+        if (!isSoundMuted) {
+          soundEffects.playMessageReceived();
+        }
+      }, replyDelay);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleToggleReaction = (messageId: string, emoji: string) => {
@@ -410,15 +426,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
             )}
 
             <button
-              onClick={() => setShowLeaveConfirm(true)}
-              className="p-1.5 sm:p-2 rounded-full text-[#cbbccf] hover:text-red-400 hover:bg-[#230d3b] transition-colors cursor-pointer border border-transparent hover:border-[#4a1f6d]"
-              title="Leave conversation"
-              aria-label="Leave conversation"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-
-            <button
               onClick={() => setShowReportModal(true)}
               className="p-1.5 sm:p-2 rounded-full text-[#cbbccf] hover:text-red-400 hover:bg-[#230d3b] transition-colors cursor-pointer border border-transparent hover:border-[#4a1f6d]"
               title="Report or block participant"
@@ -483,7 +490,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             ) : (
               <span className="text-[10px] font-medium text-emerald-300 bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-700/60 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Verified Cloud Candidate
+                Cloud Match
               </span>
             )}
             {userPrefs.applyGenderExpressionFilter &&
@@ -533,7 +540,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   }`}
                 >
                   <span>{formatChatTime(msg.timestamp)}</span>
-                  {isUser && <CheckCheck className="w-3 h-3 text-[#C77DAA]" />}
+                  {isUser && <Check className="w-3 h-3 text-[#C77DAA]" />}
                 </div>
 
                 {/* Emoji reactions display */}
@@ -676,21 +683,34 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       </div>
 
-      {/* Skip Match Action Bar (positioned below chat input composer) */}
+      {/* Action Bar (positioned below chat input composer) */}
       <div className="px-3 py-2 sm:px-4 bg-[#1b1222] border-t border-[#403247]/70 flex items-center justify-between gap-2">
         <p className="text-[11px] text-[#cbbccf]/70 hidden sm:block">
-          Want to connect with someone else?
+          Want to change or leave this conversation?
         </p>
-        <button
-          type="button"
-          onClick={() => setShowSkipConfirm(true)}
-          className="w-full sm:w-auto ml-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#2a173d] hover:bg-[#a85293] text-[#e07bb8] hover:text-[#fcf7fa] text-xs font-semibold border border-[#4a1f6d] transition-all cursor-pointer shadow-xs active:scale-95"
-          title="Skip to next available person"
-          aria-label="Skip to next match"
-        >
-          <SkipForward className="w-3.5 h-3.5" />
-          <span>Skip</span>
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+          <button
+            type="button"
+            onClick={() => setShowLeaveConfirm(true)}
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#230d3b] hover:bg-red-950/60 text-[#cbbccf] hover:text-red-300 text-xs font-semibold border border-[#4a1f6d] hover:border-red-800/80 transition-all cursor-pointer shadow-xs active:scale-95"
+            title="Leave conversation"
+            aria-label="Leave conversation"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Leave</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowSkipConfirm(true)}
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#2a173d] hover:bg-[#a85293] text-[#e07bb8] hover:text-[#fcf7fa] text-xs font-semibold border border-[#4a1f6d] transition-all cursor-pointer shadow-xs active:scale-95"
+            title="Skip to next available person"
+            aria-label="Skip to next match"
+          >
+            <SkipForward className="w-3.5 h-3.5" />
+            <span>Skip</span>
+          </button>
+        </div>
       </div>
 
       {/* Skip Match Warning Confirmation Dialog */}
@@ -809,13 +829,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 Cancel
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   setShowReportModal(false);
+                  let reportSent = false;
+                  let convEnded = false;
                   if (isCloudActive && cloudConvId) {
-                    endCloudConversation(cloudConvId, 'blocked');
-                    submitCloudReport(partner.id, 'user', reportReason);
+                    convEnded = await endCloudConversation(cloudConvId, 'blocked');
+                    reportSent = await submitCloudReport(partner.id, 'user', reportReason);
                   }
-                  onBlockAndReport(reportReason);
+                  onBlockAndReport(reportReason, { reportSent, convEnded, isCloud: isCloudActive });
                 }}
                 className="px-5 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-semibold"
               >

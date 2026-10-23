@@ -42,10 +42,22 @@ test('sendCloudMessage handles offline/unconfigured environment cleanly', async 
   assert.equal(typeof res.error, 'string');
 });
 
-test('endCloudConversation and submitCloudReport handle offline state without throwing', async () => {
+test('endCloudConversation and submitCloudReport handle offline state without throwing and return false', async () => {
   const endRes = await endCloudConversation('conv_123', 'ended');
   assert.equal(endRes, false);
 
   const reportRes = await submitCloudReport('user_target_999', 'user', 'Harassment');
   assert.equal(reportRes, false);
+});
+
+test('concurrent startOrCreateConversation calls return valid session objects without error', async () => {
+  const [sessionA, sessionB] = await Promise.all([
+    startOrCreateConversation('partner_concurrent_1'),
+    startOrCreateConversation('partner_concurrent_1'),
+  ]);
+
+  assert.equal(typeof sessionA.convId, 'string');
+  assert.equal(typeof sessionB.convId, 'string');
+  assert.equal(sessionA.participants.includes('partner_concurrent_1'), true);
+  assert.equal(sessionB.participants.includes('partner_concurrent_1'), true);
 });

@@ -98,10 +98,11 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) 
             <>
               <p>We believe genuine conversations thrive when you are free from surveillance:</p>
               <ul className="list-disc pl-5 space-y-2">
-                <li><strong className="text-[#F7F0F6]">Zero Account Data:</strong> We do not ask for or store phone numbers, email addresses, or social media links.</li>
-                <li><strong className="text-[#F7F0F6]">Ephemeral Chat Transcripts:</strong> Private 1-on-1 conversations are kept only in your active browser session. When either participant ends the session, the dialogue is cleared.</li>
-                <li><strong className="text-[#F7F0F6]">No Ad Trackers:</strong> We do not sell user data, deploy tracking pixels, or build behavioral advertising profiles.</li>
-                <li><strong className="text-[#F7F0F6]">Honest Disclosure:</strong> While conversations are anonymous to your partner, do not share financial details, home addresses, or sensitive credentials with strangers.</li>
+                <li><strong className="text-[#F7F0F6]">Zero Mandatory Registration:</strong> We do not ask for or store phone numbers, real names, or email addresses. You are assigned a pseudonymous anonymous ID automatically.</li>
+                <li><strong className="text-[#F7F0F6]">Anonymous Session Persistence & Loss:</strong> Your anonymous session is preserved in your browser storage. If you clear site data, reset browser cookies, or switch devices, a new anonymous session will be generated. Persistent account recovery is not required for private beta access.</li>
+                <li><strong className="text-[#F7F0F6]">Ephemeral Chat Transcripts:</strong> Private 1-on-1 conversations are kept only in your active chat session. When either participant leaves or blocks, the conversation is ended.</li>
+                <li><strong className="text-[#F7F0F6]">Local Demo Mode Disclosure:</strong> If cloud connectivity is unconfigured or offline, QUEERSPACE operates in Local Demo Mode using simulated peers to preserve UI usability without claiming false cloud connections.</li>
+                <li><strong className="text-[#F7F0F6]">Honest Safety Disclosure:</strong> While conversations are anonymous, never share financial credentials, home addresses, or private passwords with strangers.</li>
               </ul>
             </>
           )}
