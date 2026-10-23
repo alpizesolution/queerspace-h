@@ -1,0 +1,314 @@
+import { GenderExpressionOption, Intention, PartnerProfile, UserPreferences } from '../types.ts';
+import { isLocationCompatible } from './philippines-locations.ts';
+
+export const INTENTION_LABELS: Record<Intention, string> = {
+  friendship: 'Friendship & Bonding',
+  dating: 'Dating & Romance',
+  casual: 'Casual Chitchat',
+  deep_talk: 'Heart-to-Heart',
+  open: 'Open to Anything',
+};
+
+export const AVAILABLE_TOPICS: string[] = [
+  'WLW Books & Poetry',
+  'Chappell Roan & Music',
+  'Anime & Cozy Games',
+  'Plants & Coffee',
+  'Queer History & Art',
+  'Late Bloomer Stories',
+  'Cats & Dogs',
+  'Creative Writing',
+  'Baking & Cooking',
+  'Astrology & Tarot',
+  'Tech & Work Life',
+  'Venting & Comfort',
+];
+
+export const REGIONS: string[] = [
+  'Anywhere in the Philippines',
+  'Luzon',
+  'Visayas',
+  'Mindanao',
+  'National Capital Region (NCR), Metro Manila',
+  'Cebu Province / Cebu City',
+  'Davao Region / Davao City',
+  'Cordillera (Baguio City)',
+  'Western Visayas (Iloilo / Bacolod)',
+  'CALABARZON',
+];
+
+export const GENDER_EXPRESSIONS: GenderExpressionOption[] = [
+  'Femme',
+  'Soft Masc',
+  'Hard Masc',
+  'Andro',
+  'Hyperfemme',
+  'Butch',
+  'Stem',
+  'No label / Other',
+  'Prefer not to say',
+];
+
+export const SEXUAL_ORIENTATIONS: string[] = [
+  'Lesbian',
+  'Sapphic',
+  'Bisexual',
+  'Pansexual',
+  'Queer',
+  'Questioning',
+  'Self-described',
+  'Prefer not to say',
+];
+
+export const GENDER_IDENTITIES: string[] = [
+  'Cisgender Woman',
+  'Transgender Woman',
+  'Non-binary / Genderfluid',
+  'Agender',
+  'Demigirl',
+  'Self-described',
+  'Prefer not to say',
+];
+
+export const PRONOUN_OPTIONS: string[] = [
+  'she/her',
+  'they/she',
+  'they/them',
+  'she/they',
+  'any pronouns',
+  'Self-described',
+  'Prefer not to say',
+];
+
+export const DISCOVERY_FILTER_OPTIONS: string[] = [
+  'Any / No preference',
+  'Femme',
+  'Soft Masc',
+  'Hard Masc',
+  'Andro',
+  'Hyperfemme',
+  'Butch',
+  'Stem',
+  'No label / Other',
+];
+
+/**
+ * Handles multi-selection of gender expressions with mutual exclusivity for "Prefer not to say".
+ */
+export function toggleGenderExpression(
+  current: GenderExpressionOption[] = [],
+  selected: GenderExpressionOption
+): GenderExpressionOption[] {
+  if (selected === 'Prefer not to say') {
+    // If already selected, allow clearing; otherwise make mutually exclusive
+    return current.includes('Prefer not to say') ? [] : ['Prefer not to say'];
+  }
+
+  // If selecting a specific expression, remove 'Prefer not to say'
+  const withoutPreferNot = current.filter((item) => item !== 'Prefer not to say');
+  if (withoutPreferNot.includes(selected)) {
+    return withoutPreferNot.filter((item) => item !== selected);
+  }
+  return [...withoutPreferNot, selected];
+}
+
+/**
+ * Handles discovery filter preferences. "Any / No preference" is mutually exclusive with specific filters.
+ */
+export function togglePreferredFilter(
+  current: string[] = ['Any / No preference'],
+  selected: string
+): string[] {
+  if (selected === 'Any / No preference') {
+    return ['Any / No preference'];
+  }
+
+  const withoutAny = current.filter((item) => item !== 'Any / No preference');
+  let next: string[];
+  if (withoutAny.includes(selected)) {
+    next = withoutAny.filter((item) => item !== selected);
+  } else {
+    next = [...withoutAny, selected];
+  }
+
+  // If user unselects everything, fallback to "Any / No preference"
+  return next.length > 0 ? next : ['Any / No preference'];
+}
+
+const SAPPHIC_FIRST_NAMES = [
+  'Lavender', 'Clover', 'Velvet', 'Aster', 'Marigold',
+  'Rowan', 'Wren', 'Sage', 'Dahlia', 'Willow', 'Hazel',
+  'Ivy', 'Faye', 'Ruby', 'Celeste', 'Saffron', 'Iris'
+];
+
+const SAPPHIC_SECOND_NAMES = [
+  'Lark', 'Meadow', 'Breeze', 'Song', 'Bloom',
+  'Echo', 'Glow', 'Haven', 'Quill', 'Fern', 'Mist',
+  'Starlight', 'Dawn', 'Petal', 'Moon', 'Crest'
+];
+
+export function generateSapphicPseudonym(): { name: string; pronouns: string } {
+  const first = SAPPHIC_FIRST_NAMES[Math.floor(Math.random() * SAPPHIC_FIRST_NAMES.length)];
+  const second = SAPPHIC_SECOND_NAMES[Math.floor(Math.random() * SAPPHIC_SECOND_NAMES.length)];
+  const pronouns = Math.random() > 0.35 ? 'she/her' : (Math.random() > 0.5 ? 'they/she' : 'they/them');
+  return { name: `${first} ${second}`, pronouns };
+}
+
+/**
+ * Calculates a match score between 0 and 100 based on shared intention and topics.
+ * When applyGenderExpressionFilter is enabled, matches preferred expressions.
+ * IMPORTANT: Never automatically ranks, excludes, or penalizes users based on SOGIE
+ * or gender expression when filters are not explicitly activated by the user.
+ * "Prefer not to say" is never penalized.
+ */
+export function calculateCompatibilityScore(
+  userPrefs: UserPreferences,
+  partner: PartnerProfile
+): number {
+  let score = 50; // base score for two sapphic community members
+
+  // Intention compatibility
+  if (userPrefs.intention === 'open' || partner.intention === 'open') {
+    score += 20;
+  } else if (userPrefs.intention === partner.intention) {
+    score += 25;
+  } else if (
+    (userPrefs.intention === 'friendship' && partner.intention === 'casual') ||
+    (userPrefs.intention === 'casual' && partner.intention === 'friendship')
+  ) {
+    score += 15;
+  } else {
+    score -= 10;
+  }
+
+  // Topic overlap
+  if (userPrefs.topics.length > 0 && partner.topics.length > 0) {
+    const userTopicsSet = new Set(userPrefs.topics.map((t) => t.toLowerCase()));
+    const sharedTopics = partner.topics.filter((t) => userTopicsSet.has(t.toLowerCase()));
+    score += Math.min(sharedTopics.length * 10, 25);
+  }
+
+  // Location affinity
+  const userLocations = userPrefs.locationSelection || [userPrefs.region || 'Anywhere in the Philippines'];
+  const partnerLoc = partner.location || partner.region || '';
+  if (isLocationCompatible(userLocations, partnerLoc)) {
+    score += 10;
+  }
+
+  // Optional Gender Expression Filter (used ONLY when explicitly enabled by user)
+  if (
+    userPrefs.applyGenderExpressionFilter &&
+    userPrefs.preferredGenderExpressions &&
+    userPrefs.preferredGenderExpressions.length > 0 &&
+    !userPrefs.preferredGenderExpressions.includes('Any / No preference')
+  ) {
+    const preferredSet = new Set(userPrefs.preferredGenderExpressions);
+    const partnerExpressions = partner.genderExpression || [];
+
+    // "Prefer not to say" or unset does not exclude or penalize (inclusive privacy protection)
+    const hasPreferNotToSay =
+      partnerExpressions.length === 0 || partnerExpressions.includes('Prefer not to say');
+
+    if (!hasPreferNotToSay) {
+      const hasMatch = partnerExpressions.some((expr) => preferredSet.has(expr));
+      if (hasMatch) {
+        score += 25; // boost partner matching chosen filter
+      } else {
+        score -= 20; // lower priority relative to matched partners
+      }
+    }
+  }
+
+  return Math.min(Math.max(score, 10), 100);
+}
+
+/**
+ * Validates user preferences for matching setup.
+ */
+export function validateSetupProfile(
+  prefs: Partial<UserPreferences>,
+  isAgeConfirmed: boolean = true
+): {
+  isValid: boolean;
+  errors: Record<string, string>;
+} {
+  const errors: Record<string, string> = {};
+
+  if (!prefs.displayName || prefs.displayName.trim().length === 0) {
+    errors.displayName = 'Please choose a display name or use the random generator.';
+  } else if (prefs.displayName.trim().length > 25) {
+    errors.displayName = 'Display name must be 25 characters or fewer.';
+  }
+
+  if (prefs.topics && prefs.topics.length > 8) {
+    errors.topics = 'You can select up to 8 topics.';
+  }
+
+  if (!isAgeConfirmed) {
+    errors.ageConfirmation = 'You must affirm that you are at least 18 years old to enter.';
+  }
+
+  // Mutual exclusivity check: "Prefer not to say" must be alone if present
+  if (
+    prefs.genderExpression &&
+    prefs.genderExpression.includes('Prefer not to say') &&
+    prefs.genderExpression.length > 1
+  ) {
+    errors.genderExpression =
+      '"Prefer not to say" cannot be combined with specific gender expressions.';
+  }
+
+  // Custom text lengths
+  if (prefs.sexualOrientationCustom && prefs.sexualOrientationCustom.trim().length > 40) {
+    errors.sexualOrientationCustom = 'Self-described orientation must be 40 characters or fewer.';
+  }
+
+  if (prefs.genderIdentityCustom && prefs.genderIdentityCustom.trim().length > 40) {
+    errors.genderIdentityCustom = 'Self-described gender identity must be 40 characters or fewer.';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+/**
+ * Basic content moderation filter for respectful conversations.
+ */
+const BLOCKED_PATTERNS = [
+  /\b(kill yourself|kys)\b/i,
+  /\b(nazi|hitler|faggot|dyke bitch)\b/i,
+  /\b(send nudes|selling content|telegram @)\b/i,
+];
+
+export function sanitizeMessageText(text: string): {
+  cleanText: string;
+  isBlocked: boolean;
+  warning?: string;
+} {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { cleanText: '', isBlocked: true, warning: 'Message cannot be empty.' };
+  }
+
+  for (const pattern of BLOCKED_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return {
+        cleanText: '',
+        isBlocked: true,
+        warning: 'Message violates community safety guidelines.',
+      };
+    }
+  }
+
+  return {
+    cleanText: trimmed,
+    isBlocked: false,
+  };
+}
+
+export function formatChatTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
