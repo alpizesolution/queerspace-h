@@ -1,0 +1,261 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "QUEERSPACE Home" [ref=e6]:
+        - generic [ref=e11]:
+          - generic [ref=e12]:
+            - generic [ref=e13]: QUEERSPACE
+            - generic [ref=e14]: WLW
+          - paragraph [ref=e15]: A Sapphic Space for Women
+      - navigation "Main navigation" [ref=e16]:
+        - button "Home" [ref=e17] [cursor=pointer]
+        - button "1-on-1 Chat" [ref=e18] [cursor=pointer]
+        - button "Public Room" [ref=e19] [cursor=pointer]
+        - button "Community Posts" [ref=e25] [cursor=pointer]
+        - button "Filters" [ref=e26] [cursor=pointer]
+        - button "Safety" [ref=e29] [cursor=pointer]
+      - generic [ref=e32]:
+        - button "Mute chat sounds" [ref=e33]
+        - button "Start Chatting" [ref=e38]
+  - main [ref=e42]:
+    - generic [ref=e44]:
+      - generic [ref=e45]: A Sapphic Space for Women • 100% Free & Guest Friendly
+      - heading "Your space. Your people. Your possibilities." [level=1] [ref=e48]
+      - paragraph [ref=e49]: A dedicated sapphic space for women to meet, talk, make friends, and discover unexpected connections.
+      - generic [ref=e50]:
+        - button "Start Chatting" [ref=e51] [cursor=pointer]
+        - button "Explore Community" [ref=e55] [cursor=pointer]
+      - generic [ref=e57]:
+        - generic [ref=e58]: No sign-up or phone number needed
+        - generic [ref=e63]: •
+        - generic [ref=e64]: Safe, respectful WLW space
+        - generic [ref=e68]: •
+        - generic [ref=e69]: Instant leave & block controls
+      - generic [ref=e74]:
+        - generic [ref=e75] [cursor=pointer]:
+          - generic [ref=e76]: Quick 1-on-1
+          - paragraph [ref=e81]: Immediate match with zero wait. Pure, low-friction chat.
+        - generic [ref=e82] [cursor=pointer]:
+          - generic [ref=e83]: Custom Match
+          - paragraph [ref=e89]: Filter by intent (friendship, dating) and shared topics.
+        - generic [ref=e90] [cursor=pointer]:
+          - generic [ref=e91]: Community Space
+          - paragraph [ref=e99]: Public rooms, cozy vents, book clubs, and sapphic threads.
+    - generic [ref=e100]:
+      - generic [ref=e101]:
+        - heading "Choose Your Way to Connect" [level=2] [ref=e102]
+        - paragraph [ref=e103]: Whether you want an instant 1-on-1 chat, a tailored match based on shared interests, or a public group room, there is a place for you here.
+      - generic [ref=e104]:
+        - button "Fastest Quick Chat Start an instant one-on-one conversation with an available compatible person without any setup. Chat Instantly" [ref=e105] [cursor=pointer]:
+          - generic [ref=e106]:
+            - generic [ref=e107]: Fastest
+            - heading "Quick Chat" [level=3] [ref=e112]
+            - paragraph [ref=e113]: Start an instant one-on-one conversation with an available compatible person without any setup.
+          - button "Chat Instantly" [ref=e114]
+        - button "Tailored Custom Match Pick your conversation intention (friendship, dating, deep talk), select topics you love, and match on mutual vibes. Set Preferences" [ref=e118] [cursor=pointer]:
+          - generic [ref=e119]:
+            - generic [ref=e120]: Tailored
+            - heading "Custom Match" [level=3] [ref=e124]
+            - paragraph [ref=e125]: Pick your conversation intention (friendship, dating, deep talk), select topics you love, and match on mutual vibes.
+          - button "Set Preferences" [ref=e126]
+        - button [ref=e130] [cursor=pointer]:
+          - generic [ref=e131]:
+            - generic [ref=e132]: Active
+            - heading "Public Room" [level=3] [ref=e141]
+            - paragraph [ref=e142]: Join the live sapphic town square. A relaxed open space to say hi, read conversations, or chime in anytime.
+          - button "Join Room" [ref=e143]
+      - generic [ref=e147]:
+        - generic [ref=e154]:
+          - heading "Community Posts & Cozy Vents" [level=4] [ref=e155]
+          - paragraph [ref=e156]: Browse shared stories, book recommendations, friend finders, and heartfelt advice from fellow sapphics.
+        - button "View Community Posts" [ref=e157] [cursor=pointer]
+    - generic [ref=e159]:
+      - generic [ref=e160]:
+        - text: Simple & Transparent
+        - heading "How QUEERSPACE Works" [level=2] [ref=e161]
+        - paragraph [ref=e162]: No friction, no algorithms judging you, no paywalls. Just a straightforward path to talking with other women.
+      - generic [ref=e163]:
+        - generic [ref=e164]:
+          - generic [ref=e165]:
+            - generic [ref=e166]: "01"
+            - heading "Choose how you want to connect" [level=3] [ref=e175]
+            - paragraph [ref=e176]: Jump straight into an instant 1-on-1 chat, tailor a match with your favorite topics, or pull up a chair in the public room.
+          - generic [ref=e177]: →
+        - generic [ref=e178]:
+          - generic [ref=e179]:
+            - generic [ref=e180]: "02"
+            - heading "Set optional preferences" [level=3] [ref=e185]
+            - paragraph [ref=e186]: Everything is completely optional. Pick a cozy pseudonym, share your pronouns or intentions, or leave them blank.
+          - generic [ref=e187]: →
+        - generic [ref=e189]:
+          - generic [ref=e190]: "03"
+          - heading "Start a genuine conversation" [level=3] [ref=e196]
+          - paragraph [ref=e197]: Talk freely in a safe, moderated sapphic atmosphere. Leave or skip with one click whenever you want.
+    - generic [ref=e199]:
+      - generic [ref=e200]:
+        - generic [ref=e201]: Safety & Boundaries First
+        - heading "Your Peace of Mind Matters Most" [level=2] [ref=e205]
+        - paragraph [ref=e206]: QUEERSPACE was created to be the opposite of hostile, impersonal internet chat platforms. Every feature is built with sapphic dignity, mutual respect, and emotional safety at the center.
+      - generic [ref=e207]:
+        - generic [ref=e215]:
+          - heading "Real Privacy by Design" [level=4] [ref=e216]
+          - paragraph [ref=e217]: You are never required to link social accounts, phone numbers, or real identities. What you share is always your choice.
+        - generic [ref=e225]:
+          - heading "Instant Leave & Block" [level=4] [ref=e226]
+          - paragraph [ref=e227]: You have full autonomy. If a conversation feels awkward or unwelcome, one click leaves immediately and prevents rematching.
+        - generic [ref=e232]:
+          - heading "One-Click Reporting" [level=4] [ref=e233]
+          - paragraph [ref=e234]: Zero tolerance for harassment, unsolicited NSFW content, or male impostors. Reports are logged and violators are permanently blocked.
+        - generic [ref=e240]:
+          - heading "Curated Sapphic Space" [level=4] [ref=e241]
+          - paragraph [ref=e242]: A sanctuary designed specifically for women and eligible non-binary sapphic folks to converse without being sexualized or harassed.
+      - generic [ref=e243]:
+        - generic [ref=e244]: Strict 18+ policy for all participants. Be kind, be real.
+        - button "Read Community Guidelines & Code of Conduct →" [ref=e249] [cursor=pointer]
+  - generic [ref=e275]:
+    - generic [ref=e276]:
+      - generic [ref=e282]:
+        - heading "Start Your Conversation" [level=3] [ref=e283]
+        - paragraph [ref=e284]: Low-friction, anonymous sapphic matching
+      - button "Close setup modal" [ref=e285] [cursor=pointer]
+    - generic [ref=e290]:
+      - button "Quick Chat" [ref=e291] [cursor=pointer]
+      - button "Custom Match" [ref=e295] [cursor=pointer]
+    - generic [ref=e298]:
+      - generic [ref=e299]:
+        - generic [ref=e300]:
+          - generic [ref=e301]: Your Persona (Optional)
+          - button "Random Pseudonym" [ref=e302] [cursor=pointer]
+        - generic [ref=e307]:
+          - textbox "e.g. Lavender Lark" [ref=e309]: Clover Petal
+          - combobox [ref=e311]:
+            - option "she/her" [selected]
+            - option "they/she"
+            - option "they/them"
+            - option "she/they"
+            - option "any pronouns"
+            - option "Self-described"
+            - option "Prefer not to say"
+      - generic [ref=e312]:
+        - button "Gender Expression & SOGIE (Optional) Your Choice" [ref=e313] [cursor=pointer]:
+          - generic [ref=e314]:
+            - generic [ref=e317]: Gender Expression & SOGIE (Optional)
+            - generic [ref=e318]: Your Choice
+        - generic [ref=e321]:
+          - paragraph [ref=e322]: Share as much or as little as you feel comfortable with. These fields are completely optional and help you feel represented.
+          - generic [ref=e323]:
+            - generic [ref=e324]:
+              - generic [ref=e325]: Gender Expression (Multi-select)
+              - generic [ref=e326]: 2 chosen
+            - generic [ref=e327]:
+              - button "Femme" [ref=e328] [cursor=pointer]
+              - button "Soft Masc" [ref=e330] [cursor=pointer]
+              - button "Hard Masc" [ref=e332] [cursor=pointer]
+              - button "Andro" [ref=e334] [cursor=pointer]
+              - button "Hyperfemme" [ref=e336] [cursor=pointer]
+              - button "Butch" [ref=e338] [cursor=pointer]
+              - button "Stem" [active] [ref=e340] [cursor=pointer]
+              - button "No label / Other" [ref=e342] [cursor=pointer]
+              - button "Prefer not to say" [ref=e344] [cursor=pointer]
+          - generic [ref=e346]:
+            - generic [ref=e347]:
+              - generic [ref=e348]: Sexual Orientation
+              - combobox [ref=e349]:
+                - option "Lesbian"
+                - option "Sapphic"
+                - option "Bisexual"
+                - option "Pansexual"
+                - option "Queer"
+                - option "Questioning"
+                - option "Self-described"
+                - option "Prefer not to say" [selected]
+            - generic [ref=e350]:
+              - generic [ref=e351]: Gender Identity
+              - combobox [ref=e352]:
+                - option "Cisgender Woman"
+                - option "Transgender Woman"
+                - option "Non-binary / Genderfluid"
+                - option "Agender"
+                - option "Demigirl"
+                - option "Self-described"
+                - option "Prefer not to say" [selected]
+          - generic [ref=e353]:
+            - generic [ref=e354]: Profile Visibility & Consent
+            - generic [ref=e359] [cursor=pointer]:
+              - checkbox "Display my gender expression badge on my 1-on-1 chat profile card (otherwise used matching-only)." [checked] [ref=e360]
+              - generic [ref=e361]: Display my gender expression badge on my 1-on-1 chat profile card (otherwise used matching-only).
+            - generic [ref=e362] [cursor=pointer]:
+              - checkbox "Display my SOGIE identity on my 1-on-1 chat profile card." [ref=e363]
+              - generic [ref=e364]: Display my SOGIE identity on my 1-on-1 chat profile card.
+      - generic [ref=e365]:
+        - generic [ref=e366]: Matching Discovery Filter
+        - generic [ref=e370] [cursor=pointer]:
+          - checkbox "Filter partners by gender expression preference" [ref=e371]
+          - generic [ref=e372]: Filter partners by gender expression preference
+        - paragraph [ref=e373]: Queerspace only filters when enabled. Users with “Prefer not to say” are never excluded or penalized.
+      - generic [ref=e374]:
+        - text: What are you hoping for today?
+        - generic [ref=e375]:
+          - button "Friendship & Bonding" [ref=e376] [cursor=pointer]
+          - button "Dating & Romance" [ref=e377] [cursor=pointer]
+          - button "Casual Chitchat" [ref=e378] [cursor=pointer]
+          - button "Heart-to-Heart" [ref=e379] [cursor=pointer]
+          - button "Open to Anything" [ref=e380] [cursor=pointer]
+      - generic [ref=e381]:
+        - generic [ref=e382]:
+          - generic [ref=e383]: Shared Topics & Interests
+          - generic [ref=e384]: 2/8 selected
+        - generic [ref=e385]:
+          - button "WLW Books & Poetry" [ref=e386] [cursor=pointer]
+          - button "Chappell Roan & Music" [ref=e390] [cursor=pointer]
+          - button "Anime & Cozy Games" [ref=e392] [cursor=pointer]
+          - button "Plants & Coffee" [ref=e394] [cursor=pointer]
+          - button "Queer History & Art" [ref=e398] [cursor=pointer]
+          - button "Late Bloomer Stories" [ref=e400] [cursor=pointer]
+          - button "Cats & Dogs" [ref=e402] [cursor=pointer]
+          - button "Creative Writing" [ref=e404] [cursor=pointer]
+          - button "Baking & Cooking" [ref=e406] [cursor=pointer]
+          - button "Astrology & Tarot" [ref=e408] [cursor=pointer]
+          - button "Tech & Work Life" [ref=e410] [cursor=pointer]
+          - button "Venting & Comfort" [ref=e412] [cursor=pointer]
+        - generic [ref=e414]:
+          - textbox "Add custom topic (e.g. Fleabag, Stardew Valley)..." [ref=e415]
+          - button "Add" [disabled] [ref=e416] [cursor=pointer]
+      - generic [ref=e419]:
+        - text: Broad Location Preference
+        - combobox [ref=e420]:
+          - option "Anywhere / Worldwide" [selected]
+          - option "Philippines & Southeast Asia"
+          - option "North America"
+          - option "Europe & UK"
+          - option "Australia & Oceania"
+          - option "Latin America"
+      - generic [ref=e422] [cursor=pointer]:
+        - checkbox "I affirm that I am 18 years of age or older and identify as a woman or non-binary sapphic person." [checked] [ref=e423]
+        - generic [ref=e424]:
+          - text: I affirm that I am
+          - strong [ref=e425]: 18 years of age or older
+          - text: and identify as a woman or non-binary sapphic person.
+      - generic [ref=e429]:
+        - strong [ref=e430]: "What your match sees:"
+        - text: Only your chosen pseudonym, pronouns, intention, mutual topics, and any expression/SOGIE labels you explicitly toggled on. Private fields are never exposed.
+    - generic [ref=e431]:
+      - button "Cancel" [ref=e432] [cursor=pointer]
+      - button "Find Custom Match" [ref=e433] [cursor=pointer]
+  - contentinfo [ref=e250]:
+    - generic [ref=e251]:
+      - generic [ref=e252]:
+        - generic [ref=e253]:
+          - generic [ref=e254]: QUEERSPACE
+          - paragraph [ref=e260]: A Sapphic Space for Women. Your space. Your people. Your possibilities.
+        - generic [ref=e261]:
+          - button "About" [ref=e262] [cursor=pointer]
+          - button "Community Guidelines" [ref=e263] [cursor=pointer]
+          - button "Privacy & Anonymity" [ref=e264] [cursor=pointer]
+          - button "Terms of Service" [ref=e265] [cursor=pointer]
+          - button "Contact & Support" [ref=e266] [cursor=pointer]
+      - generic [ref=e267]:
+        - paragraph [ref=e268]: © 2026 QUEERSPACE. Built for the sapphic community.
+        - generic [ref=e269]:
+          - generic [ref=e270]: Made with
+          - generic [ref=e273]: for women who love women.

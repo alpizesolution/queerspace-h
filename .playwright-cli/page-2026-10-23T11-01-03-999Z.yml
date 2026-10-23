@@ -1,0 +1,35 @@
+- main [ref=e4]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]: C
+        - generic [ref=e9]:
+          - generic [ref=e10]:
+            - heading "Clover Breeze" [level=3] [ref=e11]
+            - generic [ref=e12]: they/she
+          - generic [ref=e13]:
+            - generic [ref=e14]: Connected
+            - generic [ref=e17]: •
+            - generic [ref=e18]: Chappell Roan & Music, Anime & Cozy Games
+      - generic [ref=e19]:
+        - button "Next" [ref=e20] [cursor=pointer]
+        - button "Leave conversation" [ref=e24]
+        - button "Report or block participant" [ref=e28]
+    - generic [ref=e32]:
+      - generic [ref=e37]:
+        - text: "Looking for:"
+        - strong [ref=e38]: casual
+      - generic [ref=e39]: Philippines & Southeast Asia
+    - generic [ref=e41]:
+      - generic [ref=e42]: "Icebreakers:"
+      - generic [ref=e46]:
+        - button "What sapphic book or movie altered your brain chemistry?" [ref=e47] [cursor=pointer]
+        - button "Comfort song or artist on heavy rotation right now?" [ref=e48] [cursor=pointer]
+        - button "What does your ideal gentle Sunday look like?" [ref=e49] [cursor=pointer]
+        - button "Are you a coffee or tea person, and how do you take it?" [ref=e50] [cursor=pointer]
+        - button "Favorite small joy or win from this week?" [ref=e51] [cursor=pointer]
+        - button "Do you have pets or house plants you love?" [ref=e52] [cursor=pointer]
+    - generic [ref=e54]:
+      - button "Open emoji picker" [ref=e55] [cursor=pointer]
+      - textbox "Message Clover Breeze... (Enter to send)" [ref=e59]
+      - button "Send message" [disabled] [ref=e60] [cursor=pointer]

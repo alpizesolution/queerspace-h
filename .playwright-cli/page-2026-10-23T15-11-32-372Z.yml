@@ -1,0 +1,135 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "QUEERSPACE Home" [ref=e6]:
+        - img "QUEERSPACE Logo" [ref=e8]
+        - generic [ref=e9]:
+          - generic [ref=e10]:
+            - generic [ref=e11]: QUEERSPACE
+            - generic [ref=e12]: WLW
+          - paragraph [ref=e13]: A Sapphic Space for Women
+      - navigation "Main navigation" [ref=e14]:
+        - button "Home" [ref=e15] [cursor=pointer]
+        - button "1-on-1 Chat" [ref=e16] [cursor=pointer]
+        - button "Public Room" [ref=e17] [cursor=pointer]
+        - button "Community Posts" [ref=e23] [cursor=pointer]
+        - button "Filters" [ref=e24] [cursor=pointer]
+        - button "Safety" [ref=e27] [cursor=pointer]
+      - generic [ref=e30]:
+        - button "Mute chat sounds" [ref=e31] [cursor=pointer]
+        - button "Start Chatting" [ref=e36] [cursor=pointer]
+  - main [ref=e40]:
+    - generic [ref=e42]:
+      - generic [ref=e43]: A Sapphic Space for Women • 100% Free & Guest Friendly
+      - heading "Your space. Your people. Your possibilities." [level=1] [ref=e46]
+      - paragraph [ref=e47]: A dedicated sapphic space for women to meet, talk, make friends, and discover unexpected connections.
+      - generic [ref=e48]:
+        - button "Start Chatting" [ref=e49] [cursor=pointer]
+        - button "Explore Community" [ref=e53] [cursor=pointer]
+      - generic [ref=e55]:
+        - generic [ref=e56]: No sign-up or phone number needed
+        - generic [ref=e61]: •
+        - generic [ref=e62]: Safe, respectful WLW space
+        - generic [ref=e66]: •
+        - generic [ref=e67]: Instant leave & block controls
+      - generic [ref=e72]:
+        - generic [ref=e73]:
+          - generic [ref=e74]: 100% Anonymous
+          - paragraph [ref=e80]: No account creation or phone number needed. Chats are ephemeral and private.
+        - generic [ref=e81]:
+          - generic [ref=e82]: Intentional WLW
+          - paragraph [ref=e88]: Tailored matching by intention (friendship, dating, deep talk) and shared topics.
+        - generic [ref=e89]:
+          - generic [ref=e90]: Safe & Welcoming
+          - paragraph [ref=e95]: Built with zero tolerance for harassment, instant skip, and 1-click block controls.
+    - generic [ref=e96]:
+      - generic [ref=e97]:
+        - heading "Choose Your Way to Connect" [level=2] [ref=e98]
+        - paragraph [ref=e99]: Whether you want an instant 1-on-1 chat, a tailored match based on shared interests, or a public group room, there is a place for you here.
+      - generic [ref=e100]:
+        - button "Fastest Quick Chat Start an instant one-on-one conversation with an available compatible person without any setup. Chat Instantly" [ref=e101] [cursor=pointer]:
+          - generic [ref=e102]:
+            - generic [ref=e103]: Fastest
+            - heading "Quick Chat" [level=3] [ref=e108]
+            - paragraph [ref=e109]: Start an instant one-on-one conversation with an available compatible person without any setup.
+          - button "Chat Instantly" [ref=e110]
+        - button "Tailored Custom Match Pick your conversation intention (friendship, dating, deep talk), select topics you love, and match on mutual vibes. Set Preferences" [ref=e114] [cursor=pointer]:
+          - generic [ref=e115]:
+            - generic [ref=e116]: Tailored
+            - heading "Custom Match" [level=3] [ref=e120]
+            - paragraph [ref=e121]: Pick your conversation intention (friendship, dating, deep talk), select topics you love, and match on mutual vibes.
+          - button "Set Preferences" [ref=e122]
+        - button [ref=e126] [cursor=pointer]:
+          - generic [ref=e127]:
+            - generic [ref=e128]: Active
+            - heading "Public Room" [level=3] [ref=e137]
+            - paragraph [ref=e138]: Join the live sapphic town square. A relaxed open space to say hi, read conversations, or chime in anytime.
+          - button "Join Room" [ref=e139]
+      - generic [ref=e143]:
+        - generic [ref=e150]:
+          - heading "Community Posts & Cozy Vents" [level=4] [ref=e151]
+          - paragraph [ref=e152]: Browse shared stories, book recommendations, friend finders, and heartfelt advice from fellow sapphics.
+        - button "View Community Posts" [ref=e153] [cursor=pointer]
+    - generic [ref=e155]:
+      - generic [ref=e156]:
+        - text: Simple & Transparent
+        - heading "How QUEERSPACE Works" [level=2] [ref=e157]
+        - paragraph [ref=e158]: No friction, no algorithms judging you, no paywalls. Just a straightforward path to talking with other women.
+      - generic [ref=e159]:
+        - generic [ref=e160]:
+          - generic [ref=e161]:
+            - generic [ref=e162]: "01"
+            - heading "Choose how you want to connect" [level=3] [ref=e171]
+            - paragraph [ref=e172]: Jump straight into an instant 1-on-1 chat, tailor a match with your favorite topics, or pull up a chair in the public room.
+          - generic [ref=e173]: →
+        - generic [ref=e174]:
+          - generic [ref=e175]:
+            - generic [ref=e176]: "02"
+            - heading "Set optional preferences" [level=3] [ref=e181]
+            - paragraph [ref=e182]: Everything is completely optional. Pick a cozy pseudonym, share your pronouns or intentions, or leave them blank.
+          - generic [ref=e183]: →
+        - generic [ref=e185]:
+          - generic [ref=e186]: "03"
+          - heading "Start a genuine conversation" [level=3] [ref=e192]
+          - paragraph [ref=e193]: Talk freely in a safe, moderated sapphic atmosphere. Leave or skip with one click whenever you want.
+    - generic [ref=e195]:
+      - generic [ref=e196]:
+        - generic [ref=e197]: Safety & Boundaries First
+        - heading "Your Peace of Mind Matters Most" [level=2] [ref=e201]
+        - paragraph [ref=e202]: QUEERSPACE was created to be the opposite of hostile, impersonal internet chat platforms. Every feature is built with sapphic dignity, mutual respect, and emotional safety at the center.
+      - generic [ref=e203]:
+        - generic [ref=e211]:
+          - heading "Real Privacy by Design" [level=4] [ref=e212]
+          - paragraph [ref=e213]: You are never required to link social accounts, phone numbers, or real identities. What you share is always your choice.
+        - generic [ref=e221]:
+          - heading "Instant Leave & Block" [level=4] [ref=e222]
+          - paragraph [ref=e223]: You have full autonomy. If a conversation feels awkward or unwelcome, one click leaves immediately and prevents rematching.
+        - generic [ref=e228]:
+          - heading "One-Click Reporting" [level=4] [ref=e229]
+          - paragraph [ref=e230]: Zero tolerance for harassment, unsolicited NSFW content, or male impostors. Reports are logged and violators are permanently blocked.
+        - generic [ref=e236]:
+          - heading "Curated Sapphic Space" [level=4] [ref=e237]
+          - paragraph [ref=e238]: A sanctuary designed specifically for women and eligible non-binary sapphic folks to converse without being sexualized or harassed.
+      - generic [ref=e239]:
+        - generic [ref=e240]: Strict 18+ policy for all participants. Be kind, be real.
+        - button "Read Community Guidelines & Code of Conduct →" [ref=e245] [cursor=pointer]
+  - contentinfo [ref=e246]:
+    - generic [ref=e247]:
+      - generic [ref=e248]:
+        - generic [ref=e249]:
+          - generic [ref=e250]:
+            - img "QUEERSPACE Logo" [ref=e252]
+            - generic [ref=e253]: QUEERSPACE
+          - paragraph [ref=e254]: A Sapphic Space for Women. Your space. Your people. Your possibilities.
+        - generic [ref=e255]:
+          - button "About" [ref=e256] [cursor=pointer]
+          - button "Community Guidelines" [ref=e257] [cursor=pointer]
+          - button "Privacy & Anonymity" [ref=e258] [cursor=pointer]
+          - button "Terms of Service" [ref=e259] [cursor=pointer]
+          - button "Contact & Support" [ref=e260] [cursor=pointer]
+          - button "♡ Support QUEERSPACE" [ref=e261] [cursor=pointer]
+      - generic [ref=e263]:
+        - paragraph [ref=e264]: © 2026 QUEERSPACE. Built for the sapphic community.
+        - generic [ref=e265]:
+          - generic [ref=e266]: Made with
+          - generic [ref=e269]: for women who love women.

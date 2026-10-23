@@ -149,6 +149,11 @@ export default function App() {
 
   const handleMatchFound = async () => {
     const result = await findMatchCandidate(userPrefs, blockedPartnerIds);
+    if (!result.candidate) {
+      setCurrentView('home');
+      showToast('No other registered candidates found in Cloud Firestore right now.');
+      return;
+    }
     setActivePartner(result.candidate);
     setActivePartnerSource(result.source);
     setCurrentView('chat');
@@ -158,6 +163,10 @@ export default function App() {
     // Cycle to next available partner
     const exclude = activePartner ? [...blockedPartnerIds, activePartner.id] : blockedPartnerIds;
     const result = await findMatchCandidate(userPrefs, exclude);
+    if (!result.candidate) {
+      showToast('No additional registered candidates found in Cloud Firestore right now.');
+      return;
+    }
     setActivePartner(result.candidate);
     setActivePartnerSource(result.source);
     showToast(`Switched to new conversation with ${result.candidate.displayName}`);

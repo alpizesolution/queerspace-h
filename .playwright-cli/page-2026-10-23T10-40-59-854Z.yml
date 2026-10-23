@@ -1,0 +1,116 @@
+- generic [active] [ref=e1]:
+  - navigation "Main navigation":
+    - generic [ref=e2]:
+      - link [ref=e3] [cursor=pointer]:
+        - /url: /
+        - img "Istorya Logo" [ref=e4]
+      - link "Start Chat" [ref=e6] [cursor=pointer]:
+        - /url: /setup
+      - button "Toggle dark mode" [ref=e7] [cursor=pointer]
+  - generic [ref=e10]:
+    - generic:
+      - img "Avatar"
+    - generic:
+      - img "Avatar"
+    - generic:
+      - img "Avatar"
+    - generic:
+      - img "Avatar"
+    - generic:
+      - img "Avatar"
+    - generic [ref=e11]:
+      - heading "Talk to 88A$93!Y from other colleges" [level=1] [ref=e12]:
+        - text: Talk to 88A$93!Y from
+        - generic [ref=e13]: other colleges
+      - paragraph [ref=e14]: Select a college, pick your preference, and start a real-time anonymous student chat across colleges and departments.
+    - link "Chat Now" [ref=e16] [cursor=pointer]:
+      - /url: /setup
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21]: "4"
+        - generic [ref=e22]: Colleges
+      - generic [ref=e23]:
+        - generic [ref=e24]: ∞
+        - generic [ref=e25]: Conversations
+      - generic [ref=e26]:
+        - generic [ref=e27]: 100%
+        - generic [ref=e28]: Anonymous
+  - generic [ref=e30]:
+    - generic [ref=e31]: No Login Required • Cross-College Match • 100% Anonymous • Meet New People • Instant Chat •
+    - generic [ref=e32]: No Login Required • Cross-College Match • 100% Anonymous • Meet New People • Instant Chat •
+  - generic [ref=e34]:
+    - generic [ref=e35]:
+      - heading "Welcome to Istorya" [level=2] [ref=e36]:
+        - generic [ref=e37]: Welcome to
+        - img "Istorya" [ref=e39]
+      - paragraph [ref=e40]: A place to talk, share, or just read.
+    - generic [ref=e41]:
+      - generic [ref=e42]:
+        - paragraph [ref=e43]: “Istorya” is a Masbateño word that means to talk or share a conversation. Here, you can meet another student in private chat, join the public room, or share what’s on your mind in Vent.
+        - paragraph [ref=e44]: Maybe you want a quick conversation, someone from another college to talk to, or somewhere to write about your day. You can choose what feels right without creating an account. It’s okay to start by reading, too.
+        - paragraph [ref=e45]: Pick a chat mode, set your preferences if you want, or browse the latest vents. If you’re curious about how Istorya started, you can read the story behind the project.
+      - link "Read More" [ref=e47] [cursor=pointer]:
+        - /url: /about
+  - generic [ref=e49]:
+    - generic [ref=e50]:
+      - heading "How It Works" [level=2] [ref=e51]
+      - paragraph [ref=e52]: Choose a private conversation, join the public room, or share a vent.
+    - generic [ref=e53]:
+      - generic [ref=e54]:
+        - generic [ref=e55]: Step 1
+        - heading "Choose Your Space" [level=3] [ref=e60]
+        - paragraph [ref=e61]: Open setup and pick Quick Chat, Custom, Public, or Vent. No account needed.
+      - generic [ref=e62]:
+        - generic [ref=e63]: Step 2
+        - heading "Make It Yours" [level=3] [ref=e70]
+        - paragraph [ref=e71]: Use Quick Chat with no filters, set preferences in Custom, or choose a flair and reply settings for a vent.
+      - generic [ref=e72]:
+        - generic [ref=e73]: Step 3
+        - heading "Join the Conversation" [level=3] [ref=e77]
+        - paragraph [ref=e78]: Wait for a private match, say hello in the public room, or post and reply in Vent.
+  - generic [ref=e80]:
+    - generic [ref=e81]:
+      - heading "Good questions. Simple answers." [level=2] [ref=e82]
+      - paragraph [ref=e83]: Get to know Istorya before you jump in.
+    - tablist "Question topics" [ref=e84]:
+      - tab "Basics" [selected] [ref=e85] [cursor=pointer]
+      - tab "Chat" [ref=e86] [cursor=pointer]
+      - tab "Vent" [ref=e87] [cursor=pointer]
+      - tab "Privacy" [ref=e88] [cursor=pointer]
+    - tabpanel "Basics" [ref=e90]:
+      - group [ref=e91]:
+        - generic "What can I do on Istorya?" [ref=e92] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e94]: +
+      - group [ref=e95]:
+        - generic "Is Istorya free, and do I need an account?" [ref=e96] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e98]: +
+      - group [ref=e99]:
+        - generic "Who is Istorya for?" [ref=e100] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e102]: +
+      - group [ref=e103]:
+        - generic "Does Istorya work on phones, and do I need to install it?" [ref=e104] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e106]: +
+  - contentinfo [ref=e107]:
+    - generic [ref=e108]:
+      - generic [ref=e109]:
+        - text: © 2026 Istorya. Made for students by
+        - link "keith" [ref=e110] [cursor=pointer]:
+          - /url: https://facebook.com/ke1th.dev
+        - text: .
+      - generic [ref=e111]:
+        - link "Blog" [ref=e112] [cursor=pointer]:
+          - /url: /blog
+        - link "Guides" [ref=e113] [cursor=pointer]:
+          - /url: /guides
+        - link "Safety" [ref=e114] [cursor=pointer]:
+          - /url: /safety
+        - link "Updates" [ref=e115] [cursor=pointer]:
+          - /url: /updates
+        - link "Contact" [ref=e116] [cursor=pointer]:
+          - /url: /contact
+        - link "What is Istorya?" [ref=e117] [cursor=pointer]:
+          - /url: /about
+        - link "Privacy Policy" [ref=e118] [cursor=pointer]:
+          - /url: /privacy
+        - link "Terms of Service" [ref=e119] [cursor=pointer]:
+          - /url: /terms

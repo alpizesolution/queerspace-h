@@ -1,0 +1,65 @@
+- generic [active] [ref=e1]:
+  - navigation "Main navigation":
+    - generic [ref=e2]:
+      - link [ref=e3] [cursor=pointer]:
+        - /url: /
+        - img "Istorya Logo" [ref=e4]
+      - link "Start Chat" [ref=e6] [cursor=pointer]:
+        - /url: /setup
+      - button "Toggle dark mode" [ref=e7] [cursor=pointer]
+  - generic [ref=e13]:
+    - generic [ref=e15]:
+      - heading "Setup CHAT" [level=1] [ref=e16]:
+        - text: Setup
+        - generic [ref=e17]: CHAT
+      - paragraph [ref=e18]: Chat Preferences
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - group "Chat type" [ref=e21]:
+          - button "Quick Chat" [ref=e23] [cursor=pointer]
+          - button "Custom" [ref=e24] [cursor=pointer]
+          - button "Public" [ref=e25] [cursor=pointer]
+          - button [ref=e26] [cursor=pointer]:
+            - text: Vent
+            - superscript [ref=e27]: NEW
+        - generic [ref=e28]: Quick chat talks to any college and any gender, and sets your college and gender to "Prefer not to say".
+      - generic [ref=e29]:
+        - generic [ref=e30]: About You
+        - generic [ref=e32]:
+          - textbox "Search college..." [ref=e33]: Prefer not to say
+          - button "Clear college selection" [ref=e34]: ×
+        - generic [ref=e35]:
+          - combobox [aria-hidden] [ref=e36]
+          - group "Select your gender" [ref=e37]:
+            - button "Male" [ref=e38] [cursor=pointer]
+            - button "Female" [ref=e39] [cursor=pointer]
+            - button "Non-binary" [ref=e40] [cursor=pointer]
+            - button "PNTS" [ref=e41] [cursor=pointer]
+            - button "More ▾" [ref=e42] [cursor=pointer]
+      - generic [ref=e43]:
+        - button "Open Chat Preview →" [ref=e44] [cursor=pointer]
+        - paragraph [ref=e45]: Meet someone new. Start a conversation.
+  - contentinfo [ref=e46]:
+    - generic [ref=e47]:
+      - generic [ref=e48]:
+        - text: © 2026 Istorya. Made for students by
+        - link "keith" [ref=e49] [cursor=pointer]:
+          - /url: https://facebook.com/ke1th.dev
+        - text: .
+      - generic [ref=e50]:
+        - link "Blog" [ref=e51] [cursor=pointer]:
+          - /url: /blog
+        - link "Guides" [ref=e52] [cursor=pointer]:
+          - /url: /guides
+        - link "Safety" [ref=e53] [cursor=pointer]:
+          - /url: /safety
+        - link "Updates" [ref=e54] [cursor=pointer]:
+          - /url: /updates
+        - link "Contact" [ref=e55] [cursor=pointer]:
+          - /url: /contact
+        - link "What is Istorya?" [ref=e56] [cursor=pointer]:
+          - /url: /about
+        - link "Privacy Policy" [ref=e57] [cursor=pointer]:
+          - /url: /privacy
+        - link "Terms of Service" [ref=e58] [cursor=pointer]:
+          - /url: /terms

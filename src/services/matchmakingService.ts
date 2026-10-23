@@ -6,7 +6,7 @@ import { findBestPartner, MOCK_PARTNERS } from '../utils/mock-partners.ts';
 import { isLocationCompatible } from '../utils/philippines-locations.ts';
 
 export interface MatchCandidateResult {
-  candidate: PartnerProfile;
+  candidate: PartnerProfile | null;
   source: 'cloud' | 'local_fallback' | 'dynamic_fallback';
   compatibilityScore: number;
   totalCandidatesQueried: number;
@@ -129,28 +129,23 @@ export async function findMatchCandidate(
     }
 
     // If Firestore has 0 eligible candidates (e.g. database empty or all excluded)
-    const mockCandidate = sanitizeCandidatePrivacy(findBestPartner(userPrefs, excludeIds));
-    const score = calculateCompatibilityScore(userPrefs, mockCandidate);
     return {
-      candidate: mockCandidate,
-      source: 'dynamic_fallback',
-      compatibilityScore: score,
-      totalCandidatesQueried: 0,
-      message: 'No cloud candidates found — matched with community demo partner.',
+      candidate: null,
+      source: 'cloud',
+      compatibilityScore: 0,
+      totalCandidatesQueried: candidatesFromCloud.length,
+      message: 'No other registered candidates found in Cloud Firestore right now.',
     };
   } catch (err: unknown) {
     const errMessage = err instanceof Error ? err.message : String(err);
     console.warn('[MatchmakingService] Firestore candidate query notice:', errMessage);
 
-    // Fallback to local mock matching on error
-    const fallbackCandidate = sanitizeCandidatePrivacy(findBestPartner(userPrefs, excludeIds));
-    const score = calculateCompatibilityScore(userPrefs, fallbackCandidate);
     return {
-      candidate: fallbackCandidate,
-      source: 'local_fallback',
-      compatibilityScore: score,
+      candidate: null,
+      source: 'cloud',
+      compatibilityScore: 0,
       totalCandidatesQueried: 0,
-      message: 'Firestore candidate query unavailable — matched via Local Demo Mode.',
+      message: `Firestore candidate query error: ${errMessage}`,
     };
   }
 }

@@ -1,0 +1,130 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - generic [ref=f1e5]:
+      - button "Vespera Home" [ref=f1e6]:
+        - generic [ref=f1e11]:
+          - generic [ref=f1e12]:
+            - generic [ref=f1e13]: Vespera
+            - generic [ref=f1e14]: WLW
+          - paragraph [ref=f1e15]: Sapphic Anonymous Chat
+      - navigation "Main navigation" [ref=f1e16]:
+        - button "Home" [ref=f1e17]
+        - button "1-on-1 Chat" [ref=f1e18]
+        - button "Public Room" [ref=f1e19]
+        - button "Community Posts" [ref=f1e25]
+        - button "Safety" [ref=f1e26]
+      - generic [ref=f1e29]:
+        - button "Mute chat sounds" [ref=f1e30]
+        - button "Start Chatting" [ref=f1e35]
+  - main [ref=f1e39]:
+    - generic [ref=f1e41]:
+      - generic [ref=f1e42]: Women-Loving-Women • 100% Free & Guest Friendly
+      - heading "Find your people. Start your story." [level=1] [ref=f1e45]
+      - paragraph [ref=f1e46]: A space for sapphic women to meet, talk freely, and discover connections that feel right.
+      - generic [ref=f1e47]:
+        - button "Start Chatting" [ref=f1e48] [cursor=pointer]
+        - button "Explore Community" [ref=f1e52] [cursor=pointer]
+      - generic [ref=f1e54]:
+        - generic [ref=f1e55]: No sign-up or phone number needed
+        - generic [ref=f1e60]: •
+        - generic [ref=f1e61]: Safe, respectful WLW space
+        - generic [ref=f1e65]: •
+        - generic [ref=f1e66]: Instant leave & block controls
+      - generic [ref=f1e71]:
+        - generic [ref=f1e72] [cursor=pointer]:
+          - generic [ref=f1e73]: Quick 1-on-1
+          - paragraph [ref=f1e78]: Immediate match with zero wait. Pure, low-friction chat.
+        - generic [ref=f1e79] [cursor=pointer]:
+          - generic [ref=f1e80]: Custom Match
+          - paragraph [ref=f1e86]: Filter by intent (friendship, dating) and shared topics.
+        - generic [ref=f1e87] [cursor=pointer]:
+          - generic [ref=f1e88]: Community Space
+          - paragraph [ref=f1e96]: Public rooms, cozy vents, book clubs, and sapphic threads.
+    - generic [ref=f1e97]:
+      - generic [ref=f1e98]:
+        - heading "Choose Your Way to Connect" [level=2] [ref=f1e99]
+        - paragraph [ref=f1e100]: Whether you want an instant 1-on-1 chat, a tailored match based on shared interests, or a public group room, there is a place for you here.
+      - generic [ref=f1e101]:
+        - button "Fastest Quick Chat Start an instant one-on-one conversation with an available compatible person without any setup. Chat Instantly" [ref=f1e102] [cursor=pointer]:
+          - generic [ref=f1e103]:
+            - generic [ref=f1e104]: Fastest
+            - heading "Quick Chat" [level=3] [ref=f1e109]
+            - paragraph [ref=f1e110]: Start an instant one-on-one conversation with an available compatible person without any setup.
+          - button "Chat Instantly" [ref=f1e111]
+        - button "Tailored Custom Match Pick your conversation intention (friendship, dating, deep talk), select topics you love, and match on mutual vibes. Set Preferences" [ref=f1e115] [cursor=pointer]:
+          - generic [ref=f1e116]:
+            - generic [ref=f1e117]: Tailored
+            - heading "Custom Match" [level=3] [ref=f1e121]
+            - paragraph [ref=f1e122]: Pick your conversation intention (friendship, dating, deep talk), select topics you love, and match on mutual vibes.
+          - button "Set Preferences" [ref=f1e123]
+        - button [ref=f1e127] [cursor=pointer]:
+          - generic [ref=f1e128]:
+            - generic [ref=f1e129]: Active
+            - heading "Public Room" [level=3] [ref=f1e138]
+            - paragraph [ref=f1e139]: Join the live sapphic town square. A relaxed open space to say hi, read conversations, or chime in anytime.
+          - button "Join Room" [ref=f1e140]
+      - generic [ref=f1e144]:
+        - generic [ref=f1e151]:
+          - heading "Community Posts & Cozy Vents" [level=4] [ref=f1e152]
+          - paragraph [ref=f1e153]: Browse shared stories, book recommendations, friend finders, and heartfelt advice from fellow sapphics.
+        - button "View Community Posts" [ref=f1e154] [cursor=pointer]
+    - generic [ref=f1e156]:
+      - generic [ref=f1e157]:
+        - text: Simple & Transparent
+        - heading "How Vespera Works" [level=2] [ref=f1e158]
+        - paragraph [ref=f1e159]: No friction, no algorithms judging you, no paywalls. Just a straightforward path to talking with other women.
+      - generic [ref=f1e160]:
+        - generic [ref=f1e161]:
+          - generic [ref=f1e162]:
+            - generic [ref=f1e163]: "01"
+            - heading "Choose how you want to connect" [level=3] [ref=f1e172]
+            - paragraph [ref=f1e173]: Jump straight into an instant 1-on-1 chat, tailor a match with your favorite topics, or pull up a chair in the public room.
+          - generic [ref=f1e174]: →
+        - generic [ref=f1e175]:
+          - generic [ref=f1e176]:
+            - generic [ref=f1e177]: "02"
+            - heading "Set optional preferences" [level=3] [ref=f1e182]
+            - paragraph [ref=f1e183]: Everything is completely optional. Pick a cozy pseudonym, share your pronouns or intentions, or leave them blank.
+          - generic [ref=f1e184]: →
+        - generic [ref=f1e186]:
+          - generic [ref=f1e187]: "03"
+          - heading "Start a genuine conversation" [level=3] [ref=f1e193]
+          - paragraph [ref=f1e194]: Talk freely in a safe, moderated sapphic atmosphere. Leave or skip with one click whenever you want.
+    - generic [ref=f1e196]:
+      - generic [ref=f1e197]:
+        - generic [ref=f1e198]: Safety & Boundaries First
+        - heading "Your Peace of Mind Matters Most" [level=2] [ref=f1e202]
+        - paragraph [ref=f1e203]: Vespera was created to be the opposite of hostile, impersonal internet chat platforms. Every feature is built with sapphic dignity, mutual respect, and emotional safety at the center.
+      - generic [ref=f1e204]:
+        - generic [ref=f1e212]:
+          - heading "Real Privacy by Design" [level=4] [ref=f1e213]
+          - paragraph [ref=f1e214]: You are never required to link social accounts, phone numbers, or real identities. What you share is always your choice.
+        - generic [ref=f1e222]:
+          - heading "Instant Leave & Block" [level=4] [ref=f1e223]
+          - paragraph [ref=f1e224]: You have full autonomy. If a conversation feels awkward or unwelcome, one click leaves immediately and prevents rematching.
+        - generic [ref=f1e229]:
+          - heading "One-Click Reporting" [level=4] [ref=f1e230]
+          - paragraph [ref=f1e231]: Zero tolerance for harassment, unsolicited NSFW content, or male impostors. Reports are logged and violators are permanently blocked.
+        - generic [ref=f1e237]:
+          - heading "Curated Sapphic Space" [level=4] [ref=f1e238]
+          - paragraph [ref=f1e239]: A sanctuary designed specifically for women and eligible non-binary sapphic folks to converse without being sexualized or harassed.
+      - generic [ref=f1e240]:
+        - generic [ref=f1e241]: Strict 18+ policy for all participants. Be kind, be real.
+        - button "Read Community Guidelines & Code of Conduct →" [ref=f1e246] [cursor=pointer]
+  - contentinfo [ref=f1e247]:
+    - generic [ref=f1e248]:
+      - generic [ref=f1e249]:
+        - generic [ref=f1e250]:
+          - generic [ref=f1e251]: Vespera
+          - paragraph [ref=f1e257]: An independent, privacy-conscious conversation and community sanctuary for women-loving-women.
+        - generic [ref=f1e258]:
+          - button "About" [ref=f1e259] [cursor=pointer]
+          - button "Community Guidelines" [ref=f1e260] [cursor=pointer]
+          - button "Privacy & Anonymity" [ref=f1e261] [cursor=pointer]
+          - button "Terms of Service" [ref=f1e262] [cursor=pointer]
+          - button "Contact & Support" [ref=f1e263] [cursor=pointer]
+      - generic [ref=f1e264]:
+        - paragraph [ref=f1e265]: © 2026 Vespera. Built for the sapphic community.
+        - generic [ref=f1e266]:
+          - generic [ref=f1e267]: Made with
+          - generic [ref=f1e270]: for women who love women.
