@@ -1,10 +1,9 @@
 import React from 'react';
-import { Home, MessageSquare, Users, Settings } from 'lucide-react';
-import { PWAInstallButton } from './PWAInstallButton.tsx';
+import { Home, MessageSquare, Users, MessageCircle } from 'lucide-react';
 
 interface Props {
   currentView: string;
-  onNavigate: (view: 'home' | 'public' | 'community') => void;
+  onNavigate: (view: 'home' | 'public' | 'community' | 'setup') => void;
 }
 
 export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate }) => {
@@ -12,6 +11,7 @@ export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate }) =
     { name: 'home', label: 'Home', icon: Home },
     { name: 'public', label: 'Rooms', icon: MessageSquare },
     { name: 'community', label: 'Feed', icon: Users },
+    { name: 'setup', label: 'Chat', icon: MessageCircle },
   ];
 
   return (
@@ -33,9 +33,6 @@ export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate }) =
             </button>
           );
         })}
-        <div className="flex flex-col items-center justify-center w-full h-full">
-            <PWAInstallButton />
-        </div>
       </div>
     </div>
   );

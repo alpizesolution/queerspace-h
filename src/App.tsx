@@ -311,7 +311,13 @@ export default function App() {
         )}
       </main>
 
-      <BottomNavigation currentView={currentView} onNavigate={setCurrentView} />
+      <BottomNavigation 
+        currentView={currentView} 
+        onNavigate={(view) => {
+          if (view === 'setup') handleOpenSetup('quick');
+          else setCurrentView(view);
+        }} 
+      />
 
       {/* Match Setup Modal */}
       {setupModalOpen && (
