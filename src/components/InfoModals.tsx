@@ -102,10 +102,6 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) 
               blocks.
             </li>
             <li>
-              <Strong>Demo mode.</Strong> If the cloud is unavailable, QUEERSPACE runs locally with
-              simulated peers and labels them as demo.
-            </li>
-            <li>
               <Strong>Stay safe.</Strong> Never share financial details, your home address or passwords
               with strangers.
             </li>

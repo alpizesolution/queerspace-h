@@ -234,6 +234,24 @@ export function subscribeToCloudMessages(
 }
 
 /**
+ * Listens to a conversation's status so each side knows when the other leaves or blocks.
+ */
+export function subscribeToConversationStatus(
+  convId: string,
+  onStatus: (status: 'active' | 'ended' | 'blocked') => void
+): () => void {
+  if (!isFirebaseConfigured || !db || !auth?.currentUser) return () => {};
+  return onSnapshot(
+    doc(db, 'conversations', convId),
+    (snap) => {
+      const status = snap.data()?.status;
+      if (status === 'active' || status === 'ended' || status === 'blocked') onStatus(status);
+    },
+    (err) => console.warn('[ChatService] Conversation status listener notice:', err)
+  );
+}
+
+/**
  * Ends a 1-on-1 cloud conversation safely.
  */
 export async function endCloudConversation(convId: string, status: 'ended' | 'blocked' = 'ended'): Promise<boolean> {

@@ -16,7 +16,7 @@ import {
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 import { ChatMessage, PartnerProfile, PartnerStatus, UserPreferences } from '../types.ts';
-import { ICEBREAKER_PROMPTS, getPartnerReply } from '../utils/mock-partners.ts';
+import { ICEBREAKER_PROMPTS } from '../utils/mock-partners.ts';
 import { INTENTION_LABELS, formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
 import { chatEventManager } from '../utils/chat-events.ts';
@@ -24,13 +24,15 @@ import {
   startOrCreateConversation,
   sendCloudMessage,
   subscribeToCloudMessages,
+  subscribeToConversationStatus,
   endCloudConversation,
   submitCloudReport,
 } from '../services/chatService.ts';
 
 interface ChatViewProps {
   partner: PartnerProfile;
-  partnerSource?: 'cloud' | 'local_fallback' | 'dynamic_fallback';
+  /** Conversation created by live matchmaking; both participants open the same one. */
+  conversationId?: string;
   userPrefs: UserPreferences;
   isSoundMuted: boolean;
   onToggleSound: () => void;
@@ -46,7 +48,7 @@ interface ChatViewProps {
 
 export const ChatView: React.FC<ChatViewProps> = ({
   partner,
-  partnerSource,
+  conversationId,
   userPrefs,
   isSoundMuted,
   onToggleSound,
@@ -89,6 +91,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [cloudConvId, setCloudConvId] = useState<string | null>(null);
   const [isCloudActive, setIsCloudActive] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
+  const [partnerLeft, setPartnerLeft] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -110,94 +113,71 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const isPartnerTyping = partnerStatus === 'typing';
 
-  // Initialize Cloud Conversation if partnerSource === 'cloud' or fallback to Local Demo
-  useEffect(() => {
-    let unsubscribeCloud: (() => void) | null = null;
-    let cancelled = false;
+  const soundMutedRef = useRef(isSoundMuted);
+  soundMutedRef.current = isSoundMuted;
 
-    // Reset messages and cloud state on partner switch to prevent stale message leakage
+  // Join the live conversation and listen for messages and for the partner leaving.
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribeMessages: (() => void) | null = null;
+    let unsubscribeStatus: (() => void) | null = null;
+    let partnerMessageCount = 0;
+
     setMessages([]);
     setCloudConvId(null);
     setIsCloudActive(false);
+    setPartnerLeft(false);
 
-    if (partnerSource === 'cloud' && partner.id) {
-      startOrCreateConversation(partner.id).then((session) => {
-        if (cancelled) return;
-        if (session.isCloud && session.convId) {
-          setCloudConvId(session.convId);
-          setIsCloudActive(true);
-
-          unsubscribeCloud = subscribeToCloudMessages(
-            session.convId,
-            (cloudMsgs) => {
-              if (cancelled) return;
-              const systemMsg: ChatMessage = {
-                id: 'sys-start',
-                sender: 'system',
-                text: `Connected with ${partner.displayName} (${partner.pronouns}) via Cloud. Pseudonymous 1-on-1 chat active.`,
-                timestamp: Date.now(),
-              };
-              setMessages([systemMsg, ...cloudMsgs]);
-            },
-            (err) => {
-              console.warn('[ChatView] Cloud message listener notice:', err);
-            }
-          );
-        }
-      });
-    }
-
-    // If local demo mode (partnerSource !== 'cloud'), run simulated demo conversation
-    if (partnerSource !== 'cloud') {
-      if (!isSoundMuted) {
-        soundEffects.playMatchFound();
-      }
+    const start = (convId: string) => {
+      if (cancelled) return;
+      setCloudConvId(convId);
+      setIsCloudActive(true);
+      if (!soundMutedRef.current) soundEffects.playMatchFound();
 
       const systemMsg: ChatMessage = {
         id: 'sys-start',
         sender: 'system',
-        text: `You are connected with ${partner.displayName} (${partner.pronouns}). Say hello and please be respectful!`,
+        text: `You're chatting with ${partner.displayName}. Be kind and respectful.`,
         timestamp: Date.now(),
       };
-
       setMessages([systemMsg]);
 
-      const timer = setTimeout(() => {
-        chatEventManager.emitPartnerStatus(partner.id, 'typing');
+      unsubscribeMessages = subscribeToCloudMessages(
+        convId,
+        (cloudMsgs) => {
+          if (cancelled) return;
+          const incoming = cloudMsgs.filter((m) => m.sender === 'partner').length;
+          if (incoming > partnerMessageCount && !soundMutedRef.current) soundEffects.playMessageReceived();
+          partnerMessageCount = incoming;
+          // Keep local-only reactions when the message list refreshes.
+          setMessages((prev) => [
+            systemMsg,
+            ...cloudMsgs.map((m) => ({ ...m, reactions: prev.find((p) => p.id === m.id)?.reactions })),
+          ]);
+        },
+        (err) => console.warn('[ChatView] Cloud message listener notice:', err)
+      );
 
-        setTimeout(() => {
-          chatEventManager.emitPartnerStatus(partner.id, 'online');
-          const greetingTexts = [
-            `Hey ${userPrefs.displayName}! So happy to match with you. How's your day going? ✨`,
-            `Hi there! Hope you're having a gentle day. Love seeing other sapphic folks on here! 🌸`,
-            `Hello! It's so nice to connect with someone. What are you up to today? ☕`,
-          ];
-          const greeting = greetingTexts[Math.floor(Math.random() * greetingTexts.length)];
-          const partnerMsg: ChatMessage = {
-            id: `msg-${Date.now()}`,
-            sender: 'partner',
-            text: greeting,
-            timestamp: Date.now(),
-            status: 'delivered',
-          };
-          setMessages((prev) => [...prev, partnerMsg]);
-          if (!isSoundMuted) {
-            soundEffects.playMessageReceived();
-          }
-        }, 1600);
-      }, 1000);
+      unsubscribeStatus = subscribeToConversationStatus(convId, (status) => {
+        if (!cancelled && status !== 'active') setPartnerLeft(true);
+      });
+    };
 
-      return () => {
-        clearTimeout(timer);
-        chatEventManager.emitPartnerStatus(partner.id, 'online');
-      };
+    if (conversationId) {
+      start(conversationId);
+    } else {
+      startOrCreateConversation(partner.id).then((session) => {
+        if (session.isCloud && session.convId) start(session.convId);
+        else if (!cancelled) setInputError("Couldn't open this conversation.");
+      });
     }
 
     return () => {
       cancelled = true;
-      if (unsubscribeCloud) unsubscribeCloud();
+      unsubscribeMessages?.();
+      unsubscribeStatus?.();
     };
-  }, [partner.id, partnerSource]);
+  }, [partner.id, conversationId]);
 
   // Scroll to bottom on new messages or typing
   useEffect(() => {
@@ -245,50 +225,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
         return;
       }
 
-      // Local Demo Mode Path
-      const userMsg: ChatMessage = {
-        id: `user-${Date.now()}`,
-        sender: 'user',
-        text: sanitized.cleanText,
-        timestamp: Date.now(),
-        status: 'delivered',
-      };
-
-      setMessages((prev) => [...prev, userMsg]);
-      setInputText('');
-      setInputError(null);
-
-      if (!isSoundMuted) {
-        soundEffects.playMessageSent();
-      }
-
-      const typingDelay = 1100 + Math.random() * 800;
-      const replyDelay = typingDelay + 1400 + Math.random() * 1100;
-
-      const partnerReply = getPartnerReply(partner, sanitized.cleanText, messages.length);
-
-      setTimeout(() => {
-        chatEventManager.emitPartnerStatus(partner.id, 'typing');
-      }, typingDelay);
-
-      setTimeout(() => {
-        chatEventManager.emitPartnerStatus(partner.id, 'online');
-        const partnerMsg: ChatMessage = {
-          id: `partner-${Date.now()}`,
-          sender: 'partner',
-          text: partnerReply.text,
-          timestamp: Date.now(),
-          status: 'delivered',
-          reactions: partnerReply.reaction
-            ? [{ emoji: partnerReply.reaction, count: 1, userReacted: false }]
-            : undefined,
-        };
-        setMessages((prev) => [...prev, partnerMsg]);
-
-        if (!isSoundMuted) {
-          soundEffects.playMessageReceived();
-        }
-      }, replyDelay);
+      setInputError(partnerLeft ? `${partner.displayName} has left the chat.` : 'Still connecting…');
+      setTimeout(() => setInputError(null), 3500);
     } finally {
       setIsSending(false);
     }
@@ -341,7 +279,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const isDemo = !!partnerSource && partnerSource !== 'cloud';
   const visibleExpressions =
     partner.showGenderExpressionOnProfile && partner.genderExpression ? partner.genderExpression : [];
   const visibleOrientation = partner.showSogieOnProfile ? partner.sexualOrientation : undefined;
@@ -383,8 +320,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <span className="text-berry font-medium">typing…</span>
               ) : (
                 <>
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 align-middle" />
-                  {partner.pronouns} · {isDemo ? 'Demo match' : 'Online'}
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${partnerLeft ? 'bg-subtle' : 'bg-emerald-400'}`} />
+                  {partner.pronouns} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}
                   {visibleLocation && <> · {visibleLocation}</>}
                 </>
               )}
@@ -475,12 +412,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
               ))}
               {visibleOrientation && <span className="tag">{visibleOrientation}</span>}
             </div>
-          )}
-          {isDemo && (
-            <p className="inline-flex items-center gap-1.5 text-[11px] text-amber-300/90">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              Local demo partner (simulated replies)
-            </p>
           )}
         </div>
 
@@ -573,80 +504,94 @@ export const ChatView: React.FC<ChatViewProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Composer */}
-      <div className="border-t border-line bg-ink pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        {!hasExchange && (
-          <div className="flex gap-2 overflow-x-auto scrollbar-none px-3 pt-2.5" aria-label="Icebreakers">
-            {ICEBREAKER_PROMPTS.map((prompt) => (
-              <button
-                key={prompt}
-                onClick={() => handleSendMessage(prompt)}
-                className="chip h-8 text-[12px] shrink-0"
-              >
-                {prompt}
-              </button>
-            ))}
+      {/* Composer, or next steps once the partner has left */}
+      {partnerLeft ? (
+        <div className="border-t border-line bg-ink px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-center anim-fade">
+          <p className="text-[14px] text-muted mb-3">{partner.displayName} left the chat.</p>
+          <div className="flex flex-col sm:flex-row gap-2 sm:justify-center">
+            <button onClick={onNextMatch} className="btn btn-primary">
+              Find someone new
+            </button>
+            <button onClick={onLeaveChat} className="btn btn-ghost">
+              Back to home
+            </button>
           </div>
-        )}
-
-        {inputError && (
-          <p role="alert" className="mx-3 mt-2 px-3 py-2 rounded-xl bg-danger/10 text-danger text-[13px] flex items-center gap-1.5">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            {inputError}
-          </p>
-        )}
-
-        <div className="relative flex items-end gap-1.5 px-2 sm:px-3 pt-2">
-          {emojiPickerOpen && (
-            <div className="absolute bottom-full left-2 mb-2 p-1.5 card bg-raised shadow-2xl shadow-black/50 grid grid-cols-5 gap-0.5 z-30 anim-pop">
-              {EMOJIS.map((emoji) => (
+        </div>
+      ) : (
+        <div className="border-t border-line bg-ink pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          {!hasExchange && (
+            <div className="flex gap-2 overflow-x-auto scrollbar-none px-3 pt-2.5" aria-label="Icebreakers">
+              {ICEBREAKER_PROMPTS.map((prompt) => (
                 <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => handleAddEmoji(emoji)}
-                  className="w-10 h-10 rounded-lg text-xl hover:bg-surface cursor-pointer"
-                  aria-label={`Insert ${emoji}`}
+                  key={prompt}
+                  onClick={() => handleSendMessage(prompt)}
+                  className="chip h-8 text-[12px] shrink-0"
                 >
-                  {emoji}
+                  {prompt}
                 </button>
               ))}
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
-            className="icon-btn w-11 h-11"
-            aria-label="Emoji"
-            aria-expanded={emojiPickerOpen}
-          >
-            <Smile className="w-[22px] h-[22px]" />
-          </button>
+          {inputError && (
+            <p role="alert" className="mx-3 mt-2 px-3 py-2 rounded-xl bg-danger/10 text-danger text-[13px] flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {inputError}
+            </p>
+          )}
 
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Message"
-            aria-label={`Message ${partner.displayName}`}
-            enterKeyHint="send"
-            autoComplete="off"
-            className="flex-1 min-w-0 h-11 px-4 rounded-full bg-surface border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
-          />
+          <div className="relative flex items-end gap-1.5 px-2 sm:px-3 pt-2">
+            {emojiPickerOpen && (
+              <div className="absolute bottom-full left-2 mb-2 p-1.5 card bg-raised shadow-2xl shadow-black/50 grid grid-cols-5 gap-0.5 z-30 anim-pop">
+                {EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => handleAddEmoji(emoji)}
+                    className="w-10 h-10 rounded-lg text-xl hover:bg-surface cursor-pointer"
+                    aria-label={`Insert ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
 
-          <button
-            type="button"
-            onClick={() => handleSendMessage()}
-            disabled={!inputText.trim()}
-            className="w-11 h-11 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center transition-all disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed active:scale-95"
-            aria-label="Send message"
-          >
-            <ArrowUp className="w-5 h-5" strokeWidth={2.5} />
-          </button>
+            <button
+              type="button"
+              onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
+              className="icon-btn w-11 h-11"
+              aria-label="Emoji"
+              aria-expanded={emojiPickerOpen}
+            >
+              <Smile className="w-[22px] h-[22px]" />
+            </button>
+
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Message"
+              aria-label={`Message ${partner.displayName}`}
+              enterKeyHint="send"
+              autoComplete="off"
+              className="flex-1 min-w-0 h-11 px-4 rounded-full bg-surface border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+            />
+
+            <button
+              type="button"
+              onClick={() => handleSendMessage()}
+              disabled={!inputText.trim()}
+              className="w-11 h-11 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center transition-all disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed active:scale-95"
+              aria-label="Send message"
+            >
+              <ArrowUp className="w-5 h-5" strokeWidth={2.5} />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {showSkipConfirm && (
         <ConfirmDialog
@@ -656,6 +601,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
           onCancel={() => setShowSkipConfirm(false)}
           onConfirm={() => {
             setShowSkipConfirm(false);
+            if (isCloudActive && cloudConvId && !partnerLeft) {
+              endCloudConversation(cloudConvId, 'ended');
+            }
             onNextMatch();
           }}
         />
@@ -671,7 +619,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           onCancel={() => setShowLeaveConfirm(false)}
           onConfirm={() => {
             setShowLeaveConfirm(false);
-            if (isCloudActive && cloudConvId) {
+            if (isCloudActive && cloudConvId && !partnerLeft) {
               endCloudConversation(cloudConvId, 'ended');
             }
             onLeaveChat();

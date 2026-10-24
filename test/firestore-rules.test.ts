@@ -256,3 +256,76 @@ test('T-12: Clients CANNOT read or scrape report documents', async () => {
   const alice = testEnv.authenticatedContext('alice');
   await assertFails(alice.firestore().doc('reports/rep1').get());
 });
+
+// ------------------------------------------------------------------
+// 6. Live Matchmaking Queue
+// ------------------------------------------------------------------
+const waitingEntry = () => ({
+  status: 'waiting',
+  partnerId: null,
+  convId: null,
+  createdAt: new Date(),
+  heartbeatAt: new Date(),
+  updatedAt: new Date(),
+});
+
+test('Q-01: User CAN join the queue as themselves, but not as someone else', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc('match_queue/alice').set(waitingEntry()));
+  await assertFails(alice.doc('match_queue/bob').set(waitingEntry()));
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('match_queue/anon').set(waitingEntry()));
+});
+
+test('Q-02: Authenticated users CAN list waiting entries; signed-out users cannot', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('match_queue/bob').set(waitingEntry());
+  });
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.collection('match_queue').where('status', '==', 'waiting').limit(25).get());
+  await assertFails(testEnv.unauthenticatedContext().firestore().collection('match_queue').where('status', '==', 'waiting').get());
+});
+
+test('Q-03: Searcher CAN claim a waiting user together with a new shared conversation', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('match_queue/alice').set(waitingEntry());
+    await ctx.firestore().doc('match_queue/bob').set(waitingEntry());
+  });
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const convRef = alice.collection('conversations').doc();
+  await assertSucceeds(
+    alice.runTransaction(async (tx) => {
+      await tx.get(alice.doc('match_queue/bob'));
+      tx.set(convRef, { participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date() });
+      tx.update(alice.doc('match_queue/bob'), { status: 'matched', partnerId: 'alice', convId: convRef.id, updatedAt: new Date() });
+      tx.update(alice.doc('match_queue/alice'), { status: 'matched', partnerId: 'bob', convId: convRef.id, updatedAt: new Date() });
+    })
+  );
+  // Bob can read his matched entry; an outsider cannot.
+  await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('match_queue/bob').get());
+  await assertFails(testEnv.authenticatedContext('carol').firestore().doc('match_queue/bob').get());
+});
+
+test('Q-04: Searcher CANNOT claim a waiting user without a conversation that includes both', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('match_queue/bob').set(waitingEntry());
+    await ctx.firestore().doc('conversations/other').set({ participants: ['carol', 'dana'], status: 'active', createdAt: new Date(), updatedAt: new Date() });
+  });
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(
+    alice.doc('match_queue/bob').update({ status: 'matched', partnerId: 'alice', convId: 'other', updatedAt: new Date() })
+  );
+  await assertFails(
+    alice.doc('match_queue/bob').update({ status: 'matched', partnerId: 'carol', convId: 'other', updatedAt: new Date() })
+  );
+});
+
+test('Q-05: Nobody else CAN re-claim or delete an already matched entry', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('conversations/c1').set({ participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date() });
+    await ctx.firestore().doc('match_queue/bob').set({ ...waitingEntry(), status: 'matched', partnerId: 'alice', convId: 'c1' });
+  });
+  const carol = testEnv.authenticatedContext('carol').firestore();
+  await assertFails(carol.doc('match_queue/bob').update({ partnerId: 'carol', updatedAt: new Date() }));
+  await assertFails(carol.doc('match_queue/bob').delete());
+  await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('match_queue/bob').delete());
+});

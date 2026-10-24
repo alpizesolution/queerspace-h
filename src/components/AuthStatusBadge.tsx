@@ -33,8 +33,8 @@ export const AuthStatusBadge: React.FC<AuthStatusBadgeProps> = ({ className = ''
     case 'local_fallback':
     default:
       dot = <span className="w-2 h-2 rounded-full bg-amber-400" />;
-      label = 'Demo';
-      title = 'Local demo mode. Matches are simulated.';
+      label = 'Offline';
+      title = 'Not connected. Live chat is unavailable.';
   }
 
   return (

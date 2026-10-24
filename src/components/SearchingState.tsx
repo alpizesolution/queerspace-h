@@ -1,121 +1,96 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Heart, Shield, RefreshCw } from 'lucide-react';
 import { UserPreferences } from '../types.ts';
-import { findMatchCandidate, MatchCandidateResult } from '../services/matchmakingService.ts';
+import { joinLiveMatchQueue, LiveMatch } from '../services/liveMatchService.ts';
 
 interface SearchingStateProps {
   mode: 'quick' | 'custom';
   prefs: UserPreferences;
   onCancel: () => void;
-  onMatchFoundFromCandidate: (candidate: any, source: any) => void;
+  onMatched: (match: LiveMatch) => void;
   blockedPartnerIds: string[];
 }
+
+const SEARCH_WINDOW_S = 30;
 
 export const SearchingState: React.FC<SearchingStateProps> = ({
   mode,
   prefs,
   onCancel,
-  onMatchFoundFromCandidate,
+  onMatched,
   blockedPartnerIds,
 }) => {
   const [secondsElapsed, setSecondsElapsed] = useState(0);
+  const [attempt, setAttempt] = useState(0);
   const [searchTimedOut, setSearchTimedOut] = useState(false);
-  const [isSearchingQuery, setIsSearchingQuery] = useState(false);
-  const searchIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const performMatchSearch = useCallback(async () => {
-    if (isSearchingQuery || searchTimedOut) return;
-    setIsSearchingQuery(true);
-    try {
-      const result: MatchCandidateResult = await findMatchCandidate(prefs, blockedPartnerIds);
-      if (result.candidate) {
-        if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
-        if (timerRef.current) clearInterval(timerRef.current);
-        onMatchFoundFromCandidate(result.candidate, result.source);
-      }
-    } catch (err) {
-      console.warn('[SearchingState] Match poll notice:', err);
-    } finally {
-      setIsSearchingQuery(false);
-    }
-  }, [prefs, blockedPartnerIds, isSearchingQuery, searchTimedOut, onMatchFoundFromCandidate]);
-
+  // Wait in the live queue for up to SEARCH_WINDOW_S seconds per attempt.
   useEffect(() => {
-    // 1-second ticker for visual counter
-    timerRef.current = setInterval(() => {
+    setSecondsElapsed(0);
+    setSearchTimedOut(false);
+    setError(null);
+
+    const leaveQueue = joinLiveMatchQueue(blockedPartnerIds, {
+      onMatched,
+      onError: (message) => {
+        setError(message);
+        clearInterval(ticker);
+      },
+    });
+
+    const ticker = setInterval(() => {
       setSecondsElapsed((prev) => {
         const next = prev + 1;
-        if (next >= 30) {
+        if (next >= SEARCH_WINDOW_S) {
+          clearInterval(ticker);
+          leaveQueue();
           setSearchTimedOut(true);
-          if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
-          if (timerRef.current) clearInterval(timerRef.current);
         }
         return next;
       });
     }, 1000);
-
-    // Initial check immediately
-    performMatchSearch();
-
-    // Poll every 2 seconds
-    searchIntervalRef.current = setInterval(() => {
-      performMatchSearch();
-    }, 2000);
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
+      clearInterval(ticker);
+      leaveQueue();
     };
-  }, [performMatchSearch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt]);
 
-  const handleKeepSearching = () => {
-    setSearchTimedOut(false);
-    setSecondsElapsed(0);
-    
-    timerRef.current = setInterval(() => {
-      setSecondsElapsed((prev) => {
-        const next = prev + 1;
-        if (next >= 30) {
-          setSearchTimedOut(true);
-          if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
-          if (timerRef.current) clearInterval(timerRef.current);
-        }
-        return next;
-      });
-    }, 1000);
+  const handleKeepSearching = () => setAttempt((n) => n + 1);
+  const stopped = searchTimedOut || Boolean(error);
 
-    searchIntervalRef.current = setInterval(() => {
-      performMatchSearch();
-    }, 2000);
-  };
-
-  const progress = Math.min(secondsElapsed / 30, 1) * 100;
+  const progress = Math.min(secondsElapsed / SEARCH_WINDOW_S, 1) * 100;
 
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-12">
       <div className="max-w-sm w-full text-center anim-rise" aria-live="polite">
         <div className="relative w-28 h-28 mx-auto mb-8 flex items-center justify-center">
-          {!searchTimedOut && (
+          {!stopped && (
             <>
               <span className="absolute inset-0 rounded-full bg-berry/25 anim-ping" />
               <span className="absolute inset-0 rounded-full bg-berry/15 anim-ping [animation-delay:0.9s]" />
             </>
           )}
           <span className="relative w-20 h-20 rounded-full bg-raised border border-line flex items-center justify-center">
-            <Heart className={`w-8 h-8 ${searchTimedOut ? 'text-subtle' : 'text-berry fill-berry/30'}`} />
+            <Heart className={`w-8 h-8 ${stopped ? 'text-subtle' : 'text-berry fill-berry/30'}`} />
           </span>
         </div>
 
         <h1 className="text-2xl font-semibold text-fg">
-          {searchTimedOut
+          {error
+            ? "Couldn't connect"
+            : searchTimedOut
             ? "No one's around yet"
             : mode === 'quick'
               ? 'Finding someone…'
               : 'Finding your match…'}
         </h1>
         <p className="mt-2 text-[15px] text-muted">
-          {searchTimedOut
+          {error
+            ? error
+            : searchTimedOut
             ? 'Try again in a moment, or visit the Public Room.'
             : (
               <>
@@ -124,13 +99,13 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
             )}
         </p>
 
-        {!searchTimedOut && (
+        {!stopped && (
           <div
             className="mt-8 h-1 rounded-full bg-raised overflow-hidden"
             role="progressbar"
             aria-label="Search progress"
             aria-valuemin={0}
-            aria-valuemax={30}
+            aria-valuemax={SEARCH_WINDOW_S}
             aria-valuenow={secondsElapsed}
           >
             <div className="h-full bg-berry/70 rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${progress}%` }} />
@@ -138,7 +113,7 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
         )}
 
         <div className="mt-8 flex flex-col gap-2">
-          {searchTimedOut && (
+          {stopped && (
             <button onClick={handleKeepSearching} className="btn btn-primary w-full">
               <RefreshCw className="w-4 h-4" />
               Try again
