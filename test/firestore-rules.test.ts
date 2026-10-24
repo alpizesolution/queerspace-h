@@ -207,6 +207,30 @@ test('T-15: Message creation FAILS if text exceeds 1000 characters', async () =>
   );
 });
 
+test('T-17: Replies quote a short snippet; padded or oversized quotes are rejected', async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc('conversations/conv_reply').set({
+      participants: ['alice', 'bob'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      status: 'active',
+    });
+  });
+
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const reply = (replyTo: unknown) => ({ senderId: 'alice', text: 'Same!', timestamp: new Date(), replyTo });
+  await assertSucceeds(
+    alice.doc('conversations/conv_reply/messages/r1').set(reply({ id: 'm1', text: 'I love cats', senderId: 'bob' }))
+  );
+  await assertFails(
+    alice.doc('conversations/conv_reply/messages/r2').set(reply({ id: 'm1', text: 'x'.repeat(141), senderId: 'bob' }))
+  );
+  await assertFails(
+    alice.doc('conversations/conv_reply/messages/r3').set(reply({ id: 'm1', text: 'hi', senderId: 'bob', extra: true }))
+  );
+  await assertFails(alice.doc('conversations/conv_reply/messages/r4').set(reply('m1')));
+});
+
 test('T-16: Conversation creation FAILS if caller is not listed in participants', async () => {
   const alice = testEnv.authenticatedContext('alice');
   // Alice tries to create a conversation between Bob and Charlie

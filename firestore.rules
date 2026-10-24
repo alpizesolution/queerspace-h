@@ -261,14 +261,25 @@ service cloud.firestore {
 
       allow delete: if false;
 
+      // A reply carries a short quote of the message it answers.
+      function isValidReplyQuote(q) {
+        return q is map
+          && q.keys().hasAll(['id', 'text', 'senderId'])
+          && q.keys().hasOnly(['id', 'text', 'senderId'])
+          && q.id is string && q.id.size() >= 1 && q.id.size() <= 64
+          && q.text is string && q.text.size() <= 140
+          && q.senderId is string && q.senderId.size() <= 128;
+      }
+
       // Ephemeral Chat Messages
       match /messages/{messageId} {
         allow read: if isConversationParticipant(convId);
 
         allow create: if isConversationParticipant(convId)
           && request.resource.data.keys().hasAll(['senderId', 'text', 'timestamp'])
-          && request.resource.data.keys().hasOnly(['senderId', 'text', 'timestamp'])
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'timestamp', 'replyTo'])
           && request.resource.data.senderId == request.auth.uid
+          && (!('replyTo' in request.resource.data) || isValidReplyQuote(request.resource.data.replyTo))
           && request.resource.data.text is string
           && request.resource.data.text.size() >= 1
           && request.resource.data.text.size() <= 1000

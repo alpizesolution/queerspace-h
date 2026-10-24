@@ -6,6 +6,7 @@ import {
   where,
   setDoc,
   addDoc,
+  FirestoreError,
   updateDoc,
   onSnapshot,
   query,
@@ -14,7 +15,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured } from '../lib/firebase.ts';
-import { ChatMessage } from '../types.ts';
+import { ChatMessage, ReplyQuote } from '../types.ts';
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
 
 export interface ConversationSession {
@@ -142,10 +143,23 @@ export async function startOrCreateConversation(partnerUid: string): Promise<Con
   }
 }
 
+/** Longest quote kept with a reply; must match isValidReplyQuote in firestore.rules. */
+export const REPLY_QUOTE_MAX_LENGTH = 140;
+
+export function toReplyQuote(value: unknown, myUid: string): ReplyQuote | undefined {
+  const q = value as { id?: unknown; text?: unknown; senderId?: unknown } | null;
+  if (!q || typeof q.id !== 'string' || typeof q.text !== 'string') return undefined;
+  return { id: q.id, text: q.text, sender: q.senderId === myUid ? 'user' : 'partner' };
+}
+
 /**
  * Sends a real-time message to a Firestore conversation.
  */
-export async function sendCloudMessage(convId: string, text: string): Promise<{ success: boolean; error?: string }> {
+export async function sendCloudMessage(
+  convId: string,
+  text: string,
+  replyTo?: { id: string; text: string; senderId: string }
+): Promise<{ success: boolean; error?: string }> {
   const currentUser = auth?.currentUser;
   if (!isFirebaseConfigured || !db || !currentUser) {
     return { success: false, error: 'Firebase is not configured or user is offline.' };
@@ -163,11 +177,23 @@ export async function sendCloudMessage(convId: string, text: string): Promise<{ 
 
   try {
     const messagesRef = collection(db, 'conversations', convId, 'messages');
-    await addDoc(messagesRef, {
+    const message = {
       senderId: currentUser.uid, // Always derived from auth, never caller spoofed
       text: trimmed,
       timestamp: serverTimestamp(),
-    });
+    };
+    if (replyTo) {
+      const quote = { id: replyTo.id, text: replyTo.text.slice(0, REPLY_QUOTE_MAX_LENGTH), senderId: replyTo.senderId };
+      try {
+        await addDoc(messagesRef, { ...message, replyTo: quote });
+      } catch (err) {
+        // Rules published before replies existed refuse the quote; still deliver the message.
+        if ((err as FirestoreError)?.code !== 'permission-denied') throw err;
+        await addDoc(messagesRef, message);
+      }
+    } else {
+      await addDoc(messagesRef, message);
+    }
 
     // Update conversation updatedAt timestamp
     const convRef = doc(db, 'conversations', convId);
@@ -218,6 +244,7 @@ export function subscribeToCloudMessages(
             text: data.text || '',
             timestamp: ts,
             status: 'delivered',
+            replyTo: toReplyQuote(data.replyTo, currentUser.uid),
           };
         });
         onMessages(msgs);
