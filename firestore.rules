@@ -49,6 +49,15 @@ service cloud.firestore {
     }
 
     // ====================================================
+    // 0. INDEXED COLLECTION GROUPS
+    // ====================================================
+    
+    // Allow querying all public profiles across all users
+    match /{path=**}/profile/{profileId} {
+      allow read: if isAuthenticated();
+    }
+
+    // ====================================================
     // 1. PRIVACY BY DESIGN: USER PROFILES & PRIVATE SETTINGS
     // ====================================================
 

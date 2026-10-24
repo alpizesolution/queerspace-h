@@ -68,10 +68,18 @@ export async function findMatchCandidate(
       if (allExcludedIds.has(userId)) return;
 
       const data = docSnap.data();
+      
+      console.log('[MatchmakingService] Found candidate doc:', userId, data);
 
       // Ensure required public profile fields are present and profile is not hidden
-      if (!data.displayName || !data.pronouns || !data.intention || !data.region) return;
-      if (data.isProfileHidden === true || data.optOutOfDiscovery === true) return;
+      if (!data.displayName || !data.pronouns || !data.intention || !data.region) {
+          console.log('[MatchmakingService] Candidate skipped (missing fields):', userId);
+          return;
+      }
+      if (data.isProfileHidden === true || data.optOutOfDiscovery === true) {
+          console.log('[MatchmakingService] Candidate skipped (hidden/opted out):', userId);
+          return;
+      }
 
       const candidateProfile: PartnerProfile = {
         id: userId,

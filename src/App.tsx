@@ -22,6 +22,7 @@ import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile } from './services/profilePersistence.ts';
 import { findMatchCandidate } from './services/matchmakingService.ts';
 import { CheckCircle2 } from 'lucide-react';
+import { BottomNavigation } from './components/BottomNavigation.tsx';
 
 
 
@@ -309,6 +310,8 @@ export default function App() {
           />
         )}
       </main>
+
+      <BottomNavigation currentView={currentView} onNavigate={setCurrentView} />
 
       {/* Match Setup Modal */}
       {setupModalOpen && (
