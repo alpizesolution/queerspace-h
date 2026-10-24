@@ -63,7 +63,8 @@ export const SEXUAL_ORIENTATIONS: string[] = [
 export const GENDER_IDENTITIES: string[] = [
   'Cisgender Woman',
   'Transgender Woman',
-  'Non-binary / Genderfluid',
+  'Non-binary',
+  'Genderfluid',
   'Agender',
   'Demigirl',
   'Self-described',

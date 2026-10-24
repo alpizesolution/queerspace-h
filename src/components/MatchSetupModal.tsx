@@ -84,7 +84,10 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
     currentPrefs.sexualOrientationCustom || ''
   );
   const [genderIdentity, setGenderIdentity] = useState<string>(
-    currentPrefs.genderIdentity || 'Prefer not to say'
+    // Saved before Non-binary and Genderfluid became separate options.
+    currentPrefs.genderIdentity === 'Non-binary / Genderfluid'
+      ? 'Non-binary'
+      : currentPrefs.genderIdentity || 'Prefer not to say'
   );
   const [genderIdentityCustom, setGenderIdentityCustom] = useState<string>(
     currentPrefs.genderIdentityCustom || ''
