@@ -272,8 +272,14 @@ export default function App() {
           <SearchingState
             mode={setupInitialMode}
             prefs={userPrefs}
+            blockedPartnerIds={blockedPartnerIds}
             onCancel={() => setCurrentView('home')}
-            onMatchFound={handleMatchFound}
+            onMatchFoundFromCandidate={(candidate, source) => {
+              setActivePartner(candidate);
+              setActivePartnerSource(source);
+              setCurrentView('chat');
+              showToast(`Matched with ${candidate.displayName}!`);
+            }}
           />
         )}
 
