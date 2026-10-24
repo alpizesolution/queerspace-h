@@ -63,13 +63,15 @@ export const AnimatedBrandTitle: React.FC<AnimatedBrandTitleProps> = ({
   };
 
   return (
-    <span
-      onClick={handleManualTrigger}
-      onMouseEnter={handleManualTrigger}
-      className={`font-serif font-bold tracking-tight text-[#fcf7fa] select-none transition-colors hover:text-[#e07bb8] cursor-pointer inline-block ${sizeClass} ${className}`}
-      title="Click or hover to jumble QUEERSPACE <-> QUEERSCAPE"
-    >
-      {displayText}
-    </span>
+    <div className={`inline-block ${sizeClass} ${className}`} style={{ width: '135px' }}>
+      <span
+        onClick={handleManualTrigger}
+        onMouseEnter={handleManualTrigger}
+        className={`font-serif font-bold tracking-tight text-[#fcf7fa] select-none transition-colors hover:text-[#e07bb8] cursor-pointer inline-block ${sizeClass} ${className}`}
+        title="Click or hover to jumble QUEERSPACE <-> QUEERSCAPE"
+      >
+        {displayText}
+      </span>
+    </div>
   );
 };
