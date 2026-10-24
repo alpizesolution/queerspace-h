@@ -84,13 +84,17 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       // Only stamps of "now" can be written, so the clock can't be wound back.
       allow create, update: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['publicRoom', 'unsaid', 'suggestion'])
+        && request.resource.data.keys().hasOnly(['publicRoom', 'unsaid', 'suggestion', 'communityPost', 'communityReply'])
         && (!('publicRoom' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
             || request.resource.data.publicRoom == request.time)
         && (!('unsaid' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
             || request.resource.data.unsaid == request.time)
         && (!('suggestion' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
-            || request.resource.data.suggestion == request.time);
+            || request.resource.data.suggestion == request.time)
+        && (!('communityPost' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.communityPost == request.time)
+        && (!('communityReply' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.communityReply == request.time);
       allow delete: if false;
     }
 
@@ -304,19 +308,38 @@ service cloud.firestore {
     }
 
     // ====================================================
-    // 4. HARDENED COMMUNITY POSTS & INDIVIDUAL LIKES
+    // 4. COMMUNITY POSTS, LIKES & REPLIES
     // ====================================================
+    // Posts are shared with everyone. Like and reply counters live on the post and
+    // can only move by one, together with the matching likes/{uid} or replies/{id}
+    // doc in the same batch, so each person likes once and counts can't be faked.
+
+    function postPath(postId) {
+      return /databases/$(database)/documents/community_posts/$(postId);
+    }
+
+    function validAuthorFields(data) {
+      return data.authorId == request.auth.uid
+        && data.authorName is string
+        && data.authorName.size() >= 1
+        && data.authorName.size() <= 30
+        && data.authorPronouns is string
+        && data.authorPronouns.size() <= 20
+        && (!('authorAvatar' in data) || (data.authorAvatar is string && data.authorAvatar.size() <= 24));
+    }
+
+    function counterMoves(field, by) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([field])
+        && request.resource.data[field] == resource.data[field] + by;
+    }
 
     match /community_posts/{postId} {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
-        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'title', 'content', 'category', 'tags', 'timestamp'])
-        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'title', 'content', 'category', 'tags', 'timestamp', 'updatedAt'])
-        && request.resource.data.authorId == request.auth.uid
-        && request.resource.data.authorName is string
-        && request.resource.data.authorName.size() >= 1
-        && request.resource.data.authorName.size() <= 30
+        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'title', 'content', 'category', 'tags', 'likes', 'replyCount', 'timestamp'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'content', 'category', 'tags', 'likes', 'replyCount', 'timestamp'])
+        && validAuthorFields(request.resource.data)
         && isValidCategory(request.resource.data.category)
         && request.resource.data.title is string
         && request.resource.data.title.size() >= 1
@@ -326,36 +349,52 @@ service cloud.firestore {
         && request.resource.data.content.size() <= 1000
         && request.resource.data.tags is list
         && request.resource.data.tags.size() <= 4
-        && request.resource.data.timestamp is timestamp;
+        && request.resource.data.likes == 0
+        && request.resource.data.replyCount == 0
+        && request.resource.data.timestamp == request.time
+        && slowMode('communityPost', 30);
 
+      // Like: +1 with a new likes/{uid} doc. Unlike: -1 while removing it.
       allow update: if isAuthenticated()
-        && request.auth.uid == resource.data.authorId
-        && request.resource.data.authorId == resource.data.authorId
-        && request.resource.data.timestamp == resource.data.timestamp
-        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'title', 'content', 'category', 'tags', 'timestamp', 'updatedAt'])
-        && isValidCategory(request.resource.data.category)
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 1
-        && request.resource.data.title.size() <= 90
-        && request.resource.data.content is string
-        && request.resource.data.content.size() >= 1
-        && request.resource.data.content.size() <= 1000
-        && request.resource.data.tags is list
-        && request.resource.data.tags.size() <= 4
-        && request.resource.data.updatedAt is timestamp;
+        && counterMoves('likes', 1)
+        && !exists(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid));
+      allow update: if isAuthenticated()
+        && counterMoves('likes', -1)
+        && exists(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid))
+        && !existsAfter(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid));
+      // Reply: +1, written in the same batch as the reply (checked on the reply doc).
+      allow update: if isAuthenticated() && counterMoves('replyCount', 1) && slowMode('communityReply', 5);
+      // Admin removing a reply: -1.
+      allow update: if isAdmin() && counterMoves('replyCount', -1);
 
       allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorId || isAdmin());
 
-      // Safe Individual Like Documents (/community_posts/{postId}/likes/{request.auth.uid})
       match /likes/{userId} {
-        allow read: if isAuthenticated();
-
+        allow read: if isOwner(userId);
         allow create: if isOwner(userId)
-          && request.resource.data.keys().hasAll(['createdAt'])
           && request.resource.data.keys().hasOnly(['createdAt'])
-          && request.resource.data.createdAt is timestamp;
+          && request.resource.data.createdAt == request.time
+          && getAfter(postPath(postId)).data.likes == get(postPath(postId)).data.likes + 1;
+        allow delete: if isOwner(userId)
+          && getAfter(postPath(postId)).data.likes == get(postPath(postId)).data.likes - 1;
+        allow update: if false;
+      }
 
-        allow delete: if isOwner(userId);
+      match /replies/{replyId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated()
+          && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'content', 'timestamp'])
+          && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'content', 'timestamp'])
+          && validAuthorFields(request.resource.data)
+          && request.resource.data.content is string
+          && request.resource.data.content.size() >= 1
+          && request.resource.data.content.size() <= 500
+          && request.resource.data.timestamp == request.time
+          && getAfter(postPath(postId)).data.replyCount == get(postPath(postId)).data.replyCount + 1
+          && slowMode('communityReply', 5);
+        allow delete: if isAdmin()
+          && getAfter(postPath(postId)).data.replyCount == get(postPath(postId)).data.replyCount - 1;
         allow update: if false;
       }
     }

@@ -1,33 +1,131 @@
-import React, { useState } from 'react';
-import { ArrowUp, Check, Heart, MessageCircle, Plus, Share, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowUp, Check, Heart, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
-import { Sheet } from './Sheet.tsx';
-import { CommunityPost, UserPreferences } from '../types.ts';
-import { INITIAL_COMMUNITY_POSTS } from '../utils/community-data.ts';
+import { ConfirmDialog, Sheet } from './Sheet.tsx';
+import { CommunityPost, CommunityReply, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
-import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.ts';
+import {
+  COMMUNITY_REPLY_MAX_LENGTH,
+  createCommunityPost,
+  deleteCommunityPost,
+  isCommunityAvailable,
+  replyToCommunityPost,
+  setCommunityLike,
+  subscribeToCommunity,
+  subscribeToReplies,
+} from '../services/communityService.ts';
 
 interface CommunityFeedViewProps {
   userPrefs: UserPreferences;
 }
 
+// Which posts this device has liked, so the heart shows filled. The server still allows one like per person.
+const LIKED_KEY = 'qs_community_liked';
+
+function loadLiked(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(LIKED_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveLiked(map: Record<string, boolean>) {
+  try {
+    localStorage.setItem(LIKED_KEY, JSON.stringify(map));
+  } catch {
+    // Per-device convenience only.
+  }
+}
+
+/** Live replies for one expanded post, plus the reply box. */
+const Replies: React.FC<{ post: CommunityPost; userPrefs: UserPreferences }> = ({ post, userPrefs }) => {
+  const [replies, setReplies] = useState<CommunityReply[] | null>(null);
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => subscribeToReplies(post.id, setReplies, () => setReplies([])), [post.id]);
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const sanitized = sanitizeMessageText(text.trim());
+    if (!text.trim()) return;
+    if (sanitized.isBlocked) {
+      setError("This goes against our guidelines, so it can't be posted.");
+      return;
+    }
+    setSending(true);
+    const result = await replyToCommunityPost(userPrefs, post.id, sanitized.cleanText);
+    setSending(false);
+    if (result === 'ok') {
+      setText('');
+      setError(null);
+    } else {
+      setError(result === 'too-fast' ? 'Slow down a little, then try again.' : "Couldn't send. Check your connection.");
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-line space-y-3 anim-fade">
+      {replies === null ? (
+        <div className="h-10 rounded-xl bg-raised animate-pulse" aria-hidden="true" />
+      ) : (
+        replies.map((reply) => (
+          <div key={reply.id} className="flex gap-2.5 text-[14px]">
+            <AnimalAvatar avatar={reply.authorAvatar} seed={reply.authorId || reply.author} className="w-7 h-7 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-[12px] text-subtle">
+                <span className="font-semibold text-fg">{reply.author}</span> {reply.authorPronouns} ·{' '}
+                {formatChatTime(reply.timestamp)}
+              </p>
+              <p className="text-muted leading-relaxed whitespace-pre-wrap break-words mt-0.5">{reply.content}</p>
+            </div>
+          </div>
+        ))
+      )}
+
+      <form onSubmit={send} className="flex items-center gap-2">
+        <input
+          type="text"
+          value={text}
+          maxLength={COMMUNITY_REPLY_MAX_LENGTH}
+          onChange={(e) => {
+            setText(e.target.value);
+            setError(null);
+          }}
+          placeholder="Write a reply"
+          aria-label={`Reply to ${post.title}`}
+          enterKeyHint="send"
+          className="flex-1 min-w-0 h-10 px-4 rounded-full bg-ink border border-line text-base sm:text-sm text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+        />
+        <button
+          type="submit"
+          onMouseDown={(e) => e.preventDefault()}
+          disabled={!text.trim() || sending}
+          className="w-10 h-10 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed"
+          aria-label="Send reply"
+        >
+          <ArrowUp className="w-[18px] h-[18px]" strokeWidth={2.5} />
+        </button>
+      </form>
+      {error && (
+        <p className="text-[12px] text-danger" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+};
+
 export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   userPrefs,
 }) => {
-  const [posts, setPosts] = useState<CommunityPost[]>(() => {
-    const saved = getStorageItem(
-      STORAGE_KEYS.COMMUNITY_POSTS.current,
-      STORAGE_KEYS.COMMUNITY_POSTS.legacies
-    );
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return INITIAL_COMMUNITY_POSTS;
-      }
-    }
-    return INITIAL_COMMUNITY_POSTS;
-  });
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [feedError, setFeedError] = useState(false);
+  const [uid, setUid] = useState<string | null>(null);
+  const [liked, setLiked] = useState<Record<string, boolean>>(loadLiked);
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -36,26 +134,46 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const [newCategory, setNewCategory] = useState<CommunityPost['category']>('general');
   const [newTag, setNewTag] = useState('');
   const [tagsList, setTagsList] = useState<string[]>(['Sapphic']);
-  const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const savePosts = (newPosts: CommunityPost[]) => {
-    setPosts(newPosts);
-    setStorageItem(STORAGE_KEYS.COMMUNITY_POSTS.current, JSON.stringify(newPosts));
+  const available = isCommunityAvailable();
+
+  useEffect(() => {
+    if (!available) return;
+    return subscribeToCommunity(
+      (next, me) => {
+        setPosts(next);
+        setUid(me);
+        setLoading(false);
+        setFeedError(false);
+      },
+      () => {
+        setLoading(false);
+        setFeedError(true);
+      }
+    );
+  }, [available]);
+
+  const updateLiked = (postId: string, value: boolean) => {
+    setLiked((prev) => {
+      const next = { ...prev };
+      if (value) next[postId] = true;
+      else delete next[postId];
+      saveLiked(next);
+      return next;
+    });
   };
 
-  const handleLikePost = (postId: string) => {
-    const updated = posts.map((post) => {
-      if (post.id !== postId) return post;
-      const isLiked = post.userLiked;
-      return {
-        ...post,
-        likes: isLiked ? post.likes - 1 : post.likes + 1,
-        userLiked: !isLiked,
-      };
-    });
-    savePosts(updated);
+  const handleLikePost = async (postId: string) => {
+    const wasLiked = Boolean(liked[postId]);
+    updateLiked(postId, !wasLiked);
+    const ok = await setCommunityLike(postId, !wasLiked);
+    // A refused like means this account already liked it on another visit; a refused unlike just reverts.
+    if (!ok) updateLiked(postId, true);
   };
 
   const handleAddTag = (e: React.SyntheticEvent) => {
@@ -71,60 +189,37 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
     setTagsList(tagsList.filter((t) => t !== tagToRemove));
   };
 
-  const handleCreatePost = (e: React.FormEvent) => {
+  const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
-    const titleSanitized = sanitizeMessageText(newTitle);
-    const contentSanitized = sanitizeMessageText(newContent);
+    const titleSanitized = sanitizeMessageText(newTitle.trim());
+    const contentSanitized = sanitizeMessageText(newContent.trim());
 
-    if (titleSanitized.isBlocked || contentSanitized.isBlocked) return;
+    if (titleSanitized.isBlocked || contentSanitized.isBlocked) {
+      setPostError("This goes against our guidelines, so it can't be posted.");
+      return;
+    }
 
-    const newPost: CommunityPost = {
-      id: `post-${Date.now()}`,
-      author: userPrefs.displayName || 'Sapphic Guest',
-      authorPronouns: userPrefs.pronouns || 'she/her',
-      category: newCategory,
+    setPosting(true);
+    const result = await createCommunityPost(userPrefs, {
       title: titleSanitized.cleanText,
       content: contentSanitized.cleanText,
-      timestamp: Date.now(),
-      likes: 1,
-      userLiked: true,
-      replies: [],
+      category: newCategory,
       tags: tagsList,
-    };
-
-    savePosts([newPost, ...posts]);
+    });
+    setPosting(false);
+    if (result !== 'ok') {
+      setPostError(
+        result === 'too-fast'
+          ? 'You can post every 30 seconds. Take a breath and try again.'
+          : "Couldn't post. Check your connection and try again."
+      );
+      return;
+    }
     setNewTitle('');
     setNewContent('');
     setTagsList(['Sapphic']);
+    setPostError(null);
     setShowCreateModal(false);
-  };
-
-  const handleAddReply = (postId: string) => {
-    const text = replyTextMap[postId];
-    if (!text || !text.trim()) return;
-
-    const sanitized = sanitizeMessageText(text);
-    if (sanitized.isBlocked) return;
-
-    const reply = {
-      id: `reply-${Date.now()}`,
-      author: userPrefs.displayName || 'Sapphic Guest',
-      authorPronouns: userPrefs.pronouns || 'she/her',
-      content: sanitized.cleanText,
-      timestamp: Date.now(),
-    };
-
-    const updated = posts.map((post) => {
-      if (post.id !== postId) return post;
-      return {
-        ...post,
-        replies: [...post.replies, reply],
-      };
-    });
-
-    savePosts(updated);
-    setReplyTextMap({ ...replyTextMap, [postId]: '' });
-    setExpandedReplies({ ...expandedReplies, [postId]: true });
   };
 
   const handleShare = async (post: CommunityPost) => {
@@ -178,7 +273,17 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
         ))}
       </div>
 
-      {filteredPosts.length === 0 ? (
+      {!available ? (
+        <p className="card p-5 text-sm text-muted">Community isn't available right now. Please try again later.</p>
+      ) : loading ? (
+        <div className="space-y-3" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="card h-36 animate-pulse" />
+          ))}
+        </div>
+      ) : feedError ? (
+        <p className="text-center text-sm text-muted py-12">Couldn't load posts. Please try again soon.</p>
+      ) : filteredPosts.length === 0 ? (
         <div className="text-center py-16 px-6">
           <p className="text-[15px] font-medium text-fg">Nothing here yet</p>
           <p className="text-[13px] text-muted mt-1 mb-5">Start the conversation.</p>
@@ -190,10 +295,12 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
         <div className="space-y-3">
           {filteredPosts.map((post) => {
             const isRepliesExpanded = expandedReplies[post.id];
+            const userLiked = Boolean(liked[post.id]);
+            const replyCount = post.replyCount ?? 0;
             return (
               <article key={post.id} className="card p-4 sm:p-5">
                 <header className="flex items-center gap-2.5 mb-3">
-                  <AnimalAvatar seed={post.author} className="w-9 h-9" />
+                  <AnimalAvatar avatar={post.authorAvatar} seed={post.authorId || post.author} className="w-9 h-9" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-semibold text-fg truncate">
                       {post.author} <span className="font-normal text-subtle">{post.authorPronouns}</span>
@@ -202,6 +309,15 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                       {CATEGORY_LABELS[post.category] ?? post.category} · {formatChatTime(post.timestamp)}
                     </p>
                   </div>
+                  {uid && post.authorId === uid && (
+                    <button
+                      onClick={() => setDeletingId(post.id)}
+                      className="icon-btn w-9 h-9 -mr-2"
+                      aria-label="Delete your post"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </header>
 
                 <h2 className="text-[17px] font-semibold text-fg leading-snug">{post.title}</h2>
@@ -220,25 +336,25 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                 <div className="flex items-center gap-1 mt-3 -ml-2 text-[13px] text-muted">
                   <button
                     onClick={() => handleLikePost(post.id)}
-                    aria-pressed={!!post.userLiked}
-                    aria-label={post.userLiked ? 'Unlike' : 'Like'}
+                    aria-pressed={!!userLiked}
+                    aria-label={userLiked ? 'Unlike' : 'Like'}
                     className={`inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full hover:bg-raised transition-colors cursor-pointer ${
-                      post.userLiked ? 'text-berry' : 'hover:text-fg'
+                      userLiked ? 'text-berry' : 'hover:text-fg'
                     }`}
                   >
-                    <Heart className={`w-[18px] h-[18px] ${post.userLiked ? 'fill-berry' : ''}`} />
+                    <Heart className={`w-[18px] h-[18px] ${userLiked ? 'fill-berry' : ''}`} />
                     {post.likes}
                   </button>
                   <button
                     onClick={() => setExpandedReplies({ ...expandedReplies, [post.id]: !isRepliesExpanded })}
                     aria-expanded={!!isRepliesExpanded}
-                    aria-label={`${post.replies.length} replies`}
+                    aria-label={`${replyCount} replies`}
                     className={`inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full hover:bg-raised hover:text-fg transition-colors cursor-pointer ${
                       isRepliesExpanded ? 'text-fg' : ''
                     }`}
                   >
                     <MessageCircle className="w-[18px] h-[18px]" />
-                    {post.replies.length}
+                    {replyCount}
                   </button>
                   <button
                     onClick={() => handleShare(post)}
@@ -256,47 +372,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                   </button>
                 </div>
 
-                {isRepliesExpanded && (
-                  <div className="mt-3 pt-3 border-t border-line space-y-3 anim-fade">
-                    {post.replies.map((reply) => (
-                      <div key={reply.id} className="text-[14px]">
-                        <p className="text-[12px] text-subtle">
-                          <span className="font-semibold text-fg">{reply.author}</span> {reply.authorPronouns} ·{' '}
-                          {formatChatTime(reply.timestamp)}
-                        </p>
-                        <p className="text-muted leading-relaxed whitespace-pre-wrap break-words mt-0.5">
-                          {reply.content}
-                        </p>
-                      </div>
-                    ))}
-
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        handleAddReply(post.id);
-                      }}
-                      className="flex items-center gap-2"
-                    >
-                      <input
-                        type="text"
-                        value={replyTextMap[post.id] || ''}
-                        onChange={(e) => setReplyTextMap({ ...replyTextMap, [post.id]: e.target.value })}
-                        placeholder="Write a reply"
-                        aria-label={`Reply to ${post.title}`}
-                        enterKeyHint="send"
-                        className="flex-1 min-w-0 h-10 px-4 rounded-full bg-ink border border-line text-base sm:text-sm text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
-                      />
-                      <button
-                        type="submit"
-                        disabled={!replyTextMap[post.id]?.trim()}
-                        className="w-10 h-10 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed"
-                        aria-label="Send reply"
-                      >
-                        <ArrowUp className="w-[18px] h-[18px]" strokeWidth={2.5} />
-                      </button>
-                    </form>
-                  </div>
-                )}
+                {isRepliesExpanded && <Replies post={post} userPrefs={userPrefs} />}
               </article>
             );
           })}
@@ -321,10 +397,10 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
             <button
               type="submit"
               form="qs-new-post"
-              disabled={!newTitle.trim() || !newContent.trim()}
+              disabled={!newTitle.trim() || !newContent.trim() || posting}
               className="btn btn-primary w-full"
             >
-              Post
+              {posting ? 'Posting…' : 'Post'}
             </button>
           }
         >
@@ -400,8 +476,28 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
               </div>
               <p className="text-[12px] text-subtle mt-1.5">Up to 4 tags.</p>
             </div>
+            {postError && (
+              <p className="text-[13px] text-danger" role="alert">
+                {postError}
+              </p>
+            )}
           </form>
         </Sheet>
+      )}
+
+      {deletingId && (
+        <ConfirmDialog
+          title="Delete your post?"
+          message="It disappears for everyone right away."
+          confirmLabel="Delete"
+          tone="danger"
+          onConfirm={() => {
+            const id = deletingId;
+            setDeletingId(null);
+            deleteCommunityPost(id);
+          }}
+          onCancel={() => setDeletingId(null)}
+        />
       )}
     </div>
   );

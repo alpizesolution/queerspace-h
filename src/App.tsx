@@ -12,6 +12,7 @@ import { UnsaidView } from './components/UnsaidView.tsx';
 import { InfoModals } from './components/InfoModals.tsx';
 import { DonationModal } from './components/DonationModal.tsx';
 import { FloatingCatsBackground } from './components/FloatingCatsBackground.tsx';
+import { InstallPrompt } from './components/InstallPrompt.tsx';
 import { PartnerProfile, UserPreferences } from './types.ts';
 import { generateSapphicPseudonym } from './utils/matching-logic.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from './utils/storage.ts';
@@ -221,6 +222,7 @@ export default function App() {
               onOpenUnsaid={() => handleNavigate('unsaid')}
             />
             <SafetySection onOpenGuidelinesModal={() => setActiveInfoModal('guidelines')} />
+            <InstallPrompt />
           </>
         )}
 
