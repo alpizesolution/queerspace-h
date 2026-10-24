@@ -12,6 +12,7 @@ import {
   doc,
   getCountFromServer,
   getDoc,
+  getDocFromServer,
   getDocs,
   limit,
   orderBy,
@@ -140,12 +141,17 @@ export function isGoogleUser(user: User | null): boolean {
   return Boolean(user?.providerData.some((p) => p.providerId === 'google.com'));
 }
 
-export async function checkIsAdmin(user: User | null): Promise<boolean> {
-  if (!db || !user || !isGoogleUser(user)) return false;
+/** 'missing': no admins/{uid} doc. 'blocked': the rules refused the read (usually not published yet). */
+export type AdminCheck = 'admin' | 'missing' | 'blocked' | 'error';
+
+export async function checkAdmin(user: User | null): Promise<AdminCheck> {
+  if (!db || !user || !isGoogleUser(user)) return 'missing';
   try {
-    return (await getDoc(doc(db, 'admins', user.uid))).exists();
-  } catch {
-    return false;
+    // Straight from the server, so a doc added in the console shows up on "Check again".
+    return (await getDocFromServer(doc(db, 'admins', user.uid))).exists() ? 'admin' : 'missing';
+  } catch (err) {
+    console.warn('[Admin] Admin check failed:', err);
+    return (err as { code?: string })?.code === 'permission-denied' ? 'blocked' : 'error';
   }
 }
 

@@ -135,23 +135,34 @@ export function togglePreferredFilter(
   return next.length > 0 ? next : ['Any / No preference'];
 }
 
-const SAPPHIC_FIRST_NAMES = [
-  'Lavender', 'Clover', 'Velvet', 'Aster', 'Marigold',
-  'Rowan', 'Wren', 'Sage', 'Dahlia', 'Willow', 'Hazel',
-  'Ivy', 'Faye', 'Ruby', 'Celeste', 'Saffron', 'Iris'
+// Playful, queer-coded names. Every result stays within the 25-character display name limit.
+export const PSEUDONYM_FIRST_WORDS = [
+  'Chaotic', 'Cottagecore', 'Soft', 'Feral', 'Useless', 'Sapphic', 'Bisexual', 'Lesbian',
+  'Pining', 'Tender', 'Moody', 'Sleepy', 'Butch', 'Femme', 'Thrifted', 'Lovesick',
+  'Kilig', 'Marupok', 'Flannel', 'Tarot', 'Iced Coffee', 'Lavender', 'Overthinking', 'Gay Little',
 ];
 
-const SAPPHIC_SECOND_NAMES = [
-  'Lark', 'Meadow', 'Breeze', 'Song', 'Bloom',
-  'Echo', 'Glow', 'Haven', 'Quill', 'Fern', 'Mist',
-  'Starlight', 'Dawn', 'Petal', 'Moon', 'Crest'
+export const PSEUDONYM_SECOND_WORDS = [
+  'Carabiner', 'Cardigan', 'Gremlin', 'Frog', 'Moth', 'Raccoon', 'Witch', 'Poet',
+  'Menace', 'Heartthrob', 'Disaster', 'Mushroom', 'Bookworm', 'Beshie', 'Plant Mom', 'Cat Lady',
+  'Stargazer', 'Daydreamer', 'Romantic', 'Sweetheart',
 ];
+
+// Hand-picked names that don't fit the two-part pattern.
+export const PSEUDONYM_SPECIALS = [
+  'U-Haul Enthusiast', 'Carabiner Collector', 'Certified Pining Expert', 'Kilig Professional',
+  'Marupok Era', 'Ate of the Group Chat', 'Beshie With Feelings', 'Two Cats One Cardigan',
+  'Tote Bag Philosopher', 'Plant Mom Energy', 'Sad Girl Hours', 'Disaster Bisexual',
+  'Useless Lesbian', 'Mutual Pining', 'Situationship Survivor', 'Main Character Energy',
+];
+
+const pick = <T,>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
 
 export function generateSapphicPseudonym(): { name: string; pronouns: string } {
-  const first = SAPPHIC_FIRST_NAMES[Math.floor(Math.random() * SAPPHIC_FIRST_NAMES.length)];
-  const second = SAPPHIC_SECOND_NAMES[Math.floor(Math.random() * SAPPHIC_SECOND_NAMES.length)];
+  const name =
+    Math.random() < 0.3 ? pick(PSEUDONYM_SPECIALS) : `${pick(PSEUDONYM_FIRST_WORDS)} ${pick(PSEUDONYM_SECOND_WORDS)}`;
   const pronouns = Math.random() > 0.35 ? 'she/her' : (Math.random() > 0.5 ? 'they/she' : 'they/them');
-  return { name: `${first} ${second}`, pronouns };
+  return { name, pronouns };
 }
 
 /**

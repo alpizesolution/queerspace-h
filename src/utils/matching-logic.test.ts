@@ -5,6 +5,9 @@ import {
   validateSetupProfile,
   sanitizeMessageText,
   generateSapphicPseudonym,
+  PSEUDONYM_FIRST_WORDS,
+  PSEUDONYM_SECOND_WORDS,
+  PSEUDONYM_SPECIALS,
   toggleGenderExpression,
   togglePreferredFilter,
 } from './matching-logic.ts';
@@ -15,6 +18,14 @@ test('generateSapphicPseudonym produces two-word name and valid pronouns', () =>
   const result = generateSapphicPseudonym();
   assert.ok(result.name.includes(' '));
   assert.ok(['she/her', 'they/she', 'they/them'].includes(result.pronouns));
+});
+
+test('every possible pseudonym fits the 25-character display name limit', () => {
+  const all = [
+    ...PSEUDONYM_SPECIALS,
+    ...PSEUDONYM_FIRST_WORDS.flatMap((a) => PSEUDONYM_SECOND_WORDS.map((b) => `${a} ${b}`)),
+  ];
+  for (const name of all) assert.ok(name.length <= 25 && name.includes(' '), name);
 });
 
 test('validateSetupProfile accepts valid display name', () => {
