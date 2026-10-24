@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Users, Sparkles, Smile, ArrowLeft, Shield } from 'lucide-react';
+import { ArrowUp, Users } from 'lucide-react';
+import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
 import { INITIAL_PUBLIC_ROOM_MESSAGES } from '../utils/community-data.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
@@ -10,16 +11,12 @@ import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.t
 interface PublicRoomViewProps {
   userPrefs: UserPreferences;
   isSoundMuted: boolean;
-  onBackToHome: () => void;
-  onOpen1on1: () => void;
   onOpenDonationModal?: () => void;
 }
 
 export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   userPrefs,
   isSoundMuted,
-  onBackToHome,
-  onOpen1on1,
   onOpenDonationModal,
 }) => {
   const [messages, setMessages] = useState<PublicRoomMessage[]>(() => {
@@ -38,12 +35,11 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   });
 
   const [inputText, setInputText] = useState('');
-  const [activeUsersCount, setActiveUsersCount] = useState(14);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages]);
 
   // Persist messages in storage
@@ -107,83 +103,53 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
     }
   };
 
-  return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-4xl mx-auto w-full bg-[#17121B] sm:border-x border-[#403247]">
-      {/* Room Header */}
-      <div className="bg-[#241B29] px-4 py-3 border-b border-[#403247] flex items-center justify-between shadow-xs z-10">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBackToHome}
-            className="p-1.5 rounded-full hover:bg-[#302235] text-[#BDB0BF] hover:text-[#F7F0F6] transition-colors"
-            aria-label="Back to home"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-serif text-base sm:text-lg font-bold text-[#F7F0F6]">
-                Sapphic Town Square
-              </h2>
-              <span className="text-[11px] font-semibold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800/60 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                {activeUsersCount} online
-              </span>
-            </div>
-            <p className="text-xs text-[#BDB0BF]">
-              Public, open conversation for all sapphic community members
-            </p>
-          </div>
-        </div>
+  const viewportHeight = useVisualViewportHeight();
+  const chrome = 'var(--header-h) - env(safe-area-inset-top) - var(--tabbar-h)';
 
-        <button
-          onClick={onOpen1on1}
-          className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#C77DAA] hover:bg-[#d893bd] text-[#17121B] text-xs font-semibold shadow-xs transition-colors"
-        >
-          <span>Switch to 1-on-1</span>
-        </button>
+  return (
+    <div
+      className="flex flex-col max-w-3xl mx-auto w-full md:border-x md:border-line"
+      style={{ height: `calc(${viewportHeight ? `${viewportHeight}px` : '100dvh'} - ${chrome})` }}
+    >
+      <div className="px-4 sm:px-5 py-3 border-b border-line flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-raised border border-line flex items-center justify-center text-berry shrink-0">
+          <Users className="w-5 h-5" />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-[15px] font-semibold text-fg">Public Room</h1>
+          <p className="text-[12px] text-subtle truncate">Everyone here can see what you write. Be kind.</p>
+        </div>
       </div>
 
-      {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#17121B]">
-        {/* Welcome notice */}
-        <div className="bg-[#241B29] rounded-2xl p-4 border border-[#403247] text-center max-w-md mx-auto my-2 space-y-1 text-xs text-[#BDB0BF] shadow-sm">
-          <div className="flex items-center justify-center gap-1.5 font-bold text-[#F7F0F6]">
-            <Sparkles className="w-4 h-4 text-[#C77DAA]" />
-            <span>Welcome to the Public Room</span>
+      <div className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4 space-y-4" aria-live="polite">
+        {messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-center px-6">
+            <p className="text-[15px] font-medium text-fg">It's quiet in here</p>
+            <p className="text-[13px] text-muted mt-1">Say hi, or share what you're reading or listening to.</p>
           </div>
-          <p>
-            Drop a cozy hello, share what song or book you're loving, or just say hi to everyone. Keep it kind and respectful!
-          </p>
-        </div>
+        )}
 
         {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex items-start gap-3 ${msg.isSelf ? 'flex-row-reverse' : ''}`}
-          >
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-xs border border-[#403247]"
-              style={{ backgroundColor: msg.avatarColor }}
-            >
-              {msg.author.charAt(0)}
-            </div>
-
-            <div className={`max-w-[80%] ${msg.isSelf ? 'text-right' : 'text-left'}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold text-xs text-[#F7F0F6]">{msg.author}</span>
-                <span className="text-[10px] text-[#C77DAA] bg-[#302235] px-1.5 py-0.2 rounded-full border border-[#403247]">
-                  {msg.authorPronouns}
-                </span>
-                <span className="text-[10px] text-[#BDB0BF]">
-                  {formatChatTime(msg.timestamp)}
-                </span>
-              </div>
-
+          <div key={msg.id} className={`flex items-end gap-2 ${msg.isSelf ? 'flex-row-reverse' : ''}`}>
+            {!msg.isSelf && (
               <div
-                className={`p-3 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-sm break-words inline-block text-left ${
-                  msg.isSelf
-                    ? 'bg-[#8E547E] text-[#F7F0F6] rounded-tr-xs'
-                    : 'bg-[#241B29] text-[#F7F0F6] border border-[#403247] rounded-tl-xs'
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[13px] font-semibold shrink-0"
+                style={{ backgroundColor: msg.avatarColor }}
+                aria-hidden="true"
+              >
+                {msg.author.charAt(0)}
+              </div>
+            )}
+
+            <div className={`max-w-[80%] flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}>
+              <div className="flex items-baseline gap-1.5 mb-1 px-1 text-[12px]">
+                {!msg.isSelf && <span className="font-semibold text-fg">{msg.author}</span>}
+                {!msg.isSelf && <span className="text-subtle">{msg.authorPronouns}</span>}
+                <span className="text-subtle">{formatChatTime(msg.timestamp)}</span>
+              </div>
+              <div
+                className={`px-3.5 py-2 text-[15px] leading-snug rounded-[20px] break-words whitespace-pre-wrap ${
+                  msg.isSelf ? 'bg-plum text-fg rounded-br-md' : 'bg-raised text-fg rounded-bl-md'
                 }`}
               >
                 {msg.text}
@@ -195,25 +161,24 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Composer */}
-      <form
-        onSubmit={handleSendMessage}
-        className="p-3 sm:p-4 bg-[#241B29] border-t border-[#403247] flex items-center gap-2"
-      >
+      <form onSubmit={handleSendMessage} className="flex items-center gap-2 px-3 sm:px-4 py-2.5 border-t border-line">
         <input
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder={`Chat in public room as ${userPrefs.displayName || 'Sapphic Guest'}...`}
-          className="flex-1 px-4 py-2.5 rounded-full bg-[#17121B] border border-[#403247] text-xs sm:text-sm text-[#F7F0F6] placeholder-[#BDB0BF]/50 focus:outline-none focus:border-[#C77DAA]"
+          placeholder={`Message as ${userPrefs.displayName || 'Sapphic Guest'}`}
+          aria-label="Message the public room"
+          enterKeyHint="send"
+          autoComplete="off"
+          className="flex-1 min-w-0 h-11 px-4 rounded-full bg-surface border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
         />
         <button
           type="submit"
           disabled={!inputText.trim()}
-          className="p-2.5 rounded-full bg-[#C77DAA] hover:bg-[#d893bd] disabled:opacity-40 text-[#17121B] transition-all shadow-md cursor-pointer active:scale-95"
-          aria-label="Send public message"
+          className="w-11 h-11 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center transition-all disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed active:scale-95"
+          aria-label="Send to public room"
         >
-          <Send className="w-4 h-4 text-[#17121B]" />
+          <ArrowUp className="w-5 h-5" strokeWidth={2.5} />
         </button>
       </form>
     </div>

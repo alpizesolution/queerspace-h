@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import {
-  X,
-  Sparkles,
   Zap,
   Sliders,
   Dices,
@@ -10,13 +8,12 @@ import {
   Plus,
   ArrowRight,
   ChevronDown,
-  ChevronUp,
   Heart,
   Lock,
-  RotateCcw,
   SlidersHorizontal,
   MapPin,
 } from 'lucide-react';
+import { Sheet } from './Sheet.tsx';
 import { GenderExpressionOption, Intention, UserPreferences } from '../types.ts';
 import {
   AVAILABLE_TOPICS,
@@ -103,7 +100,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
     currentPrefs.preferredGenderExpressions || ['Any / No preference']
   );
 
-  const [sogieSectionOpen, setSogieSectionOpen] = useState<boolean>(true);
+  const [sogieSectionOpen, setSogieSectionOpen] = useState<boolean>(false);
   const [isAgeConfirmed, setIsAgeConfirmed] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -191,646 +188,480 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
     onStartMatching(activeTab, prefs);
   };
 
+  const isCustom = activeTab === 'custom';
+  const errorList = Object.values(errors).filter(Boolean);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-[#241B29] rounded-3xl border border-[#403247] max-w-xl w-full my-auto shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="px-6 py-4 bg-[#17121B] border-b border-[#403247] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl overflow-hidden bg-[#302235] flex items-center justify-center border border-[#403247]">
-              <img src="/assets/aistudio/queerspace_cbcdbe4c.png" alt="QUEERSPACE Logo" className="w-full h-full object-cover" />
-            </div>
-            <div>
-              <h3 className="font-serif text-lg font-bold text-[#F7F0F6]">
-                Start Your Conversation
-              </h3>
-              <p className="text-xs text-[#BDB0BF]">
-                Low-friction, anonymous sapphic matching
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-[#302235] text-[#BDB0BF] hover:text-[#F7F0F6] transition-colors cursor-pointer"
-            aria-label="Close setup modal"
-          >
-            <X className="w-5 h-5" />
+    <Sheet
+      title="Start a chat"
+      onClose={onClose}
+      size="lg"
+      footer={
+        <>
+          {errorList.length > 0 && (
+            <p role="alert" className="mb-2 text-[13px] text-danger">
+              {errorList[0]}
+            </p>
+          )}
+          <button type="button" onClick={handleSubmit} className="btn btn-primary w-full h-12 text-[15px]">
+            {isCustom ? 'Find my match' : 'Start chatting'}
+            <ArrowRight className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* Tab Mode Selector */}
-        <div className="p-4 bg-[#241B29] border-b border-[#403247]">
-          <div className="grid grid-cols-2 p-1 bg-[#17121B] rounded-2xl border border-[#403247]">
-            <button
-              type="button"
-              onClick={() => setActiveTab('quick')}
-              className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'quick'
-                  ? 'bg-[#302235] text-[#F7F0F6] shadow-xs border border-[#403247]'
-                  : 'text-[#BDB0BF] hover:text-[#F7F0F6]'
-              }`}
-            >
-              <Zap className="w-4 h-4 text-[#C77DAA]" />
-              <span>Quick Chat</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('custom')}
-              className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'custom'
-                  ? 'bg-[#302235] text-[#F7F0F6] shadow-xs border border-[#403247]'
-                  : 'text-[#BDB0BF] hover:text-[#F7F0F6]'
-              }`}
-            >
-              <Sliders className="w-4 h-4 text-[#C77DAA]" />
-              <span>Custom Match</span>
-            </button>
+        </>
+      }
+    >
+      <div className="space-y-7 text-fg">
+        {/* Mode */}
+        <div>
+          <div role="tablist" aria-label="Match type" className="grid grid-cols-2 p-1 bg-ink rounded-xl border border-line">
+            {([
+              ['quick', 'Quick', Zap],
+              ['custom', 'Custom', Sliders],
+            ] as const).map(([tab, label, Icon]) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                onClick={() => setActiveTab(tab)}
+                className={`h-9 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                  activeTab === tab ? 'bg-raised text-fg shadow-sm' : 'text-muted hover:text-fg'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
           </div>
+          <p className="mt-2 text-[13px] text-muted">
+            {isCustom ? 'Match on intention, topics and location.' : 'Meet anyone available right now.'}
+          </p>
         </div>
 
-        {/* Form Body */}
-        <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
-          {/* Persona (Display Name & Pronouns) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-[#F7F0F6]">
-                Your Persona (Optional)
-              </label>
+        {/* Persona */}
+        <section>
+          <label htmlFor="qs-name" className="label">
+            Your name &amp; pronouns
+          </label>
+          <div className="flex gap-2">
+            <div className="relative flex-1 min-w-0">
+              <input
+                id="qs-name"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="e.g. Lavender Lark"
+                maxLength={25}
+                autoComplete="off"
+                aria-invalid={!!errors.displayName}
+                className="input pr-11"
+              />
               <button
                 type="button"
                 onClick={handleRandomizeIdentity}
-                className="text-xs text-[#C77DAA] hover:text-[#F7F0F6] font-medium flex items-center gap-1 hover:underline cursor-pointer"
+                className="icon-btn absolute right-0.5 top-0.5 w-10 h-10"
+                title="Random pseudonym"
+                aria-label="Generate a random pseudonym"
               >
-                <Dices className="w-3.5 h-3.5" />
-                <span>Random Pseudonym</span>
+                <Dices className="w-[18px] h-[18px]" />
               </button>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div className="sm:col-span-2">
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="e.g. Lavender Lark"
-                  maxLength={25}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#403247] bg-[#17121B] text-sm text-[#F7F0F6] placeholder-[#BDB0BF]/50 focus:outline-none focus:border-[#C77DAA] focus:ring-1 focus:ring-[#C77DAA]"
-                />
-                {errors.displayName && (
-                  <p className="text-[11px] text-red-400 mt-1">{errors.displayName}</p>
-                )}
-              </div>
-              <div>
-                <select
-                  value={pronouns}
-                  onChange={(e) => setPronouns(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-[#403247] bg-[#17121B] text-sm text-[#F7F0F6] focus:outline-none focus:border-[#C77DAA]"
-                >
-                  {PRONOUN_OPTIONS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Custom pronouns if selected */}
-            {pronouns === 'Self-described' && (
-              <div className="pt-1">
-                <input
-                  type="text"
-                  value={customPronouns}
-                  onChange={(e) => setCustomPronouns(e.target.value)}
-                  placeholder="Enter your pronouns (e.g. fae/faer, ze/hir)..."
-                  maxLength={30}
-                  className="w-full px-3.5 py-2 rounded-xl border border-[#403247] bg-[#17121B] text-xs text-[#F7F0F6] placeholder-[#BDB0BF]/50 focus:outline-none focus:border-[#C77DAA]"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* SOGIE & Gender Expression Profile Attributes (Optional) */}
-          <div className="rounded-2xl border border-[#403247] bg-[#17121B] overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setSogieSectionOpen(!sogieSectionOpen)}
-              className="w-full p-3.5 flex items-center justify-between text-left hover:bg-[#302235]/50 transition-colors cursor-pointer"
+            <select
+              value={pronouns}
+              onChange={(e) => setPronouns(e.target.value)}
+              aria-label="Pronouns"
+              className="input w-[7.5rem] sm:w-40 shrink-0"
             >
-              <div className="flex items-center gap-2">
-                <Heart className="w-4 h-4 text-[#C77DAA]" />
-                <span className="text-xs font-bold uppercase tracking-wider text-[#F7F0F6]">
-                  Gender Expression & SOGIE (Optional)
-                </span>
-                <span className="text-[10px] text-[#C77DAA] bg-[#302235] px-2 py-0.5 rounded-full border border-[#403247]">
-                  Your Choice
-                </span>
+              {PRONOUN_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+          {errors.displayName && <p className="mt-1.5 text-[13px] text-danger">{errors.displayName}</p>}
+          {pronouns === 'Self-described' && (
+            <input
+              type="text"
+              value={customPronouns}
+              onChange={(e) => setCustomPronouns(e.target.value)}
+              placeholder="Your pronouns, e.g. fae/faer"
+              aria-label="Custom pronouns"
+              maxLength={30}
+              className="input mt-2"
+            />
+          )}
+        </section>
+
+        {isCustom && (
+          <>
+            {/* Intention */}
+            <section>
+              <p className="label">Looking for</p>
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(INTENTION_LABELS) as Intention[]).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={intention === key}
+                    onClick={() => setIntention(key)}
+                    className="chip"
+                  >
+                    {INTENTION_LABELS[key]}
+                  </button>
+                ))}
               </div>
-              {sogieSectionOpen ? (
-                <ChevronUp className="w-4 h-4 text-[#BDB0BF]" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-[#BDB0BF]" />
-              )}
-            </button>
+            </section>
 
-            {sogieSectionOpen && (
-              <div className="p-4 pt-1 space-y-4 border-t border-[#403247]/60 text-xs">
-                <p className="text-[11px] text-[#BDB0BF] leading-relaxed">
-                  Share as much or as little as you feel comfortable with. These fields are completely optional and help you feel represented.
-                </p>
+            {/* Topics */}
+            <section>
+              <div className="flex items-baseline justify-between">
+                <p className="label">Topics</p>
+                <span className="text-[12px] text-subtle">{selectedTopics.length}/8</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[...AVAILABLE_TOPICS, ...selectedTopics.filter((t) => !AVAILABLE_TOPICS.includes(t))].map((topic) => {
+                  const isSelected = selectedTopics.includes(topic);
+                  return (
+                    <button
+                      key={topic}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => handleToggleTopic(topic)}
+                      className="chip"
+                    >
+                      {isSelected && <Check className="w-3.5 h-3.5 text-berry" />}
+                      {topic}
+                    </button>
+                  );
+                })}
+              </div>
+              <form onSubmit={handleAddCustomTopic} className="flex gap-2 mt-3">
+                <input
+                  type="text"
+                  value={customTopicInput}
+                  onChange={(e) => setCustomTopicInput(e.target.value)}
+                  placeholder="Add your own"
+                  aria-label="Add a custom topic"
+                  maxLength={25}
+                  className="input flex-1"
+                />
+                <button
+                  type="submit"
+                  disabled={!customTopicInput.trim() || selectedTopics.length >= 8}
+                  className="icon-btn w-11 h-11 bg-raised border border-line text-berry"
+                  aria-label="Add topic"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </form>
+            </section>
 
-                {/* 1. Gender Expression Field */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="font-semibold text-[#F7F0F6]">
-                      Gender Expression (Multi-select)
-                    </label>
-                    <span className="text-[10px] text-[#BDB0BF]">
-                      {genderExpression.length > 0 ? `${genderExpression.length} chosen` : 'None selected'}
-                    </span>
+            {/* Location */}
+            <section className="card p-4 space-y-3">
+              <ToggleRow
+                icon={<MapPin className="w-4 h-4 text-lavender" />}
+                checked={applyLocationFilter}
+                onChange={setApplyLocationFilter}
+                title="Filter by location"
+                hint={formatLocationSummary(locationSelection)}
+              />
+
+              {applyLocationFilter && (
+                <div className="space-y-3 pt-3 border-t border-line">
+                  <input
+                    type="search"
+                    value={locationSearchQuery}
+                    onChange={(e) => setLocationSearchQuery(e.target.value)}
+                    placeholder="Search region, province or city"
+                    aria-label="Search locations"
+                    className="input"
+                  />
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      aria-pressed={locationSelection.includes('Anywhere in the Philippines')}
+                      onClick={() => setLocationSelection(['Anywhere in the Philippines'])}
+                      className="chip"
+                    >
+                      Nationwide
+                    </button>
+                    {PHILIPPINE_ISLAND_GROUPS.map((ig) => (
+                      <button
+                        key={ig}
+                        type="button"
+                        aria-pressed={locationSelection.includes(ig)}
+                        onClick={() => setLocationSelection(toggleLocationPreference(locationSelection, ig))}
+                        className="chip"
+                      >
+                        {ig}
+                      </button>
+                    ))}
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {GENDER_EXPRESSIONS.map((expr) => {
-                      const isSelected = genderExpression.includes(expr);
+
+                  <div className="max-h-56 overflow-y-auto overscroll-contain space-y-2 -mr-1 pr-1">
+                    {PHILIPPINE_REGIONS_AND_LOCATIONS.map((group) => {
+                      const q = locationSearchQuery.toLowerCase();
+                      const regionMatches = !q || group.region.toLowerCase().includes(q);
+                      const places = group.provincesAndCities.filter(
+                        (pc) => regionMatches || pc.toLowerCase().includes(q)
+                      );
+                      if (!regionMatches && places.length === 0) return null;
+
+                      const isRegionSelected = locationSelection.includes(group.region);
+
                       return (
-                        <button
-                          key={expr}
-                          type="button"
-                          onClick={() => handleToggleExpr(expr)}
-                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                            isSelected
-                              ? 'bg-[#8E547E] text-white border border-[#C77DAA] shadow-xs'
-                              : 'bg-[#241B29] text-[#BDB0BF] border border-[#403247] hover:border-[#C77DAA] hover:text-[#F7F0F6]'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-3 h-3 text-[#C77DAA]" />}
-                          <span>{expr}</span>
-                        </button>
+                        <div key={group.region} className="rounded-xl bg-ink border border-line p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              aria-pressed={isRegionSelected}
+                              onClick={() =>
+                                setLocationSelection(toggleLocationPreference(locationSelection, group.region))
+                              }
+                              className={`text-left text-[13px] font-semibold cursor-pointer py-1 ${
+                                isRegionSelected ? 'text-berry' : 'text-fg hover:text-berry'
+                              }`}
+                            >
+                              {isRegionSelected && <Check className="inline w-3.5 h-3.5 mr-1 -mt-0.5" />}
+                              {group.region}
+                            </button>
+                            <span className="text-[11px] text-subtle shrink-0">{group.islandGroup}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {places.map((pc) => {
+                              const isPcSelected = locationSelection.includes(pc);
+                              return (
+                                <button
+                                  key={pc}
+                                  type="button"
+                                  aria-pressed={isPcSelected}
+                                  onClick={() => setLocationSelection(toggleLocationPreference(locationSelection, pc))}
+                                  className={`h-8 px-2.5 rounded-lg text-[12px] font-medium cursor-pointer transition-colors ${
+                                    isPcSelected
+                                      ? 'bg-berry text-ink'
+                                      : 'bg-surface text-muted border border-line hover:text-fg'
+                                  }`}
+                                >
+                                  {pc}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
-                  {errors.genderExpression && (
-                    <p className="text-[11px] text-red-400">{errors.genderExpression}</p>
-                  )}
                 </div>
+              )}
 
-                {/* 2. SOGIE Identity Fields (Sexual Orientation & Gender Identity) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <label className="block font-semibold text-[#F7F0F6] mb-1">
-                      Sexual Orientation
-                    </label>
-                    <select
-                      value={sexualOrientation}
-                      onChange={(e) => setSexualOrientation(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-[#403247] bg-[#241B29] text-xs text-[#F7F0F6] focus:outline-none focus:border-[#C77DAA]"
-                    >
-                      {SEXUAL_ORIENTATIONS.map((so) => (
-                        <option key={so} value={so}>
-                          {so}
-                        </option>
-                      ))}
-                    </select>
-                    {sexualOrientation === 'Self-described' && (
-                      <input
-                        type="text"
-                        value={sexualOrientationCustom}
-                        onChange={(e) => setSexualOrientationCustom(e.target.value)}
-                        placeholder="Describe your orientation..."
-                        maxLength={40}
-                        className="w-full mt-1.5 px-3 py-1.5 rounded-xl border border-[#403247] bg-[#241B29] text-xs text-[#F7F0F6] placeholder-[#BDB0BF]/50 focus:outline-none focus:border-[#C77DAA]"
-                      />
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-[#F7F0F6] mb-1">
-                      Gender Identity
-                    </label>
-                    <select
-                      value={genderIdentity}
-                      onChange={(e) => setGenderIdentity(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-[#403247] bg-[#241B29] text-xs text-[#F7F0F6] focus:outline-none focus:border-[#C77DAA]"
-                    >
-                      {GENDER_IDENTITIES.map((gi) => (
-                        <option key={gi} value={gi}>
-                          {gi}
-                        </option>
-                      ))}
-                    </select>
-                    {genderIdentity === 'Self-described' && (
-                      <input
-                        type="text"
-                        value={genderIdentityCustom}
-                        onChange={(e) => setGenderIdentityCustom(e.target.value)}
-                        placeholder="Describe your gender identity..."
-                        maxLength={40}
-                        className="w-full mt-1.5 px-3 py-1.5 rounded-xl border border-[#403247] bg-[#241B29] text-xs text-[#F7F0F6] placeholder-[#BDB0BF]/50 focus:outline-none focus:border-[#C77DAA]"
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* 3. Privacy & Visibility Controls */}
-                <div className="p-3 rounded-xl bg-[#241B29] border border-[#403247] space-y-2 mt-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#F7F0F6]">
-                    <Lock className="w-3.5 h-3.5 text-[#C77DAA]" />
-                    <span>Profile Visibility & Consent</span>
-                  </div>
-                  <label className="flex items-start gap-2 cursor-pointer text-[11px] text-[#BDB0BF]">
-                    <input
-                      type="checkbox"
-                      checked={showGenderExpressionOnProfile}
-                      onChange={(e) => setShowGenderExpressionOnProfile(e.target.checked)}
-                      className="mt-0.5 accent-[#C77DAA] rounded cursor-pointer"
-                    />
-                    <span>
-                      Display my gender expression badge on my 1-on-1 chat profile card (otherwise used matching-only).
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-2 cursor-pointer text-[11px] text-[#BDB0BF]">
-                    <input
-                      type="checkbox"
-                      checked={showSogieOnProfile}
-                      onChange={(e) => setShowSogieOnProfile(e.target.checked)}
-                      className="mt-0.5 accent-[#C77DAA] rounded cursor-pointer"
-                    />
-                    <span>
-                      Display my SOGIE identity on my 1-on-1 chat profile card.
-                    </span>
-                  </label>
-                </div>
+              <div className="pt-3 border-t border-line">
+                <ToggleRow
+                  checked={showLocationOnProfile}
+                  onChange={setShowLocationOnProfile}
+                  title="Show my area on my profile"
+                />
               </div>
-            )}
-          </div>
+            </section>
 
-          {activeTab === 'quick' ? (
-            /* Quick Chat Info banner */
-            <div className="bg-[#302235] rounded-2xl p-4 border border-[#403247] space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#F7F0F6]">
-                <Zap className="w-4 h-4 text-[#C77DAA]" />
-                <span>Instant 1-on-1 Conversation</span>
-              </div>
-              <p className="text-xs text-[#BDB0BF] leading-relaxed">
-                Quick chat connects you with the first available sapphic participant without filtering by specific intentions or topics. Perfect for when you just want to talk.
-              </p>
-            </div>
-          ) : (
-            /* Custom Match Options */
-            <>
-              {/* Customizable Discovery Filters (Gender Expression Preferences) */}
-              <div className="p-4 rounded-2xl bg-[#17121B] border border-[#403247] space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <SlidersHorizontal className="w-4 h-4 text-[#C77DAA]" />
-                    <label className="text-xs font-bold uppercase tracking-wider text-[#F7F0F6]">
-                      Matching Discovery Filter
-                    </label>
-                  </div>
-                  {applyGenderExpressionFilter && (
-                    <button
-                      type="button"
-                      onClick={handleResetFilters}
-                      className="text-[11px] text-[#C77DAA] hover:text-[#F7F0F6] flex items-center gap-1 cursor-pointer"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Reset</span>
-                    </button>
-                  )}
+            {/* Gender expression filter */}
+            <section className="card p-4 space-y-3">
+              <ToggleRow
+                icon={<SlidersHorizontal className="w-4 h-4 text-lavender" />}
+                checked={applyGenderExpressionFilter}
+                onChange={(v) => (v ? setApplyGenderExpressionFilter(true) : handleResetFilters())}
+                title="Filter by gender expression"
+                hint="People who prefer not to say are never excluded."
+              />
+              {applyGenderExpressionFilter && (
+                <div className="flex flex-wrap gap-2 pt-3 border-t border-line">
+                  {DISCOVERY_FILTER_OPTIONS.map((filter) => {
+                    const isSelected = preferredGenderExpressions.includes(filter);
+                    return (
+                      <button
+                        key={filter}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => handleToggleFilter(filter)}
+                        className="chip"
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5 text-berry" />}
+                        {filter}
+                      </button>
+                    );
+                  })}
                 </div>
+              )}
+            </section>
+          </>
+        )}
 
-                <label className="flex items-start gap-2 cursor-pointer text-xs text-[#F7F0F6]">
-                  <input
-                    type="checkbox"
-                    checked={applyGenderExpressionFilter}
-                    onChange={(e) => setApplyGenderExpressionFilter(e.target.checked)}
-                    className="mt-0.5 accent-[#C77DAA] rounded cursor-pointer"
-                  />
-                  <span>Filter partners by gender expression preference</span>
-                </label>
+        {/* Identity (optional) */}
+        <section className="card overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setSogieSectionOpen(!sogieSectionOpen)}
+            aria-expanded={sogieSectionOpen}
+            className="w-full flex items-center gap-2 px-4 h-14 text-left cursor-pointer hover:bg-raised transition-colors"
+          >
+            <Heart className="w-4 h-4 text-lavender" />
+            <span className="flex-1 text-sm font-semibold">Identity</span>
+            <span className="text-[12px] text-subtle">Optional</span>
+            <ChevronDown className={`w-4 h-4 text-subtle transition-transform ${sogieSectionOpen ? 'rotate-180' : ''}`} />
+          </button>
 
-                {applyGenderExpressionFilter && (
-                  <div className="space-y-2 pt-2 border-t border-[#403247]/60">
-                    <p className="text-[11px] text-[#BDB0BF]">
-                      Select which gender expressions you'd love to meet today:
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {DISCOVERY_FILTER_OPTIONS.map((filter) => {
-                        const isSelected = preferredGenderExpressions.includes(filter);
-                        return (
-                          <button
-                            key={filter}
-                            type="button"
-                            onClick={() => handleToggleFilter(filter)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                              isSelected
-                                ? 'bg-[#8E547E] text-white border border-[#C77DAA] shadow-xs'
-                                : 'bg-[#241B29] text-[#BDB0BF] border border-[#403247] hover:border-[#C77DAA] hover:text-[#F7F0F6]'
-                            }`}
-                          >
-                            {isSelected && <Check className="w-3 h-3 text-[#C77DAA]" />}
-                            <span>{filter}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+          {sogieSectionOpen && (
+            <div className="px-4 pb-4 pt-1 space-y-5 border-t border-line">
+              <div className="pt-3">
+                <p className="label">Gender expression</p>
+                <div className="flex flex-wrap gap-2">
+                  {GENDER_EXPRESSIONS.map((expr) => {
+                    const isSelected = genderExpression.includes(expr);
+                    return (
+                      <button
+                        key={expr}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => handleToggleExpr(expr)}
+                        className="chip"
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5 text-berry" />}
+                        {expr}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errors.genderExpression && (
+                  <p className="mt-1.5 text-[13px] text-danger">{errors.genderExpression}</p>
                 )}
-                <p className="text-[10px] text-[#BDB0BF]/70 italic">
-                  Queerspace only filters when enabled. Users with “Prefer not to say” are never excluded or penalized.
-                </p>
               </div>
 
-              {/* Intention */}
-              <div className="space-y-2.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-[#F7F0F6]">
-                  What are you hoping for today?
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {(Object.keys(INTENTION_LABELS) as Intention[]).map((key) => {
-                    const isSelected = intention === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setIntention(key)}
-                        className={`p-2.5 rounded-xl text-xs font-medium text-left border transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-[#8E547E] text-white border-[#C77DAA] shadow-xs'
-                            : 'bg-[#17121B] text-[#BDB0BF] border-[#403247] hover:border-[#8E547E] hover:text-[#F7F0F6]'
-                        }`}
-                      >
-                        {INTENTION_LABELS[key]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Topics / Interests */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-[#F7F0F6]">
-                    Shared Topics & Interests
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="qs-orientation" className="label">
+                    Sexual orientation
                   </label>
-                  <span className="text-[11px] text-[#BDB0BF]">
-                    {selectedTopics.length}/8 selected
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {AVAILABLE_TOPICS.map((topic) => {
-                    const isSelected = selectedTopics.includes(topic);
-                    return (
-                      <button
-                        key={topic}
-                        type="button"
-                        onClick={() => handleToggleTopic(topic)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                          isSelected
-                            ? 'bg-[#8E547E] text-white shadow-xs'
-                            : 'bg-[#17121B] text-[#BDB0BF] border border-[#403247] hover:border-[#C77DAA] hover:text-[#F7F0F6]'
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3 h-3 text-[#C77DAA]" />}
-                        <span>{topic}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Custom topic input */}
-                <form onSubmit={handleAddCustomTopic} className="flex gap-2 pt-1">
-                  <input
-                    type="text"
-                    value={customTopicInput}
-                    onChange={(e) => setCustomTopicInput(e.target.value)}
-                    placeholder="Add custom topic (e.g. Fleabag, Stardew Valley)..."
-                    maxLength={25}
-                    className="flex-1 px-3 py-2 rounded-xl border border-[#403247] bg-[#17121B] text-xs text-[#F7F0F6] placeholder-[#BDB0BF]/50 focus:outline-none focus:border-[#C77DAA]"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!customTopicInput.trim() || selectedTopics.length >= 8}
-                    className="px-3.5 py-2 rounded-xl bg-[#302235] hover:bg-[#8E547E] text-[#C77DAA] hover:text-white disabled:opacity-40 text-xs font-semibold flex items-center gap-1 transition-colors border border-[#403247] cursor-pointer"
+                  <select
+                    id="qs-orientation"
+                    value={sexualOrientation}
+                    onChange={(e) => setSexualOrientation(e.target.value)}
+                    className="input"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add</span>
-                  </button>
-                </form>
-              </div>
-
-              {/* Philippines Broad Location Preferences & Discovery Filter */}
-              <div className="p-4 rounded-2xl bg-[#17121B] border border-[#403247] space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-[#C77DAA]" />
-                    <label className="text-xs font-bold uppercase tracking-wider text-[#F7F0F6]">
-                      Philippine Location Preference
-                    </label>
-                  </div>
-                  <span className="text-[11px] text-[#C77DAA] bg-[#302235] px-2 py-0.5 rounded-full border border-[#403247]">
-                    {formatLocationSummary(locationSelection)}
-                  </span>
-                </div>
-
-                <label className="flex items-start gap-2 cursor-pointer text-xs text-[#F7F0F6]">
-                  <input
-                    type="checkbox"
-                    checked={applyLocationFilter}
-                    onChange={(e) => setApplyLocationFilter(e.target.checked)}
-                    className="mt-0.5 accent-[#C77DAA] rounded cursor-pointer"
-                  />
-                  <span>Filter matching partners by specific Philippine locations</span>
-                </label>
-
-                {applyLocationFilter && (
-                  <div className="space-y-3 pt-2 border-t border-[#403247]/60">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] text-[#BDB0BF]">
-                        Select Nationwide, Island Groups, Regions, or Cities:
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setLocationSelection(['Anywhere in the Philippines'])}
-                        className="text-[10px] text-[#C77DAA] hover:underline cursor-pointer"
-                      >
-                        Reset to Nationwide
-                      </button>
-                    </div>
-
+                    {SEXUAL_ORIENTATIONS.map((so) => (
+                      <option key={so} value={so}>
+                        {so}
+                      </option>
+                    ))}
+                  </select>
+                  {sexualOrientation === 'Self-described' && (
                     <input
                       type="text"
-                      value={locationSearchQuery}
-                      onChange={(e) => setLocationSearchQuery(e.target.value)}
-                      placeholder="Search region, province, city (e.g. Metro Manila, Cebu, Davao)..."
-                      className="w-full px-3 py-2 rounded-xl bg-[#241B29] border border-[#403247] text-xs text-[#F7F0F6] placeholder-[#BDB0BF]/50 focus:outline-none focus:border-[#C77DAA]"
+                      value={sexualOrientationCustom}
+                      onChange={(e) => setSexualOrientationCustom(e.target.value)}
+                      placeholder="Describe your orientation"
+                      aria-label="Describe your orientation"
+                      maxLength={40}
+                      className="input mt-2"
                     />
-
-                    {/* Quick Island Groups / Nationwide buttons */}
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setLocationSelection(['Anywhere in the Philippines'])}
-                        className={`px-3 py-1 rounded-full text-xs font-medium cursor-pointer ${
-                          locationSelection.includes('Anywhere in the Philippines')
-                            ? 'bg-[#8E547E] text-white border border-[#C77DAA]'
-                            : 'bg-[#241B29] text-[#BDB0BF] border border-[#403247]'
-                        }`}
-                      >
-                        🌐 Nationwide (Anywhere in PH)
-                      </button>
-                      {PHILIPPINE_ISLAND_GROUPS.map((ig) => {
-                        const isSelected = locationSelection.includes(ig);
-                        return (
-                          <button
-                            key={ig}
-                            type="button"
-                            onClick={() => {
-                              const next = toggleLocationPreference(locationSelection, ig);
-                              setLocationSelection(next);
-                            }}
-                            className={`px-3 py-1 rounded-full text-xs font-medium cursor-pointer ${
-                              isSelected
-                                ? 'bg-[#8E547E] text-white border border-[#C77DAA]'
-                                : 'bg-[#241B29] text-[#BDB0BF] border border-[#403247]'
-                            }`}
-                          >
-                            🌴 {ig}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Filtered Regions & Cities list */}
-                    <div className="max-h-48 overflow-y-auto space-y-2 pr-1 text-xs">
-                      {PHILIPPINE_REGIONS_AND_LOCATIONS.map((group) => {
-                        const matchesGroup =
-                          !locationSearchQuery ||
-                          group.region.toLowerCase().includes(locationSearchQuery.toLowerCase()) ||
-                          group.provincesAndCities.some((p) =>
-                            p.toLowerCase().includes(locationSearchQuery.toLowerCase())
-                          );
-
-                        if (!matchesGroup) return null;
-
-                        const isRegionSelected = locationSelection.includes(group.region);
-
-                        return (
-                          <div key={group.region} className="p-2.5 rounded-xl bg-[#241B29] border border-[#403247] space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const next = toggleLocationPreference(locationSelection, group.region);
-                                  setLocationSelection(next);
-                                }}
-                                className={`font-bold text-left text-[#F7F0F6] hover:text-[#C77DAA] cursor-pointer ${
-                                  isRegionSelected ? 'text-[#C77DAA]' : ''
-                                }`}
-                              >
-                                {group.region}
-                              </button>
-                              <span className="text-[10px] text-[#BDB0BF]">{group.islandGroup}</span>
-                            </div>
-                            <div className="flex flex-wrap gap-1 pt-1">
-                              {group.provincesAndCities
-                                .filter(
-                                  (pc) =>
-                                    !locationSearchQuery ||
-                                    pc.toLowerCase().includes(locationSearchQuery.toLowerCase()) ||
-                                    group.region.toLowerCase().includes(locationSearchQuery.toLowerCase())
-                                )
-                                .map((pc) => {
-                                  const isPcSelected = locationSelection.includes(pc);
-                                  return (
-                                    <button
-                                      key={pc}
-                                      type="button"
-                                      onClick={() => {
-                                        const next = toggleLocationPreference(locationSelection, pc);
-                                        setLocationSelection(next);
-                                      }}
-                                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium cursor-pointer ${
-                                        isPcSelected
-                                          ? 'bg-[#C77DAA] text-[#17121B] font-semibold'
-                                          : 'bg-[#17121B] text-[#BDB0BF] border border-[#403247] hover:border-[#C77DAA]'
-                                      }`}
-                                    >
-                                      {pc}
-                                    </button>
-                                  );
-                                })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Profile Location Visibility Checkbox */}
-                <div className="pt-2 border-t border-[#403247]/60">
-                  <label className="flex items-start gap-2 cursor-pointer text-[11px] text-[#BDB0BF]">
-                    <input
-                      type="checkbox"
-                      checked={showLocationOnProfile}
-                      onChange={(e) => setShowLocationOnProfile(e.target.checked)}
-                      className="mt-0.5 accent-[#C77DAA] rounded cursor-pointer"
-                    />
-                    <span>Display my broad location on my 1-on-1 chat profile card.</span>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor="qs-identity" className="label">
+                    Gender identity
                   </label>
+                  <select
+                    id="qs-identity"
+                    value={genderIdentity}
+                    onChange={(e) => setGenderIdentity(e.target.value)}
+                    className="input"
+                  >
+                    {GENDER_IDENTITIES.map((gi) => (
+                      <option key={gi} value={gi}>
+                        {gi}
+                      </option>
+                    ))}
+                  </select>
+                  {genderIdentity === 'Self-described' && (
+                    <input
+                      type="text"
+                      value={genderIdentityCustom}
+                      onChange={(e) => setGenderIdentityCustom(e.target.value)}
+                      placeholder="Describe your gender identity"
+                      aria-label="Describe your gender identity"
+                      maxLength={40}
+                      className="input mt-2"
+                    />
+                  )}
                 </div>
               </div>
-            </>
-          )}
 
-          {/* 18+ Age & Eligibility Confirmation */}
-          <div className="p-3.5 rounded-2xl bg-[#302235] border border-[#403247]">
-            <label className="flex items-start gap-2.5 cursor-pointer text-xs text-[#F7F0F6]">
-              <input
-                type="checkbox"
-                checked={isAgeConfirmed}
-                onChange={(e) => setIsAgeConfirmed(e.target.checked)}
-                className="mt-0.5 accent-[#C77DAA] rounded cursor-pointer"
-              />
-              <span className="leading-snug">
-                I affirm that I am <strong className="text-[#F7F0F6]">18 years of age or older</strong> and identify as a woman or non-binary sapphic person.
-              </span>
-            </label>
-            {errors.ageConfirmation && (
-              <p className="text-[11px] text-red-400 font-medium mt-1.5 pl-6">{errors.ageConfirmation}</p>
-            )}
-          </div>
-
-          {/* Privacy Transparency Callout */}
-          <div className="p-3.5 rounded-2xl bg-[#17121B] border border-[#403247] flex gap-2.5 items-start text-xs text-[#BDB0BF] leading-relaxed">
-            <Info className="w-4 h-4 text-[#C77DAA] shrink-0 mt-0.5" />
-            <div>
-              <strong className="text-[#F7F0F6]">What your match sees:</strong> Only your chosen pseudonym, pronouns, intention, mutual topics, and any expression/SOGIE labels you explicitly toggled on. Private fields are never exposed.
+              <div className="space-y-3 pt-4 border-t border-line">
+                <p className="flex items-center gap-1.5 text-[13px] font-semibold">
+                  <Lock className="w-3.5 h-3.5 text-lavender" />
+                  Show on my profile
+                </p>
+                <ToggleRow
+                  checked={showGenderExpressionOnProfile}
+                  onChange={setShowGenderExpressionOnProfile}
+                  title="Gender expression"
+                  hint="Otherwise used for matching only."
+                />
+                <ToggleRow checked={showSogieOnProfile} onChange={setShowSogieOnProfile} title="Orientation & identity" />
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+        </section>
 
-        {/* Footer Actions */}
-        <div className="p-4 sm:p-5 bg-[#17121B] border-t border-[#403247] flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold text-[#BDB0BF] hover:text-[#F7F0F6] hover:bg-[#302235] transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="px-6 py-2.5 rounded-full bg-[#C77DAA] hover:bg-[#d893bd] text-[#17121B] text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-md transition-all hover:shadow active:scale-[0.98] cursor-pointer"
-          >
-            <span>{activeTab === 'quick' ? 'Start Quick Chat' : 'Find Custom Match'}</span>
-            <ArrowRight className="w-4 h-4 text-[#17121B]" />
-          </button>
-        </div>
+        {/* Consent */}
+        <section className="space-y-3">
+          <label className="flex items-start gap-3 cursor-pointer text-sm text-fg">
+            <input
+              type="checkbox"
+              checked={isAgeConfirmed}
+              onChange={(e) => setIsAgeConfirmed(e.target.checked)}
+              aria-invalid={!!errors.ageConfirmation}
+              className="check"
+            />
+            <span className="leading-snug">
+              I'm <strong className="font-semibold">18 or older</strong> and identify as a woman or non-binary sapphic person.
+            </span>
+          </label>
+          <p className="flex gap-2 text-[13px] text-muted leading-relaxed">
+            <Info className="w-4 h-4 text-subtle shrink-0 mt-0.5" />
+            <span>
+              Your match only sees your pseudonym, pronouns, intention, shared topics and anything you choose to show.
+            </span>
+          </p>
+        </section>
       </div>
-    </div>
+    </Sheet>
   );
 };
+
+const ToggleRow: React.FC<{
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  title: string;
+  hint?: string;
+  icon?: React.ReactNode;
+}> = ({ checked, onChange, title, hint, icon }) => (
+  <label className="flex items-center gap-3 cursor-pointer">
+    {icon}
+    <span className="flex-1 min-w-0">
+      <span className="block text-sm font-medium text-fg">{title}</span>
+      {hint && <span className="block text-[12px] text-subtle mt-0.5 truncate">{hint}</span>}
+    </span>
+    <input
+      type="checkbox"
+      role="switch"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className="peer sr-only"
+    />
+    <span
+      aria-hidden="true"
+      className="relative w-11 h-[26px] shrink-0 rounded-full bg-line-strong transition-colors peer-checked:bg-berry peer-focus-visible:ring-2 peer-focus-visible:ring-berry peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-surface after:absolute after:top-[3px] after:left-[3px] after:w-5 after:h-5 after:rounded-full after:bg-fg after:shadow after:transition-transform peer-checked:after:translate-x-[18px]"
+    />
+  </label>
+);

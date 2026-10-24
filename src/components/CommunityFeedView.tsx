@@ -1,15 +1,6 @@
 import React, { useState } from 'react';
-import {
-  MessageSquare,
-  Heart,
-  Plus,
-  ArrowLeft,
-  Sparkles,
-  Send,
-  X,
-  Share2,
-  Check,
-} from 'lucide-react';
+import { ArrowUp, Check, Heart, MessageCircle, Plus, Share, X } from 'lucide-react';
+import { Sheet } from './Sheet.tsx';
 import { CommunityPost, UserPreferences } from '../types.ts';
 import { INITIAL_COMMUNITY_POSTS } from '../utils/community-data.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
@@ -17,14 +8,10 @@ import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.t
 
 interface CommunityFeedViewProps {
   userPrefs: UserPreferences;
-  onBackToHome: () => void;
-  onStart1on1: () => void;
 }
 
 export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   userPrefs,
-  onBackToHome,
-  onStart1on1,
 }) => {
   const [posts, setPosts] = useState<CommunityPost[]>(() => {
     const saved = getStorageItem(
@@ -70,7 +57,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
     savePosts(updated);
   };
 
-  const handleAddTag = (e: React.FormEvent) => {
+  const handleAddTag = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!newTag.trim() || tagsList.length >= 4) return;
     if (!tagsList.includes(newTag.trim())) {
@@ -139,9 +126,20 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
     setExpandedReplies({ ...expandedReplies, [postId]: true });
   };
 
-  const handleCopyLink = (postId: string) => {
-    setCopiedPostId(postId);
-    setTimeout(() => setCopiedPostId(null), 2000);
+  const handleShare = async (post: CommunityPost) => {
+    const text = `${post.title}\n\n${post.content}`;
+    const url = window.location.origin;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: post.title, text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(`${text}\n\n${url}`);
+      setCopiedPostId(post.id);
+      setTimeout(() => setCopiedPostId(null), 2000);
+    } catch {
+      // Share sheet dismissed or clipboard unavailable: nothing to do.
+    }
   };
 
   const filteredPosts =
@@ -149,399 +147,277 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
       ? posts
       : posts.filter((p) => p.category === activeCategory);
 
-  return (
-    <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-28 sm:pb-12 overflow-x-hidden box-border">
-      {/* Feed Top Header - Optimized for Mobile */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 sm:pb-6 mb-4 sm:mb-6 border-b border-[#4a1f6d]">
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button
-            onClick={onBackToHome}
-            className="p-2 sm:p-2.5 rounded-full bg-[#150826] hover:bg-[#230d3b] text-[#cbbccf] hover:text-[#fcf7fa] border border-[#4a1f6d] transition-colors cursor-pointer shrink-0 active:scale-95"
-            aria-label="Back to home"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="font-serif text-xl sm:text-2xl font-bold text-[#fcf7fa] truncate">
-              Sapphic Community Posts
-            </h1>
-            <p className="text-xs text-[#cbbccf] truncate">
-              Stories, cozy vents, book picks, and friend finders
-            </p>
-          </div>
-        </div>
+  const openComposer = () => setShowCreateModal(true);
 
-        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-[#e07bb8] hover:bg-[#a85293] text-[#080311] hover:text-white text-xs sm:text-sm font-bold shadow-md shadow-[#e07bb8]/20 transition-all active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Community Post</span>
-          </button>
-        </div>
+  return (
+    <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-[calc(var(--tabbar-h)+6rem)] md:pb-16">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-fg">Community</h1>
+        <button onClick={openComposer} className="btn btn-primary btn-sm hidden sm:inline-flex">
+          <Plus className="w-4 h-4" />
+          New post
+        </button>
       </div>
 
-      {/* Category Pills - Smooth Touch Pan & Edge-to-Edge Scroll on Mobile */}
-      <div className="-mx-3.5 px-3.5 sm:mx-0 sm:px-0 flex items-center gap-2 overflow-x-auto pb-3 mb-4 sm:mb-6 scrollbar-none snap-x snap-mandatory touch-pan-x">
-        {[
-          { id: 'all', label: 'All Posts' },
-          { id: 'vents', label: 'Cozy Vents' },
-          { id: 'media', label: 'Books & Media' },
-          { id: 'friends', label: 'Friend Finder' },
-          { id: 'advice', label: 'Dating & Advice' },
-          { id: 'general', label: 'General' },
-        ].map((cat) => (
+      <div
+        role="tablist"
+        aria-label="Categories"
+        className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto scrollbar-none pb-1 mb-5"
+      >
+        {CATEGORIES.map((cat) => (
           <button
             key={cat.id}
+            role="tab"
+            aria-selected={activeCategory === cat.id}
             onClick={() => setActiveCategory(cat.id)}
-            className={`snap-start shrink-0 whitespace-nowrap px-4 py-2 sm:py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-              activeCategory === cat.id
-                ? 'bg-[#e07bb8] text-[#080311] font-bold shadow-sm'
-                : 'bg-[#150826] text-[#cbbccf] border border-[#4a1f6d] hover:border-[#e07bb8]/60 hover:text-[#fcf7fa]'
-            }`}
+            className={`chip shrink-0 ${activeCategory === cat.id ? '!bg-fg !text-ink !border-fg' : ''}`}
           >
             {cat.label}
           </button>
         ))}
       </div>
 
-      {/* Posts List */}
-      <div className="space-y-4 sm:space-y-5">
-        {filteredPosts.length === 0 ? (
-          <div className="text-center py-12 sm:py-16 glass-card rounded-3xl p-6 sm:p-8">
-            <Sparkles className="w-8 h-8 text-[#e07bb8] mx-auto mb-3 animate-pulse" />
-            <h3 className="font-serif text-lg font-bold text-[#fcf7fa] mb-1">
-              No posts in this topic yet
-            </h3>
-            <p className="text-xs text-[#cbbccf] mb-4">
-              Be the first to share a cozy thought or recommendation.
-            </p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-5 py-2.5 rounded-full bg-[#e07bb8] hover:bg-[#a85293] text-[#080311] hover:text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
-            >
-              Write First Post
-            </button>
-          </div>
-        ) : (
-          filteredPosts.map((post) => {
+      {filteredPosts.length === 0 ? (
+        <div className="text-center py-16 px-6">
+          <p className="text-[15px] font-medium text-fg">Nothing here yet</p>
+          <p className="text-[13px] text-muted mt-1 mb-5">Start the conversation.</p>
+          <button onClick={openComposer} className="btn btn-secondary btn-sm">
+            Write a post
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredPosts.map((post) => {
             const isRepliesExpanded = expandedReplies[post.id];
             return (
-              <article
-                key={post.id}
-                className="glass-card glass-card-hover rounded-3xl p-4 sm:p-6 shadow-sm overflow-hidden"
-              >
-                {/* Post Author Header Row */}
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#230d3b] text-[#e07bb8] border border-[#4a1f6d] flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 shadow-xs">
-                      {post.author.charAt(0)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-xs sm:text-sm text-[#fcf7fa] truncate">
-                          {post.author}
-                        </span>
-                        <span className="text-[10px] text-[#cbbccf] bg-[#230d3b] px-2 py-0.5 rounded-full border border-[#4a1f6d] shrink-0">
-                          {post.authorPronouns}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-[#cbbccf]/70 block mt-0.5">
-                        {formatChatTime(post.timestamp)}
-                      </span>
-                    </div>
+              <article key={post.id} className="card p-4 sm:p-5">
+                <header className="flex items-center gap-2.5 mb-3">
+                  <div
+                    className="w-9 h-9 rounded-full bg-raised border border-line text-berry flex items-center justify-center font-semibold text-[13px] shrink-0"
+                    aria-hidden="true"
+                  >
+                    {post.author.charAt(0)}
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-fg truncate">
+                      {post.author} <span className="font-normal text-subtle">{post.authorPronouns}</span>
+                    </p>
+                    <p className="text-[12px] text-subtle">
+                      {CATEGORY_LABELS[post.category] ?? post.category} · {formatChatTime(post.timestamp)}
+                    </p>
+                  </div>
+                </header>
 
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-[#e07bb8] bg-[#230d3b] px-2.5 py-1 rounded-full border border-[#4a1f6d] shrink-0">
-                    {post.category}
-                  </span>
-                </div>
-
-                {/* Post Content */}
-                <h3 className="font-serif text-base sm:text-lg font-bold text-[#fcf7fa] mb-2 leading-snug">
-                  {post.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-[#cbbccf] leading-relaxed mb-3.5 whitespace-pre-wrap break-words">
+                <h2 className="text-[17px] font-semibold text-fg leading-snug">{post.title}</h2>
+                <p className="mt-1.5 text-[15px] text-muted leading-relaxed whitespace-pre-wrap break-words">
                   {post.content}
                 </p>
 
-                {/* Tags */}
                 {post.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-3.5">
+                  <div className="flex flex-wrap gap-x-2 gap-y-1 mt-3 text-[13px] text-lavender">
                     {post.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="text-[10px] font-medium text-[#cbbccf] bg-[#080311]/60 border border-[#4a1f6d] px-2.5 py-0.5 rounded-full"
-                      >
-                        #{tag}
-                      </span>
+                      <span key={tag}>#{tag}</span>
                     ))}
                   </div>
                 )}
 
-                {/* Mobile-Friendly Action Bar */}
-                <div className="flex items-center justify-between pt-3 border-t border-[#4a1f6d]/80 text-xs text-[#cbbccf]">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    {/* Like button */}
-                    <button
-                      onClick={() => handleLikePost(post.id)}
-                      className={`flex items-center gap-1.5 py-1 px-2.5 rounded-full transition-colors cursor-pointer active:scale-95 ${
-                        post.userLiked
-                          ? 'text-[#e07bb8] font-bold bg-[#230d3b] border border-[#4a1f6d]'
-                          : 'hover:text-[#fcf7fa] hover:bg-[#230d3b]/50'
-                      }`}
-                      aria-label="Like post"
-                    >
-                      <Heart
-                        className={`w-4 h-4 ${
-                          post.userLiked ? 'fill-[#e07bb8] text-[#e07bb8]' : ''
-                        }`}
-                      />
-                      <span>{post.likes}</span>
-                    </button>
-
-                    {/* Replies count button */}
-                    <button
-                      onClick={() =>
-                        setExpandedReplies({
-                          ...expandedReplies,
-                          [post.id]: !isRepliesExpanded,
-                        })
-                      }
-                      className="flex items-center gap-1.5 py-1 px-2.5 rounded-full hover:text-[#fcf7fa] hover:bg-[#230d3b]/50 transition-colors cursor-pointer active:scale-95"
-                    >
-                      <MessageSquare className="w-4 h-4 text-[#e07bb8]" />
-                      <span>{post.replies.length} <span className="hidden xs:inline">replies</span></span>
-                    </button>
-                  </div>
-
-                  {/* Share button */}
+                <div className="flex items-center gap-1 mt-3 -ml-2 text-[13px] text-muted">
                   <button
-                    onClick={() => handleCopyLink(post.id)}
-                    className="flex items-center gap-1 py-1 px-2.5 rounded-full hover:text-[#fcf7fa] hover:bg-[#230d3b]/50 transition-colors cursor-pointer text-[11px] active:scale-95"
+                    onClick={() => handleLikePost(post.id)}
+                    aria-pressed={!!post.userLiked}
+                    aria-label={post.userLiked ? 'Unlike' : 'Like'}
+                    className={`inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full hover:bg-raised transition-colors cursor-pointer ${
+                      post.userLiked ? 'text-berry' : 'hover:text-fg'
+                    }`}
+                  >
+                    <Heart className={`w-[18px] h-[18px] ${post.userLiked ? 'fill-berry' : ''}`} />
+                    {post.likes}
+                  </button>
+                  <button
+                    onClick={() => setExpandedReplies({ ...expandedReplies, [post.id]: !isRepliesExpanded })}
+                    aria-expanded={!!isRepliesExpanded}
+                    aria-label={`${post.replies.length} replies`}
+                    className={`inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full hover:bg-raised hover:text-fg transition-colors cursor-pointer ${
+                      isRepliesExpanded ? 'text-fg' : ''
+                    }`}
+                  >
+                    <MessageCircle className="w-[18px] h-[18px]" />
+                    {post.replies.length}
+                  </button>
+                  <button
+                    onClick={() => handleShare(post)}
+                    className="ml-auto inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full hover:bg-raised hover:text-fg transition-colors cursor-pointer"
+                    aria-label="Share post"
                   >
                     {copiedPostId === post.id ? (
                       <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-400 font-semibold">Copied!</span>
+                        <Check className="w-[18px] h-[18px] text-emerald-400" />
+                        <span className="text-emerald-400">Copied</span>
                       </>
                     ) : (
-                      <>
-                        <Share2 className="w-3.5 h-3.5" />
-                        <span>Share</span>
-                      </>
+                      <Share className="w-[18px] h-[18px]" />
                     )}
                   </button>
                 </div>
 
-                {/* Expanded Threaded Replies Container */}
                 {isRepliesExpanded && (
-                  <div className="mt-4 pt-4 border-t border-[#4a1f6d] space-y-3 bg-[#080311]/80 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 p-3.5 sm:p-5 rounded-b-3xl">
-                    <h4 className="text-xs font-bold text-[#fcf7fa] flex items-center justify-between">
-                      <span>Discussion & Replies ({post.replies.length})</span>
-                    </h4>
+                  <div className="mt-3 pt-3 border-t border-line space-y-3 anim-fade">
+                    {post.replies.map((reply) => (
+                      <div key={reply.id} className="text-[14px]">
+                        <p className="text-[12px] text-subtle">
+                          <span className="font-semibold text-fg">{reply.author}</span> {reply.authorPronouns} ·{' '}
+                          {formatChatTime(reply.timestamp)}
+                        </p>
+                        <p className="text-muted leading-relaxed whitespace-pre-wrap break-words mt-0.5">
+                          {reply.content}
+                        </p>
+                      </div>
+                    ))}
 
-                    {post.replies.length === 0 ? (
-                      <p className="text-[11px] text-[#cbbccf]/70 italic py-1">
-                        No replies yet. Start the conversation!
-                      </p>
-                    ) : (
-                      post.replies.map((reply) => (
-                        <div
-                          key={reply.id}
-                          className="bg-[#150826] p-3 rounded-2xl border border-[#4a1f6d] text-xs space-y-1"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="font-semibold text-[#fcf7fa] truncate">{reply.author}</span>
-                              <span className="text-[10px] text-[#cbbccf] shrink-0">({reply.authorPronouns})</span>
-                            </div>
-                            <span className="text-[10px] text-[#cbbccf]/70 shrink-0">
-                              {formatChatTime(reply.timestamp)}
-                            </span>
-                          </div>
-                          <p className="text-[#cbbccf] leading-relaxed whitespace-pre-wrap break-words">{reply.content}</p>
-                        </div>
-                      ))
-                    )}
-
-                    {/* Mobile-Optimized Inline Reply Composer */}
-                    <div className="flex items-center gap-2 pt-1">
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleAddReply(post.id);
+                      }}
+                      className="flex items-center gap-2"
+                    >
                       <input
                         type="text"
                         value={replyTextMap[post.id] || ''}
-                        onChange={(e) =>
-                          setReplyTextMap({
-                            ...replyTextMap,
-                            [post.id]: e.target.value,
-                          })
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddReply(post.id);
-                          }
-                        }}
-                        placeholder={`Reply as ${userPrefs.displayName || 'Sapphic Guest'}...`}
-                        className="flex-1 px-3.5 py-2.5 rounded-full bg-[#150826] border border-[#4a1f6d] text-xs text-[#fcf7fa] placeholder-[#cbbccf]/50 focus:outline-none focus:border-[#e07bb8]"
+                        onChange={(e) => setReplyTextMap({ ...replyTextMap, [post.id]: e.target.value })}
+                        placeholder="Write a reply"
+                        aria-label={`Reply to ${post.title}`}
+                        enterKeyHint="send"
+                        className="flex-1 min-w-0 h-10 px-4 rounded-full bg-ink border border-line text-base sm:text-sm text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
                       />
                       <button
-                        onClick={() => handleAddReply(post.id)}
+                        type="submit"
                         disabled={!replyTextMap[post.id]?.trim()}
-                        className="p-2.5 rounded-full bg-[#e07bb8] hover:bg-[#a85293] disabled:opacity-40 text-[#080311] hover:text-white cursor-pointer transition-all active:scale-95 shrink-0 shadow-xs"
+                        className="w-10 h-10 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed"
                         aria-label="Send reply"
                       >
-                        <Send className="w-3.5 h-3.5" />
+                        <ArrowUp className="w-[18px] h-[18px]" strokeWidth={2.5} />
                       </button>
-                    </div>
+                    </form>
                   </div>
                 )}
               </article>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
-      {/* Mobile Floating "New Post" Button for Quick Access */}
+      {/* Mobile compose button, kept clear of the tab bar */}
       <button
-        onClick={() => setShowCreateModal(true)}
-        className="sm:hidden fixed bottom-6 right-5 z-30 flex items-center gap-2 px-4 py-3 rounded-full bg-[#e07bb8] text-[#080311] font-bold text-xs shadow-2xl shadow-[#e07bb8]/40 border border-white/20 active:scale-95 transition-transform cursor-pointer"
-        aria-label="Create new community post"
+        onClick={openComposer}
+        className="sm:hidden fixed right-4 z-30 w-14 h-14 rounded-full bg-berry text-ink flex items-center justify-center shadow-xl shadow-black/40 active:scale-95 transition-transform cursor-pointer"
+        style={{ bottom: 'calc(var(--tabbar-h) + 1rem)' }}
+        aria-label="New post"
       >
-        <Plus className="w-4 h-4" />
-        <span>New Post</span>
+        <Plus className="w-6 h-6" strokeWidth={2.25} />
       </button>
 
-      {/* Create Post Modal - Mobile Bottom-Sheet & Keyboard Friendly */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-[#150826] w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl border border-[#4a1f6d] p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-[#4a1f6d] mb-4">
-              <h3 className="font-serif text-lg font-bold text-[#fcf7fa]">
-                Create a Community Post
-              </h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-1.5 rounded-full text-[#cbbccf] hover:bg-[#230d3b] hover:text-[#fcf7fa] transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <Sheet
+          title="New post"
+          onClose={() => setShowCreateModal(false)}
+          footer={
+            <button
+              type="submit"
+              form="qs-new-post"
+              disabled={!newTitle.trim() || !newContent.trim()}
+              className="btn btn-primary w-full"
+            >
+              Post
+            </button>
+          }
+        >
+          <form id="qs-new-post" onSubmit={handleCreatePost} className="space-y-5 text-fg">
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Category">
+              {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={newCategory === cat.id}
+                  aria-pressed={newCategory === cat.id}
+                  onClick={() => setNewCategory(cat.id as CommunityPost['category'])}
+                  className="chip"
+                >
+                  {cat.label}
+                </button>
+              ))}
             </div>
 
-            <form onSubmit={handleCreatePost} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#fcf7fa] mb-1.5">
-                  Category Topic
-                </label>
-                <select
-                  value={newCategory}
-                  onChange={(e) =>
-                    setNewCategory(e.target.value as CommunityPost['category'])
-                  }
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-[#4a1f6d] text-xs text-[#fcf7fa] bg-[#080311] focus:outline-none focus:border-[#e07bb8]"
-                >
-                  <option value="general">General Sapphic Thought</option>
-                  <option value="media">Books, Music & Cinema</option>
-                  <option value="vents">Cozy Vent & Life</option>
-                  <option value="friends">Friend Finder / Gaming</option>
-                  <option value="advice">Dating & Advice</option>
-                </select>
-              </div>
+            <input
+              type="text"
+              required
+              maxLength={90}
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="Title"
+              aria-label="Title"
+              className="input"
+            />
 
-              <div>
-                <label className="block text-xs font-bold text-[#fcf7fa] mb-1.5">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={90}
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="What's on your mind?"
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-[#4a1f6d] text-xs sm:text-sm text-[#fcf7fa] bg-[#080311] placeholder-[#cbbccf]/50 focus:outline-none focus:border-[#e07bb8]"
-                />
-              </div>
+            <textarea
+              required
+              rows={5}
+              maxLength={1000}
+              value={newContent}
+              onChange={(e) => setNewContent(e.target.value)}
+              placeholder="What's on your mind?"
+              aria-label="Post content"
+              className="input"
+            />
 
-              <div>
-                <label className="block text-xs font-bold text-[#fcf7fa] mb-1.5">
-                  Content
-                </label>
-                <textarea
-                  required
-                  rows={4}
-                  maxLength={1000}
-                  value={newContent}
-                  onChange={(e) => setNewContent(e.target.value)}
-                  placeholder="Share your story, question, or cozy recommendation..."
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-[#4a1f6d] text-xs sm:text-sm text-[#fcf7fa] bg-[#080311] placeholder-[#cbbccf]/50 focus:outline-none focus:border-[#e07bb8]"
-                />
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="block text-xs font-bold text-[#fcf7fa] mb-1.5">
-                  Tags ({tagsList.length}/4)
-                </label>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {tagsList.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 text-[11px] font-medium bg-[#230d3b] text-[#e07bb8] px-2.5 py-1 rounded-full border border-[#4a1f6d]"
+            <div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {tagsList.map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-0.5 h-8 pl-3 pr-1 rounded-full bg-raised border border-line text-[13px] text-lavender">
+                    #{tag}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-subtle hover:text-fg cursor-pointer"
+                      aria-label={`Remove tag ${tag}`}
                     >
-                      #{tag}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTag(tag)}
-                        className="hover:text-red-400 cursor-pointer font-bold ml-0.5"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-
-                <div className="flex gap-2">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
+                {tagsList.length < 4 && (
                   <input
                     type="text"
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
-                    placeholder="Add a tag..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') handleAddTag(e);
+                    }}
+                    onBlur={(e) => newTag.trim() && handleAddTag(e)}
+                    placeholder="Add tag"
+                    aria-label="Add a tag"
                     maxLength={15}
-                    className="flex-1 px-3.5 py-2 rounded-2xl border border-[#4a1f6d] text-xs text-[#fcf7fa] bg-[#080311] placeholder-[#cbbccf]/50 focus:outline-none focus:border-[#e07bb8]"
+                    className="h-8 w-28 px-2 bg-transparent text-base sm:text-[13px] text-fg placeholder:text-subtle focus:outline-none"
                   />
-                  <button
-                    type="button"
-                    onClick={handleAddTag}
-                    disabled={!newTag.trim() || tagsList.length >= 4}
-                    className="px-3.5 py-2 rounded-2xl bg-[#230d3b] text-[#e07bb8] disabled:opacity-50 text-xs font-semibold border border-[#4a1f6d] hover:bg-[#a85293] hover:text-white transition-colors cursor-pointer"
-                  >
-                    Add
-                  </button>
-                </div>
+                )}
               </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#4a1f6d]">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2.5 rounded-full border border-[#4a1f6d] text-xs font-semibold text-[#cbbccf] hover:bg-[#230d3b] transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!newTitle.trim() || !newContent.trim()}
-                  className="px-5 py-2.5 rounded-full bg-[#e07bb8] hover:bg-[#a85293] text-[#080311] hover:text-white text-xs font-bold disabled:opacity-40 transition-all cursor-pointer shadow-md active:scale-95"
-                >
-                  Publish Post
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+              <p className="text-[12px] text-subtle mt-1.5">Up to 4 tags.</p>
+            </div>
+          </form>
+        </Sheet>
       )}
     </div>
   );
 };
+
+const CATEGORIES = [
+  { id: 'all', label: 'All' },
+  { id: 'vents', label: 'Cozy Vents' },
+  { id: 'media', label: 'Books & Media' },
+  { id: 'friends', label: 'Friend Finder' },
+  { id: 'advice', label: 'Dating & Advice' },
+  { id: 'general', label: 'General' },
+];
+
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(CATEGORIES.map((c) => [c.id, c.label]));

@@ -50,10 +50,9 @@ export const FloatingCatsBackground: React.FC = () => {
           style={{
             top: cat.top,
             left: cat.left,
-            opacity: cat.opacity,
+            opacity: cat.opacity * 0.4,
             color: cat.color,
             animation: `floatCatDrift ${cat.duration}s ease-in-out infinite ${cat.delay}s`,
-            filter: `drop-shadow(0 0 10px ${cat.color}66)`,
           }}
         >
           <Cat

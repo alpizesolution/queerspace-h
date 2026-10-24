@@ -11,7 +11,7 @@ export const AnimatedBrandTitle: React.FC<AnimatedBrandTitleProps> = ({
 }) => {
   return (
     <span
-      className={`font-serif font-bold tracking-tight text-[#fcf7fa] select-none inline-block ${sizeClass} ${className}`}
+      className={`font-serif font-semibold tracking-tight text-fg select-none inline-block ${sizeClass} ${className}`}
     >
       QUEERSPACE
     </span>

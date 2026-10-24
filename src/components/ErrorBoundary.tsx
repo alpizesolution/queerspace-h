@@ -26,26 +26,22 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-[#17121B] text-[#F7F0F6]">
-          <div className="max-w-md w-full bg-[#241B29] rounded-3xl border border-[#403247] p-8 text-center shadow-xl">
-            <div className="w-12 h-12 rounded-2xl bg-[#302235] text-[#C77DAA] border border-[#403247] flex items-center justify-center mx-auto mb-4">
+        <div className="min-h-[100dvh] flex items-center justify-center p-6 bg-ink text-fg">
+          <div className="max-w-sm w-full text-center">
+            <div className="w-14 h-14 rounded-full bg-raised border border-line text-berry flex items-center justify-center mx-auto mb-5">
               <Sparkles className="w-6 h-6" />
             </div>
-            <h2 className="font-serif text-2xl font-bold text-[#F7F0F6] mb-2">
-              Something gentle went off track
-            </h2>
-            <p className="text-sm text-[#BDB0BF] mb-6 leading-relaxed">
-              We encountered an unexpected display glitch. Don't worry, your safe session preferences are preserved.
-            </p>
+            <h1 className="text-xl font-semibold mb-2">Something went off track</h1>
+            <p className="text-[15px] text-muted mb-6">Your preferences are safe. Reloading usually fixes it.</p>
             <button
               onClick={() => {
                 this.setState({ hasError: false });
                 window.location.reload();
               }}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#C77DAA] hover:bg-[#b86b9a] text-[#17121B] text-xs sm:text-sm font-bold transition-all shadow-xs cursor-pointer"
+              className="btn btn-primary w-full"
             >
               <RefreshCw className="w-4 h-4" />
-              <span>Reload QUEERSPACE</span>
+              Reload
             </button>
           </div>
         </div>

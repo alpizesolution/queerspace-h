@@ -1,72 +1,51 @@
 import React from 'react';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth.ts';
-import { Wifi, WifiOff, Loader2, ShieldCheck } from 'lucide-react';
+import { WifiOff, Loader2 } from 'lucide-react';
 
 interface AuthStatusBadgeProps {
   className?: string;
-  compactMobile?: boolean;
 }
 
-export const AuthStatusBadge: React.FC<AuthStatusBadgeProps> = ({
-  className = '',
-  compactMobile = false,
-}) => {
+/** Quiet session indicator: a dot plus a short label on wider screens, full detail in the tooltip. */
+export const AuthStatusBadge: React.FC<AuthStatusBadgeProps> = ({ className = '' }) => {
   const { status, shortUid, isAnonymous } = useFirebaseAuth();
 
-  const renderContent = () => {
-    switch (status) {
-      case 'loading':
-        return (
-          <div
-            className="flex items-center gap-1 text-[#cbbccf] bg-[#1a0c2e] p-1 sm:px-2 sm:py-0.5 rounded-full border border-[#4a1f6d]"
-            title="Connecting to session…"
-          >
-            <Loader2 className="w-3.5 h-3.5 text-[#e07bb8] animate-spin shrink-0" />
-            <span className="hidden sm:inline font-medium text-[10px]">Connecting</span>
-          </div>
-        );
+  let dot: React.ReactNode;
+  let label: string;
+  let title: string;
 
-      case 'connected':
-        return (
-          <div
-            className="flex items-center gap-1 text-[#d1fae5] bg-[#062c1e]/90 p-1 sm:px-2 sm:py-0.5 rounded-full border border-emerald-700/60 shadow-sm"
-            title={`Connected (${shortUid ? `Anon #${shortUid}` : 'Anon'})`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span className="hidden sm:inline font-semibold text-[10px] tracking-tight">
-              {isAnonymous ? `#${shortUid || 'user'}` : 'Auth'}
-            </span>
-          </div>
-        );
-
-      case 'error':
-        return (
-          <div
-            className="flex items-center gap-1 text-amber-200 bg-amber-950/70 p-1 sm:px-2 sm:py-0.5 rounded-full border border-amber-800/60"
-            title="Cloud Offline — Operating in Local Mode"
-          >
-            <WifiOff className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="hidden sm:inline font-medium text-[10px]">Offline</span>
-          </div>
-        );
-
-      case 'local_fallback':
-      default:
-        return (
-          <div
-            className="flex items-center gap-1 text-[#cbbccf] bg-[#1d0e33]/90 p-1 sm:px-2 sm:py-0.5 rounded-full border border-[#4a1f6d]"
-            title="Local Demo Mode"
-          >
-            <Wifi className="w-3.5 h-3.5 text-[#e07bb8]/70 shrink-0" />
-            <span className="hidden sm:inline font-medium text-[10px]">Demo</span>
-          </div>
-        );
-    }
-  };
+  switch (status) {
+    case 'loading':
+      dot = <Loader2 className="w-3 h-3 text-berry animate-spin" />;
+      label = 'Connecting';
+      title = 'Connecting to session…';
+      break;
+    case 'connected':
+      dot = <span className="w-2 h-2 rounded-full bg-emerald-400" />;
+      label = isAnonymous ? `Anon #${shortUid || 'user'}` : 'Signed in';
+      title = `Connected anonymously${shortUid ? ` as #${shortUid}` : ''}`;
+      break;
+    case 'error':
+      dot = <WifiOff className="w-3 h-3 text-amber-400" />;
+      label = 'Offline';
+      title = 'Cloud offline. Running in local mode.';
+      break;
+    case 'local_fallback':
+    default:
+      dot = <span className="w-2 h-2 rounded-full bg-amber-400" />;
+      label = 'Demo';
+      title = 'Local demo mode. Matches are simulated.';
+  }
 
   return (
-    <div className={`inline-flex items-center shrink-0 transition-all ${className}`}>
-      {renderContent()}
+    <div
+      className={`inline-flex items-center justify-center gap-1.5 w-8 sm:w-auto h-7 sm:px-2.5 rounded-full sm:bg-surface sm:border sm:border-line text-[11px] font-medium text-muted shrink-0 ${className}`}
+      title={title}
+      role="status"
+      aria-label={title}
+    >
+      <span className="flex items-center justify-center w-3 h-3">{dot}</span>
+      <span className="hidden sm:inline">{label}</span>
     </div>
   );
 };
