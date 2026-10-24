@@ -3,6 +3,7 @@ import { Volume2, VolumeX, Shield } from 'lucide-react';
 import { AnimatedBrandTitle } from './AnimatedBrandTitle.tsx';
 import { AuthStatusBadge } from './AuthStatusBadge.tsx';
 import { NAV_ITEMS, NavTarget, isNavActive } from './BottomNavigation.tsx';
+import { AnimalAvatar } from './AnimalAvatar.tsx';
 
 interface HeaderProps {
   onNavigate: (view: NavTarget) => void;
@@ -10,6 +11,8 @@ interface HeaderProps {
   isSoundMuted: boolean;
   onToggleSound: () => void;
   onOpenSafetyModal: () => void;
+  onOpenProfile: () => void;
+  profile: { avatar?: string; displayName?: string };
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,6 +21,8 @@ export const Header: React.FC<HeaderProps> = ({
   isSoundMuted,
   onToggleSound,
   onOpenSafetyModal,
+  onOpenProfile,
+  profile,
 }) => (
   <header className="sticky top-0 z-40 bg-ink/85 backdrop-blur-xl border-b border-line pt-safe">
     <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[var(--header-h)] flex items-center gap-3">
@@ -70,6 +75,14 @@ export const Header: React.FC<HeaderProps> = ({
           aria-label="Safety and community guidelines"
         >
           <Shield className="w-[18px] h-[18px]" />
+        </button>
+        <button
+          onClick={onOpenProfile}
+          className="ml-1 rounded-full ring-1 ring-line hover:ring-berry transition-shadow cursor-pointer"
+          title="Your profile"
+          aria-label="Edit your profile"
+        >
+          <AnimalAvatar avatar={profile.avatar} seed={profile.displayName || 'guest'} className="w-8 h-8" />
         </button>
       </div>
     </div>

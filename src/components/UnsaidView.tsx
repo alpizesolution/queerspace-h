@@ -191,7 +191,7 @@ export const UnsaidView: React.FC = () => {
               }}
               placeholder={PLACEHOLDERS[kind]}
               aria-label="Write something unsaid"
-              className="input font-serif text-[17px]"
+              className="input text-base sm:text-[15px]"
             />
             {showCrisis && <CrisisCard />}
             <div className="flex items-center justify-between gap-3">
@@ -239,11 +239,21 @@ export const UnsaidView: React.FC = () => {
                 const mine = myIds.has(post.id);
                 const myReaction = reacted[post.id];
                 return (
-                  <li key={post.id} className="card p-4 sm:p-5 anim-fade">
-                    <span className={`tag mb-2.5 ${post.kind === 'confession' ? '!text-lavender' : '!text-berry'}`}>
-                      {post.kind === 'confession' ? 'Confession' : 'Vent'}
+                  <li
+                    key={post.id}
+                    className={`relative overflow-hidden rounded-3xl border p-4 sm:p-5 anim-fade ${
+                      post.kind === 'confession'
+                        ? 'border-lavender/20 bg-gradient-to-br from-lavender/[0.09] via-surface to-surface'
+                        : 'border-berry/20 bg-gradient-to-br from-berry/[0.09] via-surface to-surface'
+                    }`}
+                  >
+                    <span aria-hidden="true" className="absolute -top-1 right-3 text-[40px] opacity-[0.08] select-none">
+                      {post.kind === 'confession' ? '🌙' : '☁️'}
                     </span>
-                    <p className="font-serif text-[17px] text-fg leading-relaxed whitespace-pre-wrap break-words">
+                    <span className={`tag mb-2 ${post.kind === 'confession' ? '!text-lavender' : '!text-berry'}`}>
+                      {post.kind === 'confession' ? '🌙 Confession' : '☁️ Vent'}
+                    </span>
+                    <p className="text-[14.5px] sm:text-[16px] text-fg/90 leading-relaxed whitespace-pre-wrap break-words">
                       {post.text}
                     </p>
                     <div className="flex items-center gap-0.5 mt-3 -ml-2 text-[13px] text-muted">

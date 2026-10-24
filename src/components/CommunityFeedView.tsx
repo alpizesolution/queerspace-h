@@ -298,7 +298,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
             const userLiked = Boolean(liked[post.id]);
             const replyCount = post.replyCount ?? 0;
             return (
-              <article key={post.id} className="card p-4 sm:p-5">
+              <article key={post.id} className="rounded-3xl border border-line bg-gradient-to-b from-raised/60 to-surface p-4 sm:p-5">
                 <header className="flex items-center gap-2.5 mb-3">
                   <AnimalAvatar avatar={post.authorAvatar} seed={post.authorId || post.author} className="w-9 h-9" />
                   <div className="min-w-0 flex-1">
@@ -306,7 +306,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                       {post.author} <span className="font-normal text-subtle">{post.authorPronouns}</span>
                     </p>
                     <p className="text-[12px] text-subtle">
-                      {CATEGORY_LABELS[post.category] ?? post.category} · {formatChatTime(post.timestamp)}
+                      {CATEGORY_EMOJI[post.category] ?? '🌸'} {CATEGORY_LABELS[post.category] ?? post.category} · {formatChatTime(post.timestamp)}
                     </p>
                   </div>
                   {uid && post.authorId === uid && (
@@ -320,15 +320,17 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                   )}
                 </header>
 
-                <h2 className="text-[17px] font-semibold text-fg leading-snug">{post.title}</h2>
-                <p className="mt-1.5 text-[15px] text-muted leading-relaxed whitespace-pre-wrap break-words">
+                <h2 className="text-[15px] sm:text-[17px] font-semibold text-fg leading-snug">{post.title}</h2>
+                <p className="mt-1 text-[14px] sm:text-[15px] text-muted leading-relaxed whitespace-pre-wrap break-words">
                   {post.content}
                 </p>
 
                 {post.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-x-2 gap-y-1 mt-3 text-[13px] text-lavender">
+                  <div className="flex flex-wrap gap-1.5 mt-3">
                     {post.tags.map((tag) => (
-                      <span key={tag}>#{tag}</span>
+                      <span key={tag} className="h-6 px-2.5 inline-flex items-center rounded-full bg-lavender/10 text-lavender text-[12px]">
+                        #{tag}
+                      </span>
                     ))}
                   </div>
                 )}
@@ -512,4 +514,11 @@ const CATEGORIES = [
   { id: 'general', label: 'General' },
 ];
 
+const CATEGORY_EMOJI: Record<string, string> = {
+  vents: '☁️',
+  media: '📚',
+  friends: '🫶',
+  advice: '💌',
+  general: '🌸',
+};
 const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(CATEGORIES.map((c) => [c.id, c.label]));

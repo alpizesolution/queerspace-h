@@ -14,18 +14,19 @@ import {
 import { isLocationCompatible, formatLocationSummary } from './philippines-locations.ts';
 import { PartnerProfile, UserPreferences } from '../types.ts';
 
-test('generateSapphicPseudonym produces two-word name and valid pronouns', () => {
+test('generateSapphicPseudonym produces a Reddit-style name and valid pronouns', () => {
   const result = generateSapphicPseudonym();
-  assert.ok(result.name.includes(' '));
+  assert.match(result.name, /^[A-Za-z]+(_[A-Za-z]+)+$/);
   assert.ok(['she/her', 'they/she', 'they/them'].includes(result.pronouns));
 });
 
 test('every possible pseudonym fits the 25-character display name limit', () => {
   const all = [
     ...PSEUDONYM_SPECIALS,
-    ...PSEUDONYM_FIRST_WORDS.flatMap((a) => PSEUDONYM_SECOND_WORDS.map((b) => `${a} ${b}`)),
+    ...PSEUDONYM_FIRST_WORDS.flatMap((a) => PSEUDONYM_SECOND_WORDS.map((b) => `${a}_${b}`)),
   ];
-  for (const name of all) assert.ok(name.length <= 25 && name.includes(' '), name);
+  // Underscore-joined words, no spaces and no numbers.
+  for (const name of all) assert.ok(name.length <= 25 && /^[A-Za-z]+(_[A-Za-z]+)+$/.test(name), name);
 });
 
 test('validateSetupProfile accepts valid display name', () => {

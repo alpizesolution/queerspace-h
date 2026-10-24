@@ -44,6 +44,9 @@ interface MatchSetupModalProps {
   currentPrefs: UserPreferences;
   onClose: () => void;
   onStartMatching: (mode: 'quick' | 'custom', prefs: UserPreferences) => void;
+  /** 'profile' edits name, avatar and details and saves them without starting a search. */
+  purpose?: 'match' | 'profile';
+  onSaveProfile?: (prefs: UserPreferences) => void;
 }
 
 export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
@@ -51,7 +54,10 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
   currentPrefs,
   onClose,
   onStartMatching,
+  purpose = 'match',
+  onSaveProfile,
 }) => {
+  const isProfile = purpose === 'profile';
   const [activeTab, setActiveTab] = useState<'quick' | 'custom'>(initialMode);
   const [displayName, setDisplayName] = useState(currentPrefs.displayName || 'Sapphic Guest');
   const [avatar, setAvatar] = useState(() =>
@@ -195,7 +201,8 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
     }
 
     setErrors({});
-    onStartMatching(activeTab, prefs);
+    if (isProfile && onSaveProfile) onSaveProfile(prefs);
+    else onStartMatching(activeTab, prefs);
   };
 
   const isCustom = activeTab === 'custom';
@@ -203,7 +210,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 
   return (
     <Sheet
-      title="Start a chat"
+      title={isProfile ? 'Your profile' : 'Start a chat'}
       onClose={onClose}
       size="lg"
       footer={
@@ -214,8 +221,8 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
             </p>
           )}
           <button type="button" onClick={handleSubmit} className="btn btn-primary w-full h-12 text-[15px]">
-            {isCustom ? 'Find my match' : 'Start chatting'}
-            <ArrowRight className="w-4 h-4" />
+            {isProfile ? 'Save profile' : isCustom ? 'Find my match' : 'Start chatting'}
+            {!isProfile && <ArrowRight className="w-4 h-4" />}
           </button>
         </>
       }

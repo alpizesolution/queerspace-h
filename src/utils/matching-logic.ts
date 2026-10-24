@@ -136,32 +136,35 @@ export function togglePreferredFilter(
   return next.length > 0 ? next : ['Any / No preference'];
 }
 
-// Playful, queer-coded names. Every result stays within the 25-character display name limit.
+// Reddit-style usernames (Adjective_Noun) without the trailing numbers, queer-coded.
+// Every result stays within the 25-character display name limit.
 export const PSEUDONYM_FIRST_WORDS = [
-  'Chaotic', 'Cottagecore', 'Soft', 'Feral', 'Useless', 'Sapphic', 'Bisexual', 'Lesbian',
+  'Chaotic', 'Cozy', 'Soft', 'Feral', 'Useless', 'Sapphic', 'Bisexual', 'Lesbian',
   'Pining', 'Tender', 'Moody', 'Sleepy', 'Butch', 'Femme', 'Thrifted', 'Lovesick',
-  'Kilig', 'Marupok', 'Flannel', 'Tarot', 'Iced Coffee', 'Lavender', 'Overthinking', 'Gay Little',
+  'Kilig', 'Marupok', 'Flannel', 'Tarot', 'Lavender', 'Overthinking', 'Dreamy', 'Clumsy',
+  'Witty', 'Gentle', 'Spicy', 'Mossy', 'Velvet', 'Starry',
 ];
 
 export const PSEUDONYM_SECOND_WORDS = [
   'Carabiner', 'Cardigan', 'Gremlin', 'Frog', 'Moth', 'Raccoon', 'Witch', 'Poet',
-  'Menace', 'Heartthrob', 'Disaster', 'Mushroom', 'Bookworm', 'Beshie', 'Plant Mom', 'Cat Lady',
-  'Stargazer', 'Daydreamer', 'Romantic', 'Sweetheart',
+  'Menace', 'Heartthrob', 'Disaster', 'Mushroom', 'Bookworm', 'Beshie', 'PlantMom', 'CatLady',
+  'Stargazer', 'Daydreamer', 'Romantic', 'Sweetheart', 'Sunflower', 'Otter', 'Capybara', 'Tulip',
+  'Mango', 'Ube', 'Siopao', 'Pandesal',
 ];
 
 // Hand-picked names that don't fit the two-part pattern.
 export const PSEUDONYM_SPECIALS = [
-  'U-Haul Enthusiast', 'Carabiner Collector', 'Certified Pining Expert', 'Kilig Professional',
-  'Marupok Era', 'Ate of the Group Chat', 'Beshie With Feelings', 'Two Cats One Cardigan',
-  'Tote Bag Philosopher', 'Plant Mom Energy', 'Sad Girl Hours', 'Disaster Bisexual',
-  'Useless Lesbian', 'Mutual Pining', 'Situationship Survivor', 'Main Character Energy',
+  'UHaul_Enthusiast', 'Carabiner_Collector', 'Certified_Pining_Expert', 'Kilig_Professional',
+  'Marupok_Era', 'Ate_Of_The_GroupChat', 'Beshie_With_Feelings', 'Two_Cats_One_Cardigan',
+  'ToteBag_Philosopher', 'PlantMom_Energy', 'SadGirl_Hours', 'Disaster_Bisexual',
+  'Useless_Lesbian', 'Mutual_Pining', 'Situationship_Survivor', 'MainCharacter_Energy',
 ];
 
 const pick = <T,>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
 
 export function generateSapphicPseudonym(): { name: string; pronouns: string } {
   const name =
-    Math.random() < 0.3 ? pick(PSEUDONYM_SPECIALS) : `${pick(PSEUDONYM_FIRST_WORDS)} ${pick(PSEUDONYM_SECOND_WORDS)}`;
+    Math.random() < 0.2 ? pick(PSEUDONYM_SPECIALS) : `${pick(PSEUDONYM_FIRST_WORDS)}_${pick(PSEUDONYM_SECOND_WORDS)}`;
   const pronouns = Math.random() > 0.35 ? 'she/her' : (Math.random() > 0.5 ? 'they/she' : 'they/them');
   return { name, pronouns };
 }
