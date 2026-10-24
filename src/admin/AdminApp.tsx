@@ -28,6 +28,8 @@ import {
   signOutAdmin,
 } from '../services/adminService.ts';
 import { BarChart } from './BarChart.tsx';
+import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
+import type { CommunityPost } from '../types.ts';
 
 type Tab = 'overview' | 'suggestions' | 'reports' | 'moderation';
 
@@ -554,7 +556,17 @@ const ReportsTab: React.FC<InboxProps<AdminReport>> = ({ items, setItems, onConf
 const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ onConfirm }) => {
   const [unsaid, setUnsaid] = useState<AdminUnsaidPost[] | null>(null);
   const [room, setRoom] = useState<AdminRoomMessage[] | null>(null);
+  const [community, setCommunity] = useState<CommunityPost[] | null>(null);
   const [error, setError] = useState(false);
+
+  useEffect(
+    () =>
+      subscribeToCommunity(setCommunity, () => {
+        setCommunity([]);
+        setError(true);
+      }),
+    []
+  );
 
   useEffect(() => {
     loadFlaggedUnsaid()
@@ -626,6 +638,46 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
                     <Trash2 className="w-4 h-4" /> Remove
                   </button>
                 </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2 className="text-[15px] font-semibold mb-1">Community</h2>
+        <p className="text-[13px] text-muted mb-3">Latest posts. Deleting one removes it for everyone.</p>
+        {!community ? (
+          <Skeleton />
+        ) : community.length === 0 ? (
+          <Empty text="No posts yet." />
+        ) : (
+          <ul className="card divide-y divide-line">
+            {community.map((p) => (
+              <li key={p.id} className="flex items-start gap-3 p-3 sm:p-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] text-subtle">
+                    <span className="text-muted font-medium">{p.author}</span> · {formatAgo(p.timestamp, now)}
+                  </p>
+                  <p className="text-[14px] text-fg font-medium break-words">{p.title}</p>
+                  <p className="text-[13px] text-muted break-words line-clamp-2">{p.content}</p>
+                </div>
+                <button
+                  onClick={() =>
+                    onConfirm({
+                      title: 'Delete this post?',
+                      message: `“${p.title.slice(0, 80)}” will be removed for everyone.`,
+                      confirmLabel: 'Delete',
+                      run: async () => {
+                        await deleteCommunityPost(p.id);
+                      },
+                    })
+                  }
+                  className="icon-btn w-9 h-9 shrink-0"
+                  aria-label={`Delete post from ${p.author}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </li>
             ))}
           </ul>

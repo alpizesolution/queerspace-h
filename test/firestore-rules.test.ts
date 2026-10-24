@@ -242,13 +242,9 @@ test('T-10: Like document creation fails if extra arbitrary fields are passed', 
   );
 });
 
-test('T-11: User CAN create valid like document for themselves', async () => {
-  const alice = testEnv.authenticatedContext('alice');
-  await assertSucceeds(
-    alice.firestore().doc('community_posts/post1/likes/alice').set({
-      createdAt: new Date(),
-    })
-  );
+test('T-11: User CAN like a post for themselves (marker + counter in one batch)', async () => {
+  await seedCommunityPost('post1', 'bob');
+  await assertSucceeds(likeAs('alice', 'post1', 1));
 });
 
 // ------------------------------------------------------------------
@@ -687,4 +683,89 @@ test('AD-04: A profile join date CAN only be set once, to now', async () => {
   });
   const bob = testEnv.authenticatedContext('bob').firestore();
   await assertSucceeds(bob.doc('users/bob/public/profile').set({ createdAt: now(), updatedAt: new Date() }, { merge: true }));
+});
+
+// ------------------------------------------------------------------
+// Community (shared posts, likes, replies)
+// ------------------------------------------------------------------
+async function seedCommunityPost(id: string, author: string, counts: Record<string, number> = {}) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`community_posts/${id}`).set({
+      authorId: author, authorName: 'Willow', authorPronouns: 'she/her', title: 'Hi', content: 'Hello',
+      category: 'general', tags: [], likes: 0, replyCount: 0, timestamp: new Date(), ...counts,
+    });
+  });
+}
+
+function likeAs(uid: string, id: string, by: 1 | -1) {
+  const fs = testEnv.authenticatedContext(uid).firestore();
+  const batch = fs.batch();
+  batch.update(fs.doc(`community_posts/${id}`), { likes: firebase.firestore.FieldValue.increment(by) });
+  if (by === 1) batch.set(fs.doc(`community_posts/${id}/likes/${uid}`), { createdAt: now() });
+  else batch.delete(fs.doc(`community_posts/${id}/likes/${uid}`));
+  return batch.commit();
+}
+
+function replyAs(uid: string, id: string, overrides: Record<string, unknown> = {}, bump = 1) {
+  const fs = testEnv.authenticatedContext(uid).firestore();
+  const batch = fs.batch();
+  batch.set(fs.collection(`community_posts/${id}/replies`).doc(), {
+    authorId: uid, authorName: 'Ivy', authorPronouns: 'she/her', content: 'same here!', timestamp: now(), ...overrides,
+  });
+  batch.update(fs.doc(`community_posts/${id}`), { replyCount: firebase.firestore.FieldValue.increment(bump) });
+  batch.set(fs.doc(`rate_limits/${uid}`), { communityReply: now() }, { merge: true });
+  return batch.commit();
+}
+
+const communityPost = (authorId: string, overrides: Record<string, unknown> = {}) => ({
+  authorId, authorName: 'Willow', authorPronouns: 'she/her', authorAvatar: 'cat.1.2', title: 'Book recs?',
+  content: 'Looking for sapphic novels', category: 'media', tags: ['Books'], likes: 0, replyCount: 0, timestamp: now(),
+  ...overrides,
+});
+
+test('C-01: Posts CAN be shared with everyone, but not spoofed or pre-liked', async () => {
+  await assertSucceeds(stampedAdd('alice', 'community_posts', communityPost('alice'), 'communityPost'));
+  await assertSucceeds(testEnv.authenticatedContext('bob').firestore().collection('community_posts').get());
+  await seedStamp('alice', 'communityPost', 60);
+  await assertFails(stampedAdd('alice', 'community_posts', communityPost('bob'), 'communityPost'));
+  await assertFails(stampedAdd('alice', 'community_posts', communityPost('alice', { likes: 99 }), 'communityPost'));
+  await assertFails(stampedAdd('alice', 'community_posts', communityPost('alice', { category: 'spam' }), 'communityPost'));
+  await assertFails(testEnv.unauthenticatedContext().firestore().collection('community_posts').get());
+});
+
+test('C-02: Posting is limited to one every 30 seconds', async () => {
+  await assertSucceeds(stampedAdd('alice', 'community_posts', communityPost('alice'), 'communityPost'));
+  await assertFails(stampedAdd('alice', 'community_posts', communityPost('alice'), 'communityPost'));
+  await seedStamp('alice', 'communityPost', 31);
+  await assertSucceeds(stampedAdd('alice', 'community_posts', communityPost('alice'), 'communityPost'));
+});
+
+test('C-03: Each person CAN like once and unlike, and counts move by exactly one', async () => {
+  await seedCommunityPost('p1', 'alice');
+  await assertSucceeds(likeAs('bob', 'p1', 1));
+  await assertFails(likeAs('bob', 'p1', 1));
+  await assertSucceeds(likeAs('bob', 'p1', -1));
+  await assertFails(likeAs('bob', 'p1', -1));
+  const carol = testEnv.authenticatedContext('carol').firestore();
+  await assertFails(carol.doc('community_posts/p1').update({ likes: 50 }));
+  await assertFails(carol.doc('community_posts/p1').update({ title: 'hijacked' }));
+});
+
+test('C-04: Replies CAN be added with the count, not spoofed, padded or edited', async () => {
+  await seedCommunityPost('p1', 'alice');
+  await assertSucceeds(replyAs('bob', 'p1'));
+  await seedStamp('bob', 'communityReply', 10);
+  await assertFails(replyAs('bob', 'p1', { authorId: 'alice' }));
+  await assertFails(replyAs('bob', 'p1', { content: 'x'.repeat(501) }));
+  await assertFails(replyAs('bob', 'p1', {}, 5));
+  await assertSucceeds(testEnv.authenticatedContext('carol').firestore().collection('community_posts/p1/replies').get());
+});
+
+test('C-05: Only the author or an admin CAN delete a post', async () => {
+  await seedCommunityPost('p1', 'alice');
+  await seedCommunityPost('p2', 'alice');
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('community_posts/p1').delete());
+  await assertSucceeds(testEnv.authenticatedContext('alice').firestore().doc('community_posts/p1').delete());
+  await seedAdmin();
+  await assertSucceeds(adminDb().doc('community_posts/p2').delete());
 });

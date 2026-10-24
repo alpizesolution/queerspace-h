@@ -79,7 +79,9 @@ export interface ChatMessage {
 
 export interface CommunityReply {
   id: string;
+  authorId?: string;
   author: string;
+  authorAvatar?: string;
   authorPronouns: string;
   content: string;
   timestamp: number;
@@ -87,14 +89,17 @@ export interface CommunityReply {
 
 export interface CommunityPost {
   id: string;
+  authorId?: string;
   author: string;
   authorPronouns: string;
+  authorAvatar?: string;
   category: 'vents' | 'media' | 'friends' | 'advice' | 'general';
   title: string;
   content: string;
   timestamp: number;
   likes: number;
   userLiked?: boolean;
+  replyCount?: number;
   replies: CommunityReply[];
   tags: string[];
 }
