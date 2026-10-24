@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import {
   ArrowUp,
@@ -13,7 +13,12 @@ import {
   VolumeX,
   SlidersHorizontal,
   SkipForward,
+  Reply,
+  X,
 } from 'lucide-react';
+import { SwipeToReply } from './SwipeToReply.tsx';
+import { MatchCelebration } from './MatchCelebration.tsx';
+import { auth } from '../lib/firebase.ts';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 import { ChatMessage, PartnerProfile, PartnerStatus, UserPreferences } from '../types.ts';
@@ -69,6 +74,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [reportReason, setReportReason] = useState('Harassment or disrespectful behavior');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  /** Message whose reactions and reply button are showing (tap on touch screens). */
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +97,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
       window.removeEventListener('keydown', onKey);
     };
   }, [menuOpen]);
+  // Hide a tapped message's actions when tapping anywhere else.
+  useEffect(() => {
+    if (!activeMessageId) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!(e.target as Element).closest?.(`[data-msg="${activeMessageId}"]`)) setActiveMessageId(null);
+    };
+    document.addEventListener('pointerdown', onPointer);
+    return () => document.removeEventListener('pointerdown', onPointer);
+  }, [activeMessageId]);
   const [inputError, setInputError] = useState<string | null>(null);
   const [cloudConvId, setCloudConvId] = useState<string | null>(null);
   const [isCloudActive, setIsCloudActive] = useState<boolean>(false);
@@ -125,6 +143,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     let partnerMessageCount = 0;
 
     setMessages([]);
+    setReplyingTo(null);
     setCloudConvId(null);
     setIsCloudActive(false);
     setPartnerLeft(false);
@@ -133,6 +152,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       if (cancelled) return;
       setCloudConvId(convId);
       setIsCloudActive(true);
+      setCelebrating(true);
       if (!soundMutedRef.current) soundEffects.playMatchFound();
 
       const systemMsg: ChatMessage = {
@@ -218,7 +238,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
           soundEffects.playMessageSent();
         }
 
-        const res = await sendCloudMessage(cloudConvId, sanitized.cleanText);
+        const quoted = replyingTo;
+        setReplyingTo(null);
+        const res = await sendCloudMessage(
+          cloudConvId,
+          sanitized.cleanText,
+          quoted
+            ? {
+                id: quoted.id,
+                text: quoted.text,
+                senderId: quoted.sender === 'user' ? auth?.currentUser?.uid ?? '' : partner.id,
+              }
+            : undefined
+        );
         if (!res.success) {
           setInputError(res.error || 'Cloud send failed.');
           setTimeout(() => setInputError(null), 3500);
@@ -267,6 +299,23 @@ export const ChatView: React.FC<ChatViewProps> = ({
     );
   };
 
+  const endCelebration = useCallback(() => setCelebrating(false), []);
+
+  const startReply = (msg: ChatMessage) => {
+    setReplyingTo(msg);
+    setActiveMessageId(null);
+    inputRef.current?.focus();
+  };
+
+  const jumpToMessage = (id: string) => {
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('anim-flash');
+    void el.offsetWidth;
+    el.classList.add('anim-flash');
+  };
+
   const handleAddEmoji = (emoji: string) => {
     setInputText((prev) => prev + emoji);
     inputRef.current?.focus();
@@ -277,6 +326,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSendMessage();
+    } else if (e.key === 'Escape' && replyingTo) {
+      setReplyingTo(null);
     }
   };
 
@@ -291,7 +342,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   return (
     <div
-      className="fixed inset-x-0 top-0 h-[100dvh] z-30 flex flex-col bg-ink md:static md:z-auto md:max-w-3xl md:mx-auto md:w-full md:border-x md:border-line"
+      className="fixed inset-x-0 top-0 h-[100dvh] z-30 flex flex-col bg-ink md:relative md:z-auto md:max-w-3xl md:mx-auto md:w-full md:border-x md:border-line"
       style={viewportHeight ? { height: viewportHeight } : undefined}
     >
       {/* Header */}
@@ -391,7 +442,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 sm:px-5 py-4">
         {/* Match context */}
         <div className="text-center mb-5 space-y-2">
           <p className="text-[12px] text-subtle">
@@ -423,21 +474,45 @@ export const ChatView: React.FC<ChatViewProps> = ({
             const isUser = msg.sender === 'user';
             const next = messages[i + 1];
             const lastInGroup = !next || next.sender !== msg.sender;
+            const showActions = activeMessageId === msg.id;
 
             return (
               <div
                 key={msg.id}
+                data-msg={msg.id}
                 className={`group flex flex-col ${isUser ? 'items-end' : 'items-start'} ${lastInGroup ? 'pb-2' : ''}`}
               >
-                <div
-                  className={`max-w-[80%] sm:max-w-[70%] px-3.5 py-2 text-[15px] leading-snug rounded-[20px] ${
-                    isUser
-                      ? `bg-plum text-fg ${lastInGroup ? 'rounded-br-md' : ''}`
-                      : `bg-raised text-fg ${lastInGroup ? 'rounded-bl-md' : ''}`
-                  }`}
+                <SwipeToReply
+                  onReply={() => startReply(msg)}
+                  onTap={() => setActiveMessageId((id) => (id === msg.id ? null : msg.id))}
+                  className={`max-w-[80%] sm:max-w-[70%] flex ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
-                  <p className="whitespace-pre-wrap break-words">{msg.text}</p>
-                </div>
+                  <div
+                    id={`msg-${msg.id}`}
+                    className={`px-3.5 py-2 text-[15px] leading-snug rounded-[20px] ${
+                      isUser
+                        ? `bg-plum text-fg ${lastInGroup ? 'rounded-br-md' : ''}`
+                        : `bg-raised text-fg ${lastInGroup ? 'rounded-bl-md' : ''}`
+                    }`}
+                  >
+                    {msg.replyTo && (
+                      <button
+                        type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onClick={() => jumpToMessage(msg.replyTo!.id)}
+                        className="block w-full text-left mb-1.5 -mx-1 px-2.5 py-1.5 rounded-xl bg-black/20 border-l-2 border-berry cursor-pointer"
+                        aria-label={`Replying to: ${msg.replyTo.text}`}
+                      >
+                        <span className="block text-[12px] font-semibold text-berry">
+                          {msg.replyTo.sender === 'user' ? 'You' : partner.displayName}
+                        </span>
+                        <span className="block text-[13px] text-fg/75 line-clamp-2 break-words">{msg.replyTo.text}</span>
+                      </button>
+                    )}
+                    <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                  </div>
+                </SwipeToReply>
 
                 {msg.reactions && msg.reactions.length > 0 && (
                   <div className="flex flex-wrap gap-1 -mt-1.5 mx-2 relative">
@@ -465,17 +540,34 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       {isUser && <Check className="w-3 h-3" aria-label="Sent" />}
                     </span>
                   )}
-                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <div
+                    className={`items-center gap-0.5 rounded-full transition-opacity ${
+                      showActions
+                        ? 'flex bg-raised border border-line px-1 py-0.5 shadow-lg shadow-black/30 anim-pop'
+                        : 'hidden md:flex opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+                    }`}
+                  >
                     {QUICK_REACTIONS.map((emoji) => (
                       <button
                         key={emoji}
-                        onClick={() => handleToggleReaction(msg.id, emoji)}
-                        className="w-7 h-7 rounded-full hover:bg-raised text-[13px] cursor-pointer"
+                        onClick={() => {
+                          handleToggleReaction(msg.id, emoji);
+                          setActiveMessageId(null);
+                        }}
+                        className={`${showActions ? 'w-9 h-9 text-[19px]' : 'w-7 h-7 text-[14px]'} rounded-full hover:bg-surface cursor-pointer transition-transform active:scale-125`}
                         aria-label={`React with ${emoji}`}
                       >
                         {emoji}
                       </button>
                     ))}
+                    <button
+                      onClick={() => startReply(msg)}
+                      className={`${showActions ? 'w-9 h-9' : 'w-7 h-7'} rounded-full hover:bg-surface text-muted hover:text-fg flex items-center justify-center cursor-pointer`}
+                      aria-label="Reply"
+                      title="Reply"
+                    >
+                      <Reply className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -535,6 +627,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </p>
           )}
 
+          {replyingTo && (
+            <div className="mx-3 mt-2 flex items-center gap-2.5 pl-3 pr-1 py-1.5 rounded-xl bg-surface border-l-2 border-berry anim-fade">
+              <Reply className="w-4 h-4 text-berry shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-semibold text-berry">
+                  Replying to {replyingTo.sender === 'user' ? 'yourself' : partner.displayName}
+                </p>
+                <p className="text-[13px] text-muted truncate">{replyingTo.text}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyingTo(null)}
+                className="icon-btn w-9 h-9 shrink-0"
+                aria-label="Cancel reply"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           <div className="relative flex items-end gap-1.5 px-2 sm:px-3 pt-2">
             {emojiPickerOpen && (
               <div className="absolute bottom-full left-2 mb-2 p-1.5 card bg-raised shadow-2xl shadow-black/50 grid grid-cols-5 gap-0.5 z-30 anim-pop">
@@ -586,6 +698,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {celebrating && (
+        <MatchCelebration
+          me={{ avatar: userPrefs.avatar, seed: auth?.currentUser?.uid ?? userPrefs.displayName ?? 'me' }}
+          partner={{ avatar: partner.avatar, seed: partner.id, name: partner.displayName }}
+          onDone={endCelebration}
+        />
       )}
 
       {showSkipConfirm && (
@@ -678,8 +798,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   );
 };
 
-const QUICK_REACTIONS = ['🌸', '❤️', '✨', '☕'];
-const EMOJIS = ['🌸', '❤️', '✨', '☕', '🫂', '🌿', '📖', '🐱', '🥺', '🎉'];
+const QUICK_REACTIONS = ['😻', '😹', '😽', '🙀', '😿', '❤️'];
+const EMOJIS = ['😺', '😻', '😹', '😽', '🙀', '😿', '😼', '🐈', '🐾', '🌸', '❤️', '✨', '🫂', '🥺', '🎉'];
 const REPORT_REASONS = [
   'Harassment or disrespectful behavior',
   'Unsolicited sexual messages or content',

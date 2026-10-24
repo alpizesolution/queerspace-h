@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, User, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
+import { Analytics, getAnalytics, isSupported as isAnalyticsSupported, logEvent } from 'firebase/analytics';
 
 const getEnvVar = (key: string): string | undefined => {
   if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -61,6 +62,31 @@ export const db = app ? getFirestore(app) : null;
 if (auth && db && getEnvVar('VITE_USE_FIREBASE_EMULATOR') === 'true') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8080);
+}
+
+// Google Analytics (GA4 through Firebase) for visitor counts and realtime views.
+// Turned on by setting VITE_FIREBASE_MEASUREMENT_ID; off in emulator mode and on /admin.
+let analytics: Analytics | null = null;
+const analyticsReady: Promise<Analytics | null> =
+  app &&
+  firebaseConfig.measurementId &&
+  typeof window !== 'undefined' &&
+  getEnvVar('VITE_USE_FIREBASE_EMULATOR') !== 'true' &&
+  !/^\/admin\/?$/.test(window.location.pathname)
+    ? isAnalyticsSupported()
+        .then((ok) => (analytics = ok ? getAnalytics(app) : null))
+        .catch((err) => {
+          console.warn('[Analytics] Could not start:', err);
+          return null;
+        })
+    : Promise.resolve(null);
+
+/** Records a screen in Analytics. The app has no URL routes, so each view counts as a page. */
+export function logScreenView(screen: string): void {
+  analyticsReady.then((a) => {
+    if (!a) return;
+    logEvent(a, 'page_view', { page_title: screen, page_location: `${window.location.origin}/#${screen}` });
+  });
 }
 
 export async function ensureAnonymousAuth(): Promise<User | null> {

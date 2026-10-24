@@ -207,6 +207,30 @@ test('T-15: Message creation FAILS if text exceeds 1000 characters', async () =>
   );
 });
 
+test('T-17: Replies quote a short snippet; padded or oversized quotes are rejected', async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc('conversations/conv_reply').set({
+      participants: ['alice', 'bob'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      status: 'active',
+    });
+  });
+
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const reply = (replyTo: unknown) => ({ senderId: 'alice', text: 'Same!', timestamp: new Date(), replyTo });
+  await assertSucceeds(
+    alice.doc('conversations/conv_reply/messages/r1').set(reply({ id: 'm1', text: 'I love cats', senderId: 'bob' }))
+  );
+  await assertFails(
+    alice.doc('conversations/conv_reply/messages/r2').set(reply({ id: 'm1', text: 'x'.repeat(141), senderId: 'bob' }))
+  );
+  await assertFails(
+    alice.doc('conversations/conv_reply/messages/r3').set(reply({ id: 'm1', text: 'hi', senderId: 'bob', extra: true }))
+  );
+  await assertFails(alice.doc('conversations/conv_reply/messages/r4').set(reply('m1')));
+});
+
 test('T-16: Conversation creation FAILS if caller is not listed in participants', async () => {
   const alice = testEnv.authenticatedContext('alice');
   // Alice tries to create a conversation between Bob and Charlie
@@ -423,7 +447,7 @@ async function seedUnsaid(id: string, author: string, counts: Record<string, num
   });
 }
 
-function reactAs(uid: string, id: string, type: 'hugs' | 'same', bump = 1) {
+function reactAs(uid: string, id: string, type: string, bump = 1) {
   const fs = testEnv.authenticatedContext(uid).firestore();
   const batch = fs.batch();
   batch.update(fs.doc(`unsaid/${id}`), { [type]: firebase.firestore.FieldValue.increment(bump) });
@@ -480,6 +504,11 @@ test('U-04: Each person CAN react once, by exactly one', async () => {
   await assertFails(reactAs('bob', 'p1', 'same'));
   await assertFails(reactAs('carol', 'p1', 'same', 5));
   await assertSucceeds(reactAs('carol', 'p1', 'same'));
+  // Newer reactions count up from a missing field on older posts.
+  await assertSucceeds(reactAs('erin', 'p1', 'felt'));
+  await assertSucceeds(reactAs('fay', 'p1', 'proud'));
+  await assertFails(reactAs('gail', 'p1', 'felt', 2));
+  await assertFails(reactAs('hana', 'p1', 'angry'));
   // A bare counter bump without the marker doc is rejected.
   const dana = testEnv.authenticatedContext('dana').firestore();
   await assertFails(dana.doc('unsaid/p1').update({ hugs: firebase.firestore.FieldValue.increment(1) }));

@@ -8,7 +8,10 @@
     <meta property="og:title" content="QUEERSPACE PH — A Sapphic Space for Women" />
     <meta property="og:description" content="Your space. Your people. Your possibilities." />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="og:url" content="https://queerspaceph.com/" />
+    <meta property="og:image" content="https://queerspaceph.com/icon-512.png" />
+    <link rel="canonical" href="https://queerspaceph.com/" />
+    <meta name="twitter:card" content="summary" />
     <meta name="theme-color" content="#120b17" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -26,9 +29,59 @@
         background-color: #120b17 !important;
         color: #F7F0F6;
       }
+      /* Splash screen: drawn before any JavaScript loads, removed by src/utils/splash.ts. */
+      #splash {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: radial-gradient(60% 45% at 50% 42%, rgba(124, 58, 110, 0.35), rgba(18, 11, 23, 0) 70%), #120b17;
+        transition: opacity 450ms ease, transform 450ms ease;
+      }
+      #splash.splash-out { opacity: 0; transform: scale(1.04); pointer-events: none; }
+      #splash .splash-logo {
+        width: 96px; height: 96px; border-radius: 50%;
+        box-shadow: 0 0 0 1px rgba(224, 123, 184, 0.25), 0 0 48px rgba(224, 123, 184, 0.28);
+        animation: splash-logo 900ms cubic-bezier(0.16, 1, 0.3, 1) both, splash-glow 2.4s ease-in-out 900ms infinite;
+      }
+      #splash .splash-name {
+        margin-top: 22px; font-family: "Playfair Display", Georgia, serif; font-weight: 600;
+        font-size: 24px; letter-spacing: 0.04em; color: #f7f0f6;
+        animation: splash-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) 250ms both;
+      }
+      #splash .splash-name span { color: #e07bb8; margin-left: 0.28em; }
+      #splash .splash-tag {
+        margin-top: 8px; font-family: "Plus Jakarta Sans", system-ui, sans-serif; font-size: 13px;
+        letter-spacing: 0.02em; color: rgba(247, 240, 246, 0.55);
+        animation: splash-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) 450ms both;
+      }
+      #splash .splash-bar {
+        position: absolute; bottom: calc(56px + env(safe-area-inset-bottom)); width: 112px; height: 2px;
+        border-radius: 2px; overflow: hidden; background: rgba(247, 240, 246, 0.1);
+        animation: splash-rise 500ms ease 600ms both;
+      }
+      #splash .splash-bar::after {
+        content: ""; position: absolute; inset: 0; width: 40%; border-radius: 2px;
+        background: linear-gradient(90deg, transparent, #e07bb8, transparent);
+        animation: splash-slide 1.1s ease-in-out infinite;
+      }
+      @keyframes splash-logo { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: none; } }
+      @keyframes splash-glow {
+        50% { box-shadow: 0 0 0 1px rgba(224, 123, 184, 0.35), 0 0 64px rgba(224, 123, 184, 0.42); }
+      }
+      @keyframes splash-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+      @keyframes splash-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+      @media (prefers-reduced-motion: reduce) {
+        #splash, #splash * { animation: none !important; transition: opacity 300ms ease !important; }
+        #splash.splash-out { transform: none; }
+      }
     </style>
   </head>
   <body class="antialiased">
+    <div id="splash" role="status" aria-label="Loading QUEERSPACE PH">
+      <img class="splash-logo" src="/icon-192.png" alt="" width="96" height="96" />
+      <div class="splash-name" aria-hidden="true">QUEERSPACE<span>PH</span></div>
+      <div class="splash-tag" aria-hidden="true">Your space. Your people.</div>
+      <div class="splash-bar" aria-hidden="true"></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

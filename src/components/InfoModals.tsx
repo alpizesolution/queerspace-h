@@ -105,6 +105,10 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) 
               blocks.
             </li>
             <li>
+              <Strong>Anonymous analytics.</Strong> We count visits and which sections are used, through Google
+              Analytics. It never sees your chats or posts.
+            </li>
+            <li>
               <Strong>Stay safe.</Strong> Never share financial details, your home address or passwords
               with strangers.
             </li>

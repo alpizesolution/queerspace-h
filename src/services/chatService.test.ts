@@ -6,6 +6,7 @@ import {
   sendCloudMessage,
   endCloudConversation,
   submitCloudReport,
+  toReplyQuote,
 } from './chatService.ts';
 
 test('getDeterministicConvId produces identical sorted string regardless of UID order', () => {
@@ -60,4 +61,11 @@ test('concurrent startOrCreateConversation calls return valid session objects wi
   assert.equal(typeof sessionB.convId, 'string');
   assert.equal(sessionA.participants.includes('partner_concurrent_1'), true);
   assert.equal(sessionB.participants.includes('partner_concurrent_1'), true);
+});
+
+test('toReplyQuote maps the quoted sender to my side or theirs and drops malformed quotes', () => {
+  assert.deepEqual(toReplyQuote({ id: 'm1', text: 'hi', senderId: 'me' }, 'me'), { id: 'm1', text: 'hi', sender: 'user' });
+  assert.deepEqual(toReplyQuote({ id: 'm1', text: 'hi', senderId: 'them' }, 'me'), { id: 'm1', text: 'hi', sender: 'partner' });
+  assert.equal(toReplyQuote(undefined, 'me'), undefined);
+  assert.equal(toReplyQuote({ id: 3, text: 'hi' }, 'me'), undefined);
 });

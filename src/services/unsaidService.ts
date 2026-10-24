@@ -29,7 +29,9 @@ export const UNSAID_LIFETIME_MS = 48 * 60 * 60 * 1000;
 /** Posts with this many flags are hidden for everyone until reviewed. */
 export const UNSAID_HIDE_AT_FLAGS = 3;
 
-export type UnsaidReaction = 'hugs' | 'same';
+/** Reaction counters on a post; must match the list in firestore.rules. */
+export const UNSAID_REACTIONS = ['hugs', 'same', 'felt', 'strong', 'proud'] as const;
+export type UnsaidReaction = (typeof UNSAID_REACTIONS)[number];
 
 export const UNSAID_KINDS = [
   { id: 'vent', label: 'Vent' },
@@ -50,6 +52,9 @@ export interface UnsaidPost {
   expiresAt: number;
   hugs: number;
   same: number;
+  felt: number;
+  strong: number;
+  proud: number;
   flags: number;
 }
 
@@ -152,6 +157,9 @@ export function subscribeToUnsaid(onPosts: (posts: UnsaidPost[]) => void, onErro
                 expiresAt: toMillis(data.expiresAt),
                 hugs: Number(data.hugs) || 0,
                 same: Number(data.same) || 0,
+                felt: Number(data.felt) || 0,
+                strong: Number(data.strong) || 0,
+                proud: Number(data.proud) || 0,
                 flags: Number(data.flags) || 0,
               };
             })

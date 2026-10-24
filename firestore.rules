@@ -261,14 +261,25 @@ service cloud.firestore {
 
       allow delete: if false;
 
+      // A reply carries a short quote of the message it answers.
+      function isValidReplyQuote(q) {
+        return q is map
+          && q.keys().hasAll(['id', 'text', 'senderId'])
+          && q.keys().hasOnly(['id', 'text', 'senderId'])
+          && q.id is string && q.id.size() >= 1 && q.id.size() <= 64
+          && q.text is string && q.text.size() <= 140
+          && q.senderId is string && q.senderId.size() <= 128;
+      }
+
       // Ephemeral Chat Messages
       match /messages/{messageId} {
         allow read: if isConversationParticipant(convId);
 
         allow create: if isConversationParticipant(convId)
           && request.resource.data.keys().hasAll(['senderId', 'text', 'timestamp'])
-          && request.resource.data.keys().hasOnly(['senderId', 'text', 'timestamp'])
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'timestamp', 'replyTo'])
           && request.resource.data.senderId == request.auth.uid
+          && (!('replyTo' in request.resource.data) || isValidReplyQuote(request.resource.data.replyTo))
           && request.resource.data.text is string
           && request.resource.data.text.size() >= 1
           && request.resource.data.text.size() <= 1000
@@ -438,7 +449,7 @@ service cloud.firestore {
 
     function bumpsOnly(field) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([field])
-        && request.resource.data[field] == resource.data[field] + 1;
+        && request.resource.data[field] == resource.data.get(field, 0) + 1;
     }
 
     match /unsaid/{postId} {
@@ -461,9 +472,10 @@ service cloud.firestore {
         && getAfter(unsaidOwnerPath(postId)).data.authorId == request.auth.uid
         && slowMode('unsaid', 60);
 
-      // A reaction: +1 on 'hugs' or 'same' alongside a new reactions/{uid} doc of that type.
+      // A reaction: +1 on one reaction counter alongside a new reactions/{uid} doc of that type.
+      // Counters added after launch (felt, strong, proud) start missing and count from 0.
       allow update: if isAuthenticated()
-        && (bumpsOnly('hugs') || bumpsOnly('same'))
+        && (bumpsOnly('hugs') || bumpsOnly('same') || bumpsOnly('felt') || bumpsOnly('strong') || bumpsOnly('proud'))
         && !exists(/databases/$(database)/documents/unsaid/$(postId)/reactions/$(request.auth.uid))
         && getAfter(/databases/$(database)/documents/unsaid/$(postId)/reactions/$(request.auth.uid)).data.type
              in request.resource.data.diff(resource.data).affectedKeys();
@@ -486,10 +498,10 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId)
           && request.resource.data.keys().hasOnly(['type', 'createdAt'])
-          && request.resource.data.type in ['hugs', 'same']
+          && request.resource.data.type in ['hugs', 'same', 'felt', 'strong', 'proud']
           && request.resource.data.createdAt == request.time
           && getAfter(unsaidPath(postId)).data[request.resource.data.type]
-               == get(unsaidPath(postId)).data[request.resource.data.type] + 1;
+               == get(unsaidPath(postId)).data.get(request.resource.data.type, 0) + 1;
         allow update, delete: if false;
       }
 

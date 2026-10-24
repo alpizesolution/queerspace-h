@@ -75,6 +75,15 @@ export interface ChatMessage {
   timestamp: number;
   status?: 'sending' | 'sent' | 'delivered';
   reactions?: MessageReaction[];
+  /** The message this one answers, as a short quote. */
+  replyTo?: ReplyQuote;
+}
+
+export interface ReplyQuote {
+  id: string;
+  text: string;
+  /** Who wrote the quoted message, from the reader's point of view. */
+  sender: 'user' | 'partner';
 }
 
 export interface CommunityReply {
