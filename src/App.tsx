@@ -34,8 +34,9 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [setupPurpose, setSetupPurpose] = useState<'match' | 'profile'>('match');
   const [activeInfoModal, setActiveInfoModal] = useState<
-    'about' | 'guidelines' | 'privacy' | 'terms' | 'contact' | null
+    'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact' | null
   >(null);
 
   const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() => {
@@ -97,7 +98,15 @@ export default function App() {
     }, 4000);
   };
 
+  const handleSaveProfile = async (prefs: UserPreferences) => {
+    setUserPrefs(prefs);
+    setSetupModalOpen(false);
+    const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds);
+    showToast(feedback.savedToCloud ? 'Profile updated.' : feedback.userMessage);
+  };
+
   const handleOpenSetup = (mode: 'quick' | 'custom' = 'quick') => {
+    setSetupPurpose('match');
     setSetupInitialMode(mode);
     setSetupModalOpen(true);
   };
@@ -213,6 +222,11 @@ export default function App() {
           isSoundMuted={isSoundMuted}
           onToggleSound={handleToggleSound}
           onOpenSafetyModal={() => setActiveInfoModal('guidelines')}
+          onOpenProfile={() => {
+            setSetupPurpose('profile');
+            setSetupModalOpen(true);
+          }}
+          profile={userPrefs}
         />
       )}
 
@@ -289,6 +303,8 @@ export default function App() {
           currentPrefs={userPrefs}
           onClose={() => setSetupModalOpen(false)}
           onStartMatching={handleStartMatching}
+          purpose={setupPurpose}
+          onSaveProfile={handleSaveProfile}
         />
       )}
 

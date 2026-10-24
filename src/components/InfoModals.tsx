@@ -3,7 +3,7 @@ import { Check } from 'lucide-react';
 import { Sheet } from './Sheet.tsx';
 import { SuggestionForm } from './SuggestionForm.tsx';
 
-type InfoModal = 'about' | 'guidelines' | 'privacy' | 'terms' | 'contact';
+type InfoModal = 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact';
 
 interface InfoModalsProps {
   activeModal: InfoModal | null;
@@ -14,6 +14,7 @@ const CONTACT_EMAIL = 'info.queerspaceph@gmail.com';
 
 const TITLES: Record<InfoModal, string> = {
   about: 'About QUEERSPACE PH',
+  faq: 'FAQ',
   guidelines: 'Community Guidelines',
   privacy: 'Privacy & Anonymity',
   terms: 'Terms of Service',
@@ -23,6 +24,77 @@ const TITLES: Record<InfoModal, string> = {
 const Strong: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <strong className="font-semibold text-fg">{children}</strong>
 );
+
+const FAQS: { q: string; a: React.ReactNode }[] = [
+  {
+    q: 'How do I change my name or avatar?',
+    a: (
+      <>
+        Tap your <Strong>animal avatar at the top right</Strong>. Type a new name or tap the dice for a
+        random pseudonym, tap the avatar to shuffle it, then <Strong>Save profile</Strong>. Your new name
+        shows on everything you post from then on; older posts keep the name they were posted with.
+      </>
+    ),
+  },
+  {
+    q: 'How do I post in Community?',
+    a: (
+      <>
+        Open <Strong>Community</Strong> and tap <Strong>New post</Strong>. Add a title, what's on your mind,
+        a category and up to 4 tags, then <Strong>Post</Strong>. Everyone sees it right away and can like or
+        reply. You can post once every 30 seconds, and delete your own post with the trash icon.
+      </>
+    ),
+  },
+  {
+    q: 'What is Unsaid? Can people see who wrote it?',
+    a: (
+      <>
+        Unsaid is for things you can't say out loud. Pick <Strong>Vent</Strong> or{' '}
+        <Strong>Confession</Strong>, write it and tap <Strong>Let it out</Strong>. No name or avatar is
+        shown. Posts fade after 48 hours, and you can post once a minute.
+        Links, @handles and phone numbers are blocked to keep everyone anonymous.
+      </>
+    ),
+  },
+  {
+    q: 'How does 1-on-1 chat work?',
+    a: (
+      <>
+        Tap <Strong>Find Your Someone</Strong> and we'll pair you with someone who's online right now.
+        Swipe a message right to reply to it, or tap it to react. Chats end when either of you leaves, and
+        nothing is kept afterwards.
+      </>
+    ),
+  },
+  {
+    q: 'Do I need an account?',
+    a: (
+      <>
+        No. You get an anonymous ID automatically. It lives in this browser, so clearing site data or
+        switching phones starts you fresh with a new name.
+      </>
+    ),
+  },
+  {
+    q: 'Someone made me uncomfortable. What do I do?',
+    a: (
+      <>
+        In a chat, tap the <Strong>shield</Strong> to report and block. They can't match with you again. On
+        posts, tap the <Strong>flag</Strong>. Our team reviews every report.
+      </>
+    ),
+  },
+  {
+    q: 'Can I install it like an app?',
+    a: (
+      <>
+        Yes. On iPhone, open it in Safari, tap Share, then <Strong>Add to Home Screen</Strong>. On Android,
+        tap <Strong>Install</Strong> when it's offered, or use the browser menu.
+      </>
+    ),
+  },
+];
 
 export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) => {
   if (!activeModal) return null;
@@ -64,6 +136,23 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) 
               ))}
             </ul>
           </>
+        )}
+
+        {activeModal === 'faq' && (
+          <div className="space-y-2">
+            {FAQS.map(({ q, a }, i) => (
+              <details key={q} open={i === 0} className="group card bg-raised/40 px-4 py-3 [&_summary::-webkit-details-marker]:hidden">
+                <summary className="flex items-center justify-between gap-3 cursor-pointer list-none text-[14px] font-semibold text-fg">
+                  {q}
+                  <span aria-hidden="true" className="text-berry text-lg leading-none transition-transform group-open:rotate-45">
+                    +
+                  </span>
+                </summary>
+                <p className="mt-2 text-[13.5px] leading-relaxed">{a}</p>
+              </details>
+            ))}
+            <p className="pt-2 text-[13px]">Still stuck? Use Suggestions in the footer and we'll help.</p>
+          </div>
         )}
 
         {activeModal === 'guidelines' && (

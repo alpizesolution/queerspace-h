@@ -2,13 +2,14 @@ import React from 'react';
 import { Heart, MessageSquarePlus } from 'lucide-react';
 
 interface FooterProps {
-  onOpenModal: (modal: 'about' | 'guidelines' | 'privacy' | 'terms' | 'contact') => void;
+  onOpenModal: (modal: 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact') => void;
   onOpenDonation: () => void;
   className?: string;
 }
 
 const LINKS = [
   { id: 'about', label: 'About' },
+  { id: 'faq', label: 'FAQ' },
   { id: 'guidelines', label: 'Guidelines' },
   { id: 'privacy', label: 'Privacy' },
   { id: 'terms', label: 'Terms' },
@@ -24,13 +25,13 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenDonation, cla
         </p>
       </div>
 
-      <nav aria-label="Footer" className="flex items-center text-[13px]">
+      <nav aria-label="Footer" className="flex flex-wrap items-center justify-center text-[13px]">
         {LINKS.map(({ id, label }, i) => (
           <React.Fragment key={id}>
             {i > 0 && <span aria-hidden="true" className="w-0.5 h-0.5 rounded-full bg-subtle/60" />}
             <button
               onClick={() => onOpenModal(id)}
-              className="px-2.5 py-2 rounded-md hover:text-fg transition-colors cursor-pointer"
+              className="px-2 sm:px-2.5 py-2 rounded-md hover:text-fg transition-colors cursor-pointer"
             >
               {label}
             </button>
