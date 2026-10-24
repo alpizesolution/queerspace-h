@@ -9,7 +9,8 @@ import {
   AdminStats,
   AdminSuggestion,
   AdminUnsaidPost,
-  checkIsAdmin,
+  AdminCheck,
+  checkAdmin,
   deleteInboxItem,
   deleteRoomMessage,
   InboxStatus,
@@ -79,7 +80,8 @@ const Centered: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 export default function AdminApp() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [adminCheck, setAdminCheck] = useState<AdminCheck | null>(null);
+  const [checking, setChecking] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -97,8 +99,8 @@ export default function AdminApp() {
       subscribeAuthState((next) => {
         setUser(next);
         setAuthReady(true);
-        setIsAdmin(null);
-        checkIsAdmin(next).then(setIsAdmin);
+        setAdminCheck(null);
+        checkAdmin(next).then(setAdminCheck);
       }),
     []
   );
@@ -130,7 +132,7 @@ export default function AdminApp() {
     );
   }
 
-  if (!authReady || (isGoogleUser(user) && isAdmin === null)) {
+  if (!authReady || (isGoogleUser(user) && adminCheck === null)) {
     return (
       <Shell user={user}>
         <div className="card h-40 max-w-md mx-auto mt-12 animate-pulse" aria-label="Loading" />
@@ -157,7 +159,7 @@ export default function AdminApp() {
     );
   }
 
-  if (!isAdmin) {
+  if (adminCheck !== 'admin') {
     const uid = user!.uid;
     return (
       <Shell user={user}>
@@ -179,7 +181,25 @@ export default function AdminApp() {
             <span className="truncate">{uid}</span>
             {copied ? <Check className="w-4 h-4 text-berry shrink-0" /> : <Copy className="w-4 h-4 text-muted shrink-0" />}
           </button>
-          <p className="text-[12px] text-subtle mt-3">Give it any field, for example role: owner. Then reload this page.</p>
+          <p className="text-[12px] text-subtle mt-3">Give it any field, for example role: owner.</p>
+          <p className="text-[12px] mt-3 text-danger" role="status">
+            {adminCheck === 'blocked'
+              ? 'Firestore blocked the check. Publish the latest rules, wait a minute, then check again.'
+              : adminCheck === 'error'
+                ? 'Couldn’t reach Firestore. Check your connection and try again.'
+                : `No document found at admins/${uid} yet.`}
+          </p>
+          <button
+            onClick={async () => {
+              setChecking(true);
+              setAdminCheck(await checkAdmin(user));
+              setChecking(false);
+            }}
+            disabled={checking}
+            className="btn btn-secondary w-full mt-4"
+          >
+            {checking ? 'Checking…' : 'Check again'}
+          </button>
         </Centered>
       </Shell>
     );
