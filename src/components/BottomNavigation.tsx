@@ -1,39 +1,46 @@
 import React from 'react';
-import { Home, MessageSquare, Users, MessageCircle } from 'lucide-react';
+import { Home, MessageCircle, Users, MessagesSquare } from 'lucide-react';
+
+export type NavTarget = 'home' | 'setup' | 'public' | 'community';
+
+/** Single source of truth for primary navigation (bottom tab bar on mobile, header tabs on desktop). */
+export const NAV_ITEMS: { id: NavTarget; label: string; icon: React.ElementType }[] = [
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'setup', label: 'Chat', icon: MessageCircle },
+  { id: 'public', label: 'Public Room', icon: Users },
+  { id: 'community', label: 'Community', icon: MessagesSquare },
+];
+
+export const isNavActive = (id: NavTarget, currentView: string) =>
+  id === 'setup' ? currentView === 'searching' || currentView === 'chat' : currentView === id;
 
 interface Props {
   currentView: string;
-  onNavigate: (view: 'home' | 'public' | 'community' | 'setup') => void;
+  onNavigate: (view: NavTarget) => void;
 }
 
-export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate }) => {
-  const tabs = [
-    { name: 'home', label: 'Home', icon: Home },
-    { name: 'public', label: 'Rooms', icon: MessageSquare },
-    { name: 'community', label: 'Feed', icon: Users },
-    { name: 'setup', label: 'Chat', icon: MessageCircle },
-  ];
-
-  return (
-    <div className="xl:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#17121B]/90 backdrop-blur-md border-t border-[#403247] pb-safe">
-      <div className="grid grid-cols-4 items-center h-16 pb-safe">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = currentView === tab.name;
-          return (
-            <button
-              key={tab.name}
-              onClick={() => onNavigate(tab.name as any)}
-              className={`flex flex-col items-center justify-center w-full h-full ${
-                isActive ? 'text-[#C77DAA]' : 'text-[#F7F0F6]/60'
-              }`}
-            >
-              <Icon className="w-6 h-6" />
-              <span className="text-[10px] font-medium mt-1">{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate }) => (
+  <nav
+    aria-label="Main"
+    className="tabbar md:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
+  >
+    <div className="grid grid-cols-4 h-14">
+      {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+        const active = isNavActive(id, currentView);
+        return (
+          <button
+            key={id}
+            onClick={() => onNavigate(id)}
+            aria-current={active ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+              active ? 'text-berry' : 'text-subtle hover:text-fg'
+            }`}
+          >
+            <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.25 : 1.75} />
+            <span className="text-[11px] font-medium leading-none">{label}</span>
+          </button>
+        );
+      })}
     </div>
-  );
-};
+  </nav>
+);

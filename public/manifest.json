@@ -4,8 +4,8 @@
   "description": "Your space. Your people. Your possibilities. A safe, anonymous chat and community platform for women-loving-women.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#17121B",
-  "theme_color": "#17121B",
+  "background_color": "#120b17",
+  "theme_color": "#120b17",
   "icons": [
     {
       "src": "/favicon.svg",

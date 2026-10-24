@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header.tsx';
 import { Hero } from './components/Hero.tsx';
-import { ModeSelector } from './components/ModeSelector.tsx';
-import { HowItWorks } from './components/HowItWorks.tsx';
 import { SafetySection } from './components/SafetySection.tsx';
 import { Footer } from './components/Footer.tsx';
 import { MatchSetupModal } from './components/MatchSetupModal.tsx';
@@ -13,7 +11,7 @@ import { CommunityFeedView } from './components/CommunityFeedView.tsx';
 import { InfoModals } from './components/InfoModals.tsx';
 import { DonationModal } from './components/DonationModal.tsx';
 import { FloatingCatsBackground } from './components/FloatingCatsBackground.tsx';
-import { ChatMode, PartnerProfile, UserPreferences } from './types.ts';
+import { PartnerProfile, UserPreferences } from './types.ts';
 import { findBestPartner } from './utils/mock-partners.ts';
 import { generateSapphicPseudonym } from './utils/matching-logic.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from './utils/storage.ts';
@@ -22,11 +20,7 @@ import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile } from './services/profilePersistence.ts';
 import { findMatchCandidate } from './services/matchmakingService.ts';
 import { CheckCircle2 } from 'lucide-react';
-import { BottomNavigation } from './components/BottomNavigation.tsx';
-
-
-
-
+import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'community'>('home');
@@ -120,21 +114,15 @@ export default function App() {
     setSetupModalOpen(true);
   };
 
-  const handleSelectMode = (mode: ChatMode) => {
-    if (mode === 'quick') {
-      // Direct quick matching
-      setCurrentView('searching');
-    } else if (mode === 'custom') {
-      handleOpenSetup('custom');
-    } else if (mode === 'public') {
-      setCurrentView('public');
-    } else if (mode === 'community') {
-      setCurrentView('community');
-    }
+  const handleNavigate = (view: NavTarget) => {
+    if (view === 'setup') handleOpenSetup('quick');
+    else setCurrentView(view);
+    window.scrollTo({ top: 0 });
   };
 
   const handleStartMatching = async (mode: 'quick' | 'custom', prefs: UserPreferences) => {
     setUserPrefs(prefs);
+    setSetupInitialMode(mode);
     setSetupModalOpen(false);
 
     const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds);
@@ -223,27 +211,30 @@ export default function App() {
     setCurrentView('home');
   };
 
+  const showChrome = currentView !== 'chat';
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#080311] text-[#fcf7fa] relative">
-      {/* Floating Cats Ambient Background */}
+    <div
+      className={`min-h-[100dvh] flex flex-col bg-ink text-fg relative ${
+        showChrome && currentView !== 'public' ? 'pb-[var(--tabbar-h)]' : ''
+      }`}
+    >
       <FloatingCatsBackground />
 
-      {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-20 right-4 z-50 flex items-center gap-2 bg-[#241B29] text-[#F7F0F6] px-4 py-3 rounded-2xl shadow-2xl border border-[#403247] text-xs sm:text-sm animate-in slide-in-from-top-2 duration-200">
-          <CheckCircle2 className="w-4 h-4 text-[#C77DAA]" />
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed z-[60] left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] w-[calc(100%-2rem)] max-w-sm flex items-start gap-2.5 bg-raised/95 backdrop-blur-xl text-fg px-4 py-3 rounded-2xl shadow-2xl shadow-black/50 border border-line text-sm anim-pop"
+        >
+          <CheckCircle2 className="w-[18px] h-[18px] text-berry shrink-0 mt-px" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Global Header (hidden during active 1-on-1 chat for full conversation immersion) */}
-      {currentView !== 'chat' && (
+      {showChrome && (
         <Header
-          onStartChat={() => handleOpenSetup('quick')}
-          onNavigate={(view) => {
-            if (view === 'setup') handleOpenSetup('custom');
-            else setCurrentView(view);
-          }}
+          onNavigate={handleNavigate}
           currentView={currentView}
           isSoundMuted={isSoundMuted}
           onToggleSound={handleToggleSound}
@@ -251,22 +242,16 @@ export default function App() {
         />
       )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col">
+      <main className="relative flex-1 flex flex-col">
         {currentView === 'home' && (
           <>
             <Hero
-              onQuickChat={() => handleSelectMode('quick')}
-              onExploreCommunity={() => setCurrentView('public')}
-              onOpenCommunity={() => setCurrentView('community')}
-              onOpenSetup={() => handleOpenSetup('custom')}
-              onOpenSafety={() => setActiveInfoModal('guidelines')}
+              onStartChat={() => handleOpenSetup('quick')}
+              onCustomMatch={() => handleOpenSetup('custom')}
+              onOpenPublicRoom={() => handleNavigate('public')}
+              onOpenCommunity={() => handleNavigate('community')}
             />
-            <ModeSelector onSelectMode={handleSelectMode} />
-            <HowItWorks />
-            <SafetySection
-              onOpenGuidelinesModal={() => setActiveInfoModal('guidelines')}
-            />
+            <SafetySection onOpenGuidelinesModal={() => setActiveInfoModal('guidelines')} />
           </>
         )}
 
@@ -304,30 +289,23 @@ export default function App() {
           <PublicRoomView
             userPrefs={userPrefs}
             isSoundMuted={isSoundMuted}
-            onBackToHome={() => setCurrentView('home')}
-            onOpen1on1={() => handleOpenSetup('quick')}
             onOpenDonationModal={() => setDonationModalOpen(true)}
           />
         )}
 
-        {currentView === 'community' && (
-          <CommunityFeedView
-            userPrefs={userPrefs}
-            onBackToHome={() => setCurrentView('home')}
-            onStart1on1={() => handleOpenSetup('quick')}
-          />
-        )}
+        {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} />}
       </main>
 
-      <BottomNavigation 
-        currentView={currentView} 
-        onNavigate={(view) => {
-          if (view === 'setup') handleOpenSetup('quick');
-          else setCurrentView(view);
-        }} 
-      />
+      {showChrome && currentView !== 'public' && (
+        <Footer
+          onOpenModal={(modal) => setActiveInfoModal(modal)}
+          onOpenDonation={() => setDonationModalOpen(true)}
+          className={currentView === 'community' ? 'hidden sm:block' : ''}
+        />
+      )}
 
-      {/* Match Setup Modal */}
+      {showChrome && <BottomNavigation currentView={currentView} onNavigate={handleNavigate} />}
+
       {setupModalOpen && (
         <MatchSetupModal
           initialMode={setupInitialMode}
@@ -337,25 +315,9 @@ export default function App() {
         />
       )}
 
-      {/* Donation Modal */}
-      <DonationModal
-        isOpen={donationModalOpen}
-        onClose={() => setDonationModalOpen(false)}
-      />
+      <DonationModal isOpen={donationModalOpen} onClose={() => setDonationModalOpen(false)} />
 
-      {/* Informational Policy & Guidelines Modals */}
-      <InfoModals
-        activeModal={activeInfoModal}
-        onClose={() => setActiveInfoModal(null)}
-      />
-
-      {/* Footer (hidden during active 1-on-1 chat and public room) */}
-      {currentView !== 'chat' && currentView !== 'public' && (
-        <Footer
-          onOpenModal={(modal) => setActiveInfoModal(modal)}
-          onOpenDonation={() => setDonationModalOpen(true)}
-        />
-      )}
+      <InfoModals activeModal={activeInfoModal} onClose={() => setActiveInfoModal(null)} />
     </div>
   );
 }

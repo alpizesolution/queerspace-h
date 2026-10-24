@@ -1,24 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Send,
-  Sparkles,
-  ArrowRight,
+  ArrowUp,
+  ChevronLeft,
   LogOut,
   ShieldAlert,
   Smile,
   Check,
-  CheckCheck,
   AlertCircle,
   MoreVertical,
   Volume2,
   VolumeX,
-  MessageCircle,
   SlidersHorizontal,
   SkipForward,
 } from 'lucide-react';
+import { ConfirmDialog, Sheet } from './Sheet.tsx';
+import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 import { ChatMessage, PartnerProfile, PartnerStatus, UserPreferences } from '../types.ts';
 import { ICEBREAKER_PROMPTS, getPartnerReply } from '../utils/mock-partners.ts';
-import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
+import { INTENTION_LABELS, formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
 import { chatEventManager } from '../utils/chat-events.ts';
 import {
@@ -67,6 +66,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [reportReason, setReportReason] = useState('Harassment or disrespectful behavior');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close the overflow menu on outside press or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointer);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
   const [inputError, setInputError] = useState<string | null>(null);
   const [cloudConvId, setCloudConvId] = useState<string | null>(null);
   const [isCloudActive, setIsCloudActive] = useState<boolean>(false);
@@ -183,7 +201,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   // Scroll to bottom on new messages or typing
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, isPartnerTyping]);
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -323,237 +341,188 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
+  const isDemo = !!partnerSource && partnerSource !== 'cloud';
+  const visibleExpressions =
+    partner.showGenderExpressionOnProfile && partner.genderExpression ? partner.genderExpression : [];
+  const visibleOrientation = partner.showSogieOnProfile ? partner.sexualOrientation : undefined;
+  const visibleLocation = partner.showLocationOnProfile !== false ? partner.location || partner.region : undefined;
+  const hasExchange = messages.filter((m) => m.sender !== 'system').length > 3;
+
+  const closeMenu = () => setMenuOpen(false);
+  const viewportHeight = useVisualViewportHeight();
+
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-4xl mx-auto w-full bg-[#17121B] sm:border-x border-[#403247]">
-      {/* Chat Header */}
-      <div className="bg-[#150826] px-3.5 py-2.5 sm:px-6 sm:py-3.5 border-b border-[#4a1f6d] shadow-xs z-20 flex flex-col justify-center">
-        {/* Top Row: Avatar + Name/Status on Left, Actions on Right */}
-        <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
-          {/* Left: Avatar + Primary Identity */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
-            <div
-              className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center text-white font-serif font-bold text-sm sm:text-base shrink-0 shadow-xs border border-[#4a1f6d]"
-              style={{ backgroundColor: partner.avatarColor }}
-            >
-              {partner.displayName.charAt(0)}
-            </div>
+    <div
+      className="fixed inset-x-0 top-0 h-[100dvh] z-30 flex flex-col bg-ink md:static md:z-auto md:max-w-3xl md:mx-auto md:w-full md:border-x md:border-line"
+      style={viewportHeight ? { height: viewportHeight } : undefined}
+    >
+      {/* Header */}
+      <header className="pt-safe bg-ink/90 backdrop-blur-xl border-b border-line z-20">
+        <div className="h-16 px-1.5 sm:px-3 flex items-center gap-0.5 sm:gap-1.5">
+          <button
+            onClick={() => setShowLeaveConfirm(true)}
+            className="icon-btn"
+            aria-label="Leave conversation"
+            title="Leave"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
 
-            <div className="min-w-0 flex-1">
-              {/* Name + Pronouns + Source Badge */}
-              <div className="flex items-center gap-1.5 truncate">
-                <h3 className="font-serif font-bold text-sm sm:text-base text-[#fcf7fa] truncate">
-                  {partner.displayName}
-                </h3>
-                <span className="text-[10px] sm:text-[11px] font-medium text-[#e07bb8] bg-[#230d3b] px-2 py-0.5 rounded-full border border-[#4a1f6d] shrink-0">
-                  {partner.pronouns}
-                </span>
-                {partnerSource && partnerSource !== 'cloud' && (
-                  <span className="text-[9px] sm:text-[10px] font-medium text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded-full border border-amber-700/60 shrink-0 flex items-center gap-1">
-                    Demo Match
-                  </span>
-                )}
-              </div>
-
-              {/* Status & Shared Topics */}
-              <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-[#cbbccf] min-w-0 mt-0.5">
-                {partnerStatus === 'typing' ? (
-                  <div className="flex items-center gap-1 text-[#e07bb8] font-semibold animate-pulse shrink-0">
-                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#e07bb8]" />
-                    <span className="flex items-center gap-0.5">
-                      <span>Typing</span>
-                      <span className="flex gap-0.5 ml-0.5">
-                        <span className="w-1 h-1 bg-[#e07bb8] rounded-full animate-bounce" />
-                        <span className="w-1 h-1 bg-[#e07bb8] rounded-full animate-bounce [animation-delay:0.2s]" />
-                        <span className="w-1 h-1 bg-[#e07bb8] rounded-full animate-bounce [animation-delay:0.4s]" />
-                      </span>
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1 text-[#cbbccf] shrink-0">
-                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Connected</span>
-                  </div>
-                )}
-                {partner.topics.length > 0 && (
-                  <>
-                    <span className="text-[#4a1f6d] shrink-0">•</span>
-                    <span className="truncate text-[#e07bb8] text-[10px] sm:text-[11px]">
-                      {partner.topics.slice(0, 2).join(', ')}
-                    </span>
-                  </>
-                )}
-              </div>
-
-              {/* Desktop Tags (rendered inline under name on sm+) */}
-              <div className="hidden sm:flex sm:items-center sm:gap-1.5 sm:flex-wrap sm:mt-1">
-                {partner.showGenderExpressionOnProfile &&
-                  partner.genderExpression &&
-                  partner.genderExpression.length > 0 &&
-                  partner.genderExpression.map((expr) => (
-                    <span
-                      key={expr}
-                      className="text-[10px] font-medium text-[#fcf7fa] bg-[#a85293]/30 px-2 py-0.5 rounded-full border border-[#e07bb8]/40 shrink-0"
-                    >
-                      {expr}
-                    </span>
-                  ))}
-                {partner.showSogieOnProfile && partner.sexualOrientation && (
-                  <span className="text-[10px] text-[#cbbccf] bg-[#230d3b] px-2 py-0.5 rounded-full border border-[#4a1f6d] shrink-0">
-                    {partner.sexualOrientation}
-                  </span>
-                )}
-                {partner.showLocationOnProfile !== false && (partner.location || partner.region) && (
-                  <span className="text-[10px] text-[#cbbccf] bg-[#230d3b] px-2 py-0.5 rounded-full border border-[#4a1f6d] shrink-0 flex items-center gap-1">
-                    <span>📍</span>
-                    <span className="truncate max-w-[180px]">{partner.location || partner.region}</span>
-                  </span>
-                )}
-              </div>
-            </div>
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-[15px] shrink-0"
+            style={{ backgroundColor: partner.avatarColor }}
+            aria-hidden="true"
+          >
+            {partner.displayName.charAt(0)}
           </div>
 
-          {/* Right: Action Toolbar */}
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            {onOpenSetup && (
-              <button
-                onClick={onOpenSetup}
-                className="p-1.5 sm:p-2 rounded-full text-[#cbbccf] hover:text-[#e07bb8] hover:bg-[#230d3b] transition-colors cursor-pointer border border-transparent hover:border-[#4a1f6d]"
-                title="Preferences & Discovery Filters"
-                aria-label="Preferences & Discovery Filters"
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-              </button>
-            )}
+          <div className="min-w-0 flex-1 pl-2">
+            <h1 className="text-[15px] font-semibold text-fg truncate">{partner.displayName}</h1>
+            <p className="text-[12px] text-muted truncate" aria-live="polite">
+              {isPartnerTyping ? (
+                <span className="text-berry font-medium">typing…</span>
+              ) : (
+                <>
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 align-middle" />
+                  {partner.pronouns} · {isDemo ? 'Demo match' : 'Online'}
+                  {visibleLocation && <> · {visibleLocation}</>}
+                </>
+              )}
+            </p>
+          </div>
 
+          <button
+            onClick={() => setShowSkipConfirm(true)}
+            className="icon-btn"
+            aria-label="Skip to next match"
+            title="Next match"
+          >
+            <SkipForward className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="icon-btn hover:text-danger"
+            aria-label="Report and block"
+            title="Report & block"
+          >
+            <ShieldAlert className="w-5 h-5" />
+          </button>
+          <div className="relative" ref={menuRef}>
             <button
-              onClick={() => setShowReportModal(true)}
-              className="p-1.5 sm:p-2 rounded-full text-[#cbbccf] hover:text-red-400 hover:bg-[#230d3b] transition-colors cursor-pointer border border-transparent hover:border-[#4a1f6d]"
-              title="Report or block participant"
-              aria-label="Report or block participant"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="icon-btn"
+              aria-label="More options"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
             >
-              <ShieldAlert className="w-4 h-4" />
+              <MoreVertical className="w-5 h-5" />
             </button>
+            {menuOpen && (
+              <>
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full mt-1 z-40 w-56 py-1.5 card bg-raised shadow-2xl shadow-black/50 anim-pop"
+                >
+                  {onOpenSetup && (
+                    <MenuItem
+                      icon={<SlidersHorizontal className="w-4 h-4" />}
+                      label="Match preferences"
+                      onClick={() => {
+                        closeMenu();
+                        onOpenSetup();
+                      }}
+                    />
+                  )}
+                  <MenuItem
+                    icon={isSoundMuted ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                    label={isSoundMuted ? 'Unmute sounds' : 'Mute sounds'}
+                    onClick={() => {
+                      closeMenu();
+                      onToggleSound();
+                    }}
+                  />
+                  <div className="my-1.5 border-t border-line" />
+                  <MenuItem
+                    icon={<LogOut className="w-4 h-4" />}
+                    label="Leave conversation"
+                    danger
+                    onClick={() => {
+                      closeMenu();
+                      setShowLeaveConfirm(true);
+                    }}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
+      </header>
 
-        {/* Mobile Tags Sub-row (rendered cleanly below the top row on mobile screens < sm) */}
-        {((partner.showGenderExpressionOnProfile && partner.genderExpression && partner.genderExpression.length > 0) ||
-          (partner.showSogieOnProfile && partner.sexualOrientation) ||
-          (partner.showLocationOnProfile !== false && (partner.location || partner.region))) && (
-          <div className="flex sm:hidden items-center gap-1.5 overflow-x-auto pt-2 pb-0.5 scrollbar-none text-[10px]">
-            {partner.showGenderExpressionOnProfile &&
-              partner.genderExpression &&
-              partner.genderExpression.length > 0 &&
-              partner.genderExpression.map((expr) => (
-                <span
-                  key={expr}
-                  className="text-[10px] font-medium text-[#fcf7fa] bg-[#a85293]/30 px-2 py-0.5 rounded-full border border-[#e07bb8]/40 shrink-0 whitespace-nowrap"
-                >
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4">
+        {/* Match context */}
+        <div className="text-center mb-5 space-y-2">
+          <p className="text-[12px] text-subtle">
+            Looking for <span className="text-muted font-medium">{INTENTION_LABELS[partner.intention] ?? partner.intention}</span>
+            {partner.topics.length > 0 && <> · {partner.topics.slice(0, 2).join(', ')}</>}
+          </p>
+          {(visibleExpressions.length > 0 || visibleOrientation) && (
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {visibleExpressions.map((expr) => (
+                <span key={expr} className="tag">
                   {expr}
                 </span>
               ))}
-            {partner.showSogieOnProfile && partner.sexualOrientation && (
-              <span className="text-[10px] text-[#cbbccf] bg-[#230d3b] px-2 py-0.5 rounded-full border border-[#4a1f6d] shrink-0 whitespace-nowrap">
-                {partner.sexualOrientation}
-              </span>
-            )}
-            {partner.showLocationOnProfile !== false && (partner.location || partner.region) && (
-              <span className="text-[10px] text-[#cbbccf] bg-[#230d3b] px-2 py-0.5 rounded-full border border-[#4a1f6d] shrink-0 flex items-center gap-1 whitespace-nowrap">
-                <span>📍</span>
-                <span>{partner.location || partner.region}</span>
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#17121B]">
-        {/* Intention & Discovery Match Banner */}
-        <div className="bg-[#241B29] rounded-2xl p-3 border border-[#403247] text-xs text-[#BDB0BF] flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#C77DAA]" />
-            <span>
-              Looking for:{' '}
-              <strong className="text-[#F7F0F6] capitalize">
-                {partner.intention.replace('_', ' ')}
-              </strong>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {partnerSource && partnerSource !== 'cloud' ? (
-              <span className="text-[10px] font-medium text-amber-300 bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-700/60 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                Local Demo Mode Partner
-              </span>
-            ) : (
-              <span className="text-[10px] font-medium text-emerald-300 bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-700/60 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Cloud Match
-              </span>
-            )}
-            {userPrefs.applyGenderExpressionFilter &&
-              userPrefs.preferredGenderExpressions &&
-              userPrefs.preferredGenderExpressions.length > 0 &&
-              !userPrefs.preferredGenderExpressions.includes('Any / No preference') && (
-                <span className="text-[10px] text-[#C77DAA] bg-[#302235] px-2 py-0.5 rounded-full border border-[#403247]">
-                  Filter: {userPrefs.preferredGenderExpressions.join(', ')}
-                </span>
-              )}
-            {partner.region && (
-              <span className="text-[11px] text-[#C77DAA]">{partner.region}</span>
-            )}
-          </div>
+              {visibleOrientation && <span className="tag">{visibleOrientation}</span>}
+            </div>
+          )}
+          {isDemo && (
+            <p className="inline-flex items-center gap-1.5 text-[11px] text-amber-300/90">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Local demo partner (simulated replies)
+            </p>
+          )}
         </div>
 
-        {/* Rendered Messages */}
-        {messages.map((msg) => {
-          if (msg.sender === 'system') {
-            return (
-              <div key={msg.id} className="text-center my-3">
-                <span className="inline-block px-3 py-1 rounded-full bg-[#241B29] text-[#C77DAA] text-xs font-medium border border-[#403247]">
+        <div className="space-y-1.5">
+          {messages.map((msg, i) => {
+            if (msg.sender === 'system') {
+              return (
+                <p key={msg.id} className="text-center text-[12px] text-subtle px-6 py-2">
                   {msg.text}
-                </span>
-              </div>
-            );
-          }
+                </p>
+              );
+            }
 
-          const isUser = msg.sender === 'user';
+            const isUser = msg.sender === 'user';
+            const next = messages[i + 1];
+            const lastInGroup = !next || next.sender !== msg.sender;
 
-          return (
-            <div
-              key={msg.id}
-              className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} group`}
-            >
+            return (
               <div
-                className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm relative ${
-                  isUser
-                    ? 'bg-[#8E547E] text-[#F7F0F6] rounded-br-xs'
-                    : 'bg-[#241B29] text-[#F7F0F6] border border-[#403247] rounded-bl-xs'
-                }`}
+                key={msg.id}
+                className={`group flex flex-col ${isUser ? 'items-end' : 'items-start'} ${lastInGroup ? 'pb-2' : ''}`}
               >
-                <p className="whitespace-pre-wrap break-words">{msg.text}</p>
                 <div
-                  className={`flex items-center gap-1.5 text-[10px] mt-1 justify-end ${
-                    isUser ? 'text-white/70' : 'text-[#BDB0BF]'
+                  className={`max-w-[80%] sm:max-w-[70%] px-3.5 py-2 text-[15px] leading-snug rounded-[20px] ${
+                    isUser
+                      ? `bg-plum text-fg ${lastInGroup ? 'rounded-br-md' : ''}`
+                      : `bg-raised text-fg ${lastInGroup ? 'rounded-bl-md' : ''}`
                   }`}
                 >
-                  <span>{formatChatTime(msg.timestamp)}</span>
-                  {isUser && <Check className="w-3 h-3 text-[#C77DAA]" />}
+                  <p className="whitespace-pre-wrap break-words">{msg.text}</p>
                 </div>
 
-                {/* Emoji reactions display */}
                 {msg.reactions && msg.reactions.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5 -mb-0.5">
+                  <div className="flex flex-wrap gap-1 -mt-1.5 mx-2 relative">
                     {msg.reactions.map((r) => (
                       <button
                         key={r.emoji}
                         onClick={() => handleToggleReaction(msg.id, r.emoji)}
-                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] border cursor-pointer transition-all ${
-                          r.userReacted
-                            ? 'bg-[#8E547E]/40 border-[#C77DAA] text-[#F7F0F6] font-bold'
-                            : 'bg-[#302235] text-[#BDB0BF] border-[#403247]'
+                        aria-pressed={!!r.userReacted}
+                        aria-label={`${r.emoji} reaction, ${r.count}`}
+                        className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[12px] border cursor-pointer ${
+                          r.userReacted ? 'bg-plum/60 border-berry/60 text-fg' : 'bg-surface border-line text-muted'
                         }`}
                       >
                         <span>{r.emoji}</span>
@@ -562,270 +531,162 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     ))}
                   </div>
                 )}
-              </div>
 
-              {/* Hover quick reactions */}
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 mt-1 text-xs">
-                {['🌸', '❤️', '✨', '☕'].map((emoji) => (
-                  <button
-                    key={emoji}
-                    onClick={() => handleToggleReaction(msg.id, emoji)}
-                    className="p-1 rounded-full hover:bg-[#302235] hover:shadow-xs transition-colors cursor-pointer text-xs"
-                    title={`React with ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
+                <div className={`flex items-center gap-1 mt-0.5 px-1 ${isUser ? 'flex-row-reverse' : ''}`}>
+                  {lastInGroup && (
+                    <span className="text-[11px] text-subtle flex items-center gap-1">
+                      {formatChatTime(msg.timestamp)}
+                      {isUser && <Check className="w-3 h-3" aria-label="Sent" />}
+                    </span>
+                  )}
+                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    {QUICK_REACTIONS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={() => handleToggleReaction(msg.id, emoji)}
+                        className="w-7 h-7 rounded-full hover:bg-raised text-[13px] cursor-pointer"
+                        aria-label={`React with ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {isPartnerTyping && (
+            <div data-testid="partner-typing-bubble" aria-live="polite" className="flex items-start anim-fade">
+              <div
+                className="bg-raised rounded-[20px] rounded-bl-md px-4 py-3 flex items-center gap-1"
+                aria-label={`${partner.displayName} is typing`}
+              >
+                <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce" />
+                <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:0.15s]" />
+                <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:0.3s]" />
               </div>
             </div>
-          );
-        })}
-
-        {/* Partner Typing Bubble */}
-        {isPartnerTyping && (
-          <div data-testid="partner-typing-bubble" aria-live="polite" className="flex items-start animate-in fade-in duration-200">
-            <div className="bg-[#241B29] border border-[#403247] rounded-2xl rounded-bl-xs px-3.5 py-2.5 text-xs text-[#BDB0BF] flex items-center gap-1.5 shadow-sm">
-              <span className="font-semibold text-[#F7F0F6]">{partner.displayName}</span>
-              <span className="text-[#C77DAA] font-medium">is typing</span>
-              <span className="flex gap-1 ml-1">
-                <span className="w-1.5 h-1.5 bg-[#C77DAA] rounded-full animate-bounce" />
-                <span className="w-1.5 h-1.5 bg-[#C77DAA] rounded-full animate-bounce [animation-delay:0.2s]" />
-                <span className="w-1.5 h-1.5 bg-[#C77DAA] rounded-full animate-bounce [animation-delay:0.4s]" />
-              </span>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Icebreaker Suggestions (Show when few messages exchanged) */}
-      {messages.filter((m) => m.sender !== 'system').length <= 3 && (
-        <div className="px-4 py-2 border-t border-[#403247] bg-[#241B29]/90 overflow-x-auto">
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="text-[#C77DAA] font-semibold shrink-0 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5" />
-              Icebreakers:
-            </span>
-            <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-              {ICEBREAKER_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => handleSendMessage(prompt)}
-                  className="whitespace-nowrap px-3 py-1 rounded-full bg-[#302235] border border-[#403247] hover:border-[#C77DAA] hover:text-[#F7F0F6] text-[11px] text-[#BDB0BF] transition-colors shrink-0 cursor-pointer shadow-xs"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Input Warning / Error */}
-      {inputError && (
-        <div className="px-4 py-1.5 bg-red-950/80 text-red-200 text-xs flex items-center gap-1.5 border-t border-red-800">
-          <AlertCircle className="w-3.5 h-3.5" />
-          <span>{inputError}</span>
-        </div>
-      )}
-
-      {/* Message Composer Area */}
-      <div className="p-3 sm:p-4 bg-[#241B29] border-t border-[#403247] relative">
-        {/* Emoji picker dropdown */}
-        {emojiPickerOpen && (
-          <div className="absolute bottom-full left-4 mb-2 p-2.5 bg-[#241B29] rounded-2xl border border-[#403247] shadow-2xl flex gap-2 text-lg z-30">
-            {['🌸', '❤️', '✨', '☕', '🫂', '🌿', '📖', '🐱', '🥺', '🎉'].map((emoji) => (
+      {/* Composer */}
+      <div className="border-t border-line bg-ink pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        {!hasExchange && (
+          <div className="flex gap-2 overflow-x-auto scrollbar-none px-3 pt-2.5" aria-label="Icebreakers">
+            {ICEBREAKER_PROMPTS.map((prompt) => (
               <button
-                key={emoji}
-                type="button"
-                onClick={() => handleAddEmoji(emoji)}
-                className="hover:scale-125 transition-transform p-1 cursor-pointer"
+                key={prompt}
+                onClick={() => handleSendMessage(prompt)}
+                className="chip h-8 text-[12px] shrink-0"
               >
-                {emoji}
+                {prompt}
               </button>
             ))}
           </div>
         )}
 
-        <div className="flex items-center gap-2">
-          {/* Emoji Toggle */}
+        {inputError && (
+          <p role="alert" className="mx-3 mt-2 px-3 py-2 rounded-xl bg-danger/10 text-danger text-[13px] flex items-center gap-1.5">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {inputError}
+          </p>
+        )}
+
+        <div className="relative flex items-end gap-1.5 px-2 sm:px-3 pt-2">
+          {emojiPickerOpen && (
+            <div className="absolute bottom-full left-2 mb-2 p-1.5 card bg-raised shadow-2xl shadow-black/50 grid grid-cols-5 gap-0.5 z-30 anim-pop">
+              {EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => handleAddEmoji(emoji)}
+                  className="w-10 h-10 rounded-lg text-xl hover:bg-surface cursor-pointer"
+                  aria-label={`Insert ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
-            className="p-2.5 rounded-full text-[#BDB0BF] hover:text-[#F7F0F6] hover:bg-[#302235] transition-colors cursor-pointer"
-            aria-label="Open emoji picker"
+            className="icon-btn w-11 h-11"
+            aria-label="Emoji"
+            aria-expanded={emojiPickerOpen}
           >
-            <Smile className="w-5 h-5" />
+            <Smile className="w-[22px] h-[22px]" />
           </button>
 
-          {/* Text Input */}
           <input
             ref={inputRef}
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Message ${partner.displayName}... (Enter to send)`}
-            className="flex-1 px-4 py-2.5 rounded-full bg-[#17121B] border border-[#403247] text-sm text-[#F7F0F6] placeholder-[#BDB0BF]/50 focus:outline-none focus:border-[#C77DAA] focus:ring-1 focus:ring-[#C77DAA]"
+            placeholder="Message"
+            aria-label={`Message ${partner.displayName}`}
+            enterKeyHint="send"
+            autoComplete="off"
+            className="flex-1 min-w-0 h-11 px-4 rounded-full bg-surface border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
           />
 
-          {/* Send Button */}
           <button
             type="button"
             onClick={() => handleSendMessage()}
             disabled={!inputText.trim()}
-            className="p-2.5 rounded-full bg-[#C77DAA] hover:bg-[#d893bd] disabled:opacity-40 text-[#17121B] transition-all shadow-md cursor-pointer active:scale-95"
+            className="w-11 h-11 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center transition-all disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed active:scale-95"
             aria-label="Send message"
           >
-            <Send className="w-4 h-4 text-[#17121B]" />
+            <ArrowUp className="w-5 h-5" strokeWidth={2.5} />
           </button>
         </div>
       </div>
 
-      {/* Action Bar (positioned below chat input composer) */}
-      <div className="px-3 py-2 sm:px-4 bg-[#1b1222] border-t border-[#403247]/70 flex items-center justify-between gap-2">
-        <p className="text-[11px] text-[#cbbccf]/70 hidden sm:block">
-          Want to change or leave this conversation?
-        </p>
-        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
-          <button
-            type="button"
-            onClick={() => setShowLeaveConfirm(true)}
-            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#230d3b] hover:bg-red-950/60 text-[#cbbccf] hover:text-red-300 text-xs font-semibold border border-[#4a1f6d] hover:border-red-800/80 transition-all cursor-pointer shadow-xs active:scale-95"
-            title="Leave conversation"
-            aria-label="Leave conversation"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Leave</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowSkipConfirm(true)}
-            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#2a173d] hover:bg-[#a85293] text-[#e07bb8] hover:text-[#fcf7fa] text-xs font-semibold border border-[#4a1f6d] transition-all cursor-pointer shadow-xs active:scale-95"
-            title="Skip to next available person"
-            aria-label="Skip to next match"
-          >
-            <SkipForward className="w-3.5 h-3.5" />
-            <span>Skip</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Skip Match Warning Confirmation Dialog */}
       {showSkipConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-[#241B29] rounded-3xl p-6 border border-[#403247] max-w-sm w-full shadow-2xl">
-            <div className="flex items-center gap-2 mb-2 text-[#e07bb8]">
-              <SkipForward className="w-5 h-5 text-[#e07bb8]" />
-              <h4 className="font-serif text-lg font-bold text-[#F7F0F6]">
-                Skip this conversation?
-              </h4>
-            </div>
-            <p className="text-xs text-[#BDB0BF] leading-relaxed mb-6">
-              You will leave this chat with <strong className="text-[#F7F0F6]">{partner.displayName}</strong> and be matched with a new sapphic peer. Unsaved chat messages in this session will be cleared.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowSkipConfirm(false)}
-                className="px-4 py-2 rounded-full border border-[#403247] text-xs font-semibold text-[#BDB0BF] hover:bg-[#302235] hover:text-[#F7F0F6] cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowSkipConfirm(false);
-                  onNextMatch();
-                }}
-                className="px-4 py-2 rounded-full bg-[#a85293] hover:bg-[#c862b0] text-white text-xs font-semibold cursor-pointer shadow-md"
-              >
-                Yes, Skip & Rematch
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Skip to someone new?"
+          message={<>Your chat with {partner.displayName} will end and be cleared.</>}
+          confirmLabel="Skip"
+          onCancel={() => setShowSkipConfirm(false)}
+          onConfirm={() => {
+            setShowSkipConfirm(false);
+            onNextMatch();
+          }}
+        />
       )}
 
-      {/* Leave Confirmation Dialog */}
       {showLeaveConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="bg-[#241B29] rounded-3xl p-6 border border-[#403247] max-w-sm w-full shadow-2xl">
-            <h4 className="font-serif text-lg font-bold text-[#F7F0F6] mb-2">
-              Leave this conversation?
-            </h4>
-            <p className="text-xs text-[#BDB0BF] leading-relaxed mb-6">
-              Your chat transcript is ephemeral and will be cleared when you leave. You can return to home or match again anytime.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowLeaveConfirm(false)}
-                className="px-4 py-2 rounded-full border border-[#403247] text-xs font-semibold text-[#BDB0BF] hover:bg-[#302235] hover:text-[#F7F0F6]"
-              >
-                Stay
-              </button>
-              <button
-                onClick={() => {
-                  setShowLeaveConfirm(false);
-                  if (isCloudActive && cloudConvId) {
-                    endCloudConversation(cloudConvId, 'ended');
-                  }
-                  onLeaveChat();
-                }}
-                className="px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-semibold"
-              >
-                Leave Chat
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Leave this conversation?"
+          message="The chat will end and the transcript will be cleared."
+          confirmLabel="Leave"
+          cancelLabel="Stay"
+          tone="danger"
+          onCancel={() => setShowLeaveConfirm(false)}
+          onConfirm={() => {
+            setShowLeaveConfirm(false);
+            if (isCloudActive && cloudConvId) {
+              endCloudConversation(cloudConvId, 'ended');
+            }
+            onLeaveChat();
+          }}
+        />
       )}
 
-      {/* Block & Report Modal */}
       {showReportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="bg-[#241B29] rounded-3xl p-6 border border-[#403247] max-w-md w-full shadow-2xl">
-            <div className="flex items-center gap-2 mb-3 text-red-400">
-              <ShieldAlert className="w-5 h-5" />
-              <h4 className="font-serif text-lg font-bold text-[#F7F0F6]">
-                Report & Block {partner.displayName}
-              </h4>
-            </div>
-            <p className="text-xs text-[#BDB0BF] leading-relaxed mb-4">
-              We take safety very seriously. Submitting a report will immediately terminate this conversation and block this participant from ever being matched with you again.
-            </p>
-
-            <div className="space-y-2 mb-6">
-              <label className="text-xs font-bold text-[#F7F0F6]">Select Reason:</label>
-              {[
-                'Harassment or disrespectful behavior',
-                'Unsolicited sexual messages or content',
-                'Suspected male imposter / Not sapphic',
-                'Underage participant (violating 18+ policy)',
-                'Spam, advertising, or scam links',
-              ].map((reason) => (
-                <label
-                  key={reason}
-                  className="flex items-center gap-2.5 p-2 rounded-xl border border-[#403247] bg-[#17121B] hover:bg-[#302235] cursor-pointer text-xs text-[#F7F0F6]"
-                >
-                  <input
-                    type="radio"
-                    name="reportReason"
-                    value={reason}
-                    checked={reportReason === reason}
-                    onChange={(e) => setReportReason(e.target.value)}
-                    className="accent-[#C77DAA]"
-                  />
-                  <span>{reason}</span>
-                </label>
-              ))}
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowReportModal(false)}
-                className="px-4 py-2 rounded-full border border-[#403247] text-xs font-semibold text-[#BDB0BF] hover:bg-[#302235] hover:text-[#F7F0F6]"
-              >
+        <Sheet
+          title={`Report ${partner.displayName}`}
+          icon={<ShieldAlert className="w-5 h-5 text-danger" />}
+          onClose={() => setShowReportModal(false)}
+          footer={
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <button onClick={() => setShowReportModal(false)} className="btn btn-ghost w-full sm:w-auto">
                 Cancel
               </button>
               <button
@@ -839,14 +700,65 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   }
                   onBlockAndReport(reportReason, { reportSent, convEnded, isCloud: isCloudActive });
                 }}
-                className="px-5 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-semibold"
+                className="btn btn-danger w-full sm:w-auto"
               >
-                Report & Block
+                Report &amp; block
               </button>
             </div>
-          </div>
-        </div>
+          }
+        >
+          <p className="mb-4">This ends the chat and blocks them from matching with you again.</p>
+          <fieldset className="space-y-2">
+            <legend className="sr-only">Reason</legend>
+            {REPORT_REASONS.map((reason) => (
+              <label
+                key={reason}
+                className={`flex items-center gap-3 min-h-12 px-3.5 py-2.5 rounded-xl border cursor-pointer text-sm transition-colors ${
+                  reportReason === reason ? 'border-danger/60 bg-danger/10 text-fg' : 'border-line text-muted hover:text-fg'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="reportReason"
+                  value={reason}
+                  checked={reportReason === reason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  className="w-4 h-4 accent-[#f17c8a]"
+                />
+                <span>{reason}</span>
+              </label>
+            ))}
+          </fieldset>
+        </Sheet>
       )}
     </div>
   );
 };
+
+const QUICK_REACTIONS = ['🌸', '❤️', '✨', '☕'];
+const EMOJIS = ['🌸', '❤️', '✨', '☕', '🫂', '🌿', '📖', '🐱', '🥺', '🎉'];
+const REPORT_REASONS = [
+  'Harassment or disrespectful behavior',
+  'Unsolicited sexual messages or content',
+  'Suspected male imposter / Not sapphic',
+  'Underage participant (violating 18+ policy)',
+  'Spam, advertising, or scam links',
+];
+
+const MenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }> = ({
+  icon,
+  label,
+  onClick,
+  danger,
+}) => (
+  <button
+    role="menuitem"
+    onClick={onClick}
+    className={`w-full flex items-center gap-3 h-11 px-4 text-sm text-left cursor-pointer hover:bg-surface transition-colors ${
+      danger ? 'text-danger' : 'text-fg'
+    }`}
+  >
+    {icon}
+    {label}
+  </button>
+);
