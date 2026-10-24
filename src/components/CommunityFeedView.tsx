@@ -150,7 +150,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
       : posts.filter((p) => p.category === activeCategory);
 
   return (
-    <div className="max-w-4xl mx-auto px-3.5 sm:px-6 py-4 sm:py-8 pb-24 sm:pb-8">
+    <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-28 sm:pb-12 overflow-x-hidden box-border">
       {/* Feed Top Header - Optimized for Mobile */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 sm:pb-6 mb-4 sm:mb-6 border-b border-[#4a1f6d]">
         <div className="flex items-center gap-3 w-full sm:w-auto">
