@@ -64,10 +64,14 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
 
     setInputText('');
     setSendError(null);
-    const ok = await sendPublicRoomMessage(userPrefs, sanitized.cleanText);
-    if (!ok) {
+    const result = await sendPublicRoomMessage(userPrefs, sanitized.cleanText);
+    if (result !== 'sent') {
       setInputText(sanitized.cleanText);
-      setSendError("Couldn't send. Check your connection and try again.");
+      setSendError(
+        result === 'too-fast'
+          ? 'Slow down a little, then try again.'
+          : "Couldn't send. Check your connection and try again."
+      );
       return;
     }
     if (!isSoundMuted) soundEffects.playMessageSent();

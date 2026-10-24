@@ -117,12 +117,14 @@ export const UnsaidView: React.FC = () => {
       return;
     }
     setPosting(true);
-    const ok = await postUnsaid(kind, checked.text);
+    const result = await postUnsaid(kind, checked.text);
     setPosting(false);
-    if (ok) {
+    if (result === 'posted') {
       setDraft('');
       setComposeError(null);
       loadMyUnsaidIds().then((ids) => setMyIds(new Set(ids)));
+    } else if (result === 'too-fast') {
+      setComposeError('You can post once a minute. Take a breath and try again soon.');
     } else {
       setComposeError("Couldn't post. Check your connection and try again.");
     }

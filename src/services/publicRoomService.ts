@@ -1,12 +1,14 @@
 import {
-  addDoc,
   collection,
+  doc,
   limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   Timestamp,
+  writeBatch,
+  FirestoreError,
 } from 'firebase/firestore';
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
@@ -73,12 +75,18 @@ export function subscribeToPublicRoom(
   };
 }
 
-export async function sendPublicRoomMessage(prefs: UserPreferences, text: string): Promise<boolean> {
-  if (!db) return false;
+export type SendResult = 'sent' | 'too-fast' | 'failed';
+
+/** Seconds between room messages; must match slowMode('publicRoom', …) in firestore.rules. */
+export const PUBLIC_ROOM_SLOW_MODE_SECONDS = 2;
+
+export async function sendPublicRoomMessage(prefs: UserPreferences, text: string): Promise<SendResult> {
+  if (!db) return 'failed';
   try {
     const user = auth?.currentUser ?? (await ensureAnonymousAuth());
-    if (!user) return false;
-    await addDoc(collection(db, 'public_room_messages'), {
+    if (!user) return 'failed';
+    const batch = writeBatch(db);
+    batch.set(doc(collection(db, 'public_room_messages')), {
       authorId: user.uid,
       authorName: (prefs.displayName?.trim() || 'Sapphic Guest').slice(0, 30),
       authorPronouns: (prefs.pronouns?.trim() || 'she/her').slice(0, 20),
@@ -86,9 +94,11 @@ export async function sendPublicRoomMessage(prefs: UserPreferences, text: string
       text: text.slice(0, 1000),
       timestamp: serverTimestamp(),
     });
-    return true;
+    batch.set(doc(db, 'rate_limits', user.uid), { publicRoom: serverTimestamp() }, { merge: true });
+    await batch.commit();
+    return 'sent';
   } catch (err) {
     console.warn('[PublicRoom] Could not send:', err);
-    return false;
+    return (err as FirestoreError)?.code === 'permission-denied' ? 'too-fast' : 'failed';
   }
 }

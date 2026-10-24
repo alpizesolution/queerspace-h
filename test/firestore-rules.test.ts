@@ -333,34 +333,53 @@ test('Q-05: Nobody else CAN re-claim or delete an already matched entry', async 
 });
 
 // ------------------------------------------------------------------
+// Slow mode: posts are written together with a rate_limits stamp
+// ------------------------------------------------------------------
+const now = () => firebase.firestore.FieldValue.serverTimestamp();
+
+function stampedAdd(uid: string, collectionPath: string, data: Record<string, unknown>, field: string) {
+  const fs = testEnv.authenticatedContext(uid).firestore();
+  const batch = fs.batch();
+  batch.set(fs.collection(collectionPath).doc(), data);
+  batch.set(fs.doc(`rate_limits/${uid}`), { [field]: now() }, { merge: true });
+  return batch.commit();
+}
+
+async function seedStamp(uid: string, field: string, secondsAgo: number) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`rate_limits/${uid}`).set({ [field]: new Date(Date.now() - secondsAgo * 1000) });
+  });
+}
+
+// ------------------------------------------------------------------
 // Suggestions
 // ------------------------------------------------------------------
 const suggestion = (authorId: string, overrides: Record<string, unknown> = {}) => ({
   authorId,
   category: 'idea',
   text: 'Add voice notes to chat',
-  createdAt: new Date(),
+  createdAt: now(),
   ...overrides,
 });
 
 test('S-01: Signed-in user CAN send a valid suggestion as themselves', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
-  await assertSucceeds(alice.collection('suggestions').add(suggestion('alice')));
+  await assertSucceeds(stampedAdd('alice', 'suggestions', suggestion('alice'), 'suggestion'));
 });
 
 test('S-02: Suggestions CANNOT be spoofed, malformed or sent signed-out', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
-  await assertFails(alice.collection('suggestions').add(suggestion('bob')));
-  await assertFails(alice.collection('suggestions').add(suggestion('alice', { category: 'spam' })));
-  await assertFails(alice.collection('suggestions').add(suggestion('alice', { text: 'x'.repeat(1001) })));
-  await assertFails(alice.collection('suggestions').add(suggestion('alice', { email: 'a@b.c' })));
+  await assertFails(stampedAdd('alice', 'suggestions', suggestion('bob'), 'suggestion'));
+  await assertFails(stampedAdd('alice', 'suggestions', suggestion('alice', { category: 'spam' }), 'suggestion'));
+  await assertFails(stampedAdd('alice', 'suggestions', suggestion('alice', { text: 'x'.repeat(1001) }), 'suggestion'));
+  await assertFails(stampedAdd('alice', 'suggestions', suggestion('alice', { email: 'a@b.c' }), 'suggestion'));
   const anon = testEnv.unauthenticatedContext().firestore();
-  await assertFails(anon.collection('suggestions').add(suggestion('alice')));
+  await assertFails(anon.collection('suggestions').add({ ...suggestion('alice'), createdAt: new Date() }));
 });
 
 test('S-03: Nobody CAN read, edit or delete suggestions from the app', async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await ctx.firestore().doc('suggestions/s1').set(suggestion('alice'));
+    await ctx.firestore().doc('suggestions/s1').set({ ...suggestion('alice'), createdAt: new Date() });
   });
   const alice = testEnv.authenticatedContext('alice').firestore();
   await assertFails(alice.doc('suggestions/s1').get());
@@ -388,6 +407,7 @@ async function postUnsaidAs(uid: string, id: string, overrides: Record<string, u
     ...overrides,
   });
   batch.set(fs.doc(`unsaid_owners/${id}`), { authorId: uid });
+  batch.set(fs.doc(`rate_limits/${uid}`), { unsaid: now() }, { merge: true });
   return batch.commit();
 }
 
@@ -514,25 +534,57 @@ const roomMessage = (authorId: string, overrides: Record<string, unknown> = {}) 
   authorName: 'Willow',
   authorPronouns: 'she/her',
   text: 'hi everyone',
-  timestamp: new Date(),
+  timestamp: now(),
   ...overrides,
 });
 
 test('R-01: Users CAN post to the public room as themselves, with or without an avatar', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
-  await assertSucceeds(alice.collection('public_room_messages').add(roomMessage('alice')));
-  await assertSucceeds(alice.collection('public_room_messages').add(roomMessage('alice', { authorAvatar: 'fox.1.2' })));
+  await assertSucceeds(stampedAdd('alice', 'public_room_messages', roomMessage('alice'), 'publicRoom'));
+  await assertSucceeds(stampedAdd('bob', 'public_room_messages', roomMessage('bob', { authorAvatar: 'fox.1.2' }), 'publicRoom'));
   await assertSucceeds(testEnv.authenticatedContext('bob').firestore().collection('public_room_messages').get());
 });
 
 test('R-02: Public room messages CANNOT be spoofed, padded or edited', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
-  await assertFails(alice.collection('public_room_messages').add(roomMessage('bob')));
-  await assertFails(alice.collection('public_room_messages').add(roomMessage('alice', { authorAvatar: 'x'.repeat(100) })));
-  await assertFails(alice.collection('public_room_messages').add(roomMessage('alice', { isAdmin: true })));
+  await assertFails(stampedAdd('alice', 'public_room_messages', roomMessage('bob'), 'publicRoom'));
+  await assertFails(stampedAdd('alice', 'public_room_messages', roomMessage('alice', { authorAvatar: 'x'.repeat(100) }), 'publicRoom'));
+  await assertFails(stampedAdd('alice', 'public_room_messages', roomMessage('alice', { isAdmin: true }), 'publicRoom'));
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await ctx.firestore().doc('public_room_messages/m1').set(roomMessage('alice'));
+    await ctx.firestore().doc('public_room_messages/m1').set({ ...roomMessage('alice'), timestamp: new Date() });
   });
   await assertFails(alice.doc('public_room_messages/m1').update({ text: 'edited' }));
   await assertFails(testEnv.unauthenticatedContext().firestore().collection('public_room_messages').get());
+});
+
+test('L-01: Slow mode blocks rapid repeat posts and unstamped posts', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  // No stamp in the batch: rejected.
+  await assertFails(alice.collection('public_room_messages').add(roomMessage('alice')));
+  // First stamped post OK, an immediate second one is too fast.
+  await assertSucceeds(stampedAdd('alice', 'public_room_messages', roomMessage('alice'), 'publicRoom'));
+  await assertFails(stampedAdd('alice', 'public_room_messages', roomMessage('alice'), 'publicRoom'));
+  // Once the window has passed, posting works again.
+  await seedStamp('alice', 'publicRoom', 10);
+  await assertSucceeds(stampedAdd('alice', 'public_room_messages', roomMessage('alice'), 'publicRoom'));
+});
+
+test('L-02: Unsaid allows one post a minute and suggestions one per 30 seconds', async () => {
+  await assertSucceeds(postUnsaidAs('alice', 'u1'));
+  await assertFails(postUnsaidAs('alice', 'u2'));
+  await seedStamp('alice', 'unsaid', 61);
+  await assertSucceeds(postUnsaidAs('alice', 'u3'));
+
+  await assertSucceeds(stampedAdd('bob', 'suggestions', suggestion('bob'), 'suggestion'));
+  await assertFails(stampedAdd('bob', 'suggestions', suggestion('bob'), 'suggestion'));
+});
+
+test('L-03: Users CANNOT backdate or erase their own slow-mode stamps', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('rate_limits/alice').set({ publicRoom: new Date(0) }));
+  await assertFails(alice.doc('rate_limits/alice').set({ other: now() }));
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('rate_limits/alice').set({ publicRoom: now() }));
+  await seedStamp('alice', 'publicRoom', 1);
+  await assertFails(alice.doc('rate_limits/alice').delete());
+  await assertFails(alice.doc('rate_limits/alice').update({ publicRoom: new Date(0) }));
 });

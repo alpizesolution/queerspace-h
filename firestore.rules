@@ -49,6 +49,37 @@ service cloud.firestore {
     }
 
     // ====================================================
+    // SLOW MODE (anti-spam)
+    // ====================================================
+    // rate_limits/{uid} remembers when a user last posted to each surface.
+    // A post must stamp its field with request.time in the same batch, and is
+    // only allowed if the previous stamp is at least `secs` seconds old.
+
+    function rateLimitPath() {
+      return /databases/$(database)/documents/rate_limits/$(request.auth.uid);
+    }
+
+    function slowMode(field, secs) {
+      let before = exists(rateLimitPath()) ? get(rateLimitPath()).data : {};
+      return getAfter(rateLimitPath()).data.get(field, null) == request.time
+        && (!(field in before) || before[field] + duration.value(secs, 's') <= request.time);
+    }
+
+    match /rate_limits/{userId} {
+      allow read: if isOwner(userId);
+      // Only stamps of "now" can be written, so the clock can't be wound back.
+      allow create, update: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['publicRoom', 'unsaid', 'suggestion'])
+        && (!('publicRoom' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.publicRoom == request.time)
+        && (!('unsaid' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.unsaid == request.time)
+        && (!('suggestion' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.suggestion == request.time);
+      allow delete: if false;
+    }
+
+    // ====================================================
     // 0. INDEXED COLLECTION GROUPS
     // ====================================================
     
@@ -235,7 +266,8 @@ service cloud.firestore {
         && request.resource.data.text is string
         && request.resource.data.text.size() >= 1
         && request.resource.data.text.size() <= 1000
-        && request.resource.data.timestamp is timestamp;
+        && request.resource.data.timestamp == request.time
+        && slowMode('publicRoom', 2);
 
       allow update, delete: if false; // Immutable public room messages
     }
@@ -355,7 +387,8 @@ service cloud.firestore {
         && request.resource.data.hugs == 0
         && request.resource.data.same == 0
         && request.resource.data.flags == 0
-        && getAfter(unsaidOwnerPath(postId)).data.authorId == request.auth.uid;
+        && getAfter(unsaidOwnerPath(postId)).data.authorId == request.auth.uid
+        && slowMode('unsaid', 60);
 
       // A reaction: +1 on 'hugs' or 'same' alongside a new reactions/{uid} doc of that type.
       allow update: if isAuthenticated()
@@ -424,7 +457,8 @@ service cloud.firestore {
         && request.resource.data.text is string
         && request.resource.data.text.size() >= 3
         && request.resource.data.text.size() <= 1000
-        && request.resource.data.createdAt is timestamp;
+        && request.resource.data.createdAt == request.time
+        && slowMode('suggestion', 30);
 
       allow read, update, delete: if false;
     }
