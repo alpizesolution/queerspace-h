@@ -1,0 +1,48 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "QUEERSPACE Home" [ref=e6]:
+        - generic [ref=e11]:
+          - generic [ref=e12]:
+            - generic [ref=e13]: QUEERSPACE
+            - generic [ref=e14]: WLW
+          - paragraph [ref=e15]: A Sapphic Space for Women
+      - navigation "Main navigation" [ref=e16]:
+        - button "Home" [ref=e17]
+        - button "1-on-1 Chat" [ref=e18]
+        - button "Public Room" [ref=e19]
+        - button "Community Posts" [ref=e25]
+        - button "Safety" [ref=e26]
+      - generic [ref=e29]:
+        - button "Mute chat sounds" [ref=e30]
+        - button "Start Chatting" [ref=e35]
+  - main [ref=e39]:
+    - generic [ref=e537]:
+      - heading "Connecting to Quick Chat..." [level=3] [ref=e544]
+      - paragraph [ref=e545]: Looking for an active sapphic peer ready to talk freely and respectfully.
+      - generic [ref=e546]:
+        - generic [ref=e547]:
+          - generic [ref=e548]: "Your Persona:"
+          - generic [ref=e549]: Clover Mist (she/her)
+        - generic [ref=e550]:
+          - generic [ref=e551]: "Time searching:"
+          - generic [ref=e552]: 0s
+      - generic [ref=e553]: Anonymous & protected session
+      - button "Cancel Search" [ref=e557] [cursor=pointer]
+  - contentinfo [ref=e562]:
+    - generic [ref=e563]:
+      - generic [ref=e564]:
+        - generic [ref=e565]:
+          - generic [ref=e566]: QUEERSPACE
+          - paragraph [ref=e572]: A Sapphic Space for Women. Your space. Your people. Your possibilities.
+        - generic [ref=e573]:
+          - button "About" [ref=e574] [cursor=pointer]
+          - button "Community Guidelines" [ref=e575] [cursor=pointer]
+          - button "Privacy & Anonymity" [ref=e576] [cursor=pointer]
+          - button "Terms of Service" [ref=e577] [cursor=pointer]
+          - button "Contact & Support" [ref=e578] [cursor=pointer]
+      - generic [ref=e579]:
+        - paragraph [ref=e580]: © 2026 QUEERSPACE. Built for the sapphic community.
+        - generic [ref=e581]:
+          - generic [ref=e582]: Made with
+          - generic [ref=e585]: for women who love women.

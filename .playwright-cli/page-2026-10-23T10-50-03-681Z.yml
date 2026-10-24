@@ -1,0 +1,54 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "Vespera Home" [ref=e6]:
+        - generic [ref=e11]:
+          - generic [ref=e12]:
+            - generic [ref=e13]: Vespera
+            - generic [ref=e14]: WLW
+          - paragraph [ref=e15]: Sapphic Anonymous Chat
+      - navigation "Main navigation" [ref=e16]:
+        - button "Home" [ref=e17]
+        - button "1-on-1 Chat" [ref=e18]
+        - button "Public Room" [ref=e19]
+        - button "Community Posts" [ref=e25]
+        - button "Safety" [ref=e26]
+      - generic [ref=e29]:
+        - button "Mute chat sounds" [ref=e30]
+        - button "Start Chatting" [ref=e35]
+  - main [ref=e39]:
+    - generic [ref=e368]:
+      - heading "Finding a Compatible Match..." [level=3] [ref=e375]
+      - paragraph [ref=e376]: Looking for an active sapphic peer ready to talk freely and respectfully.
+      - generic [ref=e377]:
+        - generic [ref=e378]:
+          - generic [ref=e379]: "Your Persona:"
+          - generic [ref=e380]: Iris Glow (they/them)
+        - generic [ref=e381]:
+          - generic [ref=e382]: "Looking for:"
+          - generic [ref=e383]: open
+        - generic [ref=e384]:
+          - generic [ref=e385]: "Topics:"
+          - generic [ref=e386]: WLW Books & Poetry, Plants & Coffee
+        - generic [ref=e387]:
+          - generic [ref=e388]: "Time searching:"
+          - generic [ref=e389]: 0s
+      - generic [ref=e390]: Anonymous & protected session
+      - button "Cancel Search" [ref=e394] [cursor=pointer]
+  - contentinfo [ref=e247]:
+    - generic [ref=e248]:
+      - generic [ref=e249]:
+        - generic [ref=e250]:
+          - generic [ref=e251]: Vespera
+          - paragraph [ref=e257]: An independent, privacy-conscious conversation and community sanctuary for women-loving-women.
+        - generic [ref=e258]:
+          - button "About" [ref=e259] [cursor=pointer]
+          - button "Community Guidelines" [ref=e260] [cursor=pointer]
+          - button "Privacy & Anonymity" [ref=e261] [cursor=pointer]
+          - button "Terms of Service" [ref=e262] [cursor=pointer]
+          - button "Contact & Support" [ref=e263] [cursor=pointer]
+      - generic [ref=e264]:
+        - paragraph [ref=e265]: © 2026 Vespera. Built for the sapphic community.
+        - generic [ref=e266]:
+          - generic [ref=e267]: Made with
+          - generic [ref=e270]: for women who love women.

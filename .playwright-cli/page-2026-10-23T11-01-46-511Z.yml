@@ -1,0 +1,35 @@
+- main [ref=f2e4]:
+  - generic [ref=f2e5]:
+    - generic [ref=f2e6]:
+      - generic [ref=f2e7]:
+        - generic [ref=f2e8]: M
+        - generic [ref=f2e9]:
+          - generic [ref=f2e10]:
+            - heading "Maya Lark" [level=3] [ref=f2e11]
+            - generic [ref=f2e12]: she/her
+          - generic [ref=f2e13]:
+            - generic [ref=f2e14]: Connected
+            - generic [ref=f2e17]: •
+            - generic [ref=f2e18]: WLW Books & Poetry, Plants & Coffee
+      - generic [ref=f2e19]:
+        - button "Next" [ref=f2e20] [cursor=pointer]
+        - button "Leave conversation" [ref=f2e24]
+        - button "Report or block participant" [ref=f2e28]
+    - generic [ref=f2e32]:
+      - generic [ref=f2e37]:
+        - text: "Looking for:"
+        - strong [ref=f2e38]: friendship
+      - generic [ref=f2e39]: North America
+    - generic [ref=f2e41]:
+      - generic [ref=f2e42]: "Icebreakers:"
+      - generic [ref=f2e46]:
+        - button "What sapphic book or movie altered your brain chemistry?" [ref=f2e47] [cursor=pointer]
+        - button "Comfort song or artist on heavy rotation right now?" [ref=f2e48] [cursor=pointer]
+        - button "What does your ideal gentle Sunday look like?" [ref=f2e49] [cursor=pointer]
+        - button "Are you a coffee or tea person, and how do you take it?" [ref=f2e50] [cursor=pointer]
+        - button "Favorite small joy or win from this week?" [ref=f2e51] [cursor=pointer]
+        - button "Do you have pets or house plants you love?" [ref=f2e52] [cursor=pointer]
+    - generic [ref=f2e54]:
+      - button "Open emoji picker" [ref=f2e55] [cursor=pointer]
+      - textbox "Message Maya Lark... (Enter to send)" [ref=f2e59]
+      - button "Send message" [disabled] [ref=f2e60] [cursor=pointer]

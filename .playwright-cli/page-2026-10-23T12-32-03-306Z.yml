@@ -1,0 +1,97 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "QUEERSPACE Home" [ref=e6]:
+        - generic [ref=e11]:
+          - generic [ref=e12]:
+            - generic [ref=e13]: QUEERSPACE
+            - generic [ref=e14]: WLW
+          - paragraph [ref=e15]: A Sapphic Space for Women
+      - navigation "Main navigation" [ref=e16]:
+        - button "Home" [ref=e17]
+        - button "1-on-1 Chat" [ref=e18]
+        - button "Public Room" [ref=e19]
+        - button "Community Posts" [ref=e25]
+        - button "Safety" [ref=e26]
+      - generic [ref=e29]:
+        - button "Mute chat sounds" [ref=e30]
+        - button "Start Chatting" [active] [ref=e35]
+  - main [ref=e39]:
+    - generic [ref=e424]:
+      - generic [ref=e425]:
+        - generic [ref=e426]:
+          - button "Back to home" [ref=e427]
+          - generic [ref=e430]:
+            - generic [ref=e431]:
+              - heading "Sapphic Town Square" [level=2] [ref=e432]
+              - generic [ref=e433]: 14 online
+            - paragraph [ref=e435]: Public, open conversation for all sapphic community members
+        - button "Switch to 1-on-1" [ref=e436]
+      - generic [ref=e438]:
+        - generic [ref=e439]:
+          - generic [ref=e440]: Welcome to the Public Room
+          - paragraph [ref=e445]: Drop a cozy hello, share what song or book you're loving, or just say hi to everyone. Keep it kind and respectful!
+        - generic [ref=e446]:
+          - generic [ref=e447]: D
+          - generic [ref=e448]:
+            - generic [ref=e449]:
+              - generic [ref=e450]: Dahlia Glow
+              - generic [ref=e451]: she/her
+              - generic [ref=e452]: 12:12 PM
+            - generic [ref=e453]: Happy Friday everyone! Hope everyone has a warm drink in hand ☕
+        - generic [ref=e454]:
+          - generic [ref=e455]: R
+          - generic [ref=e456]:
+            - generic [ref=e457]:
+              - generic [ref=e458]: Rowan Mist
+              - generic [ref=e459]: they/she
+              - generic [ref=e460]: 12:18 PM
+            - generic [ref=e461]: Watching sapphic short films on YouTube right now, the cinematography is so dreamy
+        - generic [ref=e462]:
+          - generic [ref=e463]: M
+          - generic [ref=e464]:
+            - generic [ref=e465]:
+              - generic [ref=e466]: Marigold Lark
+              - generic [ref=e467]: she/her
+              - generic [ref=e468]: 12:26 PM
+            - generic [ref=e469]: Welcome newcomers! Feel free to introduce yourselves or just lurk cozily ✨
+      - generic [ref=e470]:
+        - textbox "Chat in public room as Clover Mist..." [ref=e471]
+        - button "Send public message" [disabled] [ref=e472] [cursor=pointer]
+  - generic [ref=e477]:
+    - generic [ref=e478]:
+      - generic [ref=e484]:
+        - heading "Start Your Conversation" [level=3] [ref=e485]
+        - paragraph [ref=e486]: Low-friction, anonymous sapphic matching
+      - button "Close setup modal" [ref=e487]
+    - generic [ref=e492]:
+      - button "Quick Chat" [ref=e493]
+      - button "Custom Match" [ref=e497]
+    - generic [ref=e500]:
+      - generic [ref=e501]:
+        - generic [ref=e502]:
+          - generic [ref=e503]: Your Persona (Optional)
+          - button "Random Pseudonym" [ref=e504] [cursor=pointer]
+        - generic [ref=e509]:
+          - textbox "e.g. Lavender Lark" [ref=e511]: Clover Mist
+          - combobox [ref=e513]:
+            - option "she/her" [selected]
+            - option "they/she"
+            - option "they/them"
+            - option "any pronouns"
+            - option "prefer not to say"
+      - generic [ref=e514]:
+        - generic [ref=e515]: Instant 1-on-1 Conversation
+        - paragraph [ref=e519]: Quick chat connects you with the first available sapphic participant without filtering by specific intentions or topics. Perfect for when you just want to talk.
+      - generic [ref=e521] [cursor=pointer]:
+        - checkbox "I affirm that I am 18 years of age or older and identify as a woman or non-binary sapphic person." [checked] [ref=e522]
+        - generic [ref=e523]:
+          - text: I affirm that I am
+          - strong [ref=e524]: 18 years of age or older
+          - text: and identify as a woman or non-binary sapphic person.
+      - generic [ref=e528]:
+        - strong [ref=e529]: "What your match sees:"
+        - text: Only your chosen pseudonym, pronouns, intention, and mutual topics. No IP, location GPS, or device information is ever shared.
+    - generic [ref=e530]:
+      - button "Cancel" [ref=e531]
+      - button "Start Quick Chat" [ref=e532] [cursor=pointer]

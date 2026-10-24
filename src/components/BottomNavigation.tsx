@@ -15,7 +15,7 @@ export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate }) =
   ];
 
   return (
-    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#17121B]/90 backdrop-blur-md border-t border-[#403247] pb-safe">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#17121B]/90 backdrop-blur-md border-t border-[#403247] pb-safe">
       <div className="grid grid-cols-4 items-center h-16 pb-safe">
         {tabs.map((tab) => {
           const Icon = tab.icon;

@@ -1,0 +1,77 @@
+- generic [ref=e3]:
+  - banner [ref=e508]:
+    - generic [ref=e509]:
+      - button "Vespera Home" [ref=e510]:
+        - generic [ref=e515]:
+          - generic [ref=e516]:
+            - generic [ref=e517]: Vespera
+            - generic [ref=e518]: WLW
+          - paragraph [ref=e519]: Sapphic Anonymous Chat
+      - navigation "Main navigation" [ref=e520]:
+        - button "Home" [ref=e521]
+        - button "1-on-1 Chat" [ref=e522]
+        - button "Public Room" [active] [ref=e523]
+        - button "Community Posts" [ref=e529]
+        - button "Safety" [ref=e530]
+      - generic [ref=e533]:
+        - button "Mute chat sounds" [ref=e534]
+        - button "Start Chatting" [ref=e539]
+  - main [ref=e39]:
+    - generic [ref=e774]:
+      - generic [ref=e775]:
+        - generic [ref=e776]:
+          - button "Back to home" [ref=e777]
+          - generic [ref=e780]:
+            - generic [ref=e781]:
+              - heading "Sapphic Town Square" [level=2] [ref=e782]
+              - generic [ref=e783]: 14 online
+            - paragraph [ref=e785]: Public, open conversation for all sapphic community members
+        - button "Switch to 1-on-1" [ref=e786]
+      - generic [ref=e788]:
+        - generic [ref=e789]:
+          - generic [ref=e790]: Welcome to the Public Room
+          - paragraph [ref=e795]: Drop a cozy hello, share what song or book you're loving, or just say hi to everyone. Keep it kind and respectful!
+        - generic [ref=e796]:
+          - generic [ref=e797]: D
+          - generic [ref=e798]:
+            - generic [ref=e799]:
+              - generic [ref=e800]: Dahlia Glow
+              - generic [ref=e801]: she/her
+              - generic [ref=e802]: 10:31 AM
+            - generic [ref=e803]: Happy Friday everyone! Hope everyone has a warm drink in hand ☕
+        - generic [ref=e804]:
+          - generic [ref=e805]: R
+          - generic [ref=e806]:
+            - generic [ref=e807]:
+              - generic [ref=e808]: Rowan Mist
+              - generic [ref=e809]: they/she
+              - generic [ref=e810]: 10:37 AM
+            - generic [ref=e811]: Watching sapphic short films on YouTube right now, the cinematography is so dreamy
+        - generic [ref=e812]:
+          - generic [ref=e813]: M
+          - generic [ref=e814]:
+            - generic [ref=e815]:
+              - generic [ref=e816]: Marigold Lark
+              - generic [ref=e817]: she/her
+              - generic [ref=e818]: 10:45 AM
+            - generic [ref=e819]: Welcome newcomers! Feel free to introduce yourselves or just lurk cozily ✨
+      - generic [ref=e820]:
+        - textbox "Chat in public room as Iris Glow..." [ref=e821]
+        - button "Send public message" [disabled] [ref=e822] [cursor=pointer]
+  - contentinfo [ref=e750]:
+    - generic [ref=e751]:
+      - generic [ref=e752]:
+        - generic [ref=e753]:
+          - generic [ref=e754]: Vespera
+          - paragraph [ref=e760]: An independent, privacy-conscious conversation and community sanctuary for women-loving-women.
+        - generic [ref=e761]:
+          - button "About" [ref=e762] [cursor=pointer]
+          - button "Community Guidelines" [ref=e763] [cursor=pointer]
+          - button "Privacy & Anonymity" [ref=e764] [cursor=pointer]
+          - button "Terms of Service" [ref=e765] [cursor=pointer]
+          - button "Contact & Support" [ref=e766] [cursor=pointer]
+      - generic [ref=e767]:
+        - paragraph [ref=e768]: © 2026 Vespera. Built for the sapphic community.
+        - generic [ref=e769]:
+          - generic [ref=e770]: Made with
+          - generic [ref=e773]: for women who love women.
