@@ -16,7 +16,7 @@ import { InstallPrompt } from './components/InstallPrompt.tsx';
 import { PartnerProfile, UserPreferences } from './types.ts';
 import { generateSapphicPseudonym } from './utils/matching-logic.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from './utils/storage.ts';
-import { ensureAnonymousAuth, isFirebaseConfigured } from './lib/firebase.ts';
+import { ensureAnonymousAuth, isFirebaseConfigured, logScreenView } from './lib/firebase.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile } from './services/profilePersistence.ts';
 import { CheckCircle2 } from 'lucide-react';
@@ -101,6 +101,10 @@ export default function App() {
     setSetupInitialMode(mode);
     setSetupModalOpen(true);
   };
+
+  useEffect(() => {
+    logScreenView(currentView);
+  }, [currentView]);
 
   const handleNavigate = (view: NavTarget) => {
     if (view === 'setup') handleOpenSetup('quick');
