@@ -22,9 +22,9 @@ if (typeof window !== 'undefined') {
   });
 }
 
-const DISMISS_KEY = 'qs_install_dismissed_at';
-const DISMISS_DAYS = 14;
-const SHOW_AFTER_MS = 8000;
+// "Not now" only lasts for this visit: anyone who hasn't installed sees the card again next time.
+const DISMISS_KEY = 'qs_install_dismissed';
+const SHOW_AFTER_MS = 3000;
 
 function isStandalone(): boolean {
   return (
@@ -33,10 +33,9 @@ function isStandalone(): boolean {
   );
 }
 
-function recentlyDismissed(): boolean {
+function dismissedThisVisit(): boolean {
   try {
-    const at = Number(localStorage.getItem(DISMISS_KEY));
-    return Boolean(at) && Date.now() - at < DISMISS_DAYS * 24 * 60 * 60 * 1000;
+    return sessionStorage.getItem(DISMISS_KEY) === '1';
   } catch {
     return false;
   }
@@ -97,35 +96,20 @@ export const InstallPrompt: React.FC = () => {
   useEffect(() => {
     const update = () => setPlatform(currentPlatform());
     listeners.add(update);
-    // Wait until they've looked around and scrolled past the hero, so the card never covers "Find Your Someone".
-    let waited = false;
-    let scrolled = false;
-    const maybeShow = () => waited && scrolled && setVisible(true);
-    const onScroll = () => {
-      if (window.scrollY > window.innerHeight * 0.6) {
-        scrolled = true;
-        maybeShow();
-      }
-    };
-    const timer = setTimeout(() => {
-      waited = true;
-      maybeShow();
-    }, SHOW_AFTER_MS);
-    window.addEventListener('scroll', onScroll, { passive: true });
+    const timer = setTimeout(() => setVisible(true), SHOW_AFTER_MS);
     return () => {
       listeners.delete(update);
       clearTimeout(timer);
-      window.removeEventListener('scroll', onScroll);
     };
   }, []);
 
-  if (!visible || platform === 'installed' || platform === 'none' || recentlyDismissed()) return null;
+  if (!visible || platform === 'installed' || platform === 'none' || dismissedThisVisit()) return null;
 
   const dismiss = () => {
     try {
-      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      sessionStorage.setItem(DISMISS_KEY, '1');
     } catch {
-      // Private mode: it just shows again next visit.
+      // Storage blocked: the card just closes for now.
     }
     setVisible(false);
   };
@@ -143,7 +127,7 @@ export const InstallPrompt: React.FC = () => {
     <div
       role="dialog"
       aria-label="Install QUEERSPACE PH"
-      className="fixed z-30 inset-x-3 bottom-[calc(var(--tabbar-h)+0.75rem)] sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[22rem] card !bg-raised/95 backdrop-blur-xl shadow-2xl shadow-black/50 p-4 anim-pop"
+      className="fixed z-30 inset-x-3 top-[calc(env(safe-area-inset-top)+var(--header-h)+0.5rem)] sm:top-auto sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[22rem] card !bg-raised/95 backdrop-blur-xl shadow-2xl shadow-black/50 p-4 anim-pop"
     >
       <div className="flex items-start gap-3">
         <img src="/icon-192.png" alt="" className="w-11 h-11 rounded-xl border border-line shrink-0" />
