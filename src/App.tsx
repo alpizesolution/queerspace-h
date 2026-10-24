@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { Header } from './components/Header.tsx';
 import { Hero } from './components/Hero.tsx';
 import { SafetySection } from './components/SafetySection.tsx';
@@ -311,6 +312,8 @@ export default function App() {
       <DonationModal isOpen={donationModalOpen} onClose={() => setDonationModalOpen(false)} />
 
       <InfoModals activeModal={activeInfoModal} onClose={() => setActiveInfoModal(null)} />
+      
+      <Analytics />
     </div>
   );
 }
