@@ -1,7 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, User, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 const getEnvVar = (key: string): string | undefined => {
   if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -37,7 +37,8 @@ const app = isFirebaseConfigured
 
 // App Check proves requests come from this website (not a script), so Firestore can
 // reject bots once enforcement is switched on in the Firebase Console.
-// Turned on by setting VITE_FIREBASE_APPCHECK_SITE_KEY (a reCAPTCHA v3 site key).
+// Turned on by setting VITE_FIREBASE_APPCHECK_SITE_KEY (a reCAPTCHA Enterprise / Google Cloud
+// Fraud Defense website key; classic reCAPTCHA v3 keys are deprecated).
 const appCheckSiteKey = getEnvVar('VITE_FIREBASE_APPCHECK_SITE_KEY');
 export const isAppCheckEnabled = Boolean(
   app && appCheckSiteKey && typeof window !== 'undefined' && getEnvVar('VITE_USE_FIREBASE_EMULATOR') !== 'true'
@@ -45,7 +46,7 @@ export const isAppCheckEnabled = Boolean(
 if (app && isAppCheckEnabled && appCheckSiteKey) {
   try {
     initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
       isTokenAutoRefreshEnabled: true,
     });
   } catch (err) {
