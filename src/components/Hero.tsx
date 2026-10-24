@@ -4,6 +4,7 @@ import { ChevronRight, Zap, Users, Edit3, ShieldCheck, Heart } from 'lucide-reac
 interface HeroProps {
   onQuickChat: () => void;
   onExploreCommunity: () => void;
+  onOpenCommunity: () => void;
   onOpenSetup: () => void;
   onOpenSafety?: () => void;
 }
@@ -11,6 +12,7 @@ interface HeroProps {
 export const Hero: React.FC<HeroProps> = ({
   onQuickChat,
   onExploreCommunity,
+  onOpenCommunity,
   onOpenSetup,
   onOpenSafety,
 }) => {
@@ -118,7 +120,7 @@ export const Hero: React.FC<HeroProps> = ({
 
           {/* Card 3: Post Something */}
           <button
-            onClick={onOpenSetup}
+            onClick={onOpenCommunity}
             className="group relative p-5 rounded-2xl bg-gradient-to-br from-purple-900/60 via-[#1d0b2b]/90 to-[#2c123d] hover:from-purple-800/80 hover:to-[#381650] border border-white/15 hover:border-pink-400/50 transition-all text-left shadow-lg hover:shadow-2xl hover:-translate-y-1 cursor-pointer flex items-center justify-between"
           >
             <div className="flex items-center gap-4">

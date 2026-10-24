@@ -257,8 +257,10 @@ export default function App() {
           <>
             <Hero
               onQuickChat={() => handleSelectMode('quick')}
-              onExploreCommunity={() => setCurrentView('community')}
+              onExploreCommunity={() => setCurrentView('public')}
+              onOpenCommunity={() => setCurrentView('community')}
               onOpenSetup={() => handleOpenSetup('custom')}
+              onOpenSafety={() => setActiveInfoModal('guidelines')}
             />
             <ModeSelector onSelectMode={handleSelectMode} />
             <HowItWorks />
