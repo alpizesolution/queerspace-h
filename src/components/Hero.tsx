@@ -56,7 +56,7 @@ export const Hero: React.FC<HeroProps> = ({
             <div className="lg:col-span-5 flex items-center justify-center">
               <div className="relative w-full max-w-xs sm:max-w-sm md:max-w-md aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl border border-white/20 bg-[#2a0b31] flex items-center justify-center">
                 <img 
-                  src="/assets/aistudio/image_73c36316.png" 
+                  src="/assets/aistudio/hero_illustration.png" 
                   alt="Sapphic Community Illustration" 
                   className="w-full h-full object-cover"
                 />
