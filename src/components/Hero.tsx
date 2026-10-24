@@ -28,19 +28,22 @@ export const Hero: React.FC<HeroProps> = ({
     <section className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-6 sm:pt-12 pb-8">
       <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center">
         <div className="lg:col-span-6 anim-rise">
-          <p className="text-[13px] font-medium text-lavender mb-3">A sapphic space for women</p>
+          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-lavender mb-3">
+            ✦ A sapphic space for women · WLW ✦
+          </p>
           <h1 className="font-serif text-[34px] leading-[1.1] sm:text-5xl font-semibold tracking-tight text-fg">
-            Find your queer
+            Somewhere between
             <br />
-            community.
+            strangers and <em className="text-berry">stardust.</em>
           </h1>
           <p className="mt-4 text-[15px] sm:text-base text-muted max-w-md leading-relaxed">
-            Anonymous one-on-one chats with women who love women. No sign-up, no pressure.
+            A little universe for women who love women. Find your people, share a secret, and discover the magic of
+            an unexpected connection.
           </p>
 
           <div className="mt-7 flex flex-col sm:flex-row gap-2.5">
             <button onClick={onStartChat} className="btn btn-primary h-12 px-7 text-[15px] w-full sm:w-auto">
-              Start chatting
+              Find Your Someone
               <ArrowRight className="w-4 h-4" />
             </button>
             <button onClick={onCustomMatch} className="btn btn-ghost h-12 w-full sm:w-auto">
@@ -48,6 +51,9 @@ export const Hero: React.FC<HeroProps> = ({
               Custom match
             </button>
           </div>
+          <p className="mt-4 text-[12px] sm:text-[13px] text-subtle text-center sm:text-left">
+            Meet anonymously · Connect authentically · Be yourself
+          </p>
         </div>
 
         <div className="lg:col-span-6 order-first lg:order-none">
