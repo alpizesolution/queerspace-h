@@ -447,7 +447,7 @@ async function seedUnsaid(id: string, author: string, counts: Record<string, num
   });
 }
 
-function reactAs(uid: string, id: string, type: 'hugs' | 'same', bump = 1) {
+function reactAs(uid: string, id: string, type: string, bump = 1) {
   const fs = testEnv.authenticatedContext(uid).firestore();
   const batch = fs.batch();
   batch.update(fs.doc(`unsaid/${id}`), { [type]: firebase.firestore.FieldValue.increment(bump) });
@@ -504,6 +504,11 @@ test('U-04: Each person CAN react once, by exactly one', async () => {
   await assertFails(reactAs('bob', 'p1', 'same'));
   await assertFails(reactAs('carol', 'p1', 'same', 5));
   await assertSucceeds(reactAs('carol', 'p1', 'same'));
+  // Newer reactions count up from a missing field on older posts.
+  await assertSucceeds(reactAs('erin', 'p1', 'felt'));
+  await assertSucceeds(reactAs('fay', 'p1', 'proud'));
+  await assertFails(reactAs('gail', 'p1', 'felt', 2));
+  await assertFails(reactAs('hana', 'p1', 'angry'));
   // A bare counter bump without the marker doc is rejected.
   const dana = testEnv.authenticatedContext('dana').firestore();
   await assertFails(dana.doc('unsaid/p1').update({ hugs: firebase.firestore.FieldValue.increment(1) }));

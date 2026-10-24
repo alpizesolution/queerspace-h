@@ -34,7 +34,7 @@ test('needsCrisisSupport catches English and Tagalog crisis phrases', () => {
 
 test('isUnsaidVisible hides faded and heavily flagged posts', () => {
   const now = 1_000_000;
-  const post: UnsaidPost = { id: 'a', kind: 'vent', text: 't', createdAt: now, expiresAt: now + 1000, hugs: 0, same: 0, flags: 0 };
+  const post: UnsaidPost = { id: 'a', kind: 'vent', text: 't', createdAt: now, expiresAt: now + 1000, hugs: 0, same: 0, felt: 0, strong: 0, proud: 0, flags: 0 };
   assert.equal(isUnsaidVisible(post, now), true);
   assert.equal(isUnsaidVisible({ ...post, expiresAt: now - 1 }, now), false);
   assert.equal(isUnsaidVisible({ ...post, flags: 3 }, now), false);

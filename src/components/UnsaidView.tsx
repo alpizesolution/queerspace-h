@@ -34,8 +34,11 @@ const FILTERS: { id: 'all' | UnsaidKind; label: string }[] = [
 ];
 
 const REACTIONS: { type: UnsaidReaction; emoji: string; label: string }[] = [
-  { type: 'hugs', emoji: '🫂', label: 'Hug' },
-  { type: 'same', emoji: '🤍', label: 'Same' },
+  { type: 'hugs', emoji: '🫂', label: 'Sending a hug' },
+  { type: 'same', emoji: '🤍', label: 'Same here' },
+  { type: 'felt', emoji: '🥺', label: 'Felt this' },
+  { type: 'strong', emoji: '💪', label: 'Stay strong' },
+  { type: 'proud', emoji: '🌈', label: 'Proud of you' },
 ];
 
 function loadReacted(): Record<string, UnsaidReaction> {
@@ -243,7 +246,7 @@ export const UnsaidView: React.FC = () => {
                     <p className="font-serif text-[17px] text-fg leading-relaxed whitespace-pre-wrap break-words">
                       {post.text}
                     </p>
-                    <div className="flex items-center gap-1 mt-3 -ml-2 text-[13px] text-muted">
+                    <div className="flex items-center gap-0.5 mt-3 -ml-2 text-[13px] text-muted">
                       {REACTIONS.map(({ type, emoji, label }) => {
                         const active = myReaction === type;
                         return (
@@ -253,12 +256,12 @@ export const UnsaidView: React.FC = () => {
                             disabled={Boolean(myReaction) && !active}
                             aria-pressed={active}
                             aria-label={`${label}, ${post[type]}`}
-                            className={`inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50 ${
+                            title={label}
+                            className={`inline-flex items-center gap-1 h-9 min-w-9 justify-center px-2 rounded-full transition-colors cursor-pointer disabled:cursor-default disabled:opacity-40 ${
                               active ? 'bg-plum/40 text-fg' : 'hover:bg-raised hover:text-fg'
                             }`}
                           >
-                            <span aria-hidden="true">{emoji}</span>
-                            <span>{label}</span>
+                            <span aria-hidden="true" className="text-[17px] leading-none">{emoji}</span>
                             {post[type] > 0 && <span className="text-subtle">{post[type]}</span>}
                           </button>
                         );
