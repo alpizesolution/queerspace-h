@@ -26,13 +26,12 @@ export const AuthStatusBadge: React.FC<AuthStatusBadgeProps> = ({
       case 'connected':
         return (
           <div
-            className="flex items-center gap-1.5 text-xs text-[#d1fae5] bg-[#062c1e]/80 px-2.5 py-1 rounded-full border border-emerald-700/50 shadow-sm"
+            className="flex items-center gap-1 text-xs text-[#d1fae5] bg-[#062c1e]/80 px-2 py-0.5 rounded-full border border-emerald-700/50 shadow-sm"
             title={`Connected to Firebase Anonymous Session (${shortUid ? `Anon #${shortUid}` : 'Anon'})`}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <ShieldCheck className="w-3 h-3 text-emerald-400" />
-            <span className="font-semibold text-[11px] tracking-tight">
-              Connected · {isAnonymous ? `Anon #${shortUid || 'user'}` : 'Auth'}
+            <span className="font-semibold text-[10px] tracking-tight">
+              {isAnonymous ? `Anon #${shortUid || 'user'}` : 'Auth'}
             </span>
           </div>
         );
