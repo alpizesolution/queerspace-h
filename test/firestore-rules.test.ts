@@ -378,6 +378,7 @@ async function postUnsaidAs(uid: string, id: string, overrides: Record<string, u
   const fs = testEnv.authenticatedContext(uid).firestore();
   const batch = fs.batch();
   batch.set(fs.doc(`unsaid/${id}`), {
+    kind: 'confession',
     text: 'I never told anyone I like her',
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     expiresAt: new Date(Date.now() + 48 * HOUR),
@@ -393,6 +394,7 @@ async function postUnsaidAs(uid: string, id: string, overrides: Record<string, u
 async function seedUnsaid(id: string, author: string, counts: Record<string, number> = {}) {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await ctx.firestore().doc(`unsaid/${id}`).set({
+      kind: 'vent',
       text: 'seeded',
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + 48 * HOUR),
@@ -428,10 +430,11 @@ test('U-02: Posts CANNOT be created with an author field, a long expiry, preset 
   await assertFails(postUnsaidAs('alice', 'p2', { expiresAt: new Date(Date.now() + 30 * 24 * HOUR) }));
   await assertFails(postUnsaidAs('alice', 'p3', { hugs: 50 }));
   await assertFails(postUnsaidAs('alice', 'p4', { text: 'x'.repeat(501) }));
+  await assertFails(postUnsaidAs('alice', 'p6', { kind: 'rant' }));
   const alice = testEnv.authenticatedContext('alice').firestore();
   await assertFails(
     alice.doc('unsaid/p5').set({
-      text: 'no owner', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      kind: 'vent', text: 'no owner', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       expiresAt: new Date(Date.now() + 48 * HOUR), hugs: 0, same: 0, flags: 0,
     })
   );

@@ -31,8 +31,20 @@ export const UNSAID_HIDE_AT_FLAGS = 3;
 
 export type UnsaidReaction = 'hugs' | 'same';
 
+export const UNSAID_KINDS = [
+  { id: 'vent', label: 'Vent' },
+  { id: 'confession', label: 'Confession' },
+] as const;
+
+export type UnsaidKind = (typeof UNSAID_KINDS)[number]['id'];
+
+export function toUnsaidKind(value: unknown): UnsaidKind {
+  return value === 'confession' ? 'confession' : 'vent';
+}
+
 export interface UnsaidPost {
   id: string;
+  kind: UnsaidKind;
   text: string;
   createdAt: number;
   expiresAt: number;
@@ -134,6 +146,7 @@ export function subscribeToUnsaid(onPosts: (posts: UnsaidPost[]) => void, onErro
               const data = d.data();
               return {
                 id: d.id,
+                kind: toUnsaidKind(data.kind),
                 text: String(data.text ?? ''),
                 createdAt: toMillis(data.createdAt),
                 expiresAt: toMillis(data.expiresAt),
@@ -158,7 +171,7 @@ export function subscribeToUnsaid(onPosts: (posts: UnsaidPost[]) => void, onErro
   };
 }
 
-export async function postUnsaid(text: string): Promise<boolean> {
+export async function postUnsaid(kind: UnsaidKind, text: string): Promise<boolean> {
   const checked = validateUnsaidText(text);
   if (!checked.ok || !db) return false;
   try {
@@ -167,6 +180,7 @@ export async function postUnsaid(text: string): Promise<boolean> {
     const postRef = doc(collection(db, 'unsaid'));
     const batch = writeBatch(db);
     batch.set(postRef, {
+      kind,
       text: checked.text,
       createdAt: serverTimestamp(),
       expiresAt: Timestamp.fromMillis(Date.now() + UNSAID_LIFETIME_MS),

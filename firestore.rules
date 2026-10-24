@@ -338,8 +338,9 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
-        && request.resource.data.keys().hasAll(['text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
-        && request.resource.data.keys().hasOnly(['text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
+        && request.resource.data.keys().hasAll(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
+        && request.resource.data.keys().hasOnly(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
+        && request.resource.data.kind in ['vent', 'confession']
         && request.resource.data.text is string
         && request.resource.data.text.size() >= 1
         && request.resource.data.text.size() <= 500

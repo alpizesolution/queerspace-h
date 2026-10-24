@@ -12,6 +12,8 @@ import {
   reactToUnsaid,
   subscribeToUnsaid,
   UNSAID_MAX_LENGTH,
+  UNSAID_KINDS,
+  UnsaidKind,
   UnsaidPost,
   UnsaidReaction,
   validateUnsaidText,
@@ -19,6 +21,17 @@ import {
 
 const REACTED_KEY = 'qs_unsaid_reacted';
 const REPORT_REASONS = ['Harassment or hate', 'Names or exposes someone', 'Spam or selling', 'Something else'];
+
+const PLACEHOLDERS: Record<UnsaidKind, string> = {
+  vent: "What's weighing on you?",
+  confession: 'The thing you never said out loud…',
+};
+
+const FILTERS: { id: 'all' | UnsaidKind; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'vent', label: 'Vents' },
+  { id: 'confession', label: 'Confessions' },
+];
 
 const REACTIONS: { type: UnsaidReaction; emoji: string; label: string }[] = [
   { type: 'hugs', emoji: '🫂', label: 'Hug' },
@@ -61,6 +74,8 @@ export const UnsaidView: React.FC = () => {
   const [feedError, setFeedError] = useState(false);
   const [myIds, setMyIds] = useState<Set<string>>(new Set());
   const [reacted, setReacted] = useState<Record<string, UnsaidReaction>>(loadReacted);
+  const [kind, setKind] = useState<UnsaidKind>('vent');
+  const [filter, setFilter] = useState<'all' | UnsaidKind>('all');
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
   const [composeError, setComposeError] = useState<string | null>(null);
@@ -102,7 +117,7 @@ export const UnsaidView: React.FC = () => {
       return;
     }
     setPosting(true);
-    const ok = await postUnsaid(checked.text);
+    const ok = await postUnsaid(kind, checked.text);
     setPosting(false);
     if (ok) {
       setDraft('');
@@ -136,18 +151,31 @@ export const UnsaidView: React.FC = () => {
     await deleteUnsaid(id);
   };
 
-  const visible = posts.filter((p) => !reportedIds.has(p.id));
+  const visible = posts.filter((p) => !reportedIds.has(p.id) && (filter === 'all' || p.kind === filter));
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-10 md:pb-16">
       <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-fg">Unsaid</h1>
-      <p className="text-[13px] text-muted mt-1 mb-5">Say it anonymously. Every post fades after 48 hours.</p>
+      <p className="text-[13px] text-muted mt-1 mb-5">Vent or confess anonymously. Gone in 48 hours.</p>
 
       {!available ? (
         <p className="card p-5 text-sm text-muted">Unsaid isn't available right now. Please try again later.</p>
       ) : (
         <>
           <form onSubmit={handlePost} className="card p-3 sm:p-4 flex flex-col gap-3 mb-5">
+            <div className="flex gap-2" role="group" aria-label="Post type">
+              {UNSAID_KINDS.map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={kind === id}
+                  onClick={() => setKind(id)}
+                  className="chip"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <textarea
               rows={3}
               maxLength={UNSAID_MAX_LENGTH}
@@ -156,7 +184,7 @@ export const UnsaidView: React.FC = () => {
                 setDraft(e.target.value);
                 setComposeError(null);
               }}
-              placeholder="The thing you never said out loud…"
+              placeholder={PLACEHOLDERS[kind]}
               aria-label="Write something unsaid"
               className="input font-serif text-[17px]"
             />
@@ -171,6 +199,20 @@ export const UnsaidView: React.FC = () => {
             </div>
           </form>
 
+          <div role="tablist" aria-label="Filter posts" className="flex gap-2 mb-4">
+            {FILTERS.map(({ id, label }) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={filter === id}
+                onClick={() => setFilter(id)}
+                className={`chip shrink-0 ${filter === id ? '!bg-fg !text-ink !border-fg' : ''}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           {loading ? (
             <div className="space-y-3" aria-hidden="true">
               {[0, 1, 2].map((i) => (
@@ -181,7 +223,9 @@ export const UnsaidView: React.FC = () => {
             <p className="text-center text-sm text-muted py-12">Couldn't load the wall. Please try again soon.</p>
           ) : visible.length === 0 ? (
             <div className="text-center py-14 px-6">
-              <p className="text-[15px] font-medium text-fg">It's quiet here</p>
+              <p className="text-[15px] font-medium text-fg">
+                {filter === 'confession' ? 'No confessions yet' : filter === 'vent' ? 'No vents yet' : "It's quiet here"}
+              </p>
               <p className="text-[13px] text-muted mt-1">Be the first to let something out.</p>
             </div>
           ) : (
@@ -191,6 +235,9 @@ export const UnsaidView: React.FC = () => {
                 const myReaction = reacted[post.id];
                 return (
                   <li key={post.id} className="card p-4 sm:p-5 anim-fade">
+                    <span className={`tag mb-2.5 ${post.kind === 'confession' ? '!text-lavender' : '!text-berry'}`}>
+                      {post.kind === 'confession' ? 'Confession' : 'Vent'}
+                    </span>
                     <p className="font-serif text-[17px] text-fg leading-relaxed whitespace-pre-wrap break-words">
                       {post.text}
                     </p>

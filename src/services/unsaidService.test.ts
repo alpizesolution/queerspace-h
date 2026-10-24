@@ -4,6 +4,7 @@ import {
   formatFadesIn,
   isUnsaidVisible,
   needsCrisisSupport,
+  toUnsaidKind,
   UNSAID_MAX_LENGTH,
   UnsaidPost,
   validateUnsaidText,
@@ -33,7 +34,7 @@ test('needsCrisisSupport catches English and Tagalog crisis phrases', () => {
 
 test('isUnsaidVisible hides faded and heavily flagged posts', () => {
   const now = 1_000_000;
-  const post: UnsaidPost = { id: 'a', text: 't', createdAt: now, expiresAt: now + 1000, hugs: 0, same: 0, flags: 0 };
+  const post: UnsaidPost = { id: 'a', kind: 'vent', text: 't', createdAt: now, expiresAt: now + 1000, hugs: 0, same: 0, flags: 0 };
   assert.equal(isUnsaidVisible(post, now), true);
   assert.equal(isUnsaidVisible({ ...post, expiresAt: now - 1 }, now), false);
   assert.equal(isUnsaidVisible({ ...post, flags: 3 }, now), false);
@@ -44,4 +45,10 @@ test('formatFadesIn shows hours, then minutes', () => {
   assert.equal(formatFadesIn(31 * 3_600_000 + 5, now), 'Fades in 31h');
   assert.equal(formatFadesIn(12 * 60_000, now), 'Fades in 12m');
   assert.equal(formatFadesIn(10, now), 'Fades in 1m');
+});
+
+test('toUnsaidKind falls back to vent for unknown values', () => {
+  assert.equal(toUnsaidKind('confession'), 'confession');
+  assert.equal(toUnsaidKind('vent'), 'vent');
+  assert.equal(toUnsaidKind(undefined), 'vent');
 });
