@@ -1,0 +1,269 @@
+import React, { useEffect, useState } from 'react';
+import { Flag, HeartHandshake, Phone, Trash2 } from 'lucide-react';
+import { ConfirmDialog, Sheet } from './Sheet.tsx';
+import {
+  deleteUnsaid,
+  flagUnsaid,
+  formatFadesIn,
+  isUnsaidAvailable,
+  loadMyUnsaidIds,
+  needsCrisisSupport,
+  postUnsaid,
+  reactToUnsaid,
+  subscribeToUnsaid,
+  UNSAID_MAX_LENGTH,
+  UnsaidPost,
+  UnsaidReaction,
+  validateUnsaidText,
+} from '../services/unsaidService.ts';
+
+const REACTED_KEY = 'qs_unsaid_reacted';
+const REPORT_REASONS = ['Harassment or hate', 'Names or exposes someone', 'Spam or selling', 'Something else'];
+
+const REACTIONS: { type: UnsaidReaction; emoji: string; label: string }[] = [
+  { type: 'hugs', emoji: '🫂', label: 'Hug' },
+  { type: 'same', emoji: '🤍', label: 'Same' },
+];
+
+function loadReacted(): Record<string, UnsaidReaction> {
+  try {
+    return JSON.parse(localStorage.getItem(REACTED_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveReacted(map: Record<string, UnsaidReaction>) {
+  try {
+    localStorage.setItem(REACTED_KEY, JSON.stringify(map));
+  } catch {
+    // Per-device convenience only; the server still allows one reaction per person.
+  }
+}
+
+const CrisisCard: React.FC = () => (
+  <div className="flex gap-3 rounded-2xl border border-berry/40 bg-plum/20 p-4 anim-fade" role="note">
+    <HeartHandshake className="w-5 h-5 text-berry shrink-0 mt-0.5" />
+    <div className="text-[13px] leading-relaxed">
+      <p className="font-semibold text-fg">You're not alone, and you matter.</p>
+      <p className="text-muted mt-0.5">
+        Talk to someone right now, free and 24/7: NCMH Crisis Hotline{' '}
+        <a href="tel:1553" className="text-berry font-semibold">1553</a> or{' '}
+        <a href="tel:09178998727" className="text-berry font-semibold">0917 899 8727</a>.
+      </p>
+    </div>
+  </div>
+);
+
+export const UnsaidView: React.FC = () => {
+  const [posts, setPosts] = useState<UnsaidPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [feedError, setFeedError] = useState(false);
+  const [myIds, setMyIds] = useState<Set<string>>(new Set());
+  const [reacted, setReacted] = useState<Record<string, UnsaidReaction>>(loadReacted);
+  const [draft, setDraft] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [composeError, setComposeError] = useState<string | null>(null);
+  const [reportingId, setReportingId] = useState<string | null>(null);
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  const available = isUnsaidAvailable();
+
+  useEffect(() => {
+    if (!available) return;
+    const unsubscribe = subscribeToUnsaid(
+      (next) => {
+        setPosts(next);
+        setLoading(false);
+        setFeedError(false);
+      },
+      () => {
+        setLoading(false);
+        setFeedError(true);
+      }
+    );
+    loadMyUnsaidIds().then((ids) => setMyIds(new Set(ids)));
+    const tick = setInterval(() => setNow(Date.now()), 60_000);
+    return () => {
+      unsubscribe();
+      clearInterval(tick);
+    };
+  }, [available]);
+
+  const showCrisis = needsCrisisSupport(draft);
+
+  const handlePost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const checked = validateUnsaidText(draft);
+    if (!checked.ok) {
+      setComposeError(checked.error);
+      return;
+    }
+    setPosting(true);
+    const ok = await postUnsaid(checked.text);
+    setPosting(false);
+    if (ok) {
+      setDraft('');
+      setComposeError(null);
+      loadMyUnsaidIds().then((ids) => setMyIds(new Set(ids)));
+    } else {
+      setComposeError("Couldn't post. Check your connection and try again.");
+    }
+  };
+
+  const handleReact = async (postId: string, type: UnsaidReaction) => {
+    if (reacted[postId]) return;
+    const next = { ...reacted, [postId]: type };
+    setReacted(next);
+    saveReacted(next);
+    await reactToUnsaid(postId, type);
+  };
+
+  const handleReport = async (reason: string) => {
+    if (!reportingId) return;
+    const id = reportingId;
+    setReportingId(null);
+    setReportedIds((prev) => new Set(prev).add(id));
+    await flagUnsaid(id, reason);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingId) return;
+    const id = deletingId;
+    setDeletingId(null);
+    await deleteUnsaid(id);
+  };
+
+  const visible = posts.filter((p) => !reportedIds.has(p.id));
+
+  return (
+    <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-10 md:pb-16">
+      <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-fg">Unsaid</h1>
+      <p className="text-[13px] text-muted mt-1 mb-5">Say it anonymously. Every post fades after 48 hours.</p>
+
+      {!available ? (
+        <p className="card p-5 text-sm text-muted">Unsaid isn't available right now. Please try again later.</p>
+      ) : (
+        <>
+          <form onSubmit={handlePost} className="card p-3 sm:p-4 flex flex-col gap-3 mb-5">
+            <textarea
+              rows={3}
+              maxLength={UNSAID_MAX_LENGTH}
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setComposeError(null);
+              }}
+              placeholder="The thing you never said out loud…"
+              aria-label="Write something unsaid"
+              className="input font-serif text-[17px]"
+            />
+            {showCrisis && <CrisisCard />}
+            <div className="flex items-center justify-between gap-3">
+              <p className={`text-[12px] ${composeError ? 'text-danger' : 'text-subtle'}`} aria-live="polite">
+                {composeError ?? 'No names, no replies.'}
+              </p>
+              <button type="submit" disabled={!draft.trim() || posting} className="btn btn-primary btn-sm shrink-0">
+                {posting ? 'Posting…' : 'Let it out'}
+              </button>
+            </div>
+          </form>
+
+          {loading ? (
+            <div className="space-y-3" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="card h-28 animate-pulse" />
+              ))}
+            </div>
+          ) : feedError ? (
+            <p className="text-center text-sm text-muted py-12">Couldn't load the wall. Please try again soon.</p>
+          ) : visible.length === 0 ? (
+            <div className="text-center py-14 px-6">
+              <p className="text-[15px] font-medium text-fg">It's quiet here</p>
+              <p className="text-[13px] text-muted mt-1">Be the first to let something out.</p>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {visible.map((post) => {
+                const mine = myIds.has(post.id);
+                const myReaction = reacted[post.id];
+                return (
+                  <li key={post.id} className="card p-4 sm:p-5 anim-fade">
+                    <p className="font-serif text-[17px] text-fg leading-relaxed whitespace-pre-wrap break-words">
+                      {post.text}
+                    </p>
+                    <div className="flex items-center gap-1 mt-3 -ml-2 text-[13px] text-muted">
+                      {REACTIONS.map(({ type, emoji, label }) => {
+                        const active = myReaction === type;
+                        return (
+                          <button
+                            key={type}
+                            onClick={() => handleReact(post.id, type)}
+                            disabled={Boolean(myReaction) && !active}
+                            aria-pressed={active}
+                            aria-label={`${label}, ${post[type]}`}
+                            className={`inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50 ${
+                              active ? 'bg-plum/40 text-fg' : 'hover:bg-raised hover:text-fg'
+                            }`}
+                          >
+                            <span aria-hidden="true">{emoji}</span>
+                            <span>{label}</span>
+                            {post[type] > 0 && <span className="text-subtle">{post[type]}</span>}
+                          </button>
+                        );
+                      })}
+                      <span className="ml-auto text-[12px] text-subtle whitespace-nowrap">
+                        {formatFadesIn(post.expiresAt, now)}
+                      </span>
+                      {mine ? (
+                        <button onClick={() => setDeletingId(post.id)} className="icon-btn w-9 h-9" aria-label="Delete your post">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button onClick={() => setReportingId(post.id)} className="icon-btn w-9 h-9" aria-label="Report post">
+                          <Flag className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <p className="mt-8 flex items-center justify-center gap-1.5 text-[12px] text-subtle text-center">
+            <Phone className="w-3.5 h-3.5 shrink-0" />
+            Need to talk now? NCMH Crisis Hotline{' '}
+            <a href="tel:1553" className="text-berry font-medium">1553</a>
+          </p>
+        </>
+      )}
+
+      {reportingId && (
+        <Sheet title="Report this post" onClose={() => setReportingId(null)} size="sm">
+          <p className="mb-3">It's hidden for you right away. Posts with several reports are hidden for everyone.</p>
+          <div className="flex flex-col gap-2">
+            {REPORT_REASONS.map((reason) => (
+              <button key={reason} onClick={() => handleReport(reason)} className="btn btn-secondary justify-start">
+                {reason}
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
+
+      {deletingId && (
+        <ConfirmDialog
+          title="Delete your post?"
+          message="It disappears for everyone right away."
+          confirmLabel="Delete"
+          tone="danger"
+          onConfirm={handleDelete}
+          onCancel={() => setDeletingId(null)}
+        />
+      )}
+    </div>
+  );
+};

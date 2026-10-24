@@ -1,13 +1,14 @@
 import React from 'react';
-import { Home, MessageCircle, Users, MessagesSquare } from 'lucide-react';
+import { Home, MessageCircle, Users, MessagesSquare, Feather } from 'lucide-react';
 
-export type NavTarget = 'home' | 'setup' | 'public' | 'community';
+export type NavTarget = 'home' | 'setup' | 'public' | 'unsaid' | 'community';
 
 /** Single source of truth for primary navigation (bottom tab bar on mobile, header tabs on desktop). */
 export const NAV_ITEMS: { id: NavTarget; label: string; icon: React.ElementType }[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'setup', label: 'Chat', icon: MessageCircle },
   { id: 'public', label: 'Public Room', icon: Users },
+  { id: 'unsaid', label: 'Unsaid', icon: Feather },
   { id: 'community', label: 'Community', icon: MessagesSquare },
 ];
 
@@ -24,7 +25,7 @@ export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate }) =
     aria-label="Main"
     className="tabbar md:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
   >
-    <div className="grid grid-cols-4 h-14">
+    <div className="grid grid-cols-5 h-14">
       {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
         const active = isNavActive(id, currentView);
         return (

@@ -1,16 +1,18 @@
 import React from 'react';
-import { ArrowRight, ChevronRight, MessagesSquare, SlidersHorizontal, Users } from 'lucide-react';
+import { ArrowRight, ChevronRight, Feather, MessagesSquare, SlidersHorizontal, Users } from 'lucide-react';
 
 interface HeroProps {
   onStartChat: () => void;
   onCustomMatch: () => void;
   onOpenPublicRoom: () => void;
   onOpenCommunity: () => void;
+  onOpenUnsaid: () => void;
 }
 
 const DESTINATIONS = [
   { key: 'public', icon: Users, title: 'Public Room', text: 'Drop in and say hi' },
-  { key: 'community', icon: MessagesSquare, title: 'Community', text: 'Stories, vents and recs' },
+  { key: 'unsaid', icon: Feather, title: 'Unsaid', text: 'Say it anonymously' },
+  { key: 'community', icon: MessagesSquare, title: 'Community', text: 'Stories and recs' },
 ] as const;
 
 export const Hero: React.FC<HeroProps> = ({
@@ -18,8 +20,9 @@ export const Hero: React.FC<HeroProps> = ({
   onCustomMatch,
   onOpenPublicRoom,
   onOpenCommunity,
+  onOpenUnsaid,
 }) => {
-  const open = { public: onOpenPublicRoom, community: onOpenCommunity };
+  const open = { public: onOpenPublicRoom, unsaid: onOpenUnsaid, community: onOpenCommunity };
 
   return (
     <section className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-6 sm:pt-12 pb-8">
@@ -59,7 +62,7 @@ export const Hero: React.FC<HeroProps> = ({
         </div>
       </div>
 
-      <div className="mt-10 sm:mt-14 grid sm:grid-cols-2 gap-3">
+      <div className="mt-10 sm:mt-14 grid sm:grid-cols-3 gap-3">
         {DESTINATIONS.map(({ key, icon: Icon, title, text }) => (
           <button
             key={key}

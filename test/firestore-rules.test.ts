@@ -6,6 +6,8 @@ import {
 } from '@firebase/rules-unit-testing';
 import fs from 'node:fs';
 import test, { before, after, beforeEach } from 'node:test';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 
 let testEnv: RulesTestEnvironment;
 
@@ -365,4 +367,117 @@ test('S-03: Nobody CAN read, edit or delete suggestions from the app', async () 
   await assertFails(alice.collection('suggestions').get());
   await assertFails(alice.doc('suggestions/s1').update({ text: 'changed text' }));
   await assertFails(alice.doc('suggestions/s1').delete());
+});
+
+// ------------------------------------------------------------------
+// Unsaid wall
+// ------------------------------------------------------------------
+const HOUR = 60 * 60 * 1000;
+
+async function postUnsaidAs(uid: string, id: string, overrides: Record<string, unknown> = {}) {
+  const fs = testEnv.authenticatedContext(uid).firestore();
+  const batch = fs.batch();
+  batch.set(fs.doc(`unsaid/${id}`), {
+    text: 'I never told anyone I like her',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    expiresAt: new Date(Date.now() + 48 * HOUR),
+    hugs: 0,
+    same: 0,
+    flags: 0,
+    ...overrides,
+  });
+  batch.set(fs.doc(`unsaid_owners/${id}`), { authorId: uid });
+  return batch.commit();
+}
+
+async function seedUnsaid(id: string, author: string, counts: Record<string, number> = {}) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`unsaid/${id}`).set({
+      text: 'seeded',
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 48 * HOUR),
+      hugs: 0,
+      same: 0,
+      flags: 0,
+      ...counts,
+    });
+    await ctx.firestore().doc(`unsaid_owners/${id}`).set({ authorId: author });
+  });
+}
+
+function reactAs(uid: string, id: string, type: 'hugs' | 'same', bump = 1) {
+  const fs = testEnv.authenticatedContext(uid).firestore();
+  const batch = fs.batch();
+  batch.update(fs.doc(`unsaid/${id}`), { [type]: firebase.firestore.FieldValue.increment(bump) });
+  batch.set(fs.doc(`unsaid/${id}/reactions/${uid}`), {
+    type,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+  return batch.commit();
+}
+
+test('U-01: User CAN post anonymously with a 48h expiry and an owner record', async () => {
+  await assertSucceeds(postUnsaidAs('alice', 'p1'));
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  const snap = await assertSucceeds(bob.doc('unsaid/p1').get());
+  if ('authorId' in (snap.data() ?? {})) throw new Error('post leaks its author');
+});
+
+test('U-02: Posts CANNOT be created with an author field, a long expiry, preset counts or no owner record', async () => {
+  await assertFails(postUnsaidAs('alice', 'p1', { authorId: 'alice' }));
+  await assertFails(postUnsaidAs('alice', 'p2', { expiresAt: new Date(Date.now() + 30 * 24 * HOUR) }));
+  await assertFails(postUnsaidAs('alice', 'p3', { hugs: 50 }));
+  await assertFails(postUnsaidAs('alice', 'p4', { text: 'x'.repeat(501) }));
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(
+    alice.doc('unsaid/p5').set({
+      text: 'no owner', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      expiresAt: new Date(Date.now() + 48 * HOUR), hugs: 0, same: 0, flags: 0,
+    })
+  );
+});
+
+test('U-03: Only the author CAN read the owner record or delete the post', async () => {
+  await seedUnsaid('p1', 'alice');
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(bob.doc('unsaid_owners/p1').get());
+  await assertFails(bob.collection('unsaid_owners').where('authorId', '==', 'alice').get());
+  await assertFails(bob.doc('unsaid/p1').delete());
+  // Nobody can claim an existing post.
+  await assertFails(bob.doc('unsaid_owners/p1').set({ authorId: 'bob' }));
+
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.collection('unsaid_owners').where('authorId', '==', 'alice').get());
+  const batch = alice.batch();
+  batch.delete(alice.doc('unsaid/p1'));
+  batch.delete(alice.doc('unsaid_owners/p1'));
+  await assertSucceeds(batch.commit());
+});
+
+test('U-04: Each person CAN react once, by exactly one', async () => {
+  await seedUnsaid('p1', 'alice');
+  await assertSucceeds(reactAs('bob', 'p1', 'hugs'));
+  await assertFails(reactAs('bob', 'p1', 'hugs'));
+  await assertFails(reactAs('bob', 'p1', 'same'));
+  await assertFails(reactAs('carol', 'p1', 'same', 5));
+  await assertSucceeds(reactAs('carol', 'p1', 'same'));
+  // A bare counter bump without the marker doc is rejected.
+  const dana = testEnv.authenticatedContext('dana').firestore();
+  await assertFails(dana.doc('unsaid/p1').update({ hugs: firebase.firestore.FieldValue.increment(1) }));
+  // Text can never be edited.
+  await assertFails(testEnv.authenticatedContext('alice').firestore().doc('unsaid/p1').update({ text: 'edited' }));
+});
+
+test('U-05: Each person CAN flag a post once', async () => {
+  await seedUnsaid('p1', 'alice');
+  const flag = (uid: string) => {
+    const fs = testEnv.authenticatedContext(uid).firestore();
+    const batch = fs.batch();
+    batch.update(fs.doc('unsaid/p1'), { flags: firebase.firestore.FieldValue.increment(1) });
+    batch.set(fs.doc(`unsaid/p1/flags/${uid}`), { createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    return batch.commit();
+  };
+  await assertSucceeds(flag('bob'));
+  await assertFails(flag('bob'));
+  await assertFails(testEnv.authenticatedContext('carol').firestore().doc('unsaid/p1/flags/bob').get());
 });
