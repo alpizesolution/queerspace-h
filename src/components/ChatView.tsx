@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import {
   ArrowUp,
@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { SwipeToReply } from './SwipeToReply.tsx';
+import { MatchCelebration } from './MatchCelebration.tsx';
 import { auth } from '../lib/firebase.ts';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
@@ -73,6 +74,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [reportReason, setReportReason] = useState('Harassment or disrespectful behavior');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   /** Message whose reactions and reply button are showing (tap on touch screens). */
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
@@ -150,6 +152,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       if (cancelled) return;
       setCloudConvId(convId);
       setIsCloudActive(true);
+      setCelebrating(true);
       if (!soundMutedRef.current) soundEffects.playMatchFound();
 
       const systemMsg: ChatMessage = {
@@ -296,6 +299,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
     );
   };
 
+  const endCelebration = useCallback(() => setCelebrating(false), []);
+
   const startReply = (msg: ChatMessage) => {
     setReplyingTo(msg);
     setActiveMessageId(null);
@@ -337,7 +342,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   return (
     <div
-      className="fixed inset-x-0 top-0 h-[100dvh] z-30 flex flex-col bg-ink md:static md:z-auto md:max-w-3xl md:mx-auto md:w-full md:border-x md:border-line"
+      className="fixed inset-x-0 top-0 h-[100dvh] z-30 flex flex-col bg-ink md:relative md:z-auto md:max-w-3xl md:mx-auto md:w-full md:border-x md:border-line"
       style={viewportHeight ? { height: viewportHeight } : undefined}
     >
       {/* Header */}
@@ -693,6 +698,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {celebrating && (
+        <MatchCelebration
+          me={{ avatar: userPrefs.avatar, seed: auth?.currentUser?.uid ?? userPrefs.displayName ?? 'me' }}
+          partner={{ avatar: partner.avatar, seed: partner.id, name: partner.displayName }}
+          onDone={endCelebration}
+        />
       )}
 
       {showSkipConfirm && (
