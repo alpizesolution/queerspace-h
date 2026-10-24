@@ -136,13 +136,15 @@ export async function findMatchCandidate(
       };
     }
 
-    // If Firestore has 0 eligible candidates (e.g. database empty or all excluded)
+    // If Firestore has 0 eligible candidates, seamlessly fall back to local mock candidate so matchmaking always succeeds
+    const mockCandidate = sanitizeCandidatePrivacy(findBestPartner(userPrefs, excludeIds));
+    const score = calculateCompatibilityScore(userPrefs, mockCandidate);
     return {
-      candidate: null,
-      source: 'cloud',
-      compatibilityScore: 0,
+      candidate: mockCandidate,
+      source: 'local_fallback',
+      compatibilityScore: score,
       totalCandidatesQueried: candidatesFromCloud.length,
-      message: 'No other registered candidates found in Cloud Firestore right now.',
+      message: 'Matched via Local Demo Mode (No other active cloud candidates online right now).',
     };
   } catch (err: unknown) {
     const errMessage = err instanceof Error ? err.message : String(err);
