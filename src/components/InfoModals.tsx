@@ -9,6 +9,8 @@ interface InfoModalsProps {
   onClose: () => void;
 }
 
+const CONTACT_EMAIL = 'info.queerspaceph@gmail.com';
+
 const TITLES: Record<InfoModal, string> = {
   about: 'About QUEERSPACE',
   guidelines: 'Community Guidelines',
@@ -125,16 +127,21 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) 
           <>
             <p>Feedback, questions, or a safety incident to flag? We're listening.</p>
             <dl className="card divide-y divide-line text-[13px]">
-              {[
-                ['Safety & moderation', 'safety@queerspace.chat'],
-                ['Suggestions', 'hello@queerspace.chat'],
-                ['Response time', 'Usually within 24 hours'],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-4 px-4 py-3">
-                  <dt>{k}</dt>
-                  <dd className="text-fg font-medium text-right">{v}</dd>
-                </div>
-              ))}
+              <div className="flex justify-between gap-4 px-4 py-3">
+                <dt>Email</dt>
+                <dd className="text-right min-w-0">
+                  <a
+                    href={`mailto:${CONTACT_EMAIL}`}
+                    className="text-berry hover:text-berry-hover font-medium break-all"
+                  >
+                    {CONTACT_EMAIL}
+                  </a>
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4 px-4 py-3">
+                <dt>Response time</dt>
+                <dd className="text-fg font-medium text-right">Usually within 24 hours</dd>
+              </div>
             </dl>
           </>
         )}
