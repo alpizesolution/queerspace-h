@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { isValidAvatar, randomAvatar } from '../utils/avatar.ts';
 import {
   Zap,
   Sliders,
   Dices,
+  Shuffle,
   Info,
   Check,
   Plus,
@@ -51,6 +54,9 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'quick' | 'custom'>(initialMode);
   const [displayName, setDisplayName] = useState(currentPrefs.displayName || 'Sapphic Guest');
+  const [avatar, setAvatar] = useState(() =>
+    isValidAvatar(currentPrefs.avatar) ? currentPrefs.avatar : randomAvatar()
+  );
   const [pronouns, setPronouns] = useState(currentPrefs.pronouns || 'she/her');
   const [customPronouns, setCustomPronouns] = useState(currentPrefs.customPronouns || '');
   const [intention, setIntention] = useState<Intention>(currentPrefs.intention || 'friendship');
@@ -153,6 +159,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 
     const prefs: UserPreferences = {
       displayName: displayName.trim() || 'Sapphic Guest',
+      avatar,
       pronouns: resolvedPronouns,
       customPronouns: pronouns === 'Self-described' ? customPronouns.trim() : undefined,
       intention: activeTab === 'quick' ? 'open' : intention,
@@ -240,6 +247,23 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 
         {/* Persona */}
         <section>
+          <button
+            type="button"
+            onClick={() => setAvatar((current) => randomAvatar(current))}
+            className="group flex items-center gap-3 mb-4 -ml-1 p-1 pr-3 rounded-full hover:bg-raised transition-colors cursor-pointer"
+            aria-label="Shuffle your avatar"
+          >
+            <span className="relative">
+              <AnimalAvatar key={avatar} avatar={avatar} seed={displayName} className="w-12 h-12 anim-pop" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-raised border border-line flex items-center justify-center text-muted group-hover:text-fg">
+                <Shuffle className="w-3 h-3" />
+              </span>
+            </span>
+            <span className="text-left">
+              <span className="block text-[13px] font-semibold text-fg">Your avatar</span>
+              <span className="block text-[12px] text-subtle">Tap to shuffle</span>
+            </span>
+          </button>
           <label htmlFor="qs-name" className="label">
             Your name &amp; pronouns
           </label>
@@ -270,7 +294,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
               value={pronouns}
               onChange={(e) => setPronouns(e.target.value)}
               aria-label="Pronouns"
-              className="input w-[7.5rem] sm:w-40 shrink-0"
+              className="input w-[8.25rem] sm:w-40 shrink-0"
             >
               {PRONOUN_OPTIONS.map((p) => (
                 <option key={p} value={p}>

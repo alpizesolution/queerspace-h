@@ -68,3 +68,9 @@ test('loadAnonymousProfile returns default local profile when cloud is unavailab
   assert.equal(loadResult.fromCloudSuccess, false);
   assert.equal(typeof loadResult.prefs.displayName, 'string');
 });
+
+test('buildPublicProfilePayload keeps a valid avatar and drops an invalid one', () => {
+  assert.equal(buildPublicProfilePayload({ ...mockPrefs, avatar: 'cat.1.2' }).avatar, 'cat.1.2');
+  assert.equal('avatar' in buildPublicProfilePayload({ ...mockPrefs, avatar: '<script>' }), false);
+  assert.equal('avatar' in buildPublicProfilePayload(mockPrefs), false);
+});

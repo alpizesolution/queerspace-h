@@ -15,6 +15,8 @@ export type GenderExpressionOption =
 
 export interface UserPreferences {
   displayName: string;
+  /** Animal avatar code, e.g. "cat.1.3" (see utils/avatar.ts). */
+  avatar?: string;
   pronouns: string;
   customPronouns?: string;
   intention: Intention;
@@ -49,6 +51,7 @@ export interface PartnerProfile {
   location?: string;
   bioSnippet?: string;
   avatarColor: string;
+  avatar?: string;
   status?: PartnerStatus;
   // SOGIE & gender expression (optional)
   sexualOrientation?: string;

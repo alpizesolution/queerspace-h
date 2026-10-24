@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ArrowUp, Users } from 'lucide-react';
 import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
@@ -132,13 +133,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
         {messages.map((msg) => (
           <div key={msg.id} className={`flex items-end gap-2 ${msg.isSelf ? 'flex-row-reverse' : ''}`}>
             {!msg.isSelf && (
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[13px] font-semibold shrink-0"
-                style={{ backgroundColor: msg.avatarColor }}
-                aria-hidden="true"
-              >
-                {msg.author.charAt(0)}
-              </div>
+              <AnimalAvatar seed={msg.author} className="w-8 h-8" />
             )}
 
             <div className={`max-w-[80%] flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}>

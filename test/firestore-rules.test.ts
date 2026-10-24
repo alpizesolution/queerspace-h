@@ -484,3 +484,24 @@ test('U-05: Each person CAN flag a post once', async () => {
   await assertFails(flag('bob'));
   await assertFails(testEnv.authenticatedContext('carol').firestore().doc('unsaid/p1/flags/bob').get());
 });
+
+// ------------------------------------------------------------------
+// Avatars
+// ------------------------------------------------------------------
+const profile = (overrides: Record<string, unknown> = {}) => ({
+  displayName: 'Willow',
+  pronouns: 'she/her',
+  intention: 'open',
+  region: 'Worldwide',
+  topics: ['Books'],
+  updatedAt: new Date(),
+  ...overrides,
+});
+
+test('A-01: Users CAN save a short avatar code on their public profile, not a long or non-string one', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ avatar: 'cat.1.2' })));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(profile()));
+  await assertFails(alice.doc('users/alice/public/profile').set(profile({ avatar: 'x'.repeat(200) })));
+  await assertFails(alice.doc('users/alice/public/profile').set(profile({ avatar: 42 })));
+});
