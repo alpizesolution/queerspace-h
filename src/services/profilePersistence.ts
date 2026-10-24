@@ -83,8 +83,10 @@ export async function saveAnonymousProfile(
     const publicPayload = buildPublicProfilePayload(prefs);
     const privatePayload = buildPrivateSettingsPayload(prefs, blockedPartnerIds);
 
-    // Save public profile
-    await setDoc(publicRef, publicPayload, { merge: true });
+    // Save public profile. createdAt is stamped once, so the admin page can chart new members.
+    const existingPublicSnap = await getDoc(publicRef);
+    const joined = existingPublicSnap.exists() && existingPublicSnap.data()?.createdAt;
+    await setDoc(publicRef, joined ? publicPayload : { ...publicPayload, createdAt: serverTimestamp() }, { merge: true });
 
     // Check if private doc exists to safely set createdAt vs update
     const existingPrivateSnap = await getDoc(privateRef);
