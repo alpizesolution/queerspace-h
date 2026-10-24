@@ -312,5 +312,24 @@ service cloud.firestore {
       // Strict Zero Client Read Policy
       allow read, update, delete: if false;
     }
+
+    // ====================================================
+    // 6. SUGGESTIONS & FEEDBACK
+    // ====================================================
+    // Write-only from the app; read in the Firebase Console.
+
+    match /suggestions/{suggestionId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['authorId', 'category', 'text', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['authorId', 'category', 'text', 'createdAt'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.category in ['idea', 'bug', 'safety', 'other']
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 3
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.createdAt is timestamp;
+
+      allow read, update, delete: if false;
+    }
   }
 }

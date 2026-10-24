@@ -11,7 +11,7 @@ const LINKS = [
   { id: 'guidelines', label: 'Guidelines' },
   { id: 'privacy', label: 'Privacy' },
   { id: 'terms', label: 'Terms' },
-  { id: 'contact', label: 'Contact' },
+  { id: 'contact', label: 'Suggestions' },
 ] as const;
 
 export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenDonation, className = '' }) => (

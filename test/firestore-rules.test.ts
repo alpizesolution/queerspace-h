@@ -329,3 +329,40 @@ test('Q-05: Nobody else CAN re-claim or delete an already matched entry', async 
   await assertFails(carol.doc('match_queue/bob').delete());
   await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('match_queue/bob').delete());
 });
+
+// ------------------------------------------------------------------
+// Suggestions
+// ------------------------------------------------------------------
+const suggestion = (authorId: string, overrides: Record<string, unknown> = {}) => ({
+  authorId,
+  category: 'idea',
+  text: 'Add voice notes to chat',
+  createdAt: new Date(),
+  ...overrides,
+});
+
+test('S-01: Signed-in user CAN send a valid suggestion as themselves', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.collection('suggestions').add(suggestion('alice')));
+});
+
+test('S-02: Suggestions CANNOT be spoofed, malformed or sent signed-out', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.collection('suggestions').add(suggestion('bob')));
+  await assertFails(alice.collection('suggestions').add(suggestion('alice', { category: 'spam' })));
+  await assertFails(alice.collection('suggestions').add(suggestion('alice', { text: 'x'.repeat(1001) })));
+  await assertFails(alice.collection('suggestions').add(suggestion('alice', { email: 'a@b.c' })));
+  const anon = testEnv.unauthenticatedContext().firestore();
+  await assertFails(anon.collection('suggestions').add(suggestion('alice')));
+});
+
+test('S-03: Nobody CAN read, edit or delete suggestions from the app', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('suggestions/s1').set(suggestion('alice'));
+  });
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('suggestions/s1').get());
+  await assertFails(alice.collection('suggestions').get());
+  await assertFails(alice.doc('suggestions/s1').update({ text: 'changed text' }));
+  await assertFails(alice.doc('suggestions/s1').delete());
+});

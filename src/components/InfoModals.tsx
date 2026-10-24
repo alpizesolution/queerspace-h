@@ -1,6 +1,7 @@
 import React from 'react';
 import { Check } from 'lucide-react';
 import { Sheet } from './Sheet.tsx';
+import { SuggestionForm } from './SuggestionForm.tsx';
 
 type InfoModal = 'about' | 'guidelines' | 'privacy' | 'terms' | 'contact';
 
@@ -16,7 +17,7 @@ const TITLES: Record<InfoModal, string> = {
   guidelines: 'Community Guidelines',
   privacy: 'Privacy & Anonymity',
   terms: 'Terms of Service',
-  contact: 'Contact & Support',
+  contact: 'Suggestions & Contact',
 };
 
 const Strong: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -125,7 +126,9 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) 
 
         {activeModal === 'contact' && (
           <>
-            <p>Feedback, questions, or a safety incident to flag? We're listening.</p>
+            <p>Got an idea, spotted a bug, or something feels unsafe? Tell us.</p>
+            <SuggestionForm />
+            <p className="pt-2">For anything longer or urgent, email us.</p>
             <dl className="card divide-y divide-line text-[13px]">
               <div className="flex justify-between gap-4 px-4 py-3">
                 <dt>Email</dt>
