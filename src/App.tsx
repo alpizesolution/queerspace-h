@@ -119,7 +119,8 @@ export default function App() {
 
     const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds);
 
-    if (feedback.userMessage) {
+    // Only speak up when something went wrong; a normal save stays quiet.
+    if (feedback.userMessage && !feedback.savedToCloud) {
       showToast(feedback.userMessage);
     }
 
