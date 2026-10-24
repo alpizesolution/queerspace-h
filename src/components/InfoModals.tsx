@@ -13,7 +13,7 @@ interface InfoModalsProps {
 const CONTACT_EMAIL = 'info.queerspaceph@gmail.com';
 
 const TITLES: Record<InfoModal, string> = {
-  about: 'About QUEERSPACE',
+  about: 'About QUEERSPACE PH',
   guidelines: 'Community Guidelines',
   privacy: 'Privacy & Anonymity',
   terms: 'Terms of Service',
@@ -44,7 +44,7 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) 
         {activeModal === 'about' && (
           <>
             <p>
-              <Strong>QUEERSPACE</Strong> is a sapphic space for women to find meaningful, unexpected
+              <Strong>QUEERSPACE PH</Strong> is a sapphic space for women to find meaningful, unexpected
               connections. Your space. Your people. Your possibilities.
             </p>
             <p>
