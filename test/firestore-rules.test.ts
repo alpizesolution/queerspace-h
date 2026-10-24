@@ -505,3 +505,34 @@ test('A-01: Users CAN save a short avatar code on their public profile, not a lo
   await assertFails(alice.doc('users/alice/public/profile').set(profile({ avatar: 'x'.repeat(200) })));
   await assertFails(alice.doc('users/alice/public/profile').set(profile({ avatar: 42 })));
 });
+
+// ------------------------------------------------------------------
+// Public room
+// ------------------------------------------------------------------
+const roomMessage = (authorId: string, overrides: Record<string, unknown> = {}) => ({
+  authorId,
+  authorName: 'Willow',
+  authorPronouns: 'she/her',
+  text: 'hi everyone',
+  timestamp: new Date(),
+  ...overrides,
+});
+
+test('R-01: Users CAN post to the public room as themselves, with or without an avatar', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.collection('public_room_messages').add(roomMessage('alice')));
+  await assertSucceeds(alice.collection('public_room_messages').add(roomMessage('alice', { authorAvatar: 'fox.1.2' })));
+  await assertSucceeds(testEnv.authenticatedContext('bob').firestore().collection('public_room_messages').get());
+});
+
+test('R-02: Public room messages CANNOT be spoofed, padded or edited', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.collection('public_room_messages').add(roomMessage('bob')));
+  await assertFails(alice.collection('public_room_messages').add(roomMessage('alice', { authorAvatar: 'x'.repeat(100) })));
+  await assertFails(alice.collection('public_room_messages').add(roomMessage('alice', { isAdmin: true })));
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('public_room_messages/m1').set(roomMessage('alice'));
+  });
+  await assertFails(alice.doc('public_room_messages/m1').update({ text: 'edited' }));
+  await assertFails(testEnv.unauthenticatedContext().firestore().collection('public_room_messages').get());
+});
