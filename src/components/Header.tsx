@@ -54,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-1 text-sm font-medium text-[#cbbccf]" aria-label="Main navigation">
+        <nav className="hidden xl:flex items-center gap-1 text-sm font-medium text-[#cbbccf]" aria-label="Main navigation">
           <button
             onClick={() => handleNavClick('home')}
             className={`px-3.5 py-2 rounded-full transition-colors cursor-pointer ${
@@ -144,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Mobile Menu Hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-1.5 rounded-lg text-[#fcf7fa] hover:bg-[#150826] focus:outline-none cursor-pointer shrink-0"
+            className="xl:hidden p-1.5 rounded-lg text-[#fcf7fa] hover:bg-[#150826] focus:outline-none cursor-pointer shrink-0"
             aria-label="Toggle mobile menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -155,7 +155,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-[#4a1f6d] bg-[#150826] px-4 pt-3 pb-6 space-y-2 shadow-2xl animate-in slide-in-from-top duration-200">
+        <div className="xl:hidden border-t border-[#4a1f6d] bg-[#150826] px-4 pt-3 pb-6 space-y-2 shadow-2xl animate-in slide-in-from-top duration-200">
           <button
             onClick={() => handleNavClick('home')}
             className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium ${
