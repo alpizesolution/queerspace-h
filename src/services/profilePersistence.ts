@@ -3,6 +3,7 @@ import { db, auth, isFirebaseConfigured, handleFirestoreError, OperationType } f
 import { UserPreferences } from '../types.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.ts';
 import { formatSyncFeedback, StorageOperationResult } from '../utils/sync-feedback.ts';
+import { isValidAvatar } from '../utils/avatar.ts';
 
 export interface ProfileLoadResult {
   prefs: UserPreferences;
@@ -20,6 +21,7 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
     intention: prefs.intention || 'open',
     region: prefs.region || 'Anywhere / Worldwide',
     topics: (prefs.topics || []).slice(0, 8),
+    ...(isValidAvatar(prefs.avatar) ? { avatar: prefs.avatar } : {}),
     ...(typeof prefs.showGenderExpressionOnProfile === 'boolean'
       ? { showGenderExpressionOnProfile: prefs.showGenderExpressionOnProfile }
       : {}),
@@ -159,6 +161,7 @@ export async function loadAnonymousProfile(): Promise<ProfileLoadResult> {
 
     const restoredPrefs: UserPreferences = {
       displayName: publicData.displayName || defaultLocal.displayName,
+      avatar: isValidAvatar(publicData.avatar) ? publicData.avatar : defaultLocal.avatar,
       pronouns: publicData.pronouns || defaultLocal.pronouns,
       intention: publicData.intention || defaultLocal.intention,
       region: publicData.region || defaultLocal.region,

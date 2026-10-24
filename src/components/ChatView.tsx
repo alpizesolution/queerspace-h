@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { AnimalAvatar } from './AnimalAvatar.tsx';
 import {
   ArrowUp,
   ChevronLeft,
@@ -305,13 +306,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <ChevronLeft className="w-6 h-6" />
           </button>
 
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-[15px] shrink-0"
-            style={{ backgroundColor: partner.avatarColor }}
-            aria-hidden="true"
-          >
-            {partner.displayName.charAt(0)}
-          </div>
+          <AnimalAvatar avatar={partner.avatar} seed={partner.id} className="w-10 h-10" />
 
           <div className="min-w-0 flex-1 pl-2">
             <h1 className="text-[15px] font-semibold text-fg truncate">{partner.displayName}</h1>

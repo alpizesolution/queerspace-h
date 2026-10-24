@@ -27,7 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
         aria-label="QUEERSPACE home"
       >
         <img
-          src="/assets/aistudio/queerspace_cbcdbe4c.png"
+          src="/icon-192.png"
           alt=""
           className="w-8 h-8 rounded-[10px] object-cover border border-line shrink-0"
         />

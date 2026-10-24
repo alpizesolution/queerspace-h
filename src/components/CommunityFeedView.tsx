@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowUp, Check, Heart, MessageCircle, Plus, Share, X } from 'lucide-react';
+import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { Sheet } from './Sheet.tsx';
 import { CommunityPost, UserPreferences } from '../types.ts';
 import { INITIAL_COMMUNITY_POSTS } from '../utils/community-data.ts';
@@ -192,12 +193,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
             return (
               <article key={post.id} className="card p-4 sm:p-5">
                 <header className="flex items-center gap-2.5 mb-3">
-                  <div
-                    className="w-9 h-9 rounded-full bg-raised border border-line text-berry flex items-center justify-center font-semibold text-[13px] shrink-0"
-                    aria-hidden="true"
-                  >
-                    {post.author.charAt(0)}
-                  </div>
+                  <AnimalAvatar seed={post.author} className="w-9 h-9" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-semibold text-fg truncate">
                       {post.author} <span className="font-normal text-subtle">{post.authorPronouns}</span>

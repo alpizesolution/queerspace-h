@@ -99,8 +99,10 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
              'displayName', 'pronouns', 'intention', 'topics', 
              'region', 'showGenderExpressionOnProfile', 'showSogieOnProfile', 
-             'showLocationOnProfile', 'updatedAt'
+             'showLocationOnProfile', 'avatar', 'updatedAt'
            ])
+        && (!('avatar' in request.resource.data)
+            || (request.resource.data.avatar is string && request.resource.data.avatar.size() <= 24))
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() >= 1
         && request.resource.data.displayName.size() <= 30
@@ -310,6 +312,118 @@ service cloud.firestore {
         && request.resource.data.timestamp is timestamp;
 
       // Strict Zero Client Read Policy
+      allow read, update, delete: if false;
+    }
+
+    // ====================================================
+    // 5b. UNSAID WALL (anonymous, fades after 48 hours)
+    // ====================================================
+    // Posts carry no author field. Ownership lives in unsaid_owners/{postId},
+    // readable only by the author, so nobody can link a post to a profile.
+    // Reaction and flag counters can only go up by one, together with a
+    // per-user marker document, so each person counts once.
+
+    function unsaidPath(postId) {
+      return /databases/$(database)/documents/unsaid/$(postId);
+    }
+
+    function unsaidOwnerPath(postId) {
+      return /databases/$(database)/documents/unsaid_owners/$(postId);
+    }
+
+    function bumpsOnly(field) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([field])
+        && request.resource.data[field] == resource.data[field] + 1;
+    }
+
+    match /unsaid/{postId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
+        && request.resource.data.keys().hasOnly(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
+        && request.resource.data.kind in ['vent', 'confession']
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 500
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time + duration.value(47, 'h')
+        && request.resource.data.expiresAt < request.time + duration.value(49, 'h')
+        && request.resource.data.hugs == 0
+        && request.resource.data.same == 0
+        && request.resource.data.flags == 0
+        && getAfter(unsaidOwnerPath(postId)).data.authorId == request.auth.uid;
+
+      // A reaction: +1 on 'hugs' or 'same' alongside a new reactions/{uid} doc of that type.
+      allow update: if isAuthenticated()
+        && (bumpsOnly('hugs') || bumpsOnly('same'))
+        && !exists(/databases/$(database)/documents/unsaid/$(postId)/reactions/$(request.auth.uid))
+        && getAfter(/databases/$(database)/documents/unsaid/$(postId)/reactions/$(request.auth.uid)).data.type
+             in request.resource.data.diff(resource.data).affectedKeys();
+
+      // A flag: +1 on 'flags' alongside a new flags/{uid} doc.
+      allow update: if isAuthenticated()
+        && bumpsOnly('flags')
+        && !exists(/databases/$(database)/documents/unsaid/$(postId)/flags/$(request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/unsaid/$(postId)/flags/$(request.auth.uid));
+
+      allow delete: if isAuthenticated()
+        && get(unsaidOwnerPath(postId)).data.authorId == request.auth.uid;
+
+      match /reactions/{userId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['type', 'createdAt'])
+          && request.resource.data.type in ['hugs', 'same']
+          && request.resource.data.createdAt == request.time
+          && getAfter(unsaidPath(postId)).data[request.resource.data.type]
+               == get(unsaidPath(postId)).data[request.resource.data.type] + 1;
+        allow update, delete: if false;
+      }
+
+      match /flags/{userId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['createdAt'])
+          && request.resource.data.createdAt == request.time
+          && getAfter(unsaidPath(postId)).data.flags == get(unsaidPath(postId)).data.flags + 1;
+        allow update, delete: if false;
+      }
+    }
+
+    match /unsaid_owners/{postId} {
+      allow read: if isAuthenticated() && resource.data.authorId == request.auth.uid;
+
+      // Only for a brand-new post, created in the same batch.
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasOnly(['authorId'])
+        && request.resource.data.authorId == request.auth.uid
+        && !exists(unsaidPath(postId))
+        && existsAfter(unsaidPath(postId));
+
+      allow delete: if isAuthenticated()
+        && resource.data.authorId == request.auth.uid
+        && !existsAfter(unsaidPath(postId));
+      allow update: if false;
+    }
+
+    // ====================================================
+    // 6. SUGGESTIONS & FEEDBACK
+    // ====================================================
+    // Write-only from the app; read in the Firebase Console.
+
+    match /suggestions/{suggestionId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['authorId', 'category', 'text', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['authorId', 'category', 'text', 'createdAt'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.category in ['idea', 'bug', 'safety', 'other']
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 3
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.createdAt is timestamp;
+
       allow read, update, delete: if false;
     }
   }

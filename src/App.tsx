@@ -8,6 +8,7 @@ import { SearchingState } from './components/SearchingState.tsx';
 import { ChatView } from './components/ChatView.tsx';
 import { PublicRoomView } from './components/PublicRoomView.tsx';
 import { CommunityFeedView } from './components/CommunityFeedView.tsx';
+import { UnsaidView } from './components/UnsaidView.tsx';
 import { InfoModals } from './components/InfoModals.tsx';
 import { DonationModal } from './components/DonationModal.tsx';
 import { FloatingCatsBackground } from './components/FloatingCatsBackground.tsx';
@@ -21,7 +22,7 @@ import { CheckCircle2 } from 'lucide-react';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'community'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community'>('home');
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [donationModalOpen, setDonationModalOpen] = useState(false);
   const [setupInitialMode, setSetupInitialMode] = useState<'quick' | 'custom'>('quick');
@@ -217,6 +218,7 @@ export default function App() {
               onCustomMatch={() => handleOpenSetup('custom')}
               onOpenPublicRoom={() => handleNavigate('public')}
               onOpenCommunity={() => handleNavigate('community')}
+              onOpenUnsaid={() => handleNavigate('unsaid')}
             />
             <SafetySection onOpenGuidelinesModal={() => setActiveInfoModal('guidelines')} />
           </>
@@ -258,6 +260,8 @@ export default function App() {
             onOpenDonationModal={() => setDonationModalOpen(true)}
           />
         )}
+
+        {currentView === 'unsaid' && <UnsaidView />}
 
         {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} />}
       </main>

@@ -17,6 +17,7 @@ import {
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { Intention, PartnerProfile } from '../types.ts';
 import { endCloudConversation } from './chatService.ts';
+import { isValidAvatar } from '../utils/avatar.ts';
 
 /**
  * Live 1-on-1 matchmaking backed by a Firestore waiting queue.
@@ -93,6 +94,7 @@ async function loadPartnerProfile(partnerId: string): Promise<PartnerProfile> {
     return {
       ...fallback,
       displayName: data.displayName ? String(data.displayName).slice(0, 30) : fallback.displayName,
+      avatar: isValidAvatar(data.avatar) ? data.avatar : undefined,
       pronouns: data.pronouns ? String(data.pronouns).slice(0, 20) : fallback.pronouns,
       intention: (data.intention as Intention) || 'open',
       topics: Array.isArray(data.topics) ? data.topics.slice(0, 8) : [],

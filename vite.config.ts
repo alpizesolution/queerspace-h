@@ -25,14 +25,9 @@ export default defineConfig(() => {
           start_url: '/',
           scope: '/',
           icons: [
-            {
-              src: '/favicon.svg',
-              sizes: 'any',
-              type: 'image/svg+xml',
-              purpose: 'any',
-            },
-            // Note: In a real production scenario, generate proper 192x192 and 512x512 PNG icons.
-            // Placeholder for now, plugin will error if they don't exist.
+            { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           ],
         },
       }),
