@@ -1,0 +1,17 @@
+{
+  "name": "QUEERSPACE — A Sapphic Space for Women",
+  "short_name": "QUEERSPACE",
+  "description": "Your space. Your people. Your possibilities. A safe, anonymous chat and community platform for women-loving-women.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#17121B",
+  "theme_color": "#17121B",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

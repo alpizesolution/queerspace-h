@@ -1,0 +1,265 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ====================================================
+    // GLOBAL HELPER FUNCTIONS
+    // ====================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Role Escalation Defense: Client-writable documents MUST NOT contain 'role', 'isAdmin', or 'isModerator'
+    function hasNoPrivilegedFields() {
+      return !('role' in request.resource.data) &&
+             !('isAdmin' in request.resource.data) &&
+             !('isModerator' in request.resource.data);
+    }
+
+    // Validates that a conversation has exactly 2 distinct UIDs, including request.auth.uid
+    function isValidNewConversation() {
+      let p = request.resource.data.participants;
+      return p is list 
+        && p.size() == 2 
+        && p[0] is string 
+        && p[1] is string 
+        && p[0] != p[1] 
+        && request.auth.uid in p;
+    }
+
+    // Verifies conversation participants cannot be modified after creation
+    function areParticipantsUnchanged() {
+      return request.resource.data.participants == resource.data.participants;
+    }
+
+    // Verifies if request user is a participant of an existing conversation
+    function isConversationParticipant(convId) {
+      return isAuthenticated() && 
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+    }
+
+    // Valid categories for community posts
+    function isValidCategory(cat) {
+      return cat in ['general', 'media', 'vents', 'friends', 'advice'];
+    }
+
+    // ====================================================
+    // 0. INDEXED COLLECTION GROUPS
+    // ====================================================
+    
+    // Allow querying all public profiles across all users
+    match /{path=**}/profile/{profileId} {
+      allow read: if isAuthenticated();
+    }
+
+    // ====================================================
+    // 1. PRIVACY BY DESIGN: USER PROFILES & PRIVATE SETTINGS
+    // ====================================================
+
+    // Private settings (SOGIE, exact location, matching filters, blocked user IDs)
+    // READABLE & WRITABLE ONLY BY PROFILE OWNER. ZERO PUBLIC EXPOSURE.
+    match /users/{userId}/private/settings {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+        && hasNoPrivilegedFields()
+        && request.resource.data.keys().hasAll(['createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly([
+             'exactLocation', 'sexualOrientation', 'genderExpression', 
+             'preferredGenderExpressions', 'blockedPartnerIds', 'createdAt', 'updatedAt'
+           ])
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      allow update: if isOwner(userId)
+        && hasNoPrivilegedFields()
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.keys().hasOnly([
+             'exactLocation', 'sexualOrientation', 'genderExpression', 
+             'preferredGenderExpressions', 'blockedPartnerIds', 'createdAt', 'updatedAt'
+           ])
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if false;
+    }
+
+    // Public Profile (displayName, pronouns, intention, region, topics)
+    // READABLE BY ALL AUTHENTICATED USERS. WRITABLE ONLY BY OWNER.
+    match /users/{userId}/public/profile {
+      allow read: if isAuthenticated();
+
+      allow create, update: if isOwner(userId)
+        && hasNoPrivilegedFields()
+        && request.resource.data.keys().hasAll(['displayName', 'pronouns', 'intention', 'region', 'topics', 'updatedAt'])
+        && request.resource.data.keys().hasOnly([
+             'displayName', 'pronouns', 'intention', 'topics', 
+             'region', 'showGenderExpressionOnProfile', 'showSogieOnProfile', 
+             'showLocationOnProfile', 'updatedAt'
+           ])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 1
+        && request.resource.data.displayName.size() <= 30
+        && request.resource.data.pronouns is string
+        && request.resource.data.pronouns.size() >= 1
+        && request.resource.data.pronouns.size() <= 20
+        && request.resource.data.intention is string
+        && request.resource.data.region is string
+        && request.resource.data.topics is list
+        && request.resource.data.topics.size() <= 8
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if false;
+    }
+
+    // ====================================================
+    // 2. 1-ON-1 CONVERSATIONS & EPHEMERAL MESSAGES
+    // ====================================================
+
+    match /conversations/{convId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+
+      allow create: if isAuthenticated()
+        && isValidNewConversation()
+        && request.resource.data.keys().hasAll(['participants', 'createdAt', 'updatedAt', 'status'])
+        && request.resource.data.keys().hasOnly(['participants', 'createdAt', 'updatedAt', 'status'])
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      // Status Transition Lock: 'ended' or 'blocked' conversations cannot be changed back to 'active'
+      allow update: if isAuthenticated()
+        && request.auth.uid in resource.data.participants
+        && areParticipantsUnchanged()
+        && resource.data.status == 'active'
+        && request.resource.data.keys().hasOnly(['participants', 'createdAt', 'updatedAt', 'status'])
+        && request.resource.data.status in ['active', 'ended', 'blocked']
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if false;
+
+      // Ephemeral Chat Messages
+      match /messages/{messageId} {
+        allow read: if isConversationParticipant(convId);
+
+        allow create: if isConversationParticipant(convId)
+          && request.resource.data.keys().hasAll(['senderId', 'text', 'timestamp'])
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'timestamp'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 1000
+          && request.resource.data.timestamp is timestamp;
+
+        allow update, delete: if false; // Messages are immutable
+      }
+    }
+
+    // ====================================================
+    // 3. PUBLIC ROOM MESSAGES (TOWN SQUARE)
+    // ====================================================
+
+    match /public_room_messages/{messageId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.authorName is string
+        && request.resource.data.authorName.size() >= 1
+        && request.resource.data.authorName.size() <= 30
+        && request.resource.data.authorPronouns is string
+        && request.resource.data.authorPronouns.size() >= 1
+        && request.resource.data.authorPronouns.size() <= 20
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.timestamp is timestamp;
+
+      allow update, delete: if false; // Immutable public room messages
+    }
+
+    // ====================================================
+    // 4. HARDENED COMMUNITY POSTS & INDIVIDUAL LIKES
+    // ====================================================
+
+    match /community_posts/{postId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'title', 'content', 'category', 'tags', 'timestamp'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'title', 'content', 'category', 'tags', 'timestamp', 'updatedAt'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.authorName is string
+        && request.resource.data.authorName.size() >= 1
+        && request.resource.data.authorName.size() <= 30
+        && isValidCategory(request.resource.data.category)
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 90
+        && request.resource.data.content is string
+        && request.resource.data.content.size() >= 1
+        && request.resource.data.content.size() <= 1000
+        && request.resource.data.tags is list
+        && request.resource.data.tags.size() <= 4
+        && request.resource.data.timestamp is timestamp;
+
+      allow update: if isAuthenticated()
+        && request.auth.uid == resource.data.authorId
+        && request.resource.data.authorId == resource.data.authorId
+        && request.resource.data.timestamp == resource.data.timestamp
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'title', 'content', 'category', 'tags', 'timestamp', 'updatedAt'])
+        && isValidCategory(request.resource.data.category)
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 90
+        && request.resource.data.content is string
+        && request.resource.data.content.size() >= 1
+        && request.resource.data.content.size() <= 1000
+        && request.resource.data.tags is list
+        && request.resource.data.tags.size() <= 4
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.authorId;
+
+      // Safe Individual Like Documents (/community_posts/{postId}/likes/{request.auth.uid})
+      match /likes/{userId} {
+        allow read: if isAuthenticated();
+
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['createdAt'])
+          && request.resource.data.keys().hasOnly(['createdAt'])
+          && request.resource.data.createdAt is timestamp;
+
+        allow delete: if isOwner(userId);
+        allow update: if false;
+      }
+    }
+
+    // ====================================================
+    // 5. ABUSE & SAFETY REPORTS
+    // ====================================================
+
+    match /reports/{reportId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['reporterId', 'targetId', 'targetType', 'reason', 'timestamp'])
+        && request.resource.data.keys().hasOnly(['reporterId', 'targetId', 'targetType', 'reason', 'timestamp'])
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.targetId is string
+        && request.resource.data.targetType in ['user', 'message', 'post']
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() >= 1
+        && request.resource.data.reason.size() <= 300
+        && request.resource.data.timestamp is timestamp;
+
+      // Strict Zero Client Read Policy
+      allow read, update, delete: if false;
+    }
+  }
+}
