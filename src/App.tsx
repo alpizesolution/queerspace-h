@@ -12,13 +12,11 @@ import { InfoModals } from './components/InfoModals.tsx';
 import { DonationModal } from './components/DonationModal.tsx';
 import { FloatingCatsBackground } from './components/FloatingCatsBackground.tsx';
 import { PartnerProfile, UserPreferences } from './types.ts';
-import { findBestPartner } from './utils/mock-partners.ts';
 import { generateSapphicPseudonym } from './utils/matching-logic.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from './utils/storage.ts';
 import { ensureAnonymousAuth, isFirebaseConfigured } from './lib/firebase.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile } from './services/profilePersistence.ts';
-import { findMatchCandidate } from './services/matchmakingService.ts';
 import { CheckCircle2 } from 'lucide-react';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 
@@ -28,7 +26,7 @@ export default function App() {
   const [donationModalOpen, setDonationModalOpen] = useState(false);
   const [setupInitialMode, setSetupInitialMode] = useState<'quick' | 'custom'>('quick');
   const [activePartner, setActivePartner] = useState<PartnerProfile | null>(null);
-  const [activePartnerSource, setActivePartnerSource] = useState<'cloud' | 'local_fallback' | 'dynamic_fallback'>('local_fallback');
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [blockedPartnerIds, setBlockedPartnerIds] = useState<string[]>(() => {
     const saved = getStorageItem(STORAGE_KEYS.BLOCKED_IDS.current, STORAGE_KEYS.BLOCKED_IDS.legacies);
     return saved ? JSON.parse(saved) : [];
@@ -82,18 +80,6 @@ export default function App() {
     }
   }, []);
 
-  // Handle URL query parameters (e.g. ?autostart=1 or ?view=setup)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('autostart') === '1') {
-      const partner = findBestPartner(userPrefs, blockedPartnerIds);
-      setActivePartner(partner);
-      setActivePartnerSource('local_fallback');
-      setCurrentView('chat');
-    }
-  }, []);
-
-
   const handleToggleSound = () => {
     setIsSoundMuted((prev) => {
       const next = !prev;
@@ -136,31 +122,12 @@ export default function App() {
 
 
 
-  const handleMatchFound = async () => {
-    const result = await findMatchCandidate(userPrefs, blockedPartnerIds);
-    if (!result.candidate) {
-      setCurrentView('home');
-      showToast('No other registered candidates found in Cloud Firestore right now.');
-      return;
-    }
-    setActivePartner(result.candidate);
-    setActivePartnerSource(result.source);
-    setCurrentView('chat');
+  const handleNextMatch = () => {
+    // The chat screen has already ended the current conversation; go back to the live queue.
+    setActivePartner(null);
+    setActiveConvId(null);
+    setCurrentView('searching');
   };
-
-  const handleNextMatch = async () => {
-    // Cycle to next available partner
-    const exclude = activePartner ? [...blockedPartnerIds, activePartner.id] : blockedPartnerIds;
-    const result = await findMatchCandidate(userPrefs, exclude);
-    if (!result.candidate) {
-      showToast('No additional registered candidates found in Cloud Firestore right now.');
-      return;
-    }
-    setActivePartner(result.candidate);
-    setActivePartnerSource(result.source);
-    showToast(`Switched to new conversation with ${result.candidate.displayName}`);
-  };
-
 
   const handleLeaveChat = () => {
     setActivePartner(null);
@@ -204,7 +171,7 @@ export default function App() {
           showToast(`Cloud report submission failed. User blocked locally.`);
         }
       } else {
-        showToast(`User reported for "${reason}" and blocked locally (Local Demo Mode).`);
+        showToast(`Reported and blocked. You won't be matched again.`);
       }
     }
     setActivePartner(null);
@@ -261,11 +228,10 @@ export default function App() {
             prefs={userPrefs}
             blockedPartnerIds={blockedPartnerIds}
             onCancel={() => setCurrentView('home')}
-            onMatchFoundFromCandidate={(candidate, source) => {
-              setActivePartner(candidate);
-              setActivePartnerSource(source);
+            onMatched={({ partner, convId }) => {
+              setActivePartner(partner);
+              setActiveConvId(convId);
               setCurrentView('chat');
-              showToast(`Matched with ${candidate.displayName}!`);
             }}
           />
         )}
@@ -273,7 +239,7 @@ export default function App() {
         {currentView === 'chat' && activePartner && (
           <ChatView
             partner={activePartner}
-            partnerSource={activePartnerSource}
+            conversationId={activeConvId ?? undefined}
             userPrefs={userPrefs}
             isSoundMuted={isSoundMuted}
             onToggleSound={handleToggleSound}
