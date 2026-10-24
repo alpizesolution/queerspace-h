@@ -171,12 +171,15 @@ export function subscribeToUnsaid(onPosts: (posts: UnsaidPost[]) => void, onErro
   };
 }
 
-export async function postUnsaid(kind: UnsaidKind, text: string): Promise<boolean> {
+/** Seconds between Unsaid posts; must match slowMode('unsaid', …) in firestore.rules. */
+export const UNSAID_SLOW_MODE_SECONDS = 60;
+
+export async function postUnsaid(kind: UnsaidKind, text: string): Promise<'posted' | 'too-fast' | 'failed'> {
   const checked = validateUnsaidText(text);
-  if (!checked.ok || !db) return false;
+  if (!checked.ok || !db) return 'failed';
   try {
     const uid = await currentUid();
-    if (!uid) return false;
+    if (!uid) return 'failed';
     const postRef = doc(collection(db, 'unsaid'));
     const batch = writeBatch(db);
     batch.set(postRef, {
@@ -189,11 +192,12 @@ export async function postUnsaid(kind: UnsaidKind, text: string): Promise<boolea
       flags: 0,
     });
     batch.set(doc(db, 'unsaid_owners', postRef.id), { authorId: uid });
+    batch.set(doc(db, 'rate_limits', uid), { unsaid: serverTimestamp() }, { merge: true });
     await batch.commit();
-    return true;
+    return 'posted';
   } catch (err) {
     console.warn('[Unsaid] Could not post:', err);
-    return false;
+    return (err as { code?: string })?.code === 'permission-denied' ? 'too-fast' : 'failed';
   }
 }
 

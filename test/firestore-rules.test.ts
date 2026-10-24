@@ -333,34 +333,53 @@ test('Q-05: Nobody else CAN re-claim or delete an already matched entry', async 
 });
 
 // ------------------------------------------------------------------
+// Slow mode: posts are written together with a rate_limits stamp
+// ------------------------------------------------------------------
+const now = () => firebase.firestore.FieldValue.serverTimestamp();
+
+function stampedAdd(uid: string, collectionPath: string, data: Record<string, unknown>, field: string) {
+  const fs = testEnv.authenticatedContext(uid).firestore();
+  const batch = fs.batch();
+  batch.set(fs.collection(collectionPath).doc(), data);
+  batch.set(fs.doc(`rate_limits/${uid}`), { [field]: now() }, { merge: true });
+  return batch.commit();
+}
+
+async function seedStamp(uid: string, field: string, secondsAgo: number) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`rate_limits/${uid}`).set({ [field]: new Date(Date.now() - secondsAgo * 1000) });
+  });
+}
+
+// ------------------------------------------------------------------
 // Suggestions
 // ------------------------------------------------------------------
 const suggestion = (authorId: string, overrides: Record<string, unknown> = {}) => ({
   authorId,
   category: 'idea',
   text: 'Add voice notes to chat',
-  createdAt: new Date(),
+  createdAt: now(),
   ...overrides,
 });
 
 test('S-01: Signed-in user CAN send a valid suggestion as themselves', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
-  await assertSucceeds(alice.collection('suggestions').add(suggestion('alice')));
+  await assertSucceeds(stampedAdd('alice', 'suggestions', suggestion('alice'), 'suggestion'));
 });
 
 test('S-02: Suggestions CANNOT be spoofed, malformed or sent signed-out', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
-  await assertFails(alice.collection('suggestions').add(suggestion('bob')));
-  await assertFails(alice.collection('suggestions').add(suggestion('alice', { category: 'spam' })));
-  await assertFails(alice.collection('suggestions').add(suggestion('alice', { text: 'x'.repeat(1001) })));
-  await assertFails(alice.collection('suggestions').add(suggestion('alice', { email: 'a@b.c' })));
+  await assertFails(stampedAdd('alice', 'suggestions', suggestion('bob'), 'suggestion'));
+  await assertFails(stampedAdd('alice', 'suggestions', suggestion('alice', { category: 'spam' }), 'suggestion'));
+  await assertFails(stampedAdd('alice', 'suggestions', suggestion('alice', { text: 'x'.repeat(1001) }), 'suggestion'));
+  await assertFails(stampedAdd('alice', 'suggestions', suggestion('alice', { email: 'a@b.c' }), 'suggestion'));
   const anon = testEnv.unauthenticatedContext().firestore();
-  await assertFails(anon.collection('suggestions').add(suggestion('alice')));
+  await assertFails(anon.collection('suggestions').add({ ...suggestion('alice'), createdAt: new Date() }));
 });
 
 test('S-03: Nobody CAN read, edit or delete suggestions from the app', async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await ctx.firestore().doc('suggestions/s1').set(suggestion('alice'));
+    await ctx.firestore().doc('suggestions/s1').set({ ...suggestion('alice'), createdAt: new Date() });
   });
   const alice = testEnv.authenticatedContext('alice').firestore();
   await assertFails(alice.doc('suggestions/s1').get());
@@ -388,6 +407,7 @@ async function postUnsaidAs(uid: string, id: string, overrides: Record<string, u
     ...overrides,
   });
   batch.set(fs.doc(`unsaid_owners/${id}`), { authorId: uid });
+  batch.set(fs.doc(`rate_limits/${uid}`), { unsaid: now() }, { merge: true });
   return batch.commit();
 }
 
@@ -514,25 +534,157 @@ const roomMessage = (authorId: string, overrides: Record<string, unknown> = {}) 
   authorName: 'Willow',
   authorPronouns: 'she/her',
   text: 'hi everyone',
-  timestamp: new Date(),
+  timestamp: now(),
   ...overrides,
 });
 
 test('R-01: Users CAN post to the public room as themselves, with or without an avatar', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
-  await assertSucceeds(alice.collection('public_room_messages').add(roomMessage('alice')));
-  await assertSucceeds(alice.collection('public_room_messages').add(roomMessage('alice', { authorAvatar: 'fox.1.2' })));
+  await assertSucceeds(stampedAdd('alice', 'public_room_messages', roomMessage('alice'), 'publicRoom'));
+  await assertSucceeds(stampedAdd('bob', 'public_room_messages', roomMessage('bob', { authorAvatar: 'fox.1.2' }), 'publicRoom'));
   await assertSucceeds(testEnv.authenticatedContext('bob').firestore().collection('public_room_messages').get());
 });
 
 test('R-02: Public room messages CANNOT be spoofed, padded or edited', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
-  await assertFails(alice.collection('public_room_messages').add(roomMessage('bob')));
-  await assertFails(alice.collection('public_room_messages').add(roomMessage('alice', { authorAvatar: 'x'.repeat(100) })));
-  await assertFails(alice.collection('public_room_messages').add(roomMessage('alice', { isAdmin: true })));
+  await assertFails(stampedAdd('alice', 'public_room_messages', roomMessage('bob'), 'publicRoom'));
+  await assertFails(stampedAdd('alice', 'public_room_messages', roomMessage('alice', { authorAvatar: 'x'.repeat(100) }), 'publicRoom'));
+  await assertFails(stampedAdd('alice', 'public_room_messages', roomMessage('alice', { isAdmin: true }), 'publicRoom'));
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await ctx.firestore().doc('public_room_messages/m1').set(roomMessage('alice'));
+    await ctx.firestore().doc('public_room_messages/m1').set({ ...roomMessage('alice'), timestamp: new Date() });
   });
   await assertFails(alice.doc('public_room_messages/m1').update({ text: 'edited' }));
   await assertFails(testEnv.unauthenticatedContext().firestore().collection('public_room_messages').get());
+});
+
+test('L-01: Slow mode blocks rapid repeat posts and unstamped posts', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  // No stamp in the batch: rejected.
+  await assertFails(alice.collection('public_room_messages').add(roomMessage('alice')));
+  // First stamped post OK, an immediate second one is too fast.
+  await assertSucceeds(stampedAdd('alice', 'public_room_messages', roomMessage('alice'), 'publicRoom'));
+  await assertFails(stampedAdd('alice', 'public_room_messages', roomMessage('alice'), 'publicRoom'));
+  // Once the window has passed, posting works again.
+  await seedStamp('alice', 'publicRoom', 10);
+  await assertSucceeds(stampedAdd('alice', 'public_room_messages', roomMessage('alice'), 'publicRoom'));
+});
+
+test('L-02: Unsaid allows one post a minute and suggestions one per 30 seconds', async () => {
+  await assertSucceeds(postUnsaidAs('alice', 'u1'));
+  await assertFails(postUnsaidAs('alice', 'u2'));
+  await seedStamp('alice', 'unsaid', 61);
+  await assertSucceeds(postUnsaidAs('alice', 'u3'));
+
+  await assertSucceeds(stampedAdd('bob', 'suggestions', suggestion('bob'), 'suggestion'));
+  await assertFails(stampedAdd('bob', 'suggestions', suggestion('bob'), 'suggestion'));
+});
+
+test('L-03: Users CANNOT backdate or erase their own slow-mode stamps', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('rate_limits/alice').set({ publicRoom: new Date(0) }));
+  await assertFails(alice.doc('rate_limits/alice').set({ other: now() }));
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('rate_limits/alice').set({ publicRoom: now() }));
+  await seedStamp('alice', 'publicRoom', 1);
+  await assertFails(alice.doc('rate_limits/alice').delete());
+  await assertFails(alice.doc('rate_limits/alice').update({ publicRoom: new Date(0) }));
+});
+
+// ------------------------------------------------------------------
+// Admin page
+// ------------------------------------------------------------------
+const google = { firebase: { sign_in_provider: 'google.com' } } as any;
+const adminDb = () => testEnv.authenticatedContext('cha', google).firestore();
+
+async function seedAdmin(uid = 'cha') {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`admins/${uid}`).set({ note: 'owner' });
+  });
+}
+
+async function seedInbox() {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const fs = ctx.firestore();
+    await fs.doc('suggestions/s1').set({ ...suggestion('alice'), createdAt: new Date() });
+    await fs.doc('reports/r1').set({
+      reporterId: 'alice', targetId: 'bob', targetType: 'user', reason: 'rude', timestamp: new Date(),
+    });
+  });
+}
+
+test('AD-01: A Google-signed-in admin CAN read the inbox and mark items done, but not rewrite them', async () => {
+  await seedAdmin();
+  await seedInbox();
+  const cha = adminDb();
+  await assertSucceeds(cha.collection('suggestions').get());
+  await assertSucceeds(cha.collection('reports').get());
+  await assertSucceeds(cha.doc('suggestions/s1').update({ status: 'done' }));
+  await assertSucceeds(cha.doc('reports/r1').update({ status: 'done' }));
+  await assertFails(cha.doc('suggestions/s1').update({ text: 'rewritten' }));
+  await assertFails(cha.doc('reports/r1').update({ status: 'banned' }));
+  await assertSucceeds(cha.doc('suggestions/s1').delete());
+  await assertSucceeds(cha.doc('reports/r1').delete());
+});
+
+test('AD-02: Nobody else CAN act as an admin or make themselves one', async () => {
+  await seedAdmin();
+  await seedInbox();
+  // Right uid but an anonymous session: not an admin.
+  const anonCha = testEnv.authenticatedContext('cha', { firebase: { sign_in_provider: 'anonymous' } } as any).firestore();
+  await assertFails(anonCha.collection('suggestions').get());
+  // Google account without an admins doc: not an admin.
+  const eve = testEnv.authenticatedContext('eve', google).firestore();
+  await assertFails(eve.collection('reports').get());
+  await assertFails(eve.doc('admins/eve').set({ note: 'me' }));
+  await assertFails(eve.doc('admins/cha').get());
+  await assertSucceeds(adminDb().doc('admins/cha').get());
+  await assertFails(adminDb().doc('admins/eve').set({ note: 'friend' }));
+});
+
+test('AD-03: Admins CAN moderate and count, but still CANNOT read private chats or Unsaid authors', async () => {
+  await seedAdmin();
+  await seedUnsaid('p1', 'alice', { flags: 3 });
+  await seedUnsaid('p2', 'bob', { flags: 4 });
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const fs = ctx.firestore();
+    await fs.doc('public_room_messages/m1').set({ ...roomMessage('alice'), timestamp: new Date() });
+    await fs.doc('community_posts/c1').set({
+      authorId: 'alice', authorName: 'Willow', title: 't', content: 'c', category: 'general', tags: [], timestamp: new Date(),
+    });
+    await fs.doc('conversations/k1').set({ participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date() });
+    await fs.doc('conversations/k1/messages/x').set({ senderId: 'alice', text: 'private', timestamp: new Date() });
+    await fs.doc('users/alice/public/profile').set(profile({ createdAt: new Date() }));
+  });
+  const cha = adminDb();
+  await assertSucceeds(cha.doc('public_room_messages/m1').delete());
+  await assertSucceeds(cha.doc('community_posts/c1').delete());
+  // Restore a wrongly hidden post (flags back to 0 only).
+  await assertFails(cha.doc('unsaid/p1').update({ flags: 0, text: 'edited' }));
+  await assertSucceeds(cha.doc('unsaid/p1').update({ flags: 0 }));
+  // Remove a post together with its owner record.
+  const batch = cha.batch();
+  batch.delete(cha.doc('unsaid/p2'));
+  batch.delete(cha.doc('unsaid_owners/p2'));
+  await assertSucceeds(batch.commit());
+  await assertFails(cha.doc('unsaid_owners/p1').get());
+  await assertFails(cha.collection('unsaid_owners').get());
+  // Conversations can be counted, messages stay private.
+  await assertSucceeds(cha.collection('conversations').get());
+  await assertFails(cha.doc('conversations/k1/messages/x').get());
+  await assertSucceeds(cha.collectionGroup('public').get());
+  await assertFails(testEnv.authenticatedContext('bob').firestore().collectionGroup('public').get());
+  await assertFails(testEnv.authenticatedContext('bob').firestore().collection('conversations').get());
+});
+
+test('AD-04: A profile join date CAN only be set once, to now', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('users/alice/public/profile').set(profile({ createdAt: new Date(0) })));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ createdAt: now() })));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ displayName: 'Ivy' }), { merge: true }));
+  await assertFails(alice.doc('users/alice/public/profile').set(profile({ createdAt: now() }), { merge: true }));
+  // Profiles saved before join dates existed can get one later.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('users/bob/public/profile').set(profile());
+  });
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertSucceeds(bob.doc('users/bob/public/profile').set({ createdAt: now(), updatedAt: new Date() }, { merge: true }));
 });

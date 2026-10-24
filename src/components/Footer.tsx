@@ -17,7 +17,7 @@ const LINKS = [
 export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenDonation, className = '' }) => (
   <footer className={`border-t border-line text-[13px] text-subtle ${className}`}>
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
-      <p className="sm:mr-auto">© {new Date().getFullYear()} QUEERSPACE · For women who love women</p>
+      <p className="sm:mr-auto">© {new Date().getFullYear()} QUEERSPACE PH · For women who love women</p>
       <nav aria-label="Footer" className="flex flex-wrap gap-x-1 -mx-2">
         {LINKS.map(({ id, label }) => (
           <button

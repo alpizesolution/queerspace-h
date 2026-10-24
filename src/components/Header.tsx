@@ -23,8 +23,8 @@ export const Header: React.FC<HeaderProps> = ({
     <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[var(--header-h)] flex items-center gap-3">
       <button
         onClick={() => onNavigate('home')}
-        className="flex items-center gap-2.5 rounded-lg min-w-0 cursor-pointer"
-        aria-label="QUEERSPACE home"
+        className="flex items-center gap-2.5 rounded-lg min-w-0 pr-2 cursor-pointer"
+        aria-label="QUEERSPACE PH home"
       >
         <img
           src="/icon-192.png"

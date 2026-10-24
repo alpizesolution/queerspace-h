@@ -43,14 +43,70 @@ service cloud.firestore {
         request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
     }
 
+    // Admins sign in with Google and have a doc at admins/{uid}, which can only be
+    // created by hand in the Firebase Console. Anonymous accounts are never admins.
+    function isAdmin() {
+      return isAuthenticated()
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // An admin marking an inbox item (suggestion or report) as open or done.
+    function isAdminStatusChange() {
+      return isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['open', 'done'];
+    }
+
     // Valid categories for community posts
     function isValidCategory(cat) {
       return cat in ['general', 'media', 'vents', 'friends', 'advice'];
     }
 
     // ====================================================
+    // SLOW MODE (anti-spam)
+    // ====================================================
+    // rate_limits/{uid} remembers when a user last posted to each surface.
+    // A post must stamp its field with request.time in the same batch, and is
+    // only allowed if the previous stamp is at least `secs` seconds old.
+
+    function rateLimitPath() {
+      return /databases/$(database)/documents/rate_limits/$(request.auth.uid);
+    }
+
+    function slowMode(field, secs) {
+      let before = exists(rateLimitPath()) ? get(rateLimitPath()).data : {};
+      return getAfter(rateLimitPath()).data.get(field, null) == request.time
+        && (!(field in before) || before[field] + duration.value(secs, 's') <= request.time);
+    }
+
+    match /rate_limits/{userId} {
+      allow read: if isOwner(userId);
+      // Only stamps of "now" can be written, so the clock can't be wound back.
+      allow create, update: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['publicRoom', 'unsaid', 'suggestion'])
+        && (!('publicRoom' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.publicRoom == request.time)
+        && (!('unsaid' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.unsaid == request.time)
+        && (!('suggestion' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.suggestion == request.time);
+      allow delete: if false;
+    }
+
+    match /admins/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false;
+    }
+
+    // ====================================================
     // 0. INDEXED COLLECTION GROUPS
     // ====================================================
+
+    // Admin dashboard: counting members across users/{uid}/public/profile.
+    match /{path=**}/public/{docId} {
+      allow read: if isAdmin();
+    }
     
     // Allow querying all public profiles across all users
     match /{path=**}/profile/{profileId} {
@@ -99,8 +155,12 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
              'displayName', 'pronouns', 'intention', 'topics', 
              'region', 'showGenderExpressionOnProfile', 'showSogieOnProfile', 
-             'showLocationOnProfile', 'avatar', 'updatedAt'
+             'showLocationOnProfile', 'avatar', 'createdAt', 'updatedAt'
            ])
+        // createdAt marks when someone joined: set once to "now", then never changed.
+        && (resource != null && 'createdAt' in resource.data
+            ? request.resource.data.createdAt == resource.data.createdAt
+            : (!('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time))
         && (!('avatar' in request.resource.data)
             || (request.resource.data.avatar is string && request.resource.data.avatar.size() <= 24))
         && request.resource.data.displayName is string
@@ -174,7 +234,8 @@ service cloud.firestore {
     // ====================================================
 
     match /conversations/{convId} {
-      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      // Admins can count conversations, but never read their messages.
+      allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
 
       allow create: if isAuthenticated()
         && isValidNewConversation()
@@ -235,9 +296,11 @@ service cloud.firestore {
         && request.resource.data.text is string
         && request.resource.data.text.size() >= 1
         && request.resource.data.text.size() <= 1000
-        && request.resource.data.timestamp is timestamp;
+        && request.resource.data.timestamp == request.time
+        && slowMode('publicRoom', 2);
 
-      allow update, delete: if false; // Immutable public room messages
+      allow update: if false; // Immutable public room messages
+      allow delete: if isAdmin();
     }
 
     // ====================================================
@@ -281,7 +344,7 @@ service cloud.firestore {
         && request.resource.data.tags.size() <= 4
         && request.resource.data.updatedAt is timestamp;
 
-      allow delete: if isAuthenticated() && request.auth.uid == resource.data.authorId;
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorId || isAdmin());
 
       // Safe Individual Like Documents (/community_posts/{postId}/likes/{request.auth.uid})
       match /likes/{userId} {
@@ -313,8 +376,9 @@ service cloud.firestore {
         && request.resource.data.reason.size() <= 300
         && request.resource.data.timestamp is timestamp;
 
-      // Strict Zero Client Read Policy
-      allow read, update, delete: if false;
+      // Only admins can read reports; reporters can't see each other's.
+      allow read, delete: if isAdmin();
+      allow update: if isAdminStatusChange();
     }
 
     // ====================================================
@@ -355,7 +419,8 @@ service cloud.firestore {
         && request.resource.data.hugs == 0
         && request.resource.data.same == 0
         && request.resource.data.flags == 0
-        && getAfter(unsaidOwnerPath(postId)).data.authorId == request.auth.uid;
+        && getAfter(unsaidOwnerPath(postId)).data.authorId == request.auth.uid
+        && slowMode('unsaid', 60);
 
       // A reaction: +1 on 'hugs' or 'same' alongside a new reactions/{uid} doc of that type.
       allow update: if isAuthenticated()
@@ -370,8 +435,13 @@ service cloud.firestore {
         && !exists(/databases/$(database)/documents/unsaid/$(postId)/flags/$(request.auth.uid))
         && existsAfter(/databases/$(database)/documents/unsaid/$(postId)/flags/$(request.auth.uid));
 
+      // Admin restore: clear the flags on a post that was wrongly hidden.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flags'])
+        && request.resource.data.flags == 0;
+
       allow delete: if isAuthenticated()
-        && get(unsaidOwnerPath(postId)).data.authorId == request.auth.uid;
+        && (get(unsaidOwnerPath(postId)).data.authorId == request.auth.uid || isAdmin());
 
       match /reactions/{userId} {
         allow read: if isOwner(userId);
@@ -404,8 +474,9 @@ service cloud.firestore {
         && !exists(unsaidPath(postId))
         && existsAfter(unsaidPath(postId));
 
+      // Admins can clean up the owner record when removing a post, but still can't read it.
       allow delete: if isAuthenticated()
-        && resource.data.authorId == request.auth.uid
+        && (resource.data.authorId == request.auth.uid || isAdmin())
         && !existsAfter(unsaidPath(postId));
       allow update: if false;
     }
@@ -413,7 +484,7 @@ service cloud.firestore {
     // ====================================================
     // 6. SUGGESTIONS & FEEDBACK
     // ====================================================
-    // Write-only from the app; read in the Firebase Console.
+    // Write-only for users; admins read them on the /admin page.
 
     match /suggestions/{suggestionId} {
       allow create: if isAuthenticated()
@@ -424,9 +495,11 @@ service cloud.firestore {
         && request.resource.data.text is string
         && request.resource.data.text.size() >= 3
         && request.resource.data.text.size() <= 1000
-        && request.resource.data.createdAt is timestamp;
+        && request.resource.data.createdAt == request.time
+        && slowMode('suggestion', 30);
 
-      allow read, update, delete: if false;
+      allow read, delete: if isAdmin();
+      allow update: if isAdminStatusChange();
     }
   }
 }

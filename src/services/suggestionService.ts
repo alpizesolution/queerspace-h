@@ -1,4 +1,4 @@
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
 
 export const SUGGESTION_CATEGORIES = [
@@ -30,12 +30,16 @@ export async function submitSuggestion(category: SuggestionCategory, text: strin
   try {
     const user = auth?.currentUser ?? (await ensureAnonymousAuth());
     if (!user) return false;
-    await addDoc(collection(db, 'suggestions'), {
+    // The rate_limits stamp enforces one suggestion per 30 seconds (see firestore.rules).
+    const batch = writeBatch(db);
+    batch.set(doc(collection(db, 'suggestions')), {
       authorId: user.uid,
       category,
       text: body,
       createdAt: serverTimestamp(),
     });
+    batch.set(doc(db, 'rate_limits', user.uid), { suggestion: serverTimestamp() }, { merge: true });
+    await batch.commit();
     return true;
   } catch (err) {
     console.warn('[Suggestions] Could not send suggestion:', err);

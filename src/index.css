@@ -224,3 +224,13 @@ body {
     display: none;
   }
 }
+
+/* The wordmark's reduced-motion fallback: a soft fade, no movement. */
+.brand-fade {
+  transition: opacity 400ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-fade.brand-fade {
+    transition-duration: 400ms !important;
+  }
+}

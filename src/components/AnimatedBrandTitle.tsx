@@ -6,6 +6,8 @@ interface AnimatedBrandTitleProps {
 }
 
 const WORD = 'QUEERSPACE';
+const SCRAMBLED_WORD = 'QUEERSCAPE';
+const SUFFIX = 'PH';
 // QUEERSPACE ⇄ QUEERSCAPE: the P and C trade places, the A between them shifts to make room.
 const P_INDEX = 6;
 const A_INDEX = 7;
@@ -17,7 +19,8 @@ const CYCLE_MS = 7000;
 
 /**
  * Brand wordmark that periodically shuffles into "QUEERSCAPE" and settles back.
- * Screen readers always get "QUEERSPACE"; reduced-motion users see the static word.
+ * Screen readers always get "QUEERSPACE PH". With reduced motion on (common on phones in
+ * battery saver), the letters don't move: the word softly fades between the two spellings.
  */
 export const AnimatedBrandTitle: React.FC<AnimatedBrandTitleProps> = ({
   className = '',
@@ -28,6 +31,8 @@ export const AnimatedBrandTitle: React.FC<AnimatedBrandTitleProps> = ({
   const [scrambled, setScrambled] = useState(false);
   // True for the first half of each move, so the P and C arc past each other instead of colliding.
   const [lifted, setLifted] = useState(false);
+  const [reducedMotion] = useState(() => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches));
+  const [faded, setFaded] = useState(false);
 
   // Measure the letters so the swap lands exactly in each other's slot.
   useLayoutEffect(() => {
@@ -49,10 +54,18 @@ export const AnimatedBrandTitle: React.FC<AnimatedBrandTitleProps> = ({
   }, [sizeClass]);
 
   useEffect(() => {
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-
     const timers: ReturnType<typeof setTimeout>[] = [];
     const move = (toScrambled: boolean) => {
+      if (reducedMotion) {
+        setFaded(true);
+        timers.push(
+          setTimeout(() => {
+            setScrambled(toScrambled);
+            setFaded(false);
+          }, 400)
+        );
+        return;
+      }
       setScrambled(toScrambled);
       setLifted(true);
       timers.push(setTimeout(() => setLifted(false), 350));
@@ -67,9 +80,10 @@ export const AnimatedBrandTitle: React.FC<AnimatedBrandTitleProps> = ({
       clearInterval(interval);
       timers.forEach(clearTimeout);
     };
-  }, []);
+  }, [reducedMotion]);
 
   const transformFor = (i: number) => {
+    if (reducedMotion) return 'none';
     const lift = lifted ? 0.22 : 0;
     if (i === P_INDEX) return `translate(${scrambled ? offsets.p : 0}px, ${-lift}em)`;
     if (i === C_INDEX) return `translate(${scrambled ? offsets.c : 0}px, ${lift}em)`;
@@ -80,27 +94,32 @@ export const AnimatedBrandTitle: React.FC<AnimatedBrandTitleProps> = ({
   return (
     <span
       className={`font-serif font-semibold tracking-tight text-fg select-none inline-flex whitespace-nowrap ${sizeClass} ${className}`}
-      aria-label={WORD}
+      aria-label={`${WORD} ${SUFFIX}`}
       role="img"
     >
-      {WORD.split('').map((letter, i) => {
-        const moves = i === P_INDEX || i === A_INDEX || i === C_INDEX;
-        return (
-          <span
-            key={i}
-            ref={(el) => {
-              letterRefs.current[i] = el;
-            }}
-            aria-hidden="true"
-            className={`inline-block ${moves ? 'transition-[transform,color] duration-700 ease-[cubic-bezier(0.65,0,0.35,1)]' : ''} ${
-              scrambled && (i === P_INDEX || i === C_INDEX) ? 'text-berry' : ''
-            }`}
-            style={moves ? { transform: transformFor(i) } : undefined}
-          >
-            {letter}
-          </span>
-        );
+      <span aria-hidden="true" className={`inline-flex brand-fade ${faded ? 'opacity-0' : 'opacity-100'}`}>
+        {(reducedMotion && scrambled ? SCRAMBLED_WORD : WORD).split('').map((letter, i) => {
+          const moves = i === P_INDEX || i === A_INDEX || i === C_INDEX;
+          return (
+            <span
+              key={i}
+              ref={(el) => {
+                letterRefs.current[i] = el;
+              }}
+              aria-hidden="true"
+              className={`inline-block ${moves && !reducedMotion ? 'transition-[transform,color] duration-700 ease-[cubic-bezier(0.65,0,0.35,1)]' : ''} ${
+                scrambled && (i === P_INDEX || i === C_INDEX) ? 'text-berry' : ''
+              }`}
+              style={moves ? { transform: transformFor(i) } : undefined}
+            >
+              {letter}
+            </span>
+          );
       })}
+      </span>
+      <span aria-hidden="true" className="ml-[0.28em] text-berry">
+        {SUFFIX}
+      </span>
     </span>
   );
 };

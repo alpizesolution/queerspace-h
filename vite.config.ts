@@ -16,8 +16,8 @@ export default defineConfig(() => {
         },
         manifest: {
           id: '/',
-          name: 'QUEERSPACE — A Sapphic Space for Women',
-          short_name: 'QUEERSPACE',
+          name: 'QUEERSPACE PH — A Sapphic Space for Women',
+          short_name: 'QUEERSPACE PH',
           description: 'Your space. Your people. Your possibilities. A safe, anonymous chat and community platform for women-loving-women.',
           theme_color: '#120b17',
           background_color: '#120b17',
