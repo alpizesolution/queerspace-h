@@ -30,24 +30,24 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-[#080311]/90 backdrop-blur-md border-b border-[#4a1f6d]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
         {/* Brand Logo & Name */}
         <button
           onClick={() => handleNavClick('home')}
-          className="flex items-center gap-2.5 text-left group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e07bb8] rounded-lg p-1"
+          className="flex items-center gap-2 text-left group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e07bb8] rounded-lg p-0.5 min-w-0"
           aria-label="QUEERSPACE Home"
         >
-          <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#230d3b] flex items-center justify-center text-white shadow-sm shadow-[#e07bb8]/20 transition-transform group-hover:scale-105 border border-[#4a1f6d]">
+          <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl overflow-hidden bg-[#230d3b] flex items-center justify-center text-white shadow-sm shadow-[#e07bb8]/20 transition-transform group-hover:scale-105 border border-[#4a1f6d] shrink-0">
             <img src="/assets/aistudio/queerspace_cbcdbe4c.png" alt="QUEERSPACE Logo" className="w-full h-full object-cover" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <AnimatedBrandTitle sizeClass="text-xl" />
-              <span className="text-[10px] uppercase tracking-wider font-semibold bg-[#230d3b] text-[#e07bb8] px-1.5 py-0.5 rounded-full border border-[#4a1f6d]">
+              <AnimatedBrandTitle sizeClass="text-base sm:text-xl" />
+              <span className="hidden xs:inline-block text-[9px] uppercase tracking-wider font-semibold bg-[#230d3b] text-[#e07bb8] px-1.5 py-0.5 rounded-full border border-[#4a1f6d] shrink-0">
                 WLW
               </span>
             </div>
-            <p className="text-[11px] text-[#cbbccf] -mt-0.5 hidden sm:block">
+            <p className="text-[10px] text-[#cbbccf] -mt-0.5 hidden sm:block truncate">
               A Sapphic Space for Women
             </p>
           </div>
@@ -114,14 +114,14 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
 
         {/* Header Actions */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Auth Session & Connection Status Badge */}
-          <AuthStatusBadge className="hidden lg:inline-flex" />
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Auth Session & Connection Status Badge (Symbol on mobile, label on sm+) */}
+          <AuthStatusBadge />
 
           {/* Sound Toggle */}
           <button
             onClick={onToggleSound}
-            className="p-2 rounded-full text-[#cbbccf] hover:text-[#fcf7fa] hover:bg-[#150826] transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-full text-[#cbbccf] hover:text-[#fcf7fa] hover:bg-[#150826] transition-colors cursor-pointer shrink-0"
             title={isSoundMuted ? 'Unmute chat sounds' : 'Mute chat sounds'}
             aria-label={isSoundMuted ? 'Unmute chat sounds' : 'Mute chat sounds'}
           >
@@ -132,19 +132,19 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Primary CTA */}
+          {/* Primary CTA (Desktop & Tablet) */}
           <button
             onClick={onStartChat}
-            className="hidden sm:inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-[#e07bb8] hover:bg-[#a85293] text-[#080311] hover:text-white text-sm font-semibold shadow-md shadow-[#e07bb8]/25 transition-all hover:shadow cursor-pointer active:scale-[0.98]"
+            className="hidden sm:inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-full bg-[#e07bb8] hover:bg-[#a85293] text-[#080311] hover:text-white text-xs sm:text-sm font-semibold shadow-md shadow-[#e07bb8]/25 transition-all hover:shadow cursor-pointer active:scale-[0.98] shrink-0"
           >
-            <MessageCircle className="w-4 h-4" />
+            <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span>Start Chatting</span>
           </button>
 
           {/* Mobile Menu Hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg text-[#fcf7fa] hover:bg-[#150826] focus:outline-none cursor-pointer"
+            className="md:hidden p-1.5 rounded-lg text-[#fcf7fa] hover:bg-[#150826] focus:outline-none cursor-pointer shrink-0"
             aria-label="Toggle mobile menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
