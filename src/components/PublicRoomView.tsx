@@ -3,11 +3,9 @@ import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ArrowUp, Users } from 'lucide-react';
 import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
-import { INITIAL_PUBLIC_ROOM_MESSAGES } from '../utils/community-data.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
-
-import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.ts';
+import { isPublicRoomAvailable, sendPublicRoomMessage, subscribeToPublicRoom } from '../services/publicRoomService.ts';
 
 interface PublicRoomViewProps {
   userPrefs: UserPreferences;
@@ -20,88 +18,59 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   isSoundMuted,
   onOpenDonationModal,
 }) => {
-  const [messages, setMessages] = useState<PublicRoomMessage[]>(() => {
-    const saved = getStorageItem(
-      STORAGE_KEYS.PUBLIC_ROOM.current,
-      STORAGE_KEYS.PUBLIC_ROOM.legacies
-    );
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return INITIAL_PUBLIC_ROOM_MESSAGES;
-      }
-    }
-    return INITIAL_PUBLIC_ROOM_MESSAGES;
-  });
-
+  const [messages, setMessages] = useState<PublicRoomMessage[]>([]);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(() =>
+    isPublicRoomAvailable() ? 'loading' : 'error'
+  );
+  const [sendError, setSendError] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastCountRef = useRef(0);
 
-  // Auto-scroll to bottom
+  useEffect(() => {
+    if (!isPublicRoomAvailable()) return;
+    return subscribeToPublicRoom(
+      (next) => {
+        setMessages(next);
+        setStatus('ready');
+      },
+      () => setStatus('error')
+    );
+  }, []);
+
+  // Auto-scroll and chime when someone else's message arrives.
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages]);
+    const latest = messages[messages.length - 1];
+    if (lastCountRef.current > 0 && messages.length > lastCountRef.current && latest && !latest.isSelf && !isSoundMuted) {
+      soundEffects.playMessageReceived();
+    }
+    lastCountRef.current = messages.length;
+  }, [messages, isSoundMuted]);
 
-  // Persist messages in storage
-  useEffect(() => {
-    setStorageItem(STORAGE_KEYS.PUBLIC_ROOM.current, JSON.stringify(messages));
-  }, [messages]);
-
-  const handleSendMessage = (e?: React.FormEvent) => {
+  const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (inputText.trim() === '/donate') {
       setInputText('');
-      if (onOpenDonationModal) {
-        onOpenDonationModal();
-      }
+      onOpenDonationModal?.();
       return;
     }
 
     const sanitized = sanitizeMessageText(inputText);
-    if (sanitized.isBlocked) return;
+    if (sanitized.isBlocked) {
+      setSendError(sanitized.warning ?? "That message can't be sent.");
+      return;
+    }
 
-    const newMsg: PublicRoomMessage = {
-      id: `room-${Date.now()}`,
-      author: userPrefs.displayName || 'Sapphic Guest',
-      authorPronouns: userPrefs.pronouns || 'she/her',
-      avatarColor: '#382038',
-      text: sanitized.cleanText,
-      timestamp: Date.now(),
-      isSelf: true,
-    };
-
-    setMessages((prev) => [...prev, newMsg]);
     setInputText('');
-
-    if (!isSoundMuted) {
-      soundEffects.playMessageSent();
+    setSendError(null);
+    const ok = await sendPublicRoomMessage(userPrefs, sanitized.cleanText);
+    if (!ok) {
+      setInputText(sanitized.cleanText);
+      setSendError("Couldn't send. Check your connection and try again.");
+      return;
     }
-
-    // Occasional simulated friendly room response after 3-5 seconds
-    if (Math.random() > 0.4) {
-      setTimeout(() => {
-        const potentialPeers = [
-          { author: 'Willow Lark', pronouns: 'she/her', color: '#8D426B', text: 'I love that! Such a good point ✨' },
-          { author: 'Rowan Meadow', pronouns: 'they/she', color: '#5a2548', text: 'Totally agree, feeling so cozy in here today 🍵' },
-          { author: 'Ruby Fern', pronouns: 'she/her', color: '#7a3159', text: 'Aww welcome! Happy you shared that 🌸' },
-        ];
-        const peer = potentialPeers[Math.floor(Math.random() * potentialPeers.length)];
-        const peerMsg: PublicRoomMessage = {
-          id: `room-peer-${Date.now()}`,
-          author: peer.author,
-          authorPronouns: peer.pronouns,
-          avatarColor: peer.color,
-          text: peer.text,
-          timestamp: Date.now(),
-          isSelf: false,
-        };
-        setMessages((prev) => [...prev, peerMsg]);
-        if (!isSoundMuted) {
-          soundEffects.playMessageReceived();
-        }
-      }, 3500);
-    }
+    if (!isSoundMuted) soundEffects.playMessageSent();
   };
 
   const viewportHeight = useVisualViewportHeight();
@@ -123,7 +92,14 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4 space-y-4" aria-live="polite">
-        {messages.length === 0 && (
+        {status === 'error' && (
+          <div className="h-full flex flex-col items-center justify-center text-center px-6">
+            <p className="text-[15px] font-medium text-fg">Can't reach the room</p>
+            <p className="text-[13px] text-muted mt-1">Check your connection and try again.</p>
+          </div>
+        )}
+
+        {status === 'ready' && messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center px-6">
             <p className="text-[15px] font-medium text-fg">It's quiet in here</p>
             <p className="text-[13px] text-muted mt-1">Say hi, or share what you're reading or listening to.</p>
@@ -133,7 +109,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
         {messages.map((msg) => (
           <div key={msg.id} className={`flex items-end gap-2 ${msg.isSelf ? 'flex-row-reverse' : ''}`}>
             {!msg.isSelf && (
-              <AnimalAvatar seed={msg.author} className="w-8 h-8" />
+              <AnimalAvatar avatar={msg.authorAvatar} seed={msg.authorId || msg.author} className="w-8 h-8" />
             )}
 
             <div className={`max-w-[80%] flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}>
@@ -156,11 +132,21 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
+      {sendError && (
+        <p className="px-4 pt-2 text-[12px] text-danger border-t border-line" role="alert">
+          {sendError}
+        </p>
+      )}
       <form onSubmit={handleSendMessage} className="flex items-center gap-2 px-3 sm:px-4 py-2.5 border-t border-line">
         <input
           type="text"
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
+          onChange={(e) => {
+            setInputText(e.target.value);
+            if (sendError) setSendError(null);
+          }}
+          maxLength={1000}
+          disabled={status === 'error'}
           placeholder={`Message as ${userPrefs.displayName || 'Sapphic Guest'}`}
           aria-label="Message the public room"
           enterKeyHint="send"
@@ -169,6 +155,9 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
         />
         <button
           type="submit"
+          // Keep focus in the input so the keyboard stays open and the tab bar doesn't
+          // reappear mid-tap (which would shift the layout and swallow the click).
+          onMouseDown={(e) => e.preventDefault()}
           disabled={!inputText.trim()}
           className="w-11 h-11 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center transition-all disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed active:scale-95"
           aria-label="Send to public room"

@@ -222,8 +222,10 @@ service cloud.firestore {
 
       allow create: if isAuthenticated()
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp'])
-        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'text', 'timestamp'])
         && request.resource.data.authorId == request.auth.uid
+        && (!('authorAvatar' in request.resource.data)
+            || (request.resource.data.authorAvatar is string && request.resource.data.authorAvatar.size() <= 24))
         && request.resource.data.authorName is string
         && request.resource.data.authorName.size() >= 1
         && request.resource.data.authorName.size() <= 30

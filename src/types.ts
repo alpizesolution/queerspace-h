@@ -101,9 +101,10 @@ export interface CommunityPost {
 
 export interface PublicRoomMessage {
   id: string;
+  authorId: string;
   author: string;
   authorPronouns: string;
-  avatarColor: string;
+  authorAvatar?: string;
   text: string;
   timestamp: number;
   isSelf: boolean;
