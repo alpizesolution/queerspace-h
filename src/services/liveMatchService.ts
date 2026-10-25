@@ -296,10 +296,11 @@ export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHand
 
     const scheduleClaim = () => {
       if (matched || cancelled) return;
+      // A hidden tab still gets matched by others (its heartbeat keeps it fresh), so it scans slowly.
       claimTimer = setTimeout(async () => {
         await tryClaim();
         scheduleClaim();
-      }, nextClaimDelay(emptyScans));
+      }, document.visibilityState === 'hidden' ? CLAIM_INTERVAL_MAX_MS : nextClaimDelay(emptyScans));
     };
     tryClaim().then(scheduleClaim);
   })();
