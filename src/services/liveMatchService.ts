@@ -31,6 +31,9 @@ import { isValidAvatar } from '../utils/avatar.ts';
 const QUEUE = 'match_queue';
 const HEARTBEAT_MS = 10_000;
 const STALE_AFTER_MS = 30_000;
+/** Ages people can enter; QUEERSPACE is 18+ (must match firestore.rules). */
+export const MIN_AGE = 18;
+export const MAX_AGE = 99;
 /** Queue scans start quick and slow down while nobody else is waiting, to save reads. */
 const CLAIM_INTERVAL_MS = 3_000;
 const CLAIM_INTERVAL_MAX_MS = 12_000;
@@ -64,16 +67,46 @@ export function isFreshQueueEntry(data: { heartbeatAt?: unknown }, now: number =
   return beat === 0 || now - beat < STALE_AFTER_MS;
 }
 
-/** Oldest-first candidate order, ignoring self, blocked users and stale entries. */
+/** Age details a queue entry carries: the person's age and, with the age filter on, the range they want. */
+export interface QueueAgePrefs {
+  age?: number;
+  ageMin?: number;
+  ageMax?: number;
+}
+
+/** Both people fit each other's age range (when either has one). A range needs a known age to match. */
+export function agesCompatible(a: QueueAgePrefs, b: QueueAgePrefs): boolean {
+  const fits = (range: QueueAgePrefs, age?: number) =>
+    range.ageMin === undefined || range.ageMax === undefined
+      ? true
+      : typeof age === 'number' && age >= range.ageMin && age <= range.ageMax;
+  return fits(a, b.age) && fits(b, a.age);
+}
+
+/** Builds the queue entry's age fields from setup preferences. */
+export function queueAgeFields(prefs: { age?: number; applyAgeFilter?: boolean; ageMin?: number; ageMax?: number }): QueueAgePrefs {
+  const valid = (n?: number) => typeof n === 'number' && Number.isInteger(n) && n >= MIN_AGE && n <= MAX_AGE;
+  const fields: QueueAgePrefs = {};
+  if (valid(prefs.age)) fields.age = prefs.age;
+  if (prefs.applyAgeFilter && valid(prefs.ageMin) && valid(prefs.ageMax) && prefs.ageMin! <= prefs.ageMax!) {
+    fields.ageMin = prefs.ageMin;
+    fields.ageMax = prefs.ageMax;
+  }
+  return fields;
+}
+
+/** Oldest-first candidate order, ignoring self, blocked users, stale entries and age mismatches. */
 export function pickQueueCandidates(
-  entries: { id: string; data: { status?: string; heartbeatAt?: unknown; createdAt?: unknown } }[],
+  entries: { id: string; data: { status?: string; heartbeatAt?: unknown; createdAt?: unknown } & QueueAgePrefs }[],
   selfUid: string,
   excludeIds: string[],
-  now: number = Date.now()
+  now: number = Date.now(),
+  mine: QueueAgePrefs = {}
 ): string[] {
   const excluded = new Set([selfUid, ...excludeIds]);
   return entries
     .filter((e) => e.data.status === 'waiting' && !excluded.has(e.id) && isFreshQueueEntry(e.data, now))
+    .filter((e) => agesCompatible(mine, e.data))
     .sort((a, b) => toMillis(a.data.createdAt) - toMillis(b.data.createdAt))
     .map((e) => e.id);
 }
@@ -119,7 +152,11 @@ async function loadPartnerProfile(partnerId: string): Promise<PartnerProfile> {
  * Joins the live queue and keeps trying to pair until matched or cancelled.
  * Returns a cancel function that leaves the queue.
  */
-export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHandlers): () => void {
+export function joinLiveMatchQueue(
+  excludeIds: string[],
+  handlers: LiveMatchHandlers,
+  agePrefs: QueueAgePrefs = {}
+): () => void {
   let cancelled = false;
   let matched = false;
   let unsubscribeSelf: (() => void) | null = null;
@@ -193,7 +230,9 @@ export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHand
       const candidates = pickQueueCandidates(
         snap.docs.map((d) => ({ id: d.id, data: d.data() })),
         me,
-        excludeIds
+        excludeIds,
+        Date.now(),
+        agePrefs
       );
       emptyScans = candidates.length ? 0 : emptyScans + 1;
 
@@ -206,7 +245,7 @@ export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHand
             const theirRef = doc(firestore, QUEUE, partnerId);
             const [mine, theirs] = await Promise.all([tx.get(myRef), tx.get(theirRef)]);
             if (!mine.exists() || mine.data().status !== 'waiting') throw new Error('self-not-waiting');
-            if (!theirs.exists() || theirs.data().status !== 'waiting' || !isFreshQueueEntry(theirs.data())) {
+            if (!theirs.exists() || theirs.data().status !== 'waiting' || !isFreshQueueEntry(theirs.data()) || !agesCompatible(agePrefs, theirs.data())) {
               throw new Error('partner-unavailable');
             }
             tx.set(convRef, {
@@ -253,6 +292,7 @@ export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHand
         createdAt: serverTimestamp(),
         heartbeatAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        ...agePrefs,
       });
     } catch (err) {
       console.warn('[LiveMatch] Could not join queue:', err);

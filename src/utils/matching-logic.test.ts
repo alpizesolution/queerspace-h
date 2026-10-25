@@ -260,3 +260,13 @@ test('Philippine location matching and formatting rules work correctly', () => {
   assert.equal(formatLocationSummary(['Luzon', 'Visayas']), 'Luzon, Visayas');
   assert.equal(formatLocationSummary(['NCR', 'Cebu', 'Davao', 'Baguio']), 'NCR, Cebu +2 more');
 });
+
+test('validateSetupProfile checks age and the age filter', () => {
+  const base = { displayName: 'Willow', topics: [] };
+  assert.equal(validateSetupProfile({ ...base }).isValid, true);
+  assert.equal(validateSetupProfile({ ...base, age: 16 }).errors.age !== undefined, true);
+  assert.equal(validateSetupProfile({ ...base, age: 25 }).isValid, true);
+  assert.equal(validateSetupProfile({ ...base, applyAgeFilter: true, ageMin: 20, ageMax: 30 }).errors.ageRange !== undefined, true);
+  assert.equal(validateSetupProfile({ ...base, age: 25, applyAgeFilter: true, ageMin: 30, ageMax: 20 }).errors.ageRange !== undefined, true);
+  assert.equal(validateSetupProfile({ ...base, age: 25, applyAgeFilter: true, ageMin: 20, ageMax: 30 }).isValid, true);
+});

@@ -197,11 +197,20 @@ service cloud.firestore {
     // Only waiting entries are visible to others; matched entries are visible
     // to the owner and the person they were paired with.
 
+    // Optional age (18-99), and with the age filter on, the age range the person wants.
+    function queueAgeValid(d) {
+      return (!('age' in d) || (d.age is int && d.age >= 18 && d.age <= 99))
+        && (('ageMin' in d) == ('ageMax' in d))
+        && (!('ageMin' in d)
+            || (d.ageMin is int && d.ageMax is int && d.ageMin >= 18 && d.ageMax <= 99 && d.ageMin <= d.ageMax));
+    }
+
     function queueKeysValid() {
       return request.resource.data.keys().hasOnly([
-               'status', 'partnerId', 'convId', 'createdAt', 'heartbeatAt', 'updatedAt'
+               'status', 'partnerId', 'convId', 'createdAt', 'heartbeatAt', 'updatedAt', 'age', 'ageMin', 'ageMax'
              ])
-        && request.resource.data.status in ['waiting', 'matched'];
+        && request.resource.data.status in ['waiting', 'matched']
+        && queueAgeValid(request.resource.data);
     }
 
     function convHasParticipants(convId, a, b) {

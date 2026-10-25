@@ -961,3 +961,14 @@ test('SU-03: A suspended account CANNOT match, chat or post publicly, but CAN st
     testEnv.authenticatedContext('alice').firestore().doc('conversations/c2/messages/m2').set({ senderId: 'alice', text: 'hey', timestamp: new Date() })
   );
 });
+
+test('Q-06: Queue entries CAN carry an 18+ age and a valid age range, nothing else', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 22, ageMax: 35 }));
+  await assertSucceeds(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 16 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 30, ageMax: 20 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 17, ageMax: 30 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 20 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: '27' }));
+});

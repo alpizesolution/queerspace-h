@@ -15,6 +15,7 @@ import {
   Lock,
   SlidersHorizontal,
   MapPin,
+  Cake,
 } from 'lucide-react';
 import { Sheet } from './Sheet.tsx';
 import { GenderExpressionOption, Intention, UserPreferences } from '../types.ts';
@@ -115,6 +116,12 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
     currentPrefs.preferredGenderExpressions || ['Any / No preference']
   );
 
+  // Age: optional for everyone, required to use the age filter.
+  const [age, setAge] = useState(currentPrefs.age ? String(currentPrefs.age) : '');
+  const [applyAgeFilter, setApplyAgeFilter] = useState<boolean>(currentPrefs.applyAgeFilter ?? false);
+  const [ageMin, setAgeMin] = useState(String(currentPrefs.ageMin ?? 18));
+  const [ageMax, setAgeMax] = useState(String(currentPrefs.ageMax ?? 35));
+
   const [sogieSectionOpen, setSogieSectionOpen] = useState<boolean>(false);
   const [isAgeConfirmed, setIsAgeConfirmed] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -192,6 +199,10 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
           : ['Any / No preference'],
       locationSelection: activeTab === 'custom' ? locationSelection : ['Anywhere in the Philippines'],
       applyLocationFilter: activeTab === 'custom' ? applyLocationFilter : false,
+      age: age.trim() ? Number(age) : undefined,
+      applyAgeFilter: activeTab === 'custom' ? applyAgeFilter : false,
+      ageMin: Number(ageMin),
+      ageMax: Number(ageMax),
     };
 
     const validation = validateSetupProfile(prefs, isAgeConfirmed);
@@ -389,6 +400,29 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
                   <Plus className="w-5 h-5" />
                 </button>
               </form>
+            </section>
+
+            {/* Age */}
+            <section className="card p-4 space-y-3">
+              <ToggleRow
+                icon={<Cake className="w-4 h-4 text-lavender" />}
+                checked={applyAgeFilter}
+                onChange={setApplyAgeFilter}
+                title="Filter by age"
+                hint={applyAgeFilter ? `Ages ${ageMin}–${ageMax}` : 'Any age, 18+'}
+              />
+              {applyAgeFilter && (
+                <div className="pt-3 border-t border-line space-y-2">
+                  <div className="flex items-center gap-2">
+                    <AgeInput label="Youngest age" value={ageMin} onChange={setAgeMin} invalid={!!errors.ageRange} />
+                    <span className="text-subtle text-sm">to</span>
+                    <AgeInput label="Oldest age" value={ageMax} onChange={setAgeMax} invalid={!!errors.ageRange} />
+                  </div>
+                  <p className="text-[12px] text-subtle leading-snug">
+                    You'll only match people in this range who added their age, and whose own filter fits you.
+                  </p>
+                </div>
+              )}
             </section>
 
             {/* Location */}
@@ -649,6 +683,15 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 
         {/* Consent */}
         <section className="space-y-3">
+          <label className="flex items-center gap-3 text-sm text-fg">
+            <span className="flex-1 min-w-0">
+              <span className="block font-medium">Your age</span>
+              <span className="block text-[12px] text-subtle mt-0.5">
+                Optional. Used only for age filters, never shown to anyone.
+              </span>
+            </span>
+            <AgeInput label="Your age" value={age} onChange={setAge} invalid={!!errors.age} placeholder="18+" />
+          </label>
           <label className="flex items-start gap-3 cursor-pointer text-sm text-fg">
             <input
               type="checkbox"
@@ -672,6 +715,27 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
     </Sheet>
   );
 };
+
+const AgeInput: React.FC<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  invalid?: boolean;
+  placeholder?: string;
+}> = ({ label, value, onChange, invalid, placeholder }) => (
+  <input
+    type="text"
+    inputMode="numeric"
+    pattern="[0-9]*"
+    maxLength={2}
+    value={value}
+    onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
+    placeholder={placeholder}
+    aria-label={label}
+    aria-invalid={invalid}
+    className="input !w-20 text-center"
+  />
+);
 
 const ToggleRow: React.FC<{
   checked: boolean;

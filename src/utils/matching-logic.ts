@@ -263,6 +263,26 @@ export function validateSetupProfile(
     errors.ageConfirmation = 'You must affirm that you are at least 18 years old to enter.';
   }
 
+  if (prefs.age !== undefined) {
+    if (!Number.isInteger(prefs.age) || prefs.age < 18) {
+      errors.age = 'QUEERSPACE PH is for people 18 and older.';
+    } else if (prefs.age > 99) {
+      errors.age = 'Please enter an age between 18 and 99.';
+    }
+  }
+
+  if (prefs.applyAgeFilter) {
+    const { ageMin, ageMax } = prefs;
+    if (
+      !Number.isInteger(ageMin) || !Number.isInteger(ageMax) ||
+      ageMin! < 18 || ageMax! > 99 || ageMin! > ageMax!
+    ) {
+      errors.ageRange = 'Choose an age range between 18 and 99, with the lower age first.';
+    } else if (prefs.age === undefined) {
+      errors.ageRange = 'Add your own age to use the age filter.';
+    }
+  }
+
   // Mutual exclusivity check: "Prefer not to say" must be alone if present
   if (
     prefs.genderExpression &&

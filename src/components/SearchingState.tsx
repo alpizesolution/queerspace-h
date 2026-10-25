@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Heart, Shield, RefreshCw } from 'lucide-react';
 import { UserPreferences } from '../types.ts';
-import { joinLiveMatchQueue, LiveMatch } from '../services/liveMatchService.ts';
+import { joinLiveMatchQueue, LiveMatch, queueAgeFields } from '../services/liveMatchService.ts';
 
 interface SearchingStateProps {
   mode: 'quick' | 'custom';
@@ -31,13 +31,17 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
     setSearchTimedOut(false);
     setError(null);
 
-    const leaveQueue = joinLiveMatchQueue(blockedPartnerIds, {
-      onMatched,
-      onError: (message) => {
-        setError(message);
-        clearInterval(ticker);
+    const leaveQueue = joinLiveMatchQueue(
+      blockedPartnerIds,
+      {
+        onMatched,
+        onError: (message) => {
+          setError(message);
+          clearInterval(ticker);
+        },
       },
-    });
+      queueAgeFields(prefs)
+    );
 
     const ticker = setInterval(() => {
       setSecondsElapsed((prev) => {

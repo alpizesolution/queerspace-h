@@ -37,6 +37,12 @@ export interface UserPreferences {
   preferredGenderExpressions?: string[];
   locationSelection?: string[];
   applyLocationFilter?: boolean;
+  /** Self-declared age (18-99). Kept on this device and in the live queue, never on the public profile. */
+  age?: number;
+  /** Only match people whose age is within ageMin-ageMax (and who fit theirs). */
+  applyAgeFilter?: boolean;
+  ageMin?: number;
+  ageMax?: number;
 }
 
 export type PartnerStatus = 'online' | 'typing' | 'idle' | 'away';
