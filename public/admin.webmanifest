@@ -1,0 +1,16 @@
+{
+  "id": "/admin",
+  "name": "QUEERSPACE Admin",
+  "short_name": "QS Admin",
+  "description": "Support chats, Public Room and moderation for the QUEERSPACE PH team.",
+  "theme_color": "#120b17",
+  "background_color": "#120b17",
+  "display": "standalone",
+  "start_url": "/admin",
+  "scope": "/admin",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

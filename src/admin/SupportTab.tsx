@@ -49,8 +49,8 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
       </p>
       {error && <p className="card p-4 mb-4 text-sm text-danger">Support chats couldn’t load. Try again.</p>}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-        <ul className={`card divide-y divide-line self-start ${open ? 'hidden lg:block' : ''}`}>
+      <div className="grid gap-4 desk:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+        <ul className={`card divide-y divide-line self-start ${open ? 'hidden desk:block' : ''}`}>
           {!threads ? (
             <li className="p-4 text-[13px] text-subtle">Loading…</li>
           ) : threads.length === 0 ? (
@@ -93,7 +93,7 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
         {open ? (
           <SupportConversation key={open.id} thread={open} onBack={() => setOpenId(null)} />
         ) : (
-          <div className="hidden lg:flex card p-8 items-center justify-center text-[13px] text-subtle">
+          <div className="hidden desk:flex card p-8 items-center justify-center text-[13px] text-subtle">
             Pick a chat to read and reply.
           </div>
         )}
@@ -137,7 +137,7 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
   return (
     <section className="card flex flex-col min-h-[60dvh] max-h-[75dvh]" aria-label={`Chat with ${thread.displayName}`}>
       <header className="flex items-center gap-3 p-3 border-b border-line">
-        <button onClick={onBack} className="icon-btn w-9 h-9 lg:hidden" aria-label="Back to support chats">
+        <button onClick={onBack} className="icon-btn w-9 h-9 desk:hidden" aria-label="Back to support chats">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <AnimalAvatar avatar={thread.avatar} seed={thread.id} className="w-8 h-8" />

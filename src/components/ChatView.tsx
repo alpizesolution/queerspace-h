@@ -342,7 +342,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   return (
     <div
-      className="fixed inset-x-0 top-0 h-[100dvh] z-30 flex flex-col bg-ink md:relative md:z-auto md:max-w-3xl md:mx-auto md:w-full md:border-x md:border-line"
+      className="fixed inset-x-0 top-0 h-[100dvh] z-30 flex flex-col bg-ink desk:relative desk:z-auto desk:max-w-3xl desk:mx-auto desk:w-full desk:border-x desk:border-line"
       style={viewportHeight ? { height: viewportHeight } : undefined}
     >
       {/* Header */}
@@ -544,7 +544,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     className={`items-center gap-0.5 rounded-full transition-opacity ${
                       showActions
                         ? 'flex bg-raised border border-line px-1 py-0.5 shadow-lg shadow-black/30 anim-pop'
-                        : 'hidden md:flex opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+                        : 'hidden desk:flex opacity-0 group-hover:opacity-100 focus-within:opacity-100'
                     }`}
                   >
                     {QUICK_REACTIONS.map((emoji) => (

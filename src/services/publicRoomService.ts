@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   doc,
   limit,
@@ -13,6 +14,8 @@ import {
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
+import { isAdminDevice } from '../utils/adminDevice.ts';
+import { TEAM_NAME } from './supportService.ts';
 
 /** How many recent messages the room shows. */
 export const PUBLIC_ROOM_HISTORY = 100;
@@ -101,5 +104,36 @@ export async function sendPublicRoomMessage(prefs: UserPreferences, text: string
   } catch (err) {
     console.warn('[PublicRoom] Could not send:', err);
     return (err as FirestoreError)?.code === 'permission-denied' ? 'too-fast' : 'failed';
+  }
+}
+
+/**
+ * Whether this device may offer "Post as Team": an admin signed in with Google here
+ * (via /admin). firestore.rules make the final call on every team post.
+ */
+export async function canPostAsTeam(): Promise<boolean> {
+  if (!db || !isAdminDevice()) return false;
+  const user = auth?.currentUser ?? (await ensureAnonymousAuth());
+  return Boolean(user?.providerData.some((p) => p.providerId === 'google.com'));
+}
+
+/** Posts with the verified team badge. Returns the new message ID, or null if it failed. */
+export async function sendTeamRoomMessage(text: string): Promise<string | null> {
+  const clean = text.trim().slice(0, 1000);
+  const uid = auth?.currentUser?.uid;
+  if (!db || !uid || !clean) return null;
+  try {
+    const ref = await addDoc(collection(db, 'public_room_messages'), {
+      authorId: uid,
+      authorName: TEAM_NAME,
+      authorPronouns: 'team',
+      text: clean,
+      timestamp: serverTimestamp(),
+      team: true,
+    });
+    return ref.id;
+  } catch (err) {
+    console.warn('[PublicRoom] Could not post as team:', err);
+    return null;
   }
 }

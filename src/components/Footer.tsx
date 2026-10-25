@@ -1,5 +1,9 @@
 import React from 'react';
-import { Heart, MessageCircleHeart } from 'lucide-react';
+import { Heart, LayoutDashboard, MessageCircleHeart } from 'lucide-react';
+import { isAdminDevice } from '../utils/adminDevice.ts';
+
+// On phones the header has no room, so the admin shortcut lives here.
+const SHOW_ADMIN_LINK = isAdminDevice();
 
 interface FooterProps {
   onOpenModal: (modal: 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact') => void;
@@ -60,6 +64,13 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenDonation, onO
           Support us
         </button>
       </div>
+
+      {SHOW_ADMIN_LINK && (
+        <a href="/admin" className="chip h-8 px-3 text-[12px] text-berry sm:hidden">
+          <LayoutDashboard className="w-3.5 h-3.5" />
+          Admin
+        </a>
+      )}
 
       <p className="text-[11px] text-subtle/80 sm:hidden">© {new Date().getFullYear()} QUEERSPACE PH</p>
     </div>

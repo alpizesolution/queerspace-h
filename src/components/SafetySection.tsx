@@ -13,7 +13,7 @@ const POINTS = [
 ];
 
 export const SafetySection: React.FC<SafetySectionProps> = ({ onOpenGuidelinesModal }) => (
-  <section className="max-w-6xl mx-auto w-full px-4 sm:px-6 pb-12 sm:pb-16">
+  <section className="max-w-2xl desk:max-w-6xl mx-auto w-full px-4 sm:px-6 pb-12 sm:pb-16">
     <div className="flex items-end justify-between gap-4 mb-4">
       <h2 className="text-lg font-semibold text-fg">Safety first</h2>
       <button
@@ -24,7 +24,7 @@ export const SafetySection: React.FC<SafetySectionProps> = ({ onOpenGuidelinesMo
         <ChevronRight className="w-4 h-4" />
       </button>
     </div>
-    <ul className="card divide-y divide-line sm:divide-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-4">
+    <ul className="card divide-y divide-line sm:divide-y-0 sm:grid sm:grid-cols-2 desk:grid-cols-4">
       {POINTS.map(({ icon: Icon, title, text }) => (
         <li key={title} className="flex gap-3 p-4 sm:p-5">
           <Icon className="w-5 h-5 text-lavender shrink-0 mt-0.5" />

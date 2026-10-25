@@ -1,27 +1,36 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { User } from 'firebase/auth';
-import { ArrowLeft, Check, Copy, LogOut, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Inbox,
+  LayoutDashboard,
+  LifeBuoy,
+  LogOut,
+  RefreshCw,
+  RotateCcw,
+  ShieldCheck,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { ConfirmDialog } from '../components/Sheet.tsx';
 import { isFirebaseConfigured, subscribeAuthState } from '../lib/firebase.ts';
 import {
   AdminReport,
-  AdminRoomMessage,
   AdminStats,
   AdminSuggestion,
   AdminUnsaidPost,
   AdminCheck,
   checkAdmin,
   deleteInboxItem,
-  deleteRoomMessage,
   InboxStatus,
   isGoogleUser,
   loadDisplayName,
   loadFlaggedUnsaid,
   loadReports,
-  loadRoomMessages,
   loadStats,
   loadSuggestions,
-  postTeamRoomMessage,
   removeUnsaid,
   restoreUnsaid,
   setInboxStatus,
@@ -29,12 +38,14 @@ import {
   signOutAdmin,
 } from '../services/adminService.ts';
 import { BarChart } from './BarChart.tsx';
+import { rememberAdminDevice } from '../utils/adminDevice.ts';
 import { SupportTab } from './SupportTab.tsx';
-import { countUnreadSupport, TEAM_NAME } from '../services/supportService.ts';
+import { RoomTab } from './RoomTab.tsx';
+import { countUnreadSupport } from '../services/supportService.ts';
 import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
 import type { CommunityPost } from '../types.ts';
 
-type Tab = 'overview' | 'support' | 'suggestions' | 'reports' | 'moderation';
+type Tab = 'overview' | 'support' | 'room' | 'inbox' | 'moderation';
 
 interface PendingConfirm {
   title: string;
@@ -74,7 +85,9 @@ const Shell: React.FC<{ children: React.ReactNode; user?: User | null }> = ({ ch
         )}
       </div>
     </header>
-    <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">{children}</main>
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10 pb-[calc(var(--tabbar-h)+1.5rem)] desk:pb-10">
+      {children}
+    </main>
   </div>
 );
 
@@ -105,7 +118,13 @@ export default function AdminApp() {
         setUser(next);
         setAuthReady(true);
         setAdminCheck(null);
-        checkAdmin(next).then(setAdminCheck);
+        if (!isGoogleUser(next)) rememberAdminDevice(false);
+        checkAdmin(next).then((result) => {
+          setAdminCheck(result);
+          // Shows the Admin shortcut in the main app on this device only.
+          if (result === 'admin') rememberAdminDevice(true);
+          else if (result === 'missing') rememberAdminDevice(false);
+        });
       }),
     []
   );
@@ -240,23 +259,30 @@ const Dashboard: React.FC = () => {
   const openSuggestions = suggestions?.filter((s) => s.status === 'open').length ?? 0;
   const openReports = reports?.filter((r) => r.status === 'open').length ?? 0;
 
-  const tabs: { id: Tab; label: string; badge?: number }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'support', label: 'Support', badge: unreadSupport },
-    { id: 'suggestions', label: 'Suggestions', badge: openSuggestions },
-    { id: 'reports', label: 'Reports', badge: openReports },
-    { id: 'moderation', label: 'Moderation' },
+  const [inboxView, setInboxView] = useState<'suggestions' | 'reports'>('suggestions');
+
+  const tabs: { id: Tab; label: string; short: string; icon: typeof Inbox; badge?: number }[] = [
+    { id: 'overview', label: 'Overview', short: 'Home', icon: LayoutDashboard },
+    { id: 'support', label: 'Support', short: 'Support', icon: LifeBuoy, badge: unreadSupport },
+    { id: 'room', label: 'Public Room', short: 'Room', icon: Users },
+    { id: 'inbox', label: 'Inbox', short: 'Inbox', icon: Inbox, badge: openSuggestions + openReports },
+    { id: 'moderation', label: 'Moderation', short: 'Moderate', icon: ShieldCheck },
   ];
+
+  const go = (id: Tab) => {
+    setTab(id);
+    window.scrollTo({ top: 0 });
+  };
 
   return (
     <>
-      <div role="tablist" aria-label="Admin sections" className="flex gap-2 mb-6 flex-wrap">
+      <div role="tablist" aria-label="Admin sections" className="hidden desk:flex gap-2 mb-6 flex-wrap">
         {tabs.map(({ id, label, badge }) => (
           <button
             key={id}
             role="tab"
             aria-selected={tab === id}
-            onClick={() => setTab(id)}
+            onClick={() => go(id)}
             className={`chip shrink-0 ${tab === id ? '!bg-fg !text-ink !border-fg' : ''}`}
           >
             {label}
@@ -269,11 +295,64 @@ const Dashboard: React.FC = () => {
 
       {tab === 'overview' && <Overview openSuggestions={openSuggestions} openReports={openReports} />}
       {tab === 'support' && <SupportTab formatAgo={(ms) => formatAgo(ms)} onUnreadChange={setUnreadSupport} />}
-      {tab === 'suggestions' && (
-        <SuggestionsTab items={suggestions} setItems={setSuggestions} onConfirm={setConfirm} />
+      {tab === 'room' && <RoomTab onConfirm={setConfirm} />}
+      {tab === 'inbox' && (
+        <>
+          <div className="flex gap-2 mb-5" role="group" aria-label="Inbox">
+            {(
+              [
+                ['suggestions', 'Suggestions', openSuggestions],
+                ['reports', 'Reports', openReports],
+              ] as const
+            ).map(([id, label, count]) => (
+              <button
+                key={id}
+                onClick={() => setInboxView(id)}
+                aria-pressed={inboxView === id}
+                className={`chip h-8 px-3 text-[13px] ${inboxView === id ? '!bg-raised !text-fg !border-line-strong' : ''}`}
+              >
+                {label}
+                {count ? <span className="ml-1 text-[11px] font-semibold text-berry">{count}</span> : null}
+              </button>
+            ))}
+          </div>
+          {inboxView === 'suggestions' ? (
+            <SuggestionsTab items={suggestions} setItems={setSuggestions} onConfirm={setConfirm} />
+          ) : (
+            <ReportsTab items={reports} setItems={setReports} onConfirm={setConfirm} />
+          )}
+        </>
       )}
-      {tab === 'reports' && <ReportsTab items={reports} setItems={setReports} onConfirm={setConfirm} />}
       {tab === 'moderation' && <ModerationTab onConfirm={setConfirm} />}
+
+      <nav
+        aria-label="Admin sections"
+        className="tabbar desk:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
+      >
+        <div className="grid grid-cols-5 h-14 max-w-2xl mx-auto">
+          {tabs.map(({ id, short, icon: Icon, badge }) => {
+            const active = tab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => go(id)}
+                aria-current={active ? 'page' : undefined}
+                className={`relative flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+                  active ? 'text-berry' : 'text-subtle hover:text-fg'
+                }`}
+              >
+                <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.25 : 1.75} />
+                <span className="text-[11px] font-medium leading-none">{short}</span>
+                {badge ? (
+                  <span className="absolute top-1.5 left-1/2 ml-2 min-w-4 h-4 px-1 rounded-full bg-berry text-ink text-[10px] font-bold flex items-center justify-center">
+                    {badge > 9 ? '9+' : badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       {confirm && (
         <ConfirmDialog
@@ -565,7 +644,6 @@ const ReportsTab: React.FC<InboxProps<AdminReport>> = ({ items, setItems, onConf
 
 const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ onConfirm }) => {
   const [unsaid, setUnsaid] = useState<AdminUnsaidPost[] | null>(null);
-  const [room, setRoom] = useState<AdminRoomMessage[] | null>(null);
   const [community, setCommunity] = useState<CommunityPost[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -585,15 +663,9 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
         setUnsaid([]);
         setError(true);
       });
-    loadRoomMessages()
-      .then(setRoom)
-      .catch(() => {
-        setRoom([]);
-        setError(true);
-      });
   }, []);
 
-  const now = useMemo(() => Date.now(), [unsaid, room]);
+  const now = useMemo(() => Date.now(), [unsaid, community]);
 
   return (
     <div className="space-y-8">
@@ -694,92 +766,6 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
         )}
       </section>
 
-      <section>
-        <h2 className="text-[15px] font-semibold mb-1">Public Room</h2>
-        <p className="text-[13px] text-muted mb-3">Latest messages. Deleting one removes it for everyone.</p>
-        <TeamPostForm onPosted={(m) => setRoom((prev) => [m, ...(prev ?? [])])} />
-        {!room ? (
-          <Skeleton />
-        ) : room.length === 0 ? (
-          <Empty text="No messages yet." />
-        ) : (
-          <ul className="card divide-y divide-line">
-            {room.map((m) => (
-              <li key={m.id} className="flex items-start gap-3 p-3 sm:p-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12px] text-subtle">
-                    <span className={`font-medium ${m.authorName === TEAM_NAME ? 'text-berry' : 'text-muted'}`}>{m.authorName}</span> ·{' '}
-                    {formatAgo(m.createdAt, now)}
-                  </p>
-                  <p className="text-[14px] text-fg break-words">{m.text}</p>
-                </div>
-                <button
-                  onClick={() =>
-                    onConfirm({
-                      title: 'Delete this message?',
-                      message: `“${m.text.slice(0, 80)}${m.text.length > 80 ? '…' : ''}” will be removed for everyone.`,
-                      confirmLabel: 'Delete',
-                      run: async () => {
-                        await deleteRoomMessage(m.id);
-                        setRoom((prev) => prev?.filter((x) => x.id !== m.id) ?? prev);
-                      },
-                    })
-                  }
-                  className="icon-btn w-9 h-9 shrink-0"
-                  aria-label={`Delete message from ${m.authorName}`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
-  );
-};
-
-/** Post to the Public Room as the team, with the verified badge members see. */
-const TeamPostForm: React.FC<{ onPosted: (m: AdminRoomMessage) => void }> = ({ onPosted }) => {
-  const [text, setText] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'failed'>('idle');
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!text.trim() || state === 'sending') return;
-    setState('sending');
-    try {
-      const posted = await postTeamRoomMessage(text);
-      if (!posted) throw new Error('not posted');
-      onPosted(posted);
-      setText('');
-      setState('idle');
-    } catch (err) {
-      console.warn('[Admin] Team post failed:', err);
-      setState('failed');
-    }
-  };
-
-  return (
-    <form onSubmit={submit} className="card p-3 mb-3">
-      <label htmlFor="team-post" className="block text-[12px] text-muted mb-2">
-        Post as <span className="text-berry font-medium">{TEAM_NAME}</span> (shows a Team badge)
-      </label>
-      <div className="flex items-end gap-2">
-        <textarea
-          id="team-post"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={2}
-          maxLength={1000}
-          placeholder="Announcements, welcomes, reminders…"
-          className="flex-1 min-w-0 resize-none px-3.5 py-2.5 rounded-2xl bg-ink border border-line text-[14px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
-        />
-        <button type="submit" disabled={!text.trim() || state === 'sending'} className="btn btn-primary btn-sm">
-          {state === 'sending' ? 'Posting…' : 'Post'}
-        </button>
-      </div>
-      {state === 'failed' && <p className="mt-2 text-[12px] text-danger">Couldn’t post. Try again.</p>}
-    </form>
   );
 };

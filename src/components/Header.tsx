@@ -1,9 +1,13 @@
 import React from 'react';
-import { Volume2, VolumeX, Shield } from 'lucide-react';
+import { LayoutDashboard, Volume2, VolumeX, Shield } from 'lucide-react';
 import { AnimatedBrandTitle } from './AnimatedBrandTitle.tsx';
 import { AuthStatusBadge } from './AuthStatusBadge.tsx';
 import { NAV_ITEMS, NavTarget, isNavActive } from './BottomNavigation.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { isAdminDevice } from '../utils/adminDevice.ts';
+
+// Read once per page load; set when an admin signs in at /admin on this device.
+const SHOW_ADMIN_LINK = isAdminDevice();
 
 interface HeaderProps {
   onNavigate: (view: NavTarget) => void;
@@ -39,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
         <AnimatedBrandTitle sizeClass="text-[17px] sm:text-lg" />
       </button>
 
-      <nav className="hidden md:flex items-center gap-1 mx-auto" aria-label="Main">
+      <nav className="hidden desk:flex items-center gap-1 mx-auto" aria-label="Main">
         {NAV_ITEMS.map(({ id, label }) => {
           const active = isNavActive(id, currentView);
           return (
@@ -57,8 +61,13 @@ export const Header: React.FC<HeaderProps> = ({
         })}
       </nav>
 
-      <div className="flex items-center gap-0.5 ml-auto md:ml-0 shrink-0">
+      <div className="flex items-center gap-0.5 ml-auto desk:ml-0 shrink-0">
         <AuthStatusBadge className="mr-1.5" />
+        {SHOW_ADMIN_LINK && (
+          <a href="/admin" className="icon-btn text-berry hidden sm:inline-flex" title="Admin dashboard" aria-label="Open admin dashboard">
+            <LayoutDashboard className="w-[18px] h-[18px]" />
+          </a>
+        )}
         <button
           onClick={onToggleSound}
           className="icon-btn"
