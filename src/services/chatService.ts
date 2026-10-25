@@ -21,7 +21,7 @@ import { ChatMessage, ReplyQuote } from '../types.ts';
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
 
 /** Newest messages a 1-on-1 chat loads and keeps live. */
-export const CHAT_HISTORY = 200;
+export const CHAT_HISTORY = 40;
 
 export interface ConversationSession {
   convId: string;

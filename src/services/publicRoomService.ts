@@ -18,7 +18,7 @@ import { isAdminDevice } from '../utils/adminDevice.ts';
 import { TEAM_NAME } from './supportService.ts';
 
 /** How many recent messages the room shows. */
-export const PUBLIC_ROOM_HISTORY = 50;
+export const PUBLIC_ROOM_HISTORY = 20;
 
 export const isPublicRoomAvailable = () => isFirebaseConfigured && Boolean(db);
 
