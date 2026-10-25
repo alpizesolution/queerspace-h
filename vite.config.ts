@@ -14,6 +14,11 @@ export default defineConfig(() => {
         devOptions: {
           enabled: true,
         },
+        workbox: {
+          // Firebase sign-in pages (/__/auth/*) and API routes must reach the network.
+          // Serving the cached homepage for them breaks Google sign-in.
+          navigateFallbackDenylist: [/^\/__\//, /^\/api\//],
+        },
         manifest: {
           id: '/',
           name: 'QUEERSPACE PH — A Sapphic Space for Women',
