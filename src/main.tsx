@@ -2,9 +2,13 @@ import { lazy, Suspense } from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { QuotaNotice } from './components/QuotaNotice.tsx';
 import './index.css';
 import { hideSplash } from './utils/splash.ts';
 import { unlockAudioOnFirstTap } from './utils/sound.ts';
+import { installQuotaWatch } from './utils/quotaGuard.ts';
+
+installQuotaWatch();
 
 // The admin page is its own bundle, so regular visitors never download it.
 const AdminApp = lazy(() => import('./admin/AdminApp.tsx'));
@@ -33,6 +37,7 @@ createRoot(document.getElementById('root')!).render(
     ) : (
       <App />
     )}
+    <QuotaNotice />
   </ErrorBoundary>
 );
 
