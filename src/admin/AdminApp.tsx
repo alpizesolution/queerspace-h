@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { User } from 'firebase/auth';
+import { Analytics } from '@vercel/analytics/react';
 import { ArrowLeft, Check, Copy, LogOut, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '../components/Sheet.tsx';
 import { isFirebaseConfigured, subscribeAuthState } from '../lib/firebase.ts';
@@ -723,6 +724,7 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
           </ul>
         )}
       </section>
+      <Analytics />
     </div>
   );
 };
