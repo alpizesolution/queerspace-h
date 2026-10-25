@@ -5,7 +5,7 @@
   "description": "Support chats, Public Room and moderation for the QUEERSPACE PH team.",
   "theme_color": "#120b17",
   "background_color": "#120b17",
-  "display": "standalone",
+  "display": "minimal-ui",
   "start_url": "/admin",
   "scope": "/admin",
   "icons": [

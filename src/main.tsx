@@ -17,6 +17,11 @@ if (isAdminRoute) {
     else link.remove();
   });
   document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', 'QS Admin');
+  // iPhone home-screen apps get their own storage, so the admin's Google sign-in from Safari
+  // doesn't carry over, and signing in inside one can't finish. Without this meta (and with
+  // display: minimal-ui, which iOS treats as "browser"), the QS Admin icon opens in Safari and
+  // shares its sign-in. Android and desktop still install it as an app window.
+  document.querySelector('meta[name="apple-mobile-web-app-capable"]')?.remove();
 }
 
 createRoot(document.getElementById('root')!).render(
