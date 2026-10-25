@@ -2,6 +2,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/__/auth/:path*", "destination": "/api/firebase-auth?p=__/auth/:path*" },
+    { "source": "/__/firebase/:path*", "destination": "/api/firebase-auth?p=__/firebase/:path*" },
     {
       "source": "/(.*)",
       "destination": "/index.html"
@@ -9,7 +11,15 @@
   ],
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/__/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains" }
+      ]
+    },
+    {
+      "source": "/((?!__/).*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
