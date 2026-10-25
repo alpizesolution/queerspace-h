@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
-import { ArrowUp, BadgeCheck, Users } from 'lucide-react';
+import { ArrowUp, BadgeCheck, Reply, Users, X } from 'lucide-react';
+import { SwipeToReply } from './SwipeToReply.tsx';
 import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
@@ -8,6 +9,7 @@ import { soundEffects } from '../utils/sound.ts';
 import {
   canPostAsTeam,
   isPublicRoomAvailable,
+  quoteOf,
   sendPublicRoomMessage,
   sendTeamRoomMessage,
   subscribeToPublicRoom,
@@ -36,6 +38,22 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   // Admins signed in on this device can post as the team without leaving the room.
   const [teamAvailable, setTeamAvailable] = useState(false);
   const [asTeam, setAsTeam] = useState(false);
+  // Admins can answer a specific message; replies always go out as the team.
+  const [replyingTo, setReplyingTo] = useState<PublicRoomMessage | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startReply = (msg: PublicRoomMessage) => {
+    setReplyingTo(msg);
+    setAsTeam(true);
+    inputRef.current?.focus();
+  };
+
+  const jumpTo = (id: string) => {
+    const el = document.getElementById(`room-${id}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el?.classList.add('ring-2', 'ring-berry/60');
+    window.setTimeout(() => el?.classList.remove('ring-2', 'ring-berry/60'), 1200);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -84,12 +102,14 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
 
     setInputText('');
     setSendError(null);
+    const quoted = teamAvailable && asTeam && replyingTo ? quoteOf(replyingTo) : undefined;
     const result =
       teamAvailable && asTeam
-        ? (await sendTeamRoomMessage(sanitized.cleanText))
+        ? (await sendTeamRoomMessage(sanitized.cleanText, quoted))
           ? 'sent'
           : 'failed'
         : await sendPublicRoomMessage(userPrefs, sanitized.cleanText);
+    if (result === 'sent') setReplyingTo(null);
     if (result !== 'sent') {
       setInputText(sanitized.cleanText);
       setSendError(
@@ -161,18 +181,47 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                 {!msg.isSelf && !msg.team && <span className="text-subtle">{msg.authorPronouns}</span>}
                 <span className="text-subtle">{formatChatTime(msg.timestamp)}</span>
               </div>
-              <div
-                className={`px-3.5 py-2 text-[15px] leading-snug rounded-[20px] break-words whitespace-pre-wrap ${
-                  msg.isSelf
-                    ? 'bg-plum text-fg rounded-br-md'
-                    : msg.team
-                      ? 'bg-berry/10 border border-berry/30 text-fg rounded-bl-md'
-                      : 'bg-raised text-fg rounded-bl-md'
-                }`}
-              >
-                {msg.text}
-              </div>
+              <SwipeToReply onReply={() => startReply(msg)} disabled={!teamAvailable} className="max-w-full">
+                <div
+                  id={`room-${msg.id}`}
+                  className={`px-3.5 py-2 text-[15px] leading-snug rounded-[20px] break-words transition-shadow ${
+                    msg.isSelf
+                      ? 'bg-plum text-fg rounded-br-md'
+                      : msg.team
+                        ? 'bg-berry/10 border border-berry/30 text-fg rounded-bl-md'
+                        : 'bg-raised text-fg rounded-bl-md'
+                  }`}
+                >
+                  {msg.replyTo && (
+                    <button
+                      type="button"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onPointerUp={(e) => e.stopPropagation()}
+                      onClick={() => jumpTo(msg.replyTo!.id)}
+                      className="block w-full text-left mb-1.5 -mx-1 px-2.5 py-1.5 rounded-xl bg-black/20 border-l-2 border-berry cursor-pointer"
+                      aria-label={`Replying to ${msg.replyTo.author}: ${msg.replyTo.text}`}
+                    >
+                      <span className="block text-[12px] font-semibold text-berry">{msg.replyTo.author}</span>
+                      <span className="block text-[13px] text-fg/75 line-clamp-2 break-words">{msg.replyTo.text}</span>
+                    </button>
+                  )}
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                </div>
+              </SwipeToReply>
             </div>
+
+            {teamAvailable && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => startReply(msg)}
+                className="icon-btn w-8 h-8 shrink-0 self-center text-subtle"
+                aria-label={`Reply to ${msg.isSelf ? 'your message' : msg.author} as ${TEAM_NAME}`}
+                title="Reply as Team"
+              >
+                <Reply className="w-4 h-4" />
+              </button>
+            )}
           </div>
         ))}
 
@@ -186,7 +235,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
       )}
       {teamAvailable && (
         <div className="flex items-center gap-2 px-3 sm:px-4 pt-2.5 border-t border-line" role="group" aria-label="Post as">
-          <span className="text-[12px] text-subtle">Post as</span>
+          <span className="text-[12px] text-subtle whitespace-nowrap shrink-0">Post as</span>
           {[
             { team: false, label: userPrefs.displayName || 'You' },
             { team: true, label: TEAM_NAME },
@@ -196,7 +245,10 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
               type="button"
               // Keep the keyboard open: a blur here would shift the layout mid-tap.
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setAsTeam(opt.team)}
+              onClick={() => {
+                setAsTeam(opt.team);
+                if (!opt.team) setReplyingTo(null);
+              }}
               aria-pressed={asTeam === opt.team}
               className={`chip h-7 px-2.5 text-[12px] max-w-[45%] truncate ${
                 asTeam === opt.team ? (opt.team ? '!bg-berry !text-ink !border-berry' : '!bg-fg !text-ink !border-fg') : ''
@@ -206,6 +258,25 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
               <span className="truncate">{opt.label}</span>
             </button>
           ))}
+        </div>
+      )}
+      {replyingTo && (
+        <div className="flex items-center gap-2 mx-3 sm:mx-4 mt-2 pl-3 pr-1 py-1.5 rounded-xl bg-raised border-l-2 border-berry">
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-semibold text-berry">
+              Replying to {replyingTo.isSelf ? 'your message' : replyingTo.author} as {TEAM_NAME}
+            </p>
+            <p className="text-[13px] text-muted truncate">{replyingTo.text}</p>
+          </div>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setReplyingTo(null)}
+            className="icon-btn w-8 h-8"
+            aria-label="Cancel reply"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
       <form
@@ -222,6 +293,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           maxLength={1000}
           disabled={status === 'error'}
           placeholder={`Message as ${teamAvailable && asTeam ? TEAM_NAME : userPrefs.displayName || 'Sapphic Guest'}`}
+          ref={inputRef}
           aria-label="Message the public room"
           enterKeyHint="send"
           autoComplete="off"

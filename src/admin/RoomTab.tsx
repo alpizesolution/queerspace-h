@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUp, BadgeCheck, Trash2 } from 'lucide-react';
+import { ArrowUp, BadgeCheck, Reply, Trash2, X } from 'lucide-react';
 import { AnimalAvatar } from '../components/AnimalAvatar.tsx';
 import { formatChatTime } from '../utils/matching-logic.ts';
 import { deleteRoomMessage } from '../services/adminService.ts';
-import { sendTeamRoomMessage, subscribeToPublicRoom } from '../services/publicRoomService.ts';
+import { quoteOf, sendTeamRoomMessage, subscribeToPublicRoom } from '../services/publicRoomService.ts';
 import { TEAM_NAME } from '../services/supportService.ts';
 import type { PublicRoomMessage } from '../types.ts';
 
@@ -18,7 +18,9 @@ export const RoomTab: React.FC<RoomTabProps> = ({ onConfirm }) => {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<PublicRoomMessage | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(
     () =>
@@ -38,10 +40,12 @@ export const RoomTab: React.FC<RoomTabProps> = ({ onConfirm }) => {
     if (!text.trim() || sending) return;
     setSending(true);
     setFailed(false);
-    const id = await sendTeamRoomMessage(text);
+    const id = await sendTeamRoomMessage(text, replyingTo ? quoteOf(replyingTo) : undefined);
     setSending(false);
-    if (id) setText('');
-    else setFailed(true);
+    if (id) {
+      setText('');
+      setReplyingTo(null);
+    } else setFailed(true);
   };
 
   return (
@@ -75,8 +79,23 @@ export const RoomTab: React.FC<RoomTabProps> = ({ onConfirm }) => {
                     {m.team && <BadgeCheck className="w-3.5 h-3.5 text-berry shrink-0" aria-label="Team" />}
                     <span className="text-subtle shrink-0">{formatChatTime(m.timestamp)}</span>
                   </p>
+                  {m.replyTo && (
+                    <p className="mt-0.5 mb-1 pl-2 border-l-2 border-berry/60 text-[12px] text-subtle truncate">
+                      ↪ {m.replyTo.author}: {m.replyTo.text}
+                    </p>
+                  )}
                   <p className="text-[14px] text-fg break-words whitespace-pre-wrap">{m.text}</p>
                 </div>
+                <button
+                  onClick={() => {
+                    setReplyingTo(m);
+                    inputRef.current?.focus();
+                  }}
+                  className="icon-btn w-8 h-8 shrink-0"
+                  aria-label={`Reply to ${m.author}`}
+                >
+                  <Reply className="w-4 h-4" />
+                </button>
                 <button
                   onClick={() =>
                     onConfirm({
@@ -102,12 +121,24 @@ export const RoomTab: React.FC<RoomTabProps> = ({ onConfirm }) => {
             Couldn’t post. Try again.
           </p>
         )}
+        {replyingTo && (
+          <div className="flex items-center gap-2 mx-3 mt-2 pl-3 pr-1 py-1.5 rounded-xl bg-raised border-l-2 border-berry">
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-semibold text-berry">Replying to {replyingTo.author}</p>
+              <p className="text-[13px] text-muted truncate">{replyingTo.text}</p>
+            </div>
+            <button onClick={() => setReplyingTo(null)} className="icon-btn w-8 h-8" aria-label="Cancel reply">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         <form onSubmit={send} className="flex items-center gap-2 p-3 border-t border-line">
           <input
             type="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={1000}
+            ref={inputRef}
             placeholder={`Message as ${TEAM_NAME}`}
             aria-label={`Post to the Public Room as ${TEAM_NAME}`}
             enterKeyHint="send"

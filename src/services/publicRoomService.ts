@@ -12,7 +12,7 @@ import {
   FirestoreError,
 } from 'firebase/firestore';
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
-import { PublicRoomMessage, UserPreferences } from '../types.ts';
+import { PublicRoomMessage, RoomQuote, UserPreferences } from '../types.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { isAdminDevice } from '../utils/adminDevice.ts';
 import { TEAM_NAME } from './supportService.ts';
@@ -38,7 +38,20 @@ export function toPublicRoomMessage(id: string, data: Record<string, unknown>, s
     timestamp: millis,
     isSelf: Boolean(selfUid) && authorId === selfUid,
     ...(data.team === true ? { team: true } : {}),
+    ...(toRoomQuote(data.replyTo) ? { replyTo: toRoomQuote(data.replyTo) } : {}),
   };
+}
+
+function toRoomQuote(value: unknown): RoomQuote | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const q = value as Record<string, unknown>;
+  if (typeof q.id !== 'string' || !q.id) return undefined;
+  return { id: q.id, author: String(q.author ?? '').slice(0, 30), text: String(q.text ?? '').slice(0, 140) };
+}
+
+/** The short quote a reply stores (limits must match isValidRoomQuote in firestore.rules). */
+export function quoteOf(message: PublicRoomMessage): RoomQuote {
+  return { id: message.id.slice(0, 64), author: message.author.slice(0, 30), text: message.text.slice(0, 140) };
 }
 
 /** Live feed of the latest room messages, oldest first. */
@@ -118,7 +131,7 @@ export async function canPostAsTeam(): Promise<boolean> {
 }
 
 /** Posts with the verified team badge. Returns the new message ID, or null if it failed. */
-export async function sendTeamRoomMessage(text: string): Promise<string | null> {
+export async function sendTeamRoomMessage(text: string, replyTo?: RoomQuote): Promise<string | null> {
   const clean = text.trim().slice(0, 1000);
   const uid = auth?.currentUser?.uid;
   if (!db || !uid || !clean) return null;
@@ -130,6 +143,7 @@ export async function sendTeamRoomMessage(text: string): Promise<string | null> 
       text: clean,
       timestamp: serverTimestamp(),
       team: true,
+      ...(replyTo ? { replyTo } : {}),
     });
     return ref.id;
   } catch (err) {

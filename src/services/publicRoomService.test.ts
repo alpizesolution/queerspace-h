@@ -20,3 +20,9 @@ test('toPublicRoomMessage keeps the team flag only when it is exactly true', () 
   assert.equal(toPublicRoomMessage('t', { authorId: 'a', text: 'hi', team: true }, null).team, true);
   assert.equal(toPublicRoomMessage('t', { authorId: 'a', text: 'hi', team: 'yes' }, null).team, undefined);
 });
+
+test('toPublicRoomMessage keeps a well-formed reply quote and drops a broken one', () => {
+  const withQuote = toPublicRoomMessage('t', { authorId: 'a', text: 'hi', team: true, replyTo: { id: 'm1', author: 'Ivy', text: 'help?' } }, null);
+  assert.deepEqual(withQuote.replyTo, { id: 'm1', author: 'Ivy', text: 'help?' });
+  assert.equal(toPublicRoomMessage('t', { authorId: 'a', text: 'hi', replyTo: { text: 'no id' } }, null).replyTo, undefined);
+});

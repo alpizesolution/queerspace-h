@@ -124,4 +124,12 @@ export interface PublicRoomMessage {
   isSelf: boolean;
   /** Posted by an admin from /admin; shown with the verified team badge. */
   team?: boolean;
+  /** The message a team post answers, as a short quote. */
+  replyTo?: RoomQuote;
+}
+
+export interface RoomQuote {
+  id: string;
+  author: string;
+  text: string;
 }
