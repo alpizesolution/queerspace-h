@@ -15,3 +15,8 @@ test('toPublicRoomMessage marks your own messages and keeps valid avatars only',
 test('toPublicRoomMessage is never "self" when signed out', () => {
   assert.equal(toPublicRoomMessage('m', { authorId: '', text: 'x' }, null).isSelf, false);
 });
+
+test('toPublicRoomMessage keeps the team flag only when it is exactly true', () => {
+  assert.equal(toPublicRoomMessage('t', { authorId: 'a', text: 'hi', team: true }, null).team, true);
+  assert.equal(toPublicRoomMessage('t', { authorId: 'a', text: 'hi', team: 'yes' }, null).team, undefined);
+});

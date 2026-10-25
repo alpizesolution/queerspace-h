@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
-import { ArrowUp, Users } from 'lucide-react';
+import { ArrowUp, BadgeCheck, Users } from 'lucide-react';
 import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
@@ -112,19 +112,37 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
 
         {messages.map((msg) => (
           <div key={msg.id} className={`flex items-end gap-2 ${msg.isSelf ? 'flex-row-reverse' : ''}`}>
-            {!msg.isSelf && (
-              <AnimalAvatar avatar={msg.authorAvatar} seed={msg.authorId || msg.author} className="w-8 h-8" />
-            )}
+            {!msg.isSelf &&
+              (msg.team ? (
+                <span
+                  aria-hidden="true"
+                  className="w-8 h-8 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center text-[15px] font-bold"
+                >
+                  Q
+                </span>
+              ) : (
+                <AnimalAvatar avatar={msg.authorAvatar} seed={msg.authorId || msg.author} className="w-8 h-8" />
+              ))}
 
             <div className={`max-w-[80%] flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}>
               <div className="flex items-baseline gap-1.5 mb-1 px-1 text-[12px]">
                 {!msg.isSelf && <span className="font-semibold text-fg">{msg.author}</span>}
-                {!msg.isSelf && <span className="text-subtle">{msg.authorPronouns}</span>}
+                {!msg.isSelf && msg.team && (
+                  <span className="inline-flex items-center gap-1 self-center px-1.5 py-px rounded-full bg-berry/15 text-berry text-[10.5px] font-semibold uppercase tracking-wide">
+                    <BadgeCheck className="w-3 h-3" aria-hidden="true" />
+                    Team
+                  </span>
+                )}
+                {!msg.isSelf && !msg.team && <span className="text-subtle">{msg.authorPronouns}</span>}
                 <span className="text-subtle">{formatChatTime(msg.timestamp)}</span>
               </div>
               <div
                 className={`px-3.5 py-2 text-[15px] leading-snug rounded-[20px] break-words whitespace-pre-wrap ${
-                  msg.isSelf ? 'bg-plum text-fg rounded-br-md' : 'bg-raised text-fg rounded-bl-md'
+                  msg.isSelf
+                    ? 'bg-plum text-fg rounded-br-md'
+                    : msg.team
+                      ? 'bg-berry/10 border border-berry/30 text-fg rounded-bl-md'
+                      : 'bg-raised text-fg rounded-bl-md'
                 }`}
               >
                 {msg.text}

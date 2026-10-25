@@ -34,6 +34,7 @@ export function toPublicRoomMessage(id: string, data: Record<string, unknown>, s
     text: String(data.text ?? ''),
     timestamp: millis,
     isSelf: Boolean(selfUid) && authorId === selfUid,
+    ...(data.team === true ? { team: true } : {}),
   };
 }
 

@@ -11,6 +11,7 @@ import { CommunityFeedView } from './components/CommunityFeedView.tsx';
 import { UnsaidView } from './components/UnsaidView.tsx';
 import { InfoModals } from './components/InfoModals.tsx';
 import { DonationModal } from './components/DonationModal.tsx';
+import { SupportChat } from './components/SupportChat.tsx';
 import { FloatingCatsBackground } from './components/FloatingCatsBackground.tsx';
 import { InstallPrompt } from './components/InstallPrompt.tsx';
 import { PartnerProfile, UserPreferences } from './types.ts';
@@ -19,6 +20,7 @@ import { getStorageItem, setStorageItem, STORAGE_KEYS } from './utils/storage.ts
 import { ensureAnonymousAuth, isFirebaseConfigured, logScreenView } from './lib/firebase.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile } from './services/profilePersistence.ts';
+import { hasUnreadSupportReply } from './services/supportService.ts';
 import { CheckCircle2 } from 'lucide-react';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 
@@ -26,6 +28,8 @@ export default function App() {
   const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community'>('home');
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [donationModalOpen, setDonationModalOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [hasSupportReply, setHasSupportReply] = useState(false);
   const [setupInitialMode, setSetupInitialMode] = useState<'quick' | 'custom'>('quick');
   const [activePartner, setActivePartner] = useState<PartnerProfile | null>(null);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -75,6 +79,11 @@ export default function App() {
                 setUserPrefs(res.prefs);
               }
             });
+            hasUnreadSupportReply().then((unread) => {
+              if (!unread) return;
+              setHasSupportReply(true);
+              showToast('The QUEERSPACE Team replied. Open "Chat with us" in the footer.');
+            });
           }
         })
         .catch((err) => {
@@ -96,6 +105,12 @@ export default function App() {
     setTimeout(() => {
       setToastMessage(null);
     }, 4000);
+  };
+
+  const openSupport = () => {
+    setActiveInfoModal(null);
+    setHasSupportReply(false);
+    setSupportOpen(true);
   };
 
   const handleSaveProfile = async (prefs: UserPreferences) => {
@@ -291,6 +306,8 @@ export default function App() {
         <Footer
           onOpenModal={(modal) => setActiveInfoModal(modal)}
           onOpenDonation={() => setDonationModalOpen(true)}
+          onOpenSupport={openSupport}
+          hasSupportReply={hasSupportReply}
           className={currentView === 'community' ? 'hidden sm:block' : ''}
         />
       )}
@@ -310,7 +327,18 @@ export default function App() {
 
       <DonationModal isOpen={donationModalOpen} onClose={() => setDonationModalOpen(false)} />
 
-      <InfoModals activeModal={activeInfoModal} onClose={() => setActiveInfoModal(null)} />
+      <InfoModals activeModal={activeInfoModal} onClose={() => setActiveInfoModal(null)} onOpenSupport={openSupport} />
+
+      {supportOpen && (
+        <SupportChat
+          userPrefs={userPrefs}
+          onClose={() => setSupportOpen(false)}
+          onOpenSuggestions={() => {
+            setSupportOpen(false);
+            setActiveInfoModal('contact');
+          }}
+        />
+      )}
     </div>
   );
 }

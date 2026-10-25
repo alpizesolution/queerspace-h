@@ -84,7 +84,7 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       // Only stamps of "now" can be written, so the clock can't be wound back.
       allow create, update: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['publicRoom', 'unsaid', 'suggestion', 'communityPost', 'communityReply'])
+        && request.resource.data.keys().hasOnly(['publicRoom', 'unsaid', 'suggestion', 'communityPost', 'communityReply', 'support'])
         && (!('publicRoom' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
             || request.resource.data.publicRoom == request.time)
         && (!('unsaid' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
@@ -94,7 +94,9 @@ service cloud.firestore {
         && (!('communityPost' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
             || request.resource.data.communityPost == request.time)
         && (!('communityReply' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
-            || request.resource.data.communityReply == request.time);
+            || request.resource.data.communityReply == request.time)
+        && (!('support' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.support == request.time);
       allow delete: if false;
     }
 
@@ -313,6 +315,21 @@ service cloud.firestore {
         && request.resource.data.text.size() <= 1000
         && request.resource.data.timestamp == request.time
         && slowMode('publicRoom', 2);
+
+      // Team announcements: only admins can post with the verified team flag (no slow mode).
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp', 'team'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp', 'team'])
+        && request.resource.data.team == true
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.authorName is string
+        && request.resource.data.authorName.size() <= 30
+        && request.resource.data.authorPronouns is string
+        && request.resource.data.authorPronouns.size() <= 20
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.timestamp == request.time;
 
       allow update: if false; // Immutable public room messages
       allow delete: if isAdmin();
@@ -551,6 +568,69 @@ service cloud.firestore {
 
       allow read, delete: if isAdmin();
       allow update: if isAdminStatusChange();
+    }
+
+    // ====================================================
+    // 7. SUPPORT CHAT
+    // ====================================================
+    // One private thread per member (support_threads/{uid}), visible only to that member
+    // and admins. The thread doc is a summary for the admin inbox; messages hold the chat.
+
+    function supportSummaryValid() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['displayName', 'avatar', 'lastMessage', 'lastFrom', 'updatedAt', 'unreadForTeam', 'unreadForUser'])
+        && d.lastMessage is string && d.lastMessage.size() <= 140
+        && (!('displayName' in d) || (d.displayName is string && d.displayName.size() <= 30))
+        && (!('avatar' in d) || (d.avatar is string && d.avatar.size() <= 24));
+    }
+
+    function supportChanged() {
+      return request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys();
+    }
+
+    match /support_threads/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Member sends: summary says the member wrote last, stamped with their slow mode.
+      allow create, update: if isOwner(userId)
+        && supportSummaryValid()
+        && request.resource.data.lastFrom == 'user'
+        && request.resource.data.unreadForTeam == true
+        && request.resource.data.updatedAt == request.time
+        && !('unreadForUser' in supportChanged())
+        && slowMode('support', 2);
+
+      // Member opens the chat: clear their unread flag only.
+      allow update: if isOwner(userId)
+        && supportChanged().hasOnly(['unreadForUser'])
+        && request.resource.data.unreadForUser == false;
+
+      // Team replies, or opens the thread (clears the team's unread flag only).
+      allow update: if isAdmin() && supportSummaryValid() && (
+        (supportChanged().hasOnly(['lastMessage', 'lastFrom', 'updatedAt', 'unreadForUser', 'unreadForTeam'])
+          && request.resource.data.lastFrom == 'team'
+          && request.resource.data.unreadForUser == true
+          && request.resource.data.updatedAt == request.time)
+        || (supportChanged().hasOnly(['unreadForTeam']) && request.resource.data.unreadForTeam == false)
+      );
+
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isOwner(userId) || isAdmin();
+
+        allow create: if request.resource.data.keys().hasAll(['from', 'text', 'timestamp'])
+          && request.resource.data.keys().hasOnly(['from', 'text', 'timestamp'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 1000
+          && request.resource.data.timestamp == request.time
+          && ((isOwner(userId) && request.resource.data.from == 'user' && slowMode('support', 2))
+              || (isAdmin() && request.resource.data.from == 'team'));
+
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
     }
   }
 }

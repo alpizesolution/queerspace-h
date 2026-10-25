@@ -6,6 +6,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import fs from 'node:fs';
 import test, { before, after, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
@@ -797,4 +798,76 @@ test('C-05: Only the author or an admin CAN delete a post', async () => {
   await assertSucceeds(testEnv.authenticatedContext('alice').firestore().doc('community_posts/p1').delete());
   await seedAdmin();
   await assertSucceeds(adminDb().doc('community_posts/p2').delete());
+});
+
+// ---------------------------------------------------------------- Support chat
+
+function supportSend(uid: string, text: string, fs = testEnv.authenticatedContext(uid).firestore()) {
+  const batch = fs.batch();
+  batch.set(fs.collection(`support_threads/${uid}/messages`).doc(), { from: 'user', text, timestamp: now() });
+  batch.set(
+    fs.doc(`support_threads/${uid}`),
+    { displayName: 'Moody_Raccoon', lastMessage: text.slice(0, 140), lastFrom: 'user', updatedAt: now(), unreadForTeam: true },
+    { merge: true }
+  );
+  batch.set(fs.doc(`rate_limits/${uid}`), { support: now() }, { merge: true });
+  return batch.commit();
+}
+
+function teamReply(uid: string, text: string, fs = adminDb()) {
+  const batch = fs.batch();
+  batch.set(fs.collection(`support_threads/${uid}/messages`).doc(), { from: 'team', text, timestamp: now() });
+  batch.update(fs.doc(`support_threads/${uid}`), {
+    lastMessage: text.slice(0, 140), lastFrom: 'team', updatedAt: now(), unreadForUser: true, unreadForTeam: false,
+  });
+  return batch.commit();
+}
+
+test('S-01: A member CAN open a private support thread; only they and admins can read it', async () => {
+  await seedAdmin();
+  await assertSucceeds(supportSend('ivy', 'How do I change my name?'));
+  const ivy = testEnv.authenticatedContext('ivy').firestore();
+  await assertSucceeds(ivy.doc('support_threads/ivy').get());
+  await assertSucceeds(ivy.collection('support_threads/ivy/messages').get());
+  const eve = testEnv.authenticatedContext('eve').firestore();
+  await assertFails(eve.doc('support_threads/ivy').get());
+  await assertFails(eve.collection('support_threads/ivy/messages').get());
+  await assertFails(eve.collection('support_threads').get());
+  await assertSucceeds(adminDb().collection('support_threads').get());
+  await assertSucceeds(adminDb().collection('support_threads/ivy/messages').get());
+});
+
+test('S-02: Members CANNOT pose as the team, write into others threads, or skip slow mode', async () => {
+  await seedAdmin();
+  const ivy = testEnv.authenticatedContext('ivy').firestore();
+  await assertFails(ivy.collection('support_threads/ivy/messages').add({ from: 'team', text: 'fake', timestamp: now() }));
+  await assertFails(supportSend('ivy', 'hi', testEnv.authenticatedContext('eve').firestore()));
+  await assertSucceeds(supportSend('ivy', 'first'));
+  await assertFails(supportSend('ivy', 'too fast'));
+  // Members can clear only their own unread flag, never the team's.
+  await assertSucceeds(ivy.doc('support_threads/ivy').update({ unreadForUser: false }));
+  await assertFails(ivy.doc('support_threads/ivy').update({ unreadForTeam: false }));
+});
+
+test('S-03: Admins CAN reply as the team and mark threads read; members see the reply', async () => {
+  await seedAdmin();
+  await assertSucceeds(supportSend('ivy', 'Is this app safe?'));
+  await assertSucceeds(teamReply('ivy', 'Yes! Here is how we keep it safe…'));
+  await assertSucceeds(adminDb().doc('support_threads/ivy').update({ unreadForTeam: false }));
+  await assertFails(adminDb().doc('support_threads/ivy').update({ lastMessage: 'rewritten' }));
+  // A Google user without an admins doc cannot reply.
+  const eve = testEnv.authenticatedContext('eve', google).firestore();
+  await assertFails(teamReply('ivy', 'not staff', eve));
+  const msgs = await testEnv.authenticatedContext('ivy').firestore().collection('support_threads/ivy/messages').get();
+  assert.equal(msgs.docs.filter((d) => d.data().from === 'team').length, 1);
+});
+
+test('S-04: Only admins CAN post verified team messages in the Public Room', async () => {
+  await seedAdmin();
+  const teamMsg = (uid: string) => ({
+    authorId: uid, authorName: 'QUEERSPACE Team', authorPronouns: 'team', text: 'Welcome!', timestamp: now(), team: true,
+  });
+  await assertSucceeds(adminDb().collection('public_room_messages').add(teamMsg('cha')));
+  await assertFails(testEnv.authenticatedContext('ivy').firestore().collection('public_room_messages').add(teamMsg('ivy')));
+  await assertFails(stampedAdd('ivy', 'public_room_messages', teamMsg('ivy'), 'publicRoom'));
 });

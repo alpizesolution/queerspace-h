@@ -122,4 +122,6 @@ export interface PublicRoomMessage {
   text: string;
   timestamp: number;
   isSelf: boolean;
+  /** Posted by an admin from /admin; shown with the verified team badge. */
+  team?: boolean;
 }
