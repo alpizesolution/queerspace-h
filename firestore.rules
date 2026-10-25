@@ -295,6 +295,15 @@ service cloud.firestore {
     // 3. PUBLIC ROOM MESSAGES (TOWN SQUARE)
     // ====================================================
 
+    function isValidRoomQuote(q) {
+      return q is map
+        && q.keys().hasAll(['id', 'author', 'text'])
+        && q.keys().hasOnly(['id', 'author', 'text'])
+        && q.id is string && q.id.size() >= 1 && q.id.size() <= 64
+        && q.author is string && q.author.size() <= 30
+        && q.text is string && q.text.size() <= 140;
+    }
+
     match /public_room_messages/{messageId} {
       allow read: if isAuthenticated();
 
@@ -316,10 +325,12 @@ service cloud.firestore {
         && request.resource.data.timestamp == request.time
         && slowMode('publicRoom', 2);
 
-      // Team announcements: only admins can post with the verified team flag (no slow mode).
+      // Team announcements: only admins can post with the verified team flag (no slow mode),
+      // optionally quoting the message they answer.
       allow create: if isAdmin()
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp', 'team'])
-        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp', 'team'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp', 'team', 'replyTo'])
+        && (!('replyTo' in request.resource.data) || isValidRoomQuote(request.resource.data.replyTo))
         && request.resource.data.team == true
         && request.resource.data.authorId == request.auth.uid
         && request.resource.data.authorName is string
@@ -490,9 +501,10 @@ service cloud.firestore {
         && slowMode('unsaid', 60);
 
       // A reaction: +1 on one reaction counter alongside a new reactions/{uid} doc of that type.
-      // Counters added after launch (felt, strong, proud) start missing and count from 0.
+      // Counters added after launch (felt, strong, proud, cry) start missing and count from 0.
       allow update: if isAuthenticated()
-        && (bumpsOnly('hugs') || bumpsOnly('same') || bumpsOnly('felt') || bumpsOnly('strong') || bumpsOnly('proud'))
+        && (bumpsOnly('hugs') || bumpsOnly('same') || bumpsOnly('felt') || bumpsOnly('strong') || bumpsOnly('proud')
+            || bumpsOnly('cry'))
         && !exists(/databases/$(database)/documents/unsaid/$(postId)/reactions/$(request.auth.uid))
         && getAfter(/databases/$(database)/documents/unsaid/$(postId)/reactions/$(request.auth.uid)).data.type
              in request.resource.data.diff(resource.data).affectedKeys();
@@ -515,7 +527,7 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId)
           && request.resource.data.keys().hasOnly(['type', 'createdAt'])
-          && request.resource.data.type in ['hugs', 'same', 'felt', 'strong', 'proud']
+          && request.resource.data.type in ['hugs', 'same', 'felt', 'strong', 'proud', 'cry']
           && request.resource.data.createdAt == request.time
           && getAfter(unsaidPath(postId)).data[request.resource.data.type]
                == get(unsaidPath(postId)).data.get(request.resource.data.type, 0) + 1;

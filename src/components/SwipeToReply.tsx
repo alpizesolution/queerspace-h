@@ -9,6 +9,8 @@ interface SwipeToReplyProps {
   /** A tap without a swipe, e.g. to show the message's actions. */
   onTap?: () => void;
   className?: string;
+  /** Render the children as-is, with no swipe. */
+  disabled?: boolean;
   children: React.ReactNode;
 }
 
@@ -16,7 +18,7 @@ interface SwipeToReplyProps {
  * Drag a message to the right to reply, like in messaging apps. Vertical scrolling stays
  * with the browser (touch-action: pan-y), so only sideways drags move the bubble.
  */
-export const SwipeToReply: React.FC<SwipeToReplyProps> = ({ onReply, onTap, className = '', children }) => {
+export const SwipeToReply: React.FC<SwipeToReplyProps> = ({ onReply, onTap, className = '', disabled = false, children }) => {
   const [offset, setOffset] = useState(0);
   const start = useRef<{ x: number; y: number; id: number } | null>(null);
   const moved = useRef(false);
@@ -70,6 +72,8 @@ export const SwipeToReply: React.FC<SwipeToReplyProps> = ({ onReply, onTap, clas
   };
 
   const progress = Math.min(1, offset / TRIGGER_PX);
+
+  if (disabled) return <div className={className}>{children}</div>;
 
   return (
     <div

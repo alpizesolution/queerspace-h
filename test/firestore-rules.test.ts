@@ -508,6 +508,8 @@ test('U-04: Each person CAN react once, by exactly one', async () => {
   // Newer reactions count up from a missing field on older posts.
   await assertSucceeds(reactAs('erin', 'p1', 'felt'));
   await assertSucceeds(reactAs('fay', 'p1', 'proud'));
+  await assertSucceeds(reactAs('ivy', 'p1', 'cry'));
+  await assertFails(reactAs('jo', 'p1', 'gasp'));
   await assertFails(reactAs('gail', 'p1', 'felt', 2));
   await assertFails(reactAs('hana', 'p1', 'angry'));
   // A bare counter bump without the marker doc is rejected.
@@ -870,4 +872,20 @@ test('S-04: Only admins CAN post verified team messages in the Public Room', asy
   await assertSucceeds(adminDb().collection('public_room_messages').add(teamMsg('cha')));
   await assertFails(testEnv.authenticatedContext('ivy').firestore().collection('public_room_messages').add(teamMsg('ivy')));
   await assertFails(stampedAdd('ivy', 'public_room_messages', teamMsg('ivy'), 'publicRoom'));
+});
+
+test('S-05: Team posts CAN quote a message; members cannot, and quotes must be well-formed', async () => {
+  await seedAdmin();
+  const quote = { id: 'm1', author: 'Ivy', text: 'How do I rename?' };
+  const teamReply = (extra: object) => ({
+    authorId: 'cha', authorName: 'QUEERSPACE Team', authorPronouns: 'team', text: 'Tap your avatar!', timestamp: now(), team: true, ...extra,
+  });
+  await assertSucceeds(adminDb().collection('public_room_messages').add(teamReply({ replyTo: quote })));
+  await assertFails(adminDb().collection('public_room_messages').add(teamReply({ replyTo: { ...quote, text: 'x'.repeat(141) } })));
+  await assertFails(adminDb().collection('public_room_messages').add(teamReply({ replyTo: { ...quote, extra: 1 } })));
+  await assertFails(
+    stampedAdd('ivy', 'public_room_messages', {
+      authorId: 'ivy', authorName: 'Ivy', authorPronouns: 'she/her', text: 'hi', timestamp: now(), replyTo: quote,
+    }, 'publicRoom')
+  );
 });
