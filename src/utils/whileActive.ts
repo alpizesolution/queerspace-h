@@ -6,7 +6,7 @@
  * and reopens it on the next tap, key, scroll or return to the tab (reopening re-reads the
  * query once, so screens catch up on whatever they missed).
  */
-export const IDLE_AFTER_MS = 5 * 60 * 1000;
+export const IDLE_AFTER_MS = 2 * 60 * 1000;
 const CHECK_EVERY_MS = 30 * 1000;
 const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'touchstart', 'scroll', 'focus', 'visibilitychange'] as const;
 
