@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Heart, Shield, RefreshCw } from 'lucide-react';
 import { UserPreferences } from '../types.ts';
-import { joinLiveMatchQueue, LiveMatch, queueAgeFields } from '../services/liveMatchService.ts';
+import { joinLiveMatchQueue, LiveMatch, queueMatchFields } from '../services/liveMatchService.ts';
 
 interface SearchingStateProps {
   mode: 'quick' | 'custom';
@@ -40,7 +40,7 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
           clearInterval(ticker);
         },
       },
-      queueAgeFields(prefs)
+      queueMatchFields(prefs)
     );
 
     const ticker = setInterval(() => {

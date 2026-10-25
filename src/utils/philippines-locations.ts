@@ -367,3 +367,25 @@ function isMindanaoLocation(loc: string): boolean {
     l.includes('agusan')
   );
 }
+
+/** Island group, region and place for a location option: ['Visayas', 'Region VII (Central Visayas)', 'Cebu City']. */
+function locationPath(name: string): string[] {
+  if ((PHILIPPINE_ISLAND_GROUPS as readonly string[]).includes(name)) return [name];
+  for (const group of PHILIPPINE_REGIONS_AND_LOCATIONS) {
+    if (group.region === name) return [group.islandGroup, group.region];
+    if (group.provincesAndCities.includes(name)) return [group.islandGroup, group.region, name];
+  }
+  return [name];
+}
+
+/**
+ * Two location options overlap when one contains the other: 'Visayas' overlaps 'Cebu City',
+ * 'Region VII (Central Visayas)' overlaps 'Cebu City', but 'Cebu City' and 'Bohol' don't.
+ */
+export function locationsOverlap(a: string, b: string): boolean {
+  if (a === NATIONWIDE_OPTION || b === NATIONWIDE_OPTION) return true;
+  const pa = locationPath(a);
+  const pb = locationPath(b);
+  const [shorter, longer] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
+  return shorter.every((part, i) => longer[i] === part);
+}

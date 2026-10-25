@@ -15,7 +15,8 @@ import {
   where,
 } from 'firebase/firestore';
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
-import { Intention, PartnerProfile } from '../types.ts';
+import { Intention, PartnerProfile, UserPreferences } from '../types.ts';
+import { locationsOverlap, NATIONWIDE_OPTION } from '../utils/philippines-locations.ts';
 import { endCloudConversation } from './chatService.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 
@@ -74,6 +75,20 @@ export interface QueueAgePrefs {
   ageMax?: number;
 }
 
+/**
+ * Everything a queue entry carries for filtering. `areas` and `expr` describe the person (only
+ * when they show them on their profile); `wantAreas` and `wantExpr` are their filters.
+ */
+export interface QueueMatchPrefs extends QueueAgePrefs {
+  areas?: string[];
+  wantAreas?: string[];
+  expr?: string[];
+  wantExpr?: string[];
+}
+
+/** Longest list a queue entry may carry (must match firestore.rules). */
+export const MAX_QUEUE_LIST = 20;
+
 /** Both people fit each other's age range (when either has one). A range needs a known age to match. */
 export function agesCompatible(a: QueueAgePrefs, b: QueueAgePrefs): boolean {
   const fits = (range: QueueAgePrefs, age?: number) =>
@@ -83,30 +98,61 @@ export function agesCompatible(a: QueueAgePrefs, b: QueueAgePrefs): boolean {
   return fits(a, b.age) && fits(b, a.age);
 }
 
-/** Builds the queue entry's age fields from setup preferences. */
-export function queueAgeFields(prefs: { age?: number; applyAgeFilter?: boolean; ageMin?: number; ageMax?: number }): QueueAgePrefs {
+/**
+ * Both people pass each other's location and gender expression filters. Someone who didn't
+ * share a location or expression is never excluded, matching the setup screen's promise.
+ */
+export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boolean {
+  const fitsArea = (want?: string[], theirs?: string[]) =>
+    !want?.length || !theirs?.length || theirs.some((area) => want.some((w) => locationsOverlap(w, area)));
+  const fitsExpr = (want?: string[], theirs?: string[]) =>
+    !want?.length || !theirs?.length || theirs.some((e) => want.includes(e));
+  return (
+    agesCompatible(a, b) &&
+    fitsArea(a.wantAreas, b.areas) &&
+    fitsArea(b.wantAreas, a.areas) &&
+    fitsExpr(a.wantExpr, b.expr) &&
+    fitsExpr(b.wantExpr, a.expr)
+  );
+}
+
+/** Builds the queue entry's filter fields from setup preferences. */
+export function queueMatchFields(prefs: Partial<UserPreferences>): QueueMatchPrefs {
   const valid = (n?: number) => typeof n === 'number' && Number.isInteger(n) && n >= MIN_AGE && n <= MAX_AGE;
-  const fields: QueueAgePrefs = {};
+  const fields: QueueMatchPrefs = {};
   if (valid(prefs.age)) fields.age = prefs.age;
   if (prefs.applyAgeFilter && valid(prefs.ageMin) && valid(prefs.ageMax) && prefs.ageMin! <= prefs.ageMax!) {
     fields.ageMin = prefs.ageMin;
     fields.ageMax = prefs.ageMax;
   }
+
+  const areas = (prefs.locationSelection ?? []).filter((a) => a && a !== NATIONWIDE_OPTION).slice(0, MAX_QUEUE_LIST);
+  if (areas.length && prefs.showLocationOnProfile !== false) fields.areas = areas;
+  if (areas.length && prefs.applyLocationFilter) fields.wantAreas = areas;
+
+  const expr = prefs.genderExpression ?? [];
+  if (expr.length && !expr.includes('Prefer not to say') && prefs.showGenderExpressionOnProfile !== false) {
+    fields.expr = expr.slice(0, MAX_QUEUE_LIST);
+  }
+  const wantExpr = prefs.preferredGenderExpressions ?? [];
+  if (prefs.applyGenderExpressionFilter && wantExpr.length && !wantExpr.includes('Any / No preference')) {
+    fields.wantExpr = wantExpr.slice(0, MAX_QUEUE_LIST);
+  }
   return fields;
 }
 
-/** Oldest-first candidate order, ignoring self, blocked users, stale entries and age mismatches. */
+/** Oldest-first candidate order, ignoring self, blocked users, stale entries and filter mismatches. */
 export function pickQueueCandidates(
-  entries: { id: string; data: { status?: string; heartbeatAt?: unknown; createdAt?: unknown } & QueueAgePrefs }[],
+  entries: { id: string; data: { status?: string; heartbeatAt?: unknown; createdAt?: unknown } & QueueMatchPrefs }[],
   selfUid: string,
   excludeIds: string[],
   now: number = Date.now(),
-  mine: QueueAgePrefs = {}
+  mine: QueueMatchPrefs = {}
 ): string[] {
   const excluded = new Set([selfUid, ...excludeIds]);
   return entries
     .filter((e) => e.data.status === 'waiting' && !excluded.has(e.id) && isFreshQueueEntry(e.data, now))
-    .filter((e) => agesCompatible(mine, e.data))
+    .filter((e) => filtersCompatible(mine, e.data))
     .sort((a, b) => toMillis(a.data.createdAt) - toMillis(b.data.createdAt))
     .map((e) => e.id);
 }
@@ -155,7 +201,7 @@ async function loadPartnerProfile(partnerId: string): Promise<PartnerProfile> {
 export function joinLiveMatchQueue(
   excludeIds: string[],
   handlers: LiveMatchHandlers,
-  agePrefs: QueueAgePrefs = {}
+  matchPrefs: QueueMatchPrefs = {}
 ): () => void {
   let cancelled = false;
   let matched = false;
@@ -232,7 +278,7 @@ export function joinLiveMatchQueue(
         me,
         excludeIds,
         Date.now(),
-        agePrefs
+        matchPrefs
       );
       emptyScans = candidates.length ? 0 : emptyScans + 1;
 
@@ -245,7 +291,7 @@ export function joinLiveMatchQueue(
             const theirRef = doc(firestore, QUEUE, partnerId);
             const [mine, theirs] = await Promise.all([tx.get(myRef), tx.get(theirRef)]);
             if (!mine.exists() || mine.data().status !== 'waiting') throw new Error('self-not-waiting');
-            if (!theirs.exists() || theirs.data().status !== 'waiting' || !isFreshQueueEntry(theirs.data()) || !agesCompatible(agePrefs, theirs.data())) {
+            if (!theirs.exists() || theirs.data().status !== 'waiting' || !isFreshQueueEntry(theirs.data()) || !filtersCompatible(matchPrefs, theirs.data())) {
               throw new Error('partner-unavailable');
             }
             tx.set(convRef, {
@@ -292,7 +338,7 @@ export function joinLiveMatchQueue(
         createdAt: serverTimestamp(),
         heartbeatAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        ...agePrefs,
+        ...matchPrefs,
       });
     } catch (err) {
       console.warn('[LiveMatch] Could not join queue:', err);

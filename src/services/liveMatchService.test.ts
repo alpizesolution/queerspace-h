@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Timestamp } from 'firebase/firestore';
-import { agesCompatible, isFreshQueueEntry, nextClaimDelay, pickQueueCandidates, queueAgeFields } from './liveMatchService.ts';
+import { agesCompatible, filtersCompatible, isFreshQueueEntry, nextClaimDelay, pickQueueCandidates, queueMatchFields } from './liveMatchService.ts';
 
 const now = 1_800_000_000_000;
 const ts = (msAgo: number) => Timestamp.fromMillis(now - msAgo);
@@ -59,9 +59,53 @@ test('pickQueueCandidates filters by age both ways', () => {
   assert.deepEqual(pickQueueCandidates(entries, 'me', [], now, { age: 25 }), ['no-age', 'too-old', 'fits']);
 });
 
-test('queueAgeFields keeps only valid ages and a range when the filter is on', () => {
-  assert.deepEqual(queueAgeFields({}), {});
-  assert.deepEqual(queueAgeFields({ age: 30, applyAgeFilter: false, ageMin: 20, ageMax: 30 }), { age: 30 });
-  assert.deepEqual(queueAgeFields({ age: 30, applyAgeFilter: true, ageMin: 25, ageMax: 35 }), { age: 30, ageMin: 25, ageMax: 35 });
-  assert.deepEqual(queueAgeFields({ age: 16, applyAgeFilter: true, ageMin: 35, ageMax: 25 }), {});
+test('queueMatchFields keeps only valid ages and a range when the filter is on', () => {
+  assert.deepEqual(queueMatchFields({}), {});
+  assert.deepEqual(queueMatchFields({ age: 30, applyAgeFilter: false, ageMin: 20, ageMax: 30 }), { age: 30 });
+  assert.deepEqual(queueMatchFields({ age: 30, applyAgeFilter: true, ageMin: 25, ageMax: 35 }), { age: 30, ageMin: 25, ageMax: 35 });
+  assert.deepEqual(queueMatchFields({ age: 16, applyAgeFilter: true, ageMin: 35, ageMax: 25 }), {});
+});
+
+test('filtersCompatible: location filters match containing areas, both ways', () => {
+  const cebu = { areas: ['Cebu City'] };
+  assert.equal(filtersCompatible({ wantAreas: ['Visayas'] }, cebu), true);
+  assert.equal(filtersCompatible({ wantAreas: ['Region VII (Central Visayas)'] }, cebu), true);
+  assert.equal(filtersCompatible({ wantAreas: ['Quezon City'] }, cebu), false);
+  assert.equal(filtersCompatible({ wantAreas: ['Quezon City'] }, {}), true, 'no shared location is never excluded');
+  assert.equal(filtersCompatible({ areas: ['Quezon City'] }, { areas: ['Cebu City'], wantAreas: ['Cebu City'] }), false, 'their filter counts too');
+  assert.equal(filtersCompatible({ wantAreas: ['Luzon'] }, { areas: ['Bohol', 'Makati City'] }), true);
+});
+
+test('filtersCompatible: gender expression filters, both ways, never excluding the unshared', () => {
+  assert.equal(filtersCompatible({ wantExpr: ['Butch'] }, { expr: ['Butch', 'Stem'] }), true);
+  assert.equal(filtersCompatible({ wantExpr: ['Butch'] }, { expr: ['Femme'] }), false);
+  assert.equal(filtersCompatible({ wantExpr: ['Butch'] }, {}), true);
+  assert.equal(filtersCompatible({ expr: ['Femme'] }, { wantExpr: ['Andro'] }), false);
+  assert.equal(filtersCompatible({ expr: ['Femme'], age: 30 }, { wantExpr: ['Femme'], age: 31, ageMin: 18, ageMax: 25 }), false, 'age still applies');
+});
+
+test('queueMatchFields shares location and expression only when shown, and filters only when on', () => {
+  assert.deepEqual(
+    queueMatchFields({
+      locationSelection: ['Cebu City'],
+      applyLocationFilter: true,
+      genderExpression: ['Femme'],
+      applyGenderExpressionFilter: true,
+      preferredGenderExpressions: ['Butch'],
+    }),
+    { areas: ['Cebu City'], wantAreas: ['Cebu City'], expr: ['Femme'], wantExpr: ['Butch'] }
+  );
+  assert.deepEqual(
+    queueMatchFields({
+      locationSelection: ['Cebu City'],
+      showLocationOnProfile: false,
+      genderExpression: ['Femme'],
+      showGenderExpressionOnProfile: false,
+      applyGenderExpressionFilter: true,
+      preferredGenderExpressions: ['Any / No preference'],
+    }),
+    {}
+  );
+  assert.deepEqual(queueMatchFields({ locationSelection: ['Anywhere in the Philippines'], applyLocationFilter: true }), {});
+  assert.deepEqual(queueMatchFields({ genderExpression: ['Prefer not to say'] }), {});
 });
