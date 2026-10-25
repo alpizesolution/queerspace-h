@@ -24,6 +24,7 @@ import {
   AdminCheck,
   checkAdmin,
   deleteInboxItem,
+  finishRedirectSignIn,
   InboxStatus,
   isGoogleUser,
   loadDisplayName,
@@ -129,20 +130,31 @@ export default function AdminApp() {
     []
   );
 
+  const showSignInError = (err: unknown) => {
+    const code = (err as { code?: string })?.code ?? '';
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
+    console.warn('[Admin] Sign-in failed:', err);
+    setSignInError(
+      code === 'auth/operation-not-allowed'
+        ? 'Google sign-in is turned off. Enable it in Firebase → Authentication → Sign-in method.'
+        : code === 'auth/unauthorized-domain'
+          ? 'This domain isn’t allowed yet. Add it in Firebase → Authentication → Settings → Authorized domains.'
+          : `Couldn’t sign in. Please try again.${code ? ` (${code})` : ''}`
+    );
+  };
+
+  // Coming back from Google on phones and tablets: surface any error instead of a silent loop.
+  useEffect(() => {
+    finishRedirectSignIn().catch(showSignInError);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSignIn = async () => {
     setSignInError(null);
     try {
       await signInAdmin();
     } catch (err) {
-      const code = (err as { code?: string })?.code ?? '';
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
-      setSignInError(
-        code === 'auth/operation-not-allowed'
-          ? 'Google sign-in is turned off. Enable it in Firebase → Authentication → Sign-in method.'
-          : code === 'auth/unauthorized-domain'
-            ? 'This domain isn’t allowed yet. Add it in Firebase → Authentication → Settings → Authorized domains.'
-            : 'Couldn’t sign in. Please try again.'
-      );
+      showSignInError(err);
     }
   };
 

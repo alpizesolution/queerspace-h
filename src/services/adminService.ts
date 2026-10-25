@@ -1,4 +1,5 @@
 import {
+  getRedirectResult,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
@@ -114,6 +115,13 @@ export async function signInAdmin(): Promise<void> {
   if (!auth) throw new Error('Firebase is not configured');
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
+  // Phones, tablets and home-screen apps handle a full-page redirect far better than a popup.
+  const touchFirst =
+    window.matchMedia?.('(pointer: coarse)').matches || window.matchMedia?.('(display-mode: standalone)').matches;
+  if (touchFirst) {
+    await signInWithRedirect(auth, provider);
+    return;
+  }
   try {
     await signInWithPopup(auth, provider);
   } catch (err) {
@@ -123,6 +131,11 @@ export async function signInAdmin(): Promise<void> {
     }
     throw err;
   }
+}
+
+/** Finishes a redirect sign-in; throws its error (if any) so the page can show it. */
+export async function finishRedirectSignIn(): Promise<void> {
+  if (auth) await getRedirectResult(auth);
 }
 
 export async function signOutAdmin(): Promise<void> {
