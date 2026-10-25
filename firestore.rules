@@ -501,9 +501,10 @@ service cloud.firestore {
         && slowMode('unsaid', 60);
 
       // A reaction: +1 on one reaction counter alongside a new reactions/{uid} doc of that type.
-      // Counters added after launch (felt, strong, proud) start missing and count from 0.
+      // Counters added after launch (felt, strong, proud, cry) start missing and count from 0.
       allow update: if isAuthenticated()
-        && (bumpsOnly('hugs') || bumpsOnly('same') || bumpsOnly('felt') || bumpsOnly('strong') || bumpsOnly('proud'))
+        && (bumpsOnly('hugs') || bumpsOnly('same') || bumpsOnly('felt') || bumpsOnly('strong') || bumpsOnly('proud')
+            || bumpsOnly('cry'))
         && !exists(/databases/$(database)/documents/unsaid/$(postId)/reactions/$(request.auth.uid))
         && getAfter(/databases/$(database)/documents/unsaid/$(postId)/reactions/$(request.auth.uid)).data.type
              in request.resource.data.diff(resource.data).affectedKeys();
@@ -526,7 +527,7 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId)
           && request.resource.data.keys().hasOnly(['type', 'createdAt'])
-          && request.resource.data.type in ['hugs', 'same', 'felt', 'strong', 'proud']
+          && request.resource.data.type in ['hugs', 'same', 'felt', 'strong', 'proud', 'cry']
           && request.resource.data.createdAt == request.time
           && getAfter(unsaidPath(postId)).data[request.resource.data.type]
                == get(unsaidPath(postId)).data.get(request.resource.data.type, 0) + 1;

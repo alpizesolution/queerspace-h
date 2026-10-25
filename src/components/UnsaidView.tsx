@@ -33,12 +33,14 @@ const FILTERS: { id: 'all' | UnsaidKind; label: string }[] = [
   { id: 'confession', label: 'Confessions' },
 ];
 
-const REACTIONS: { type: UnsaidReaction; emoji: string; label: string }[] = [
+/** `img` swaps the emoji for a custom image from public/emoji. */
+const REACTIONS: { type: UnsaidReaction; emoji: string; label: string; img?: string }[] = [
   { type: 'hugs', emoji: '🫂', label: 'Sending a hug' },
   { type: 'same', emoji: '🤍', label: 'Same here' },
   { type: 'felt', emoji: '🥺', label: 'Felt this' },
   { type: 'strong', emoji: '💪', label: 'Stay strong' },
   { type: 'proud', emoji: '🌈', label: 'Proud of you' },
+  { type: 'cry', emoji: '😭', label: 'Crying with you', img: '/emoji/cry.webp' },
 ];
 
 function loadReacted(): Record<string, UnsaidReaction> {
@@ -256,38 +258,46 @@ export const UnsaidView: React.FC = () => {
                     <p className="text-[14.5px] sm:text-[16px] text-fg/90 leading-relaxed whitespace-pre-wrap break-words">
                       {post.text}
                     </p>
-                    <div className="flex items-center gap-0.5 mt-3 -ml-2 text-[13px] text-muted">
-                      {REACTIONS.map(({ type, emoji, label }) => {
-                        const active = myReaction === type;
-                        return (
-                          <button
-                            key={type}
-                            onClick={() => handleReact(post.id, type)}
-                            disabled={Boolean(myReaction) && !active}
-                            aria-pressed={active}
-                            aria-label={`${label}, ${post[type]}`}
-                            title={label}
-                            className={`inline-flex items-center gap-1 h-9 min-w-9 justify-center px-2 rounded-full transition-colors cursor-pointer disabled:cursor-default disabled:opacity-40 ${
-                              active ? 'bg-plum/40 text-fg' : 'hover:bg-raised hover:text-fg'
-                            }`}
-                          >
-                            <span aria-hidden="true" className="text-[17px] leading-none">{emoji}</span>
-                            {post[type] > 0 && <span className="text-subtle">{post[type]}</span>}
+                    <div className="flex flex-wrap items-center gap-y-1 mt-3 -ml-2 text-[13px] text-muted">
+                      <div className="flex flex-wrap items-center gap-0.5">
+                        {REACTIONS.map(({ type, emoji, label, img }) => {
+                          const active = myReaction === type;
+                          return (
+                            <button
+                              key={type}
+                              onClick={() => handleReact(post.id, type)}
+                              disabled={Boolean(myReaction) && !active}
+                              aria-pressed={active}
+                              aria-label={`${label}, ${post[type]}`}
+                              title={label}
+                              className={`inline-flex items-center gap-1 h-9 min-w-9 justify-center px-2 rounded-full transition-colors cursor-pointer disabled:cursor-default disabled:opacity-40 ${
+                                active ? 'bg-plum/40 text-fg' : 'hover:bg-raised hover:text-fg'
+                              }`}
+                            >
+                              {img ? (
+                                <img src={img} alt="" aria-hidden="true" width={20} height={20} className="w-5 h-5" />
+                              ) : (
+                                <span aria-hidden="true" className="text-[17px] leading-none">{emoji}</span>
+                              )}
+                              {post[type] > 0 && <span className="text-subtle">{post[type]}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="ml-auto flex items-center">
+                        <span className="text-[12px] text-subtle whitespace-nowrap">
+                          {formatFadesIn(post.expiresAt, now)}
+                        </span>
+                        {mine ? (
+                          <button onClick={() => setDeletingId(post.id)} className="icon-btn w-9 h-9" aria-label="Delete your post">
+                            <Trash2 className="w-4 h-4" />
                           </button>
-                        );
-                      })}
-                      <span className="ml-auto text-[12px] text-subtle whitespace-nowrap">
-                        {formatFadesIn(post.expiresAt, now)}
-                      </span>
-                      {mine ? (
-                        <button onClick={() => setDeletingId(post.id)} className="icon-btn w-9 h-9" aria-label="Delete your post">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button onClick={() => setReportingId(post.id)} className="icon-btn w-9 h-9" aria-label="Report post">
-                          <Flag className="w-4 h-4" />
-                        </button>
-                      )}
+                        ) : (
+                          <button onClick={() => setReportingId(post.id)} className="icon-btn w-9 h-9" aria-label="Report post">
+                            <Flag className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </li>
                 );

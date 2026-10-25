@@ -508,6 +508,8 @@ test('U-04: Each person CAN react once, by exactly one', async () => {
   // Newer reactions count up from a missing field on older posts.
   await assertSucceeds(reactAs('erin', 'p1', 'felt'));
   await assertSucceeds(reactAs('fay', 'p1', 'proud'));
+  await assertSucceeds(reactAs('ivy', 'p1', 'cry'));
+  await assertFails(reactAs('jo', 'p1', 'gasp'));
   await assertFails(reactAs('gail', 'p1', 'felt', 2));
   await assertFails(reactAs('hana', 'p1', 'angry'));
   // A bare counter bump without the marker doc is rejected.

@@ -30,7 +30,7 @@ export const UNSAID_LIFETIME_MS = 48 * 60 * 60 * 1000;
 export const UNSAID_HIDE_AT_FLAGS = 3;
 
 /** Reaction counters on a post; must match the list in firestore.rules. */
-export const UNSAID_REACTIONS = ['hugs', 'same', 'felt', 'strong', 'proud'] as const;
+export const UNSAID_REACTIONS = ['hugs', 'same', 'felt', 'strong', 'proud', 'cry'] as const;
 export type UnsaidReaction = (typeof UNSAID_REACTIONS)[number];
 
 export const UNSAID_KINDS = [
@@ -55,6 +55,7 @@ export interface UnsaidPost {
   felt: number;
   strong: number;
   proud: number;
+  cry: number;
   flags: number;
 }
 
@@ -160,6 +161,7 @@ export function subscribeToUnsaid(onPosts: (posts: UnsaidPost[]) => void, onErro
                 felt: Number(data.felt) || 0,
                 strong: Number(data.strong) || 0,
                 proud: Number(data.proud) || 0,
+                cry: Number(data.cry) || 0,
                 flags: Number(data.flags) || 0,
               };
             })
