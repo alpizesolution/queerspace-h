@@ -8,6 +8,7 @@ type InfoModal = 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact
 interface InfoModalsProps {
   activeModal: InfoModal | null;
   onClose: () => void;
+  onOpenSupport: () => void;
 }
 
 const CONTACT_EMAIL = 'info.queerspaceph@gmail.com';
@@ -96,7 +97,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
   },
 ];
 
-export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) => {
+export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose, onOpenSupport }) => {
   if (!activeModal) return null;
 
   return (
@@ -151,7 +152,13 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) 
                 <p className="mt-2 text-[13.5px] leading-relaxed">{a}</p>
               </details>
             ))}
-            <p className="pt-2 text-[13px]">Still stuck? Use Suggestions in the footer and we'll help.</p>
+            <p className="pt-2 text-[13px]">
+              Still stuck?{' '}
+              <button onClick={onOpenSupport} className="text-berry font-medium hover:text-berry-hover cursor-pointer">
+                Chat with us
+              </button>{' '}
+              and we'll help.
+            </p>
           </div>
         )}
 
@@ -221,7 +228,13 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose }) 
           <>
             <p>Got an idea, spotted a bug, or something feels unsafe? Tell us.</p>
             <SuggestionForm />
-            <p className="pt-2">For anything longer or urgent, email us.</p>
+            <p className="pt-2">
+              Need a reply?{' '}
+              <button onClick={onOpenSupport} className="text-berry font-medium hover:text-berry-hover cursor-pointer">
+                Chat with the team
+              </button>
+              , or email us for anything longer.
+            </p>
             <dl className="card divide-y divide-line text-[13px]">
               <div className="flex justify-between gap-4 px-4 py-3">
                 <dt>Email</dt>

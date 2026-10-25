@@ -1,9 +1,12 @@
 import React from 'react';
-import { Heart, MessageSquarePlus } from 'lucide-react';
+import { Heart, MessageCircleHeart } from 'lucide-react';
 
 interface FooterProps {
   onOpenModal: (modal: 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact') => void;
   onOpenDonation: () => void;
+  onOpenSupport: () => void;
+  /** The team replied and the member hasn't read it yet. */
+  hasSupportReply?: boolean;
   className?: string;
 }
 
@@ -15,7 +18,7 @@ const LINKS = [
   { id: 'terms', label: 'Terms' },
 ] as const;
 
-export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenDonation, className = '' }) => (
+export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenDonation, onOpenSupport, hasSupportReply = false, className = '' }) => (
   <footer className={`border-t border-line text-subtle ${className}`}>
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-6 flex flex-col items-center text-center gap-4 sm:flex-row sm:text-left sm:gap-6">
       <div className="sm:mr-auto">
@@ -40,9 +43,14 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenDonation, cla
       </nav>
 
       <div className="flex items-center gap-2">
-        <button onClick={() => onOpenModal('contact')} className="chip h-8 px-3 text-[12px]">
-          <MessageSquarePlus className="w-3.5 h-3.5" />
-          Suggestions
+        <button onClick={onOpenSupport} className="chip relative h-8 px-3 text-[12px]">
+          <MessageCircleHeart className="w-3.5 h-3.5" />
+          Chat with us
+          {hasSupportReply && (
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-berry ring-2 ring-ink">
+              <span className="sr-only">New reply from the team</span>
+            </span>
+          )}
         </button>
         <button
           onClick={onOpenDonation}

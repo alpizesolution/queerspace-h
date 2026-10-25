@@ -21,6 +21,7 @@ import {
   loadRoomMessages,
   loadStats,
   loadSuggestions,
+  postTeamRoomMessage,
   removeUnsaid,
   restoreUnsaid,
   setInboxStatus,
@@ -28,10 +29,12 @@ import {
   signOutAdmin,
 } from '../services/adminService.ts';
 import { BarChart } from './BarChart.tsx';
+import { SupportTab } from './SupportTab.tsx';
+import { countUnreadSupport, TEAM_NAME } from '../services/supportService.ts';
 import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
 import type { CommunityPost } from '../types.ts';
 
-type Tab = 'overview' | 'suggestions' | 'reports' | 'moderation';
+type Tab = 'overview' | 'support' | 'suggestions' | 'reports' | 'moderation';
 
 interface PendingConfirm {
   title: string;
@@ -229,11 +232,17 @@ const Dashboard: React.FC = () => {
 
   useEffect(refreshInbox, [refreshInbox]);
 
+  const [unreadSupport, setUnreadSupport] = useState(0);
+  useEffect(() => {
+    countUnreadSupport().then(setUnreadSupport);
+  }, []);
+
   const openSuggestions = suggestions?.filter((s) => s.status === 'open').length ?? 0;
   const openReports = reports?.filter((r) => r.status === 'open').length ?? 0;
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: 'overview', label: 'Overview' },
+    { id: 'support', label: 'Support', badge: unreadSupport },
     { id: 'suggestions', label: 'Suggestions', badge: openSuggestions },
     { id: 'reports', label: 'Reports', badge: openReports },
     { id: 'moderation', label: 'Moderation' },
@@ -259,6 +268,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {tab === 'overview' && <Overview openSuggestions={openSuggestions} openReports={openReports} />}
+      {tab === 'support' && <SupportTab formatAgo={(ms) => formatAgo(ms)} onUnreadChange={setUnreadSupport} />}
       {tab === 'suggestions' && (
         <SuggestionsTab items={suggestions} setItems={setSuggestions} onConfirm={setConfirm} />
       )}
@@ -687,6 +697,7 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
       <section>
         <h2 className="text-[15px] font-semibold mb-1">Public Room</h2>
         <p className="text-[13px] text-muted mb-3">Latest messages. Deleting one removes it for everyone.</p>
+        <TeamPostForm onPosted={(m) => setRoom((prev) => [m, ...(prev ?? [])])} />
         {!room ? (
           <Skeleton />
         ) : room.length === 0 ? (
@@ -697,7 +708,8 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
               <li key={m.id} className="flex items-start gap-3 p-3 sm:p-4">
                 <div className="min-w-0 flex-1">
                   <p className="text-[12px] text-subtle">
-                    <span className="text-muted font-medium">{m.authorName}</span> · {formatAgo(m.createdAt, now)}
+                    <span className={`font-medium ${m.authorName === TEAM_NAME ? 'text-berry' : 'text-muted'}`}>{m.authorName}</span> ·{' '}
+                    {formatAgo(m.createdAt, now)}
                   </p>
                   <p className="text-[14px] text-fg break-words">{m.text}</p>
                 </div>
@@ -724,5 +736,50 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
         )}
       </section>
     </div>
+  );
+};
+
+/** Post to the Public Room as the team, with the verified badge members see. */
+const TeamPostForm: React.FC<{ onPosted: (m: AdminRoomMessage) => void }> = ({ onPosted }) => {
+  const [text, setText] = useState('');
+  const [state, setState] = useState<'idle' | 'sending' | 'failed'>('idle');
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim() || state === 'sending') return;
+    setState('sending');
+    try {
+      const posted = await postTeamRoomMessage(text);
+      if (!posted) throw new Error('not posted');
+      onPosted(posted);
+      setText('');
+      setState('idle');
+    } catch (err) {
+      console.warn('[Admin] Team post failed:', err);
+      setState('failed');
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="card p-3 mb-3">
+      <label htmlFor="team-post" className="block text-[12px] text-muted mb-2">
+        Post as <span className="text-berry font-medium">{TEAM_NAME}</span> (shows a Team badge)
+      </label>
+      <div className="flex items-end gap-2">
+        <textarea
+          id="team-post"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={2}
+          maxLength={1000}
+          placeholder="Announcements, welcomes, reminders…"
+          className="flex-1 min-w-0 resize-none px-3.5 py-2.5 rounded-2xl bg-ink border border-line text-[14px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+        />
+        <button type="submit" disabled={!text.trim() || state === 'sending'} className="btn btn-primary btn-sm">
+          {state === 'sending' ? 'Posting…' : 'Post'}
+        </button>
+      </div>
+      {state === 'failed' && <p className="mt-2 text-[12px] text-danger">Couldn’t post. Try again.</p>}
+    </form>
   );
 };
