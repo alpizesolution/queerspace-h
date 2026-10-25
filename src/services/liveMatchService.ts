@@ -31,7 +31,14 @@ import { isValidAvatar } from '../utils/avatar.ts';
 const QUEUE = 'match_queue';
 const HEARTBEAT_MS = 10_000;
 const STALE_AFTER_MS = 30_000;
-const CLAIM_INTERVAL_MS = 2_500;
+/** Queue scans start quick and slow down while nobody else is waiting, to save reads. */
+const CLAIM_INTERVAL_MS = 3_000;
+const CLAIM_INTERVAL_MAX_MS = 12_000;
+/** Next scan delay: grows 1.5x per empty scan, capped, with a little jitter so clients spread out. */
+export function nextClaimDelay(emptyScans: number, random: number = Math.random()): number {
+  const base = Math.min(CLAIM_INTERVAL_MAX_MS, CLAIM_INTERVAL_MS * 1.5 ** emptyScans);
+  return Math.round(base * (0.85 + random * 0.3));
+}
 
 export interface LiveMatch {
   partner: PartnerProfile;
@@ -117,13 +124,16 @@ export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHand
   let matched = false;
   let unsubscribeSelf: (() => void) | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  let claimTimer: ReturnType<typeof setInterval> | null = null;
+  let claimTimer: ReturnType<typeof setTimeout> | null = null;
+  let emptyScans = 0;
+  // Fresh-only scans need the (status, heartbeatAt) index; until it exists, fall back to the old scan.
+  let freshQueryFailed = false;
   let claiming = false;
   let uid: string | null = null;
 
   const stopTimers = () => {
     if (heartbeatTimer) clearInterval(heartbeatTimer);
-    if (claimTimer) clearInterval(claimTimer);
+    if (claimTimer) clearTimeout(claimTimer);
     heartbeatTimer = claimTimer = null;
   };
 
@@ -167,12 +177,25 @@ export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHand
     const firestore = db;
     const me = uid;
     try {
-      const snap = await getDocs(query(collection(firestore, QUEUE), where('status', '==', 'waiting'), limit(25)));
+      const waiting = query(collection(firestore, QUEUE), where('status', '==', 'waiting'));
+      const cutoff = Timestamp.fromMillis(Date.now() - STALE_AFTER_MS);
+      let snap;
+      if (!freshQueryFailed) {
+        try {
+          // Only entries with a recent heartbeat, so abandoned ones never cost a read.
+          snap = await getDocs(query(waiting, where('heartbeatAt', '>', cutoff), limit(10)));
+        } catch (err) {
+          freshQueryFailed = true;
+          console.warn('[LiveMatch] Fresh queue scan unavailable (missing index?), falling back:', err);
+        }
+      }
+      snap = snap ?? (await getDocs(query(waiting, limit(25))));
       const candidates = pickQueueCandidates(
         snap.docs.map((d) => ({ id: d.id, data: d.data() })),
         me,
         excludeIds
       );
+      emptyScans = candidates.length ? 0 : emptyScans + 1;
 
       for (const partnerId of candidates) {
         if (matched || cancelled) return;
@@ -271,8 +294,14 @@ export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHand
       updateDoc(doc(db, QUEUE, uid), { heartbeatAt: serverTimestamp() }).catch(() => {});
     }, HEARTBEAT_MS);
 
-    claimTimer = setInterval(tryClaim, CLAIM_INTERVAL_MS);
-    tryClaim();
+    const scheduleClaim = () => {
+      if (matched || cancelled) return;
+      claimTimer = setTimeout(async () => {
+        await tryClaim();
+        scheduleClaim();
+      }, nextClaimDelay(emptyScans));
+    };
+    tryClaim().then(scheduleClaim);
   })();
 
   return () => {
