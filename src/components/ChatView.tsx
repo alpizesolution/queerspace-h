@@ -34,6 +34,7 @@ import {
   endCloudConversation,
   submitCloudReport,
 } from '../services/chatService.ts';
+import { autoSuspendPartner, UNDERAGE_REPORT_REASON } from '../services/suspensionService.ts';
 
 interface ChatViewProps {
   partner: PartnerProfile;
@@ -760,6 +761,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   if (isCloudActive && cloudConvId) {
                     convEnded = await endCloudConversation(cloudConvId, 'blocked');
                     reportSent = await submitCloudReport(partner.id, 'user', reportReason);
+                    // Underage reports pause the partner's account until the team reviews it.
+                    if (reportSent && reportReason === UNDERAGE_REPORT_REASON) {
+                      await autoSuspendPartner(partner.id, cloudConvId);
+                    }
                   }
                   onBlockAndReport(reportReason, { reportSent, convEnded, isCloud: isCloudActive });
                 }}
@@ -804,7 +809,7 @@ const REPORT_REASONS = [
   'Harassment or disrespectful behavior',
   'Unsolicited sexual messages or content',
   'Suspected male imposter / Not sapphic',
-  'Underage participant (violating 18+ policy)',
+  UNDERAGE_REPORT_REASON,
   'Spam, advertising, or scam links',
 ];
 

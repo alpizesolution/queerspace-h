@@ -166,13 +166,26 @@ async function count(q: Query): Promise<number> {
   return (await getCountFromServer(q)).data().count;
 }
 
-export async function loadStats(): Promise<AdminStats> {
+/**
+ * Counts scan one index entry per document (billed 1 read per 1,000 entries), so the totals grow
+ * with the app. Reopening Overview within a few minutes reuses the last result; Refresh forces.
+ */
+const STATS_TTL_MS = 5 * 60_000;
+let cachedStats: { at: number; stats: AdminStats } | null = null;
+
+export async function loadStats(force = false): Promise<AdminStats> {
+  if (!force && cachedStats && Date.now() - cachedStats.at < STATS_TTL_MS) return cachedStats.stats;
+  const stats = await fetchStats();
+  cachedStats = { at: Date.now(), stats };
+  return stats;
+}
+
+async function fetchStats(): Promise<AdminStats> {
   if (!db) throw new Error('Firebase is not configured');
   const firestore = db;
   const days = lastDays(CHART_DAYS);
   const ts = (ms: number) => Timestamp.fromMillis(ms);
   const today = days[days.length - 1];
-  const weekStart = days[days.length - 7];
 
   const members = collectionGroup(firestore, 'public');
   const chats = collection(firestore, 'conversations');
@@ -190,31 +203,21 @@ export async function loadStats(): Promise<AdminStats> {
       return 0;
     });
 
-  const [
-    memberTotal,
-    membersToday,
-    membersWeek,
-    chatsTotal,
-    chatsToday,
-    chatsWeek,
-    roomToday,
-    unsaidLive,
-    queueSnap,
-    memberDayCounts,
-    chatDayCounts,
-  ] = await Promise.all([
+  // Today and this week come from the daily counts, so each day's index entries are scanned once.
+  const [memberTotal, chatsTotal, roomToday, unsaidLive, queueSnap, memberDayCounts, chatDayCounts] = await Promise.all([
     count(members),
-    memberCount(between(members, 'createdAt', today)),
-    memberCount(between(members, 'createdAt', weekStart)),
     count(chats),
-    count(between(chats, 'createdAt', today)),
-    count(between(chats, 'createdAt', weekStart)),
     count(between(collection(firestore, 'public_room_messages'), 'timestamp', today)),
     count(query(collection(firestore, 'unsaid'), where('expiresAt', '>', Timestamp.now()))),
     getDocs(query(collection(firestore, 'match_queue'), where('status', '==', 'waiting'))),
     Promise.all(days.map((d) => memberCount(between(members, 'createdAt', d, d + DAY_MS)))),
     Promise.all(days.map((d) => count(between(chats, 'createdAt', d, d + DAY_MS)))),
   ]);
+  const sum = (counts: number[]) => counts.reduce((a, b) => a + b, 0);
+  const membersToday = memberDayCounts[memberDayCounts.length - 1];
+  const membersWeek = sum(memberDayCounts.slice(-7));
+  const chatsToday = chatDayCounts[chatDayCounts.length - 1];
+  const chatsWeek = sum(chatDayCounts.slice(-7));
 
   return {
     members: memberTotal,

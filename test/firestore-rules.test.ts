@@ -889,3 +889,106 @@ test('S-05: Team posts CAN quote a message; members cannot, and quotes must be w
     }, 'publicRoom')
   );
 });
+
+// ------------------------------------------------------------------
+// Suspensions
+// ------------------------------------------------------------------
+const UNDERAGE = 'Underage participant (violating 18+ policy)';
+
+async function seedChat(id = 'c1', participants = ['alice', 'bob']) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`conversations/${id}`).set({
+      participants, createdAt: new Date(), updatedAt: new Date(), status: 'blocked',
+    });
+  });
+}
+
+const autoSuspension = (reporterId: string, convId = 'c1', overrides: Record<string, unknown> = {}) => ({
+  source: 'auto-underage', reason: UNDERAGE, createdAt: now(), reporterId, convId, ...overrides,
+});
+
+async function seedSuspension(uid: string) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`suspensions/${uid}`).set({ source: 'admin', reason: 'test', createdAt: new Date() });
+  });
+}
+
+test('SU-01: A chat partner CAN auto-suspend someone they reported as underage; nobody else can', async () => {
+  await seedChat('c1', ['alice', 'bob']);
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const carol = testEnv.authenticatedContext('carol').firestore();
+  // Not in that conversation, spoofed reporter, self-suspension, wrong source, extra fields: rejected.
+  await assertFails(carol.doc('suspensions/bob').set(autoSuspension('carol')));
+  await assertFails(alice.doc('suspensions/bob').set(autoSuspension('carol')));
+  await assertFails(alice.doc('suspensions/alice').set(autoSuspension('alice')));
+  await assertFails(alice.doc('suspensions/bob').set(autoSuspension('alice', 'c1', { source: 'admin' })));
+  await assertFails(alice.doc('suspensions/bob').set(autoSuspension('alice', 'c1', { until: 'forever' })));
+  await assertSucceeds(alice.doc('suspensions/bob').set(autoSuspension('alice')));
+  // Can't be rewritten or lifted by members, including the suspended person.
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertSucceeds(bob.doc('suspensions/bob').get());
+  await assertFails(carol.doc('suspensions/bob').get());
+  await assertFails(bob.doc('suspensions/bob').delete());
+  await assertFails(alice.doc('suspensions/bob').update({ reason: 'x' }));
+});
+
+test('SU-02: Admins CAN suspend and lift; members cannot use the admin form', async () => {
+  await seedAdmin();
+  const suspension = { source: 'admin', reason: UNDERAGE, createdAt: now(), reportId: 'r1' };
+  await assertFails(testEnv.authenticatedContext('alice').firestore().doc('suspensions/bob').set(suspension));
+  await assertSucceeds(adminDb().doc('suspensions/bob').set(suspension));
+  await assertSucceeds(adminDb().collection('suspensions').get());
+  await assertSucceeds(adminDb().doc('suspensions/bob').delete());
+});
+
+test('SU-03: A suspended account CANNOT match, chat or post publicly, but CAN still message support', async () => {
+  await seedSuspension('bob');
+  await seedChat('c2', ['alice', 'bob']);
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('conversations/c2').update({ status: 'active' });
+    await ctx.firestore().doc('match_queue/alice').set(waitingEntry());
+  });
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(bob.doc('match_queue/bob').set(waitingEntry()));
+  await assertFails(bob.doc('conversations/c2/messages/m1').set({ senderId: 'bob', text: 'hi', timestamp: new Date() }));
+  await assertFails(stampedAdd('bob', 'public_room_messages', roomMessage('bob'), 'publicRoom'));
+  await assertFails(postUnsaidAs('bob', 'u1'));
+  await assertFails(stampedAdd('bob', 'community_posts', communityPost('bob'), 'communityPost'));
+  await assertSucceeds(supportSend('bob', 'Please review my account'));
+  // Everyone else is unaffected.
+  await assertSucceeds(stampedAdd('alice', 'public_room_messages', roomMessage('alice'), 'publicRoom'));
+  await assertSucceeds(
+    testEnv.authenticatedContext('alice').firestore().doc('conversations/c2/messages/m2').set({ senderId: 'alice', text: 'hey', timestamp: new Date() })
+  );
+});
+
+test('Q-06: Queue entries CAN carry an 18+ age and a valid age range, nothing else', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 22, ageMax: 35 }));
+  await assertSucceeds(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 16 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 30, ageMax: 20 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 17, ageMax: 30 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 20 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: '27' }));
+});
+
+test('Q-07: Queue entries CAN carry short location, gender expression and topic lists', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(
+    alice.doc('match_queue/alice').set({
+      ...waitingEntry(),
+      areas: ['Cebu City'],
+      wantAreas: ['Cebu City'],
+      expr: ['Femme'],
+      wantExpr: ['Butch', 'Stem'],
+      topics: ['cats & dogs'],
+      intent: 'deep_talk',
+    })
+  );
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), areas: 'Cebu City' }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), wantExpr: [] }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), areas: Array.from({ length: 21 }, (_, i) => `a${i}`) }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), city: 'Cebu City' }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), intent: 'anything' }));
+});

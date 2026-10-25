@@ -127,7 +127,7 @@ export async function loadAnonymousProfile(): Promise<ProfileLoadResult> {
     displayName: 'Lavender Sapphire',
     pronouns: 'she/her',
     intention: 'open',
-    topics: ['WLW Books & Poetry', 'Plants & Coffee'],
+    topics: [],
     region: 'Anywhere / Worldwide',
   };
 

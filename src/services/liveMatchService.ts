@@ -15,7 +15,8 @@ import {
   where,
 } from 'firebase/firestore';
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
-import { Intention, PartnerProfile } from '../types.ts';
+import { Intention, PartnerProfile, UserPreferences } from '../types.ts';
+import { locationsOverlap, NATIONWIDE_OPTION } from '../utils/philippines-locations.ts';
 import { endCloudConversation } from './chatService.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 
@@ -31,6 +32,9 @@ import { isValidAvatar } from '../utils/avatar.ts';
 const QUEUE = 'match_queue';
 const HEARTBEAT_MS = 10_000;
 const STALE_AFTER_MS = 30_000;
+/** Ages people can enter; QUEERSPACE is 18+ (must match firestore.rules). */
+export const MIN_AGE = 18;
+export const MAX_AGE = 99;
 /** Queue scans start quick and slow down while nobody else is waiting, to save reads. */
 const CLAIM_INTERVAL_MS = 3_000;
 const CLAIM_INTERVAL_MAX_MS = 12_000;
@@ -64,16 +68,107 @@ export function isFreshQueueEntry(data: { heartbeatAt?: unknown }, now: number =
   return beat === 0 || now - beat < STALE_AFTER_MS;
 }
 
-/** Oldest-first candidate order, ignoring self, blocked users and stale entries. */
+/** Age details a queue entry carries: the person's age and, with the age filter on, the range they want. */
+export interface QueueAgePrefs {
+  age?: number;
+  ageMin?: number;
+  ageMax?: number;
+}
+
+/**
+ * Everything a queue entry carries for filtering. `areas` and `expr` describe the person (only
+ * when they show them on their profile); `wantAreas` and `wantExpr` are their filters.
+ */
+export interface QueueMatchPrefs extends QueueAgePrefs {
+  areas?: string[];
+  wantAreas?: string[];
+  expr?: string[];
+  wantExpr?: string[];
+  /** Chat topics, lowercased. People who picked topics only match people sharing one. */
+  topics?: string[];
+  /** What they're looking for. Only the same intention matches, so "open" meets "open". */
+  intent?: Intention;
+}
+
+/** Valid intentions (must match firestore.rules). */
+const INTENTIONS: Record<Intention, true> = { friendship: true, dating: true, casual: true, deep_talk: true, open: true };
+
+/** Longest list a queue entry may carry (must match firestore.rules). */
+export const MAX_QUEUE_LIST = 20;
+
+/** Both people fit each other's age range (when either has one). A range needs a known age to match. */
+export function agesCompatible(a: QueueAgePrefs, b: QueueAgePrefs): boolean {
+  const fits = (range: QueueAgePrefs, age?: number) =>
+    range.ageMin === undefined || range.ageMax === undefined
+      ? true
+      : typeof age === 'number' && age >= range.ageMin && age <= range.ageMax;
+  return fits(a, b.age) && fits(b, a.age);
+}
+
+/**
+ * Both people want the same thing (intention), pass each other's location and gender expression
+ * filters, and share a topic when either picked any (so "open to anything" chatters don't land in
+ * a topic match). Someone who didn't share a location or expression is never excluded, matching
+ * the setup screen's promise.
+ */
+export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boolean {
+  const fitsArea = (want?: string[], theirs?: string[]) =>
+    !want?.length || !theirs?.length || theirs.some((area) => want.some((w) => locationsOverlap(w, area)));
+  const fitsExpr = (want?: string[], theirs?: string[]) =>
+    !want?.length || !theirs?.length || theirs.some((e) => want.includes(e));
+  const sharesTopic = () =>
+    (!a.topics?.length && !b.topics?.length) || (a.topics ?? []).some((t) => b.topics?.includes(t));
+  return (
+    agesCompatible(a, b) &&
+    (a.intent ?? 'open') === (b.intent ?? 'open') &&
+    sharesTopic() &&
+    fitsArea(a.wantAreas, b.areas) &&
+    fitsArea(b.wantAreas, a.areas) &&
+    fitsExpr(a.wantExpr, b.expr) &&
+    fitsExpr(b.wantExpr, a.expr)
+  );
+}
+
+/** Builds the queue entry's filter fields from setup preferences. */
+export function queueMatchFields(prefs: Partial<UserPreferences>): QueueMatchPrefs {
+  const valid = (n?: number) => typeof n === 'number' && Number.isInteger(n) && n >= MIN_AGE && n <= MAX_AGE;
+  const fields: QueueMatchPrefs = {};
+  if (valid(prefs.age)) fields.age = prefs.age;
+  if (prefs.applyAgeFilter && valid(prefs.ageMin) && valid(prefs.ageMax) && prefs.ageMin! <= prefs.ageMax!) {
+    fields.ageMin = prefs.ageMin;
+    fields.ageMax = prefs.ageMax;
+  }
+
+  const areas = (prefs.locationSelection ?? []).filter((a) => a && a !== NATIONWIDE_OPTION).slice(0, MAX_QUEUE_LIST);
+  if (areas.length && prefs.showLocationOnProfile !== false) fields.areas = areas;
+  if (areas.length && prefs.applyLocationFilter) fields.wantAreas = areas;
+
+  const expr = prefs.genderExpression ?? [];
+  if (expr.length && !expr.includes('Prefer not to say') && prefs.showGenderExpressionOnProfile !== false) {
+    fields.expr = expr.slice(0, MAX_QUEUE_LIST);
+  }
+  const wantExpr = prefs.preferredGenderExpressions ?? [];
+  if (prefs.applyGenderExpressionFilter && wantExpr.length && !wantExpr.includes('Any / No preference')) {
+    fields.wantExpr = wantExpr.slice(0, MAX_QUEUE_LIST);
+  }
+  if (prefs.intention && prefs.intention in INTENTIONS) fields.intent = prefs.intention;
+  const topics = [...new Set((prefs.topics ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean))];
+  if (topics.length) fields.topics = topics.slice(0, MAX_QUEUE_LIST);
+  return fields;
+}
+
+/** Oldest-first candidate order, ignoring self, blocked users, stale entries and filter mismatches. */
 export function pickQueueCandidates(
-  entries: { id: string; data: { status?: string; heartbeatAt?: unknown; createdAt?: unknown } }[],
+  entries: { id: string; data: { status?: string; heartbeatAt?: unknown; createdAt?: unknown } & QueueMatchPrefs }[],
   selfUid: string,
   excludeIds: string[],
-  now: number = Date.now()
+  now: number = Date.now(),
+  mine: QueueMatchPrefs = {}
 ): string[] {
   const excluded = new Set([selfUid, ...excludeIds]);
   return entries
     .filter((e) => e.data.status === 'waiting' && !excluded.has(e.id) && isFreshQueueEntry(e.data, now))
+    .filter((e) => filtersCompatible(mine, e.data))
     .sort((a, b) => toMillis(a.data.createdAt) - toMillis(b.data.createdAt))
     .map((e) => e.id);
 }
@@ -119,7 +214,11 @@ async function loadPartnerProfile(partnerId: string): Promise<PartnerProfile> {
  * Joins the live queue and keeps trying to pair until matched or cancelled.
  * Returns a cancel function that leaves the queue.
  */
-export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHandlers): () => void {
+export function joinLiveMatchQueue(
+  excludeIds: string[],
+  handlers: LiveMatchHandlers,
+  matchPrefs: QueueMatchPrefs = {}
+): () => void {
   let cancelled = false;
   let matched = false;
   let unsubscribeSelf: (() => void) | null = null;
@@ -193,7 +292,9 @@ export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHand
       const candidates = pickQueueCandidates(
         snap.docs.map((d) => ({ id: d.id, data: d.data() })),
         me,
-        excludeIds
+        excludeIds,
+        Date.now(),
+        matchPrefs
       );
       emptyScans = candidates.length ? 0 : emptyScans + 1;
 
@@ -206,7 +307,7 @@ export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHand
             const theirRef = doc(firestore, QUEUE, partnerId);
             const [mine, theirs] = await Promise.all([tx.get(myRef), tx.get(theirRef)]);
             if (!mine.exists() || mine.data().status !== 'waiting') throw new Error('self-not-waiting');
-            if (!theirs.exists() || theirs.data().status !== 'waiting' || !isFreshQueueEntry(theirs.data())) {
+            if (!theirs.exists() || theirs.data().status !== 'waiting' || !isFreshQueueEntry(theirs.data()) || !filtersCompatible(matchPrefs, theirs.data())) {
               throw new Error('partner-unavailable');
             }
             tx.set(convRef, {
@@ -253,6 +354,7 @@ export function joinLiveMatchQueue(excludeIds: string[], handlers: LiveMatchHand
         createdAt: serverTimestamp(),
         heartbeatAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        ...matchPrefs,
       });
     } catch (err) {
       console.warn('[LiveMatch] Could not join queue:', err);
