@@ -6,7 +6,6 @@ import {
   User,
 } from 'firebase/auth';
 import {
-  addDoc,
   collection,
   collectionGroup,
   deleteDoc,
@@ -19,7 +18,6 @@ import {
   orderBy,
   query,
   Query,
-  serverTimestamp,
   Timestamp,
   updateDoc,
   where,
@@ -27,7 +25,6 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.ts';
 import { isFreshQueueEntry } from './liveMatchService.ts';
-import { TEAM_NAME } from './supportService.ts';
 
 /**
  * Admin page data. Every read and write here is also guarded by firestore.rules:
@@ -52,14 +49,6 @@ export interface AdminReport {
   reason: string;
   createdAt: number;
   status: InboxStatus;
-}
-
-export interface AdminRoomMessage {
-  id: string;
-  authorId: string;
-  authorName: string;
-  text: string;
-  createdAt: number;
 }
 
 export interface AdminUnsaidPost {
@@ -290,37 +279,6 @@ export async function loadDisplayName(uid: string): Promise<string | null> {
 }
 
 // ---------------------------------------------------------------- Moderation
-
-export async function loadRoomMessages(): Promise<AdminRoomMessage[]> {
-  if (!db) return [];
-  const snap = await getDocs(query(collection(db, 'public_room_messages'), orderBy('timestamp', 'desc'), limit(60)));
-  return snap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      authorId: String(data.authorId ?? ''),
-      authorName: String(data.authorName ?? ''),
-      text: String(data.text ?? ''),
-      createdAt: toMillis(data.timestamp),
-    };
-  });
-}
-
-/** Posts to the Public Room with the verified team badge (firestore.rules allows only admins). */
-export async function postTeamRoomMessage(text: string): Promise<AdminRoomMessage | null> {
-  const clean = text.trim().slice(0, 1000);
-  const uid = auth?.currentUser?.uid;
-  if (!db || !uid || !clean) return null;
-  const ref = await addDoc(collection(db, 'public_room_messages'), {
-    authorId: uid,
-    authorName: TEAM_NAME,
-    authorPronouns: 'team',
-    text: clean,
-    timestamp: serverTimestamp(),
-    team: true,
-  });
-  return { id: ref.id, authorId: uid, authorName: TEAM_NAME, text: clean, createdAt: Date.now() };
-}
 
 export async function deleteRoomMessage(id: string): Promise<void> {
   if (!db) return;

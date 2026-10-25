@@ -5,7 +5,14 @@ import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
-import { isPublicRoomAvailable, sendPublicRoomMessage, subscribeToPublicRoom } from '../services/publicRoomService.ts';
+import {
+  canPostAsTeam,
+  isPublicRoomAvailable,
+  sendPublicRoomMessage,
+  sendTeamRoomMessage,
+  subscribeToPublicRoom,
+} from '../services/publicRoomService.ts';
+import { TEAM_NAME } from '../services/supportService.ts';
 
 interface PublicRoomViewProps {
   userPrefs: UserPreferences;
@@ -26,6 +33,19 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastCountRef = useRef(0);
+  // Admins signed in on this device can post as the team without leaving the room.
+  const [teamAvailable, setTeamAvailable] = useState(false);
+  const [asTeam, setAsTeam] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    canPostAsTeam().then((ok) => {
+      if (!cancelled) setTeamAvailable(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isPublicRoomAvailable()) return;
@@ -64,7 +84,12 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
 
     setInputText('');
     setSendError(null);
-    const result = await sendPublicRoomMessage(userPrefs, sanitized.cleanText);
+    const result =
+      teamAvailable && asTeam
+        ? (await sendTeamRoomMessage(sanitized.cleanText))
+          ? 'sent'
+          : 'failed'
+        : await sendPublicRoomMessage(userPrefs, sanitized.cleanText);
     if (result !== 'sent') {
       setInputText(sanitized.cleanText);
       setSendError(
@@ -127,7 +152,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
             <div className={`max-w-[80%] flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}>
               <div className="flex items-baseline gap-1.5 mb-1 px-1 text-[12px]">
                 {!msg.isSelf && <span className="font-semibold text-fg">{msg.author}</span>}
-                {!msg.isSelf && msg.team && (
+                {msg.team && (
                   <span className="inline-flex items-center gap-1 self-center px-1.5 py-px rounded-full bg-berry/15 text-berry text-[10.5px] font-semibold uppercase tracking-wide">
                     <BadgeCheck className="w-3 h-3" aria-hidden="true" />
                     Team
@@ -159,7 +184,34 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           {sendError}
         </p>
       )}
-      <form onSubmit={handleSendMessage} className="flex items-center gap-2 px-3 sm:px-4 py-2.5 border-t border-line">
+      {teamAvailable && (
+        <div className="flex items-center gap-2 px-3 sm:px-4 pt-2.5 border-t border-line" role="group" aria-label="Post as">
+          <span className="text-[12px] text-subtle">Post as</span>
+          {[
+            { team: false, label: userPrefs.displayName || 'You' },
+            { team: true, label: TEAM_NAME },
+          ].map((opt) => (
+            <button
+              key={String(opt.team)}
+              type="button"
+              // Keep the keyboard open: a blur here would shift the layout mid-tap.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setAsTeam(opt.team)}
+              aria-pressed={asTeam === opt.team}
+              className={`chip h-7 px-2.5 text-[12px] max-w-[45%] truncate ${
+                asTeam === opt.team ? (opt.team ? '!bg-berry !text-ink !border-berry' : '!bg-fg !text-ink !border-fg') : ''
+              }`}
+            >
+              {opt.team && <BadgeCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />}
+              <span className="truncate">{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <form
+        onSubmit={handleSendMessage}
+        className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 ${teamAvailable ? '' : 'border-t border-line'}`}
+      >
         <input
           type="text"
           value={inputText}
@@ -169,7 +221,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           }}
           maxLength={1000}
           disabled={status === 'error'}
-          placeholder={`Message as ${userPrefs.displayName || 'Sapphic Guest'}`}
+          placeholder={`Message as ${teamAvailable && asTeam ? TEAM_NAME : userPrefs.displayName || 'Sapphic Guest'}`}
           aria-label="Message the public room"
           enterKeyHint="send"
           autoComplete="off"
