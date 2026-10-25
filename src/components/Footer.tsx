@@ -1,13 +1,15 @@
 import React from 'react';
-import { Heart, LayoutDashboard, MessageCircleHeart } from 'lucide-react';
+import { LayoutDashboard, MessageCircleHeart } from 'lucide-react';
 import { isAdminDevice } from '../utils/adminDevice.ts';
 
 // On phones the header has no room, so the admin shortcut lives here.
 const SHOW_ADMIN_LINK = isAdminDevice();
 
+/** Buy Me a Coffee page, styled like their official button (their embed script can't run in this app). */
+const BMC_URL = 'https://www.buymeacoffee.com/donotdm';
+
 interface FooterProps {
   onOpenModal: (modal: 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact') => void;
-  onOpenDonation: () => void;
   onOpenSupport: () => void;
   /** The team replied and the member hasn't read it yet. */
   hasSupportReply?: boolean;
@@ -22,7 +24,7 @@ const LINKS = [
   { id: 'terms', label: 'Terms' },
 ] as const;
 
-export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenDonation, onOpenSupport, hasSupportReply = false, className = '' }) => (
+export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, hasSupportReply = false, className = '' }) => (
   <footer className={`border-t border-line text-subtle ${className}`}>
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-6 flex flex-col items-center text-center gap-4 sm:flex-row sm:text-left sm:gap-6">
       <div className="sm:mr-auto">
@@ -56,13 +58,15 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenDonation, onO
             </span>
           )}
         </button>
-        <button
-          onClick={onOpenDonation}
-          className="chip h-8 px-3 text-[12px] border-berry/40 bg-berry/10 text-berry hover:text-berry-hover hover:border-berry/70"
+        <a
+          href={BMC_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#FFDD00] text-black border border-black font-[Cookie,cursive] text-[19px] leading-none whitespace-nowrap hover:brightness-95 transition"
         >
-          <Heart className="w-3.5 h-3.5" />
-          Support us
-        </button>
+          <span aria-hidden="true" className="text-[14px]">☕</span>
+          Buy me a coffee
+        </a>
       </div>
 
       {SHOW_ADMIN_LINK && (

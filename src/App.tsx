@@ -314,7 +314,6 @@ export default function App() {
       {showChrome && currentView !== 'public' && (
         <Footer
           onOpenModal={(modal) => setActiveInfoModal(modal)}
-          onOpenDonation={() => setDonationModalOpen(true)}
           onOpenSupport={openSupport}
           hasSupportReply={hasSupportReply}
           className={currentView === 'community' ? 'hidden sm:block' : ''}
