@@ -17,7 +17,7 @@ export const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose })
         Completely optional, always appreciated. 💜
       </p>
       <a
-        href="https://ko-fi.com/alpize"
+        href="https://buymeacoffee.com/donotdm"
         target="_blank"
         rel="noopener noreferrer"
         className="mt-5 card flex items-center gap-3 p-4 hover:border-line-strong hover:bg-raised transition-colors group"
@@ -26,8 +26,8 @@ export const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose })
           <Coffee className="w-5 h-5" />
         </span>
         <span className="flex-1 min-w-0">
-          <span className="block text-sm font-semibold text-fg">Support on Ko-fi</span>
-          <span className="block text-[13px] text-subtle">ko-fi.com/alpize</span>
+          <span className="block text-sm font-semibold text-fg">Buy us a coffee</span>
+          <span className="block text-[13px] text-subtle">buymeacoffee.com/donotdm</span>
         </span>
         <ExternalLink className="w-4 h-4 text-subtle group-hover:text-fg" />
       </a>
