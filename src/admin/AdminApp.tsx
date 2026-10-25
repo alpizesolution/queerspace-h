@@ -29,6 +29,7 @@ import {
   signOutAdmin,
 } from '../services/adminService.ts';
 import { BarChart } from './BarChart.tsx';
+import { rememberAdminDevice } from '../utils/adminDevice.ts';
 import { SupportTab } from './SupportTab.tsx';
 import { countUnreadSupport, TEAM_NAME } from '../services/supportService.ts';
 import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
@@ -105,7 +106,13 @@ export default function AdminApp() {
         setUser(next);
         setAuthReady(true);
         setAdminCheck(null);
-        checkAdmin(next).then(setAdminCheck);
+        if (!isGoogleUser(next)) rememberAdminDevice(false);
+        checkAdmin(next).then((result) => {
+          setAdminCheck(result);
+          // Shows the Admin shortcut in the main app on this device only.
+          if (result === 'admin') rememberAdminDevice(true);
+          else if (result === 'missing') rememberAdminDevice(false);
+        });
       }),
     []
   );
