@@ -14,6 +14,7 @@ import {
   subscribeToCommunity,
   subscribeToReplies,
 } from '../services/communityService.ts';
+import { whileActive } from '../utils/whileActive.ts';
 
 interface CommunityFeedViewProps {
   userPrefs: UserPreferences;
@@ -45,7 +46,7 @@ const Replies: React.FC<{ post: CommunityPost; userPrefs: UserPreferences }> = (
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => subscribeToReplies(post.id, setReplies, () => setReplies([])), [post.id]);
+  useEffect(() => whileActive(() => subscribeToReplies(post.id, setReplies, () => setReplies([]))), [post.id]);
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,17 +145,19 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
 
   useEffect(() => {
     if (!available) return;
-    return subscribeToCommunity(
-      (next, me) => {
-        setPosts(next);
-        setUid(me);
-        setLoading(false);
-        setFeedError(false);
-      },
-      () => {
-        setLoading(false);
-        setFeedError(true);
-      }
+    return whileActive(() =>
+      subscribeToCommunity(
+        (next, me) => {
+          setPosts(next);
+          setUid(me);
+          setLoading(false);
+          setFeedError(false);
+        },
+        () => {
+          setLoading(false);
+          setFeedError(true);
+        }
+      )
     );
   }, [available]);
 

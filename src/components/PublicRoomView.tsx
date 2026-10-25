@@ -15,6 +15,7 @@ import {
   subscribeToPublicRoom,
 } from '../services/publicRoomService.ts';
 import { TEAM_NAME } from '../services/supportService.ts';
+import { whileActive } from '../utils/whileActive.ts';
 
 interface PublicRoomViewProps {
   userPrefs: UserPreferences;
@@ -67,12 +68,14 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
 
   useEffect(() => {
     if (!isPublicRoomAvailable()) return;
-    return subscribeToPublicRoom(
-      (next) => {
-        setMessages(next);
-        setStatus('ready');
-      },
-      () => setStatus('error')
+    return whileActive(() =>
+      subscribeToPublicRoom(
+        (next) => {
+          setMessages(next);
+          setStatus('ready');
+        },
+        () => setStatus('error')
+      )
     );
   }, []);
 

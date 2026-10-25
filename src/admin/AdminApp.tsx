@@ -45,6 +45,7 @@ import { RoomTab } from './RoomTab.tsx';
 import { countUnreadSupport } from '../services/supportService.ts';
 import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
 import type { CommunityPost } from '../types.ts';
+import { whileActive } from '../utils/whileActive.ts';
 
 type Tab = 'overview' | 'support' | 'room' | 'inbox' | 'moderation';
 
@@ -661,10 +662,12 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
 
   useEffect(
     () =>
-      subscribeToCommunity(setCommunity, () => {
-        setCommunity([]);
-        setError(true);
-      }),
+      whileActive(() =>
+        subscribeToCommunity(setCommunity, () => {
+          setCommunity([]);
+          setError(true);
+        })
+      ),
     []
   );
 

@@ -13,10 +13,14 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
+  limitToLast,
 } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { ChatMessage, ReplyQuote } from '../types.ts';
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
+
+/** Newest messages a 1-on-1 chat loads and keeps live. */
+export const CHAT_HISTORY = 200;
 
 export interface ConversationSession {
   convId: string;
@@ -223,7 +227,8 @@ export function subscribeToCloudMessages(
 
   try {
     const messagesRef = collection(db, 'conversations', convId, 'messages');
-    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+    // Only the latest messages: a long chat shouldn't re-read its whole history on every open.
+    const q = query(messagesRef, orderBy('timestamp', 'asc'), limitToLast(CHAT_HISTORY));
 
     return onSnapshot(
       q,

@@ -6,6 +6,7 @@ import { deleteRoomMessage } from '../services/adminService.ts';
 import { quoteOf, sendTeamRoomMessage, subscribeToPublicRoom } from '../services/publicRoomService.ts';
 import { TEAM_NAME } from '../services/supportService.ts';
 import type { PublicRoomMessage } from '../types.ts';
+import { whileActive } from '../utils/whileActive.ts';
 
 interface RoomTabProps {
   onConfirm: (c: { title: string; message: string; confirmLabel: string; run: () => Promise<void> }) => void;
@@ -24,10 +25,12 @@ export const RoomTab: React.FC<RoomTabProps> = ({ onConfirm }) => {
 
   useEffect(
     () =>
-      subscribeToPublicRoom(setMessages, () => {
-        setMessages([]);
-        setError(true);
-      }),
+      whileActive(() =>
+        subscribeToPublicRoom(setMessages, () => {
+          setMessages([]);
+          setError(true);
+        })
+      ),
     []
   );
 

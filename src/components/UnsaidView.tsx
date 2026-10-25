@@ -18,6 +18,7 @@ import {
   UnsaidReaction,
   validateUnsaidText,
 } from '../services/unsaidService.ts';
+import { whileActive } from '../utils/whileActive.ts';
 
 const REACTED_KEY = 'qs_unsaid_reacted';
 const REPORT_REASONS = ['Harassment or hate', 'Names or exposes someone', 'Spam or selling', 'Something else'];
@@ -93,16 +94,18 @@ export const UnsaidView: React.FC = () => {
 
   useEffect(() => {
     if (!available) return;
-    const unsubscribe = subscribeToUnsaid(
-      (next) => {
-        setPosts(next);
-        setLoading(false);
-        setFeedError(false);
-      },
-      () => {
-        setLoading(false);
-        setFeedError(true);
-      }
+    const unsubscribe = whileActive(() =>
+      subscribeToUnsaid(
+        (next) => {
+          setPosts(next);
+          setLoading(false);
+          setFeedError(false);
+        },
+        () => {
+          setLoading(false);
+          setFeedError(true);
+        }
+      )
     );
     loadMyUnsaidIds().then((ids) => setMyIds(new Set(ids)));
     const tick = setInterval(() => setNow(Date.now()), 60_000);

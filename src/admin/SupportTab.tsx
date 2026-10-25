@@ -12,6 +12,7 @@ import {
   subscribeToSupportThreads,
   TEAM_NAME,
 } from '../services/supportService.ts';
+import { whileActive } from '../utils/whileActive.ts';
 
 /** Admin inbox for member support chats. Listeners run only while this tab is open. */
 export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadChange: (n: number) => void }> = ({
@@ -24,15 +25,17 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
 
   useEffect(
     () =>
-      subscribeToSupportThreads(
-        (next) => {
-          setThreads(next);
-          onUnreadChange(next.filter((t) => t.unreadForTeam).length);
-        },
-        () => {
-          setThreads([]);
-          setError(true);
-        }
+      whileActive(() =>
+        subscribeToSupportThreads(
+          (next) => {
+            setThreads(next);
+            onUnreadChange(next.filter((t) => t.unreadForTeam).length);
+          },
+          () => {
+            setThreads([]);
+            setError(true);
+          }
+        )
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -110,7 +113,7 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(
-    () => subscribeToSupportMessages(thread.id, setMessages, () => setMessages([])),
+    () => whileActive(() => subscribeToSupportMessages(thread.id, setMessages, () => setMessages([]))),
     [thread.id]
   );
 
