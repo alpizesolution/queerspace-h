@@ -21,6 +21,8 @@ import { ensureAnonymousAuth, isFirebaseConfigured, logScreenView } from './lib/
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile } from './services/profilePersistence.ts';
 import { hasUnreadSupportReply } from './services/supportService.ts';
+import { getMySuspension } from './services/suspensionService.ts';
+import { SuspendedNotice } from './components/SuspendedNotice.tsx';
 import { CheckCircle2 } from 'lucide-react';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 
@@ -30,6 +32,7 @@ export default function App() {
   const [donationModalOpen, setDonationModalOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [hasSupportReply, setHasSupportReply] = useState(false);
+  const [suspended, setSuspended] = useState(false);
   const [setupInitialMode, setSetupInitialMode] = useState<'quick' | 'custom'>('quick');
   const [activePartner, setActivePartner] = useState<PartnerProfile | null>(null);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -79,6 +82,7 @@ export default function App() {
                 setUserPrefs(res.prefs);
               }
             });
+            getMySuspension().then((s) => setSuspended(Boolean(s)));
             hasUnreadSupportReply().then((unread) => {
               if (!unread) return;
               setHasSupportReply(true);
@@ -121,6 +125,10 @@ export default function App() {
   };
 
   const handleOpenSetup = (mode: 'quick' | 'custom' = 'quick') => {
+    if (suspended) {
+      showToast('Matching is paused on this account while the team reviews a report.');
+      return;
+    }
     setSetupPurpose('match');
     setSetupInitialMode(mode);
     setSetupModalOpen(true);
@@ -246,6 +254,7 @@ export default function App() {
       )}
 
       <main className="relative flex-1 flex flex-col">
+        {suspended && <SuspendedNotice onContact={openSupport} />}
         {currentView === 'home' && (
           <>
             <Hero

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { User } from 'firebase/auth';
 import {
   ArrowLeft,
+  Ban,
   Check,
   Copy,
   Inbox,
@@ -46,6 +47,7 @@ import { countUnreadSupport } from '../services/supportService.ts';
 import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
 import type { CommunityPost } from '../types.ts';
 import { whileActive } from '../utils/whileActive.ts';
+import { liftSuspension, loadSuspensions, suspendUser, type Suspension } from '../services/suspensionService.ts';
 
 type Tab = 'overview' | 'support' | 'room' | 'inbox' | 'moderation';
 
@@ -587,7 +589,49 @@ function describeTarget(r: AdminReport, names: Record<string, string | null>): s
 const ReportsTab: React.FC<InboxProps<AdminReport>> = ({ items, setItems, onConfirm }) => {
   const { filter, chips } = useStatusFilter();
   const [names, setNames] = useState<Record<string, string | null>>({});
+  const [suspensions, setSuspensions] = useState<Record<string, Suspension>>({});
   const visible = items?.filter((r) => r.status === filter) ?? [];
+  // How many reports each user has, so repeat offenders stand out.
+  const reportCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    items?.forEach((r) => {
+      if (r.targetType === 'user') counts[r.targetId] = (counts[r.targetId] ?? 0) + 1;
+    });
+    return counts;
+  }, [items]);
+
+  useEffect(() => {
+    loadSuspensions().then(setSuspensions).catch(() => {});
+  }, []);
+
+  const confirmSuspend = (r: AdminReport) =>
+    onConfirm({
+      title: `Suspend ${names[r.targetId] ? `“${names[r.targetId]}”` : 'this user'}?`,
+      message: 'They can still read and message support, but can’t match, chat or post until you lift it.',
+      confirmLabel: 'Suspend',
+      run: async () => {
+        await suspendUser(r.targetId, r.reason, r.id);
+        setSuspensions((prev) => ({
+          ...prev,
+          [r.targetId]: { uid: r.targetId, source: 'admin', reason: r.reason, createdAt: Date.now() },
+        }));
+      },
+    });
+
+  const confirmLift = (r: AdminReport) =>
+    onConfirm({
+      title: 'Lift this suspension?',
+      message: 'They can match, chat and post again right away.',
+      confirmLabel: 'Lift suspension',
+      run: async () => {
+        await liftSuspension(r.targetId);
+        setSuspensions((prev) => {
+          const next = { ...prev };
+          delete next[r.targetId];
+          return next;
+        });
+      },
+    });
 
   useEffect(() => {
     const missing = [...new Set(visible.filter((r) => r.targetType === 'user').map((r) => r.targetId))].filter(
@@ -619,6 +663,14 @@ const ReportsTab: React.FC<InboxProps<AdminReport>> = ({ items, setItems, onConf
             <li key={r.id} className="card p-4">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="tag !text-danger">{describeTarget(r, names)}</span>
+                {suspensions[r.targetId] && (
+                  <span className="tag !text-danger !bg-danger/10">
+                    Suspended{suspensions[r.targetId].source === 'auto-underage' ? ' · auto' : ''}
+                  </span>
+                )}
+                {(reportCounts[r.targetId] ?? 0) > 1 && (
+                  <span className="text-[12px] font-medium text-danger">{reportCounts[r.targetId]} reports</span>
+                )}
                 <span className="text-[12px] text-subtle">{formatAgo(r.createdAt)}</span>
               </div>
               <p className="text-[15px] text-fg">{r.reason.replace(/^Unsaid:\s*/, '')}</p>
@@ -627,6 +679,17 @@ const ReportsTab: React.FC<InboxProps<AdminReport>> = ({ items, setItems, onConf
               </p>
               <div className="flex gap-2 mt-3">
                 <StatusButton status={r.status} onToggle={() => toggle(r)} />
+                {r.targetType === 'user' &&
+                  r.targetId &&
+                  (suspensions[r.targetId] ? (
+                    <button onClick={() => confirmLift(r)} className="btn btn-secondary btn-sm">
+                      <RotateCcw className="w-4 h-4" /> Lift suspension
+                    </button>
+                  ) : (
+                    <button onClick={() => confirmSuspend(r)} className="btn btn-secondary btn-sm !text-danger">
+                      <Ban className="w-4 h-4" /> Suspend
+                    </button>
+                  ))}
                 <button
                   onClick={() =>
                     onConfirm({

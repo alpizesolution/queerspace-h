@@ -51,6 +51,12 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    // A suspended account (suspensions/{uid}, see section 8) can still read and message
+    // support, but can't match, chat, or post anywhere public.
+    function isSuspended() {
+      return exists(/databases/$(database)/documents/suspensions/$(request.auth.uid));
+    }
+
     // An admin marking an inbox item (suggestion or report) as open or done.
     function isAdminStatusChange() {
       return isAdmin()
@@ -211,6 +217,7 @@ service cloud.firestore {
       );
 
       allow create: if isOwner(userId)
+        && !isSuspended()
         && queueKeysValid()
         && request.resource.data.status == 'waiting'
         && request.resource.data.createdAt is timestamp
@@ -226,6 +233,7 @@ service cloud.firestore {
       // in a conversation created in the same transaction.
       allow update: if isAuthenticated()
         && request.auth.uid != userId
+        && !isSuspended()
         && resource.data.status == 'waiting'
         && request.resource.data.status == 'matched'
         && request.resource.data.partnerId == request.auth.uid
@@ -278,6 +286,7 @@ service cloud.firestore {
         allow read: if isConversationParticipant(convId);
 
         allow create: if isConversationParticipant(convId)
+          && !isSuspended()
           && request.resource.data.keys().hasAll(['senderId', 'text', 'timestamp'])
           && request.resource.data.keys().hasOnly(['senderId', 'text', 'timestamp', 'replyTo'])
           && request.resource.data.senderId == request.auth.uid
@@ -323,7 +332,8 @@ service cloud.firestore {
         && request.resource.data.text.size() >= 1
         && request.resource.data.text.size() <= 1000
         && request.resource.data.timestamp == request.time
-        && slowMode('publicRoom', 2);
+        && slowMode('publicRoom', 2)
+        && !isSuspended();
 
       // Team announcements: only admins can post with the verified team flag (no slow mode),
       // optionally quoting the message they answer.
@@ -391,7 +401,8 @@ service cloud.firestore {
         && request.resource.data.likes == 0
         && request.resource.data.replyCount == 0
         && request.resource.data.timestamp == request.time
-        && slowMode('communityPost', 30);
+        && slowMode('communityPost', 30)
+        && !isSuspended();
 
       // Like: +1 with a new likes/{uid} doc. Unlike: -1 while removing it.
       allow update: if isAuthenticated()
@@ -431,7 +442,8 @@ service cloud.firestore {
           && request.resource.data.content.size() <= 500
           && request.resource.data.timestamp == request.time
           && getAfter(postPath(postId)).data.replyCount == get(postPath(postId)).data.replyCount + 1
-          && slowMode('communityReply', 5);
+          && slowMode('communityReply', 5)
+          && !isSuspended();
         allow delete: if isAdmin()
           && getAfter(postPath(postId)).data.replyCount == get(postPath(postId)).data.replyCount - 1;
         allow update: if false;
@@ -498,7 +510,8 @@ service cloud.firestore {
         && request.resource.data.same == 0
         && request.resource.data.flags == 0
         && getAfter(unsaidOwnerPath(postId)).data.authorId == request.auth.uid
-        && slowMode('unsaid', 60);
+        && slowMode('unsaid', 60)
+        && !isSuspended();
 
       // A reaction: +1 on one reaction counter alongside a new reactions/{uid} doc of that type.
       // Counters added after launch (felt, strong, proud, cry) start missing and count from 0.
@@ -643,6 +656,44 @@ service cloud.firestore {
         allow update: if false;
         allow delete: if isAdmin();
       }
+    }
+
+    // ====================================================
+    // 8. SUSPENSIONS
+    // ====================================================
+    // suspensions/{uid} pauses an account (see isSuspended). Only admins can lift one.
+
+    match /suspensions/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+
+      // An admin suspends from the Inbox.
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['source', 'reason', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['source', 'reason', 'createdAt', 'reportId'])
+        && request.resource.data.source == 'admin'
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() >= 1
+        && request.resource.data.reason.size() <= 300
+        && (!('reportId' in request.resource.data) || request.resource.data.reportId is string)
+        && request.resource.data.createdAt == request.time;
+
+      // Automatic: someone reporting their chat partner as underage pauses that partner
+      // until an admin reviews it. Only a real partner from that conversation can do this.
+      allow create: if isAuthenticated()
+        && request.auth.uid != userId
+        && request.resource.data.keys().hasAll(['source', 'reason', 'createdAt', 'reporterId', 'convId'])
+        && request.resource.data.keys().hasOnly(['source', 'reason', 'createdAt', 'reporterId', 'convId'])
+        && request.resource.data.source == 'auto-underage'
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() >= 1
+        && request.resource.data.reason.size() <= 300
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.convId is string
+        && get(/databases/$(database)/documents/conversations/$(request.resource.data.convId)).data.participants.hasAll([request.auth.uid, userId]);
+
+      allow update: if false;
+      allow delete: if isAdmin();
     }
   }
 }
