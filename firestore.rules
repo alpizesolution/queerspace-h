@@ -213,7 +213,7 @@ service cloud.firestore {
     function queueKeysValid() {
       return request.resource.data.keys().hasOnly([
                'status', 'partnerId', 'convId', 'createdAt', 'heartbeatAt', 'updatedAt', 'age', 'ageMin', 'ageMax',
-               'areas', 'wantAreas', 'expr', 'wantExpr', 'topics'
+               'areas', 'wantAreas', 'expr', 'wantExpr', 'topics', 'intent'
              ])
         && request.resource.data.status in ['waiting', 'matched']
         && queueAgeValid(request.resource.data)
@@ -221,7 +221,9 @@ service cloud.firestore {
         && queueListValid(request.resource.data, 'wantAreas')
         && queueListValid(request.resource.data, 'expr')
         && queueListValid(request.resource.data, 'wantExpr')
-        && queueListValid(request.resource.data, 'topics');
+        && queueListValid(request.resource.data, 'topics')
+        && (!('intent' in request.resource.data)
+            || request.resource.data.intent in ['friendship', 'dating', 'casual', 'deep_talk', 'open']);
     }
 
     function convHasParticipants(convId, a, b) {

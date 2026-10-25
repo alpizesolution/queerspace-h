@@ -983,10 +983,12 @@ test('Q-07: Queue entries CAN carry short location, gender expression and topic 
       expr: ['Femme'],
       wantExpr: ['Butch', 'Stem'],
       topics: ['cats & dogs'],
+      intent: 'deep_talk',
     })
   );
   await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), areas: 'Cebu City' }));
   await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), wantExpr: [] }));
   await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), areas: Array.from({ length: 21 }, (_, i) => `a${i}`) }));
   await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), city: 'Cebu City' }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), intent: 'anything' }));
 });

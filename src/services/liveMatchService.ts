@@ -86,7 +86,12 @@ export interface QueueMatchPrefs extends QueueAgePrefs {
   wantExpr?: string[];
   /** Chat topics, lowercased. People who picked topics only match people sharing one. */
   topics?: string[];
+  /** What they're looking for. Only the same intention matches, so "open" meets "open". */
+  intent?: Intention;
 }
+
+/** Valid intentions (must match firestore.rules). */
+const INTENTIONS: Record<Intention, true> = { friendship: true, dating: true, casual: true, deep_talk: true, open: true };
 
 /** Longest list a queue entry may carry (must match firestore.rules). */
 export const MAX_QUEUE_LIST = 20;
@@ -101,9 +106,10 @@ export function agesCompatible(a: QueueAgePrefs, b: QueueAgePrefs): boolean {
 }
 
 /**
- * Both people pass each other's location and gender expression filters, and share a topic when
- * either picked any (so "open to anything" chatters don't land in a topic match). Someone who
- * didn't share a location or expression is never excluded, matching the setup screen's promise.
+ * Both people want the same thing (intention), pass each other's location and gender expression
+ * filters, and share a topic when either picked any (so "open to anything" chatters don't land in
+ * a topic match). Someone who didn't share a location or expression is never excluded, matching
+ * the setup screen's promise.
  */
 export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boolean {
   const fitsArea = (want?: string[], theirs?: string[]) =>
@@ -114,6 +120,7 @@ export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boole
     (!a.topics?.length && !b.topics?.length) || (a.topics ?? []).some((t) => b.topics?.includes(t));
   return (
     agesCompatible(a, b) &&
+    (a.intent ?? 'open') === (b.intent ?? 'open') &&
     sharesTopic() &&
     fitsArea(a.wantAreas, b.areas) &&
     fitsArea(b.wantAreas, a.areas) &&
@@ -144,6 +151,7 @@ export function queueMatchFields(prefs: Partial<UserPreferences>): QueueMatchPre
   if (prefs.applyGenderExpressionFilter && wantExpr.length && !wantExpr.includes('Any / No preference')) {
     fields.wantExpr = wantExpr.slice(0, MAX_QUEUE_LIST);
   }
+  if (prefs.intention && prefs.intention in INTENTIONS) fields.intent = prefs.intention;
   const topics = [...new Set((prefs.topics ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean))];
   if (topics.length) fields.topics = topics.slice(0, MAX_QUEUE_LIST);
   return fields;

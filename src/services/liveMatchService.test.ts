@@ -122,3 +122,11 @@ test('queueMatchFields lowercases and dedupes topics', () => {
   assert.deepEqual(queueMatchFields({ topics: ['Cats & Dogs', 'cats & dogs ', ' '] }), { topics: ['cats & dogs'] });
   assert.deepEqual(queueMatchFields({ topics: [] }), {});
 });
+
+test('filtersCompatible: only the same intention matches; no intention counts as open', () => {
+  assert.equal(filtersCompatible({ intent: 'deep_talk' }, { intent: 'deep_talk' }), true);
+  assert.equal(filtersCompatible({ intent: 'deep_talk' }, { intent: 'open' }), false);
+  assert.equal(filtersCompatible({ intent: 'deep_talk' }, {}), false);
+  assert.equal(filtersCompatible({ intent: 'open' }, {}), true);
+  assert.deepEqual(queueMatchFields({ intention: 'dating' }), { intent: 'dating' });
+});
