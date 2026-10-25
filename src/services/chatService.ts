@@ -13,6 +13,7 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
+  limit,
   limitToLast,
 } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured } from '../lib/firebase.ts';
@@ -103,7 +104,8 @@ export async function startOrCreateConversation(partnerUid: string): Promise<Con
     const q = query(
       conversationsRef,
       where('participants', 'array-contains', myUid),
-      where('status', '==', 'active')
+      where('status', '==', 'active'),
+      limit(20)
     );
     const querySnap = await getDocs(q);
 

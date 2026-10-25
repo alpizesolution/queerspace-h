@@ -402,10 +402,10 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback((force = false) => {
     setLoading(true);
     setError(false);
-    loadStats()
+    loadStats(force)
       .then(setStats)
       .catch((err) => {
         console.warn('[Admin] Stats failed:', err);
@@ -414,13 +414,13 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(refresh, [refresh]);
+  useEffect(() => refresh(), [refresh]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
-        <button onClick={refresh} className="icon-btn" aria-label="Refresh" disabled={loading}>
+        <button onClick={() => refresh(true)} className="icon-btn" aria-label="Refresh" disabled={loading}>
           <RefreshCw className={`w-[18px] h-[18px] ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
