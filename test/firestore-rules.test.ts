@@ -973,7 +973,7 @@ test('Q-06: Queue entries CAN carry an 18+ age and a valid age range, nothing el
   await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: '27' }));
 });
 
-test('Q-07: Queue entries CAN carry short location and gender expression lists', async () => {
+test('Q-07: Queue entries CAN carry short location, gender expression and topic lists', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
   await assertSucceeds(
     alice.doc('match_queue/alice').set({
@@ -982,6 +982,7 @@ test('Q-07: Queue entries CAN carry short location and gender expression lists',
       wantAreas: ['Cebu City'],
       expr: ['Femme'],
       wantExpr: ['Butch', 'Stem'],
+      topics: ['cats & dogs'],
     })
   );
   await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), areas: 'Cebu City' }));

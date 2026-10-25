@@ -400,6 +400,11 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
                   <Plus className="w-5 h-5" />
                 </button>
               </form>
+              <p className="mt-2 text-[12px] text-subtle">
+                {selectedTopics.length
+                  ? "You'll only match people who picked at least one of these."
+                  : 'No topics: you can match anyone who also picked none.'}
+              </p>
             </section>
 
             {/* Age */}

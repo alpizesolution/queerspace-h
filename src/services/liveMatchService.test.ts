@@ -109,3 +109,16 @@ test('queueMatchFields shares location and expression only when shown, and filte
   assert.deepEqual(queueMatchFields({ locationSelection: ['Anywhere in the Philippines'], applyLocationFilter: true }), {});
   assert.deepEqual(queueMatchFields({ genderExpression: ['Prefer not to say'] }), {});
 });
+
+test('filtersCompatible: picking topics needs a shared topic; no topics only meets no topics', () => {
+  assert.equal(filtersCompatible({}, {}), true);
+  assert.equal(filtersCompatible({ topics: ['cats & dogs', 'tech & work life'] }, { topics: ['tech & work life'] }), true);
+  assert.equal(filtersCompatible({ topics: ['cats & dogs'] }, { topics: ['anime & cozy games'] }), false);
+  assert.equal(filtersCompatible({ topics: ['cats & dogs'] }, {}), false, 'open to anything does not land in a topic match');
+  assert.equal(filtersCompatible({}, { topics: ['cats & dogs'] }), false);
+});
+
+test('queueMatchFields lowercases and dedupes topics', () => {
+  assert.deepEqual(queueMatchFields({ topics: ['Cats & Dogs', 'cats & dogs ', ' '] }), { topics: ['cats & dogs'] });
+  assert.deepEqual(queueMatchFields({ topics: [] }), {});
+});

@@ -66,7 +66,7 @@ export default function App() {
       displayName: initial.name,
       pronouns: initial.pronouns,
       intention: 'open',
-      topics: ['WLW Books & Poetry', 'Plants & Coffee'],
+      topics: [],
       region: 'Anywhere / Worldwide',
     };
   });

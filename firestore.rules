@@ -205,7 +205,7 @@ service cloud.firestore {
             || (d.ageMin is int && d.ageMax is int && d.ageMin >= 18 && d.ageMax <= 99 && d.ageMin <= d.ageMax));
     }
 
-    // Location and gender expression filters: short lists of option names.
+    // Location, gender expression and topic filters: short lists of option names.
     function queueListValid(d, key) {
       return !(key in d) || (d[key] is list && d[key].size() >= 1 && d[key].size() <= 20);
     }
@@ -213,14 +213,15 @@ service cloud.firestore {
     function queueKeysValid() {
       return request.resource.data.keys().hasOnly([
                'status', 'partnerId', 'convId', 'createdAt', 'heartbeatAt', 'updatedAt', 'age', 'ageMin', 'ageMax',
-               'areas', 'wantAreas', 'expr', 'wantExpr'
+               'areas', 'wantAreas', 'expr', 'wantExpr', 'topics'
              ])
         && request.resource.data.status in ['waiting', 'matched']
         && queueAgeValid(request.resource.data)
         && queueListValid(request.resource.data, 'areas')
         && queueListValid(request.resource.data, 'wantAreas')
         && queueListValid(request.resource.data, 'expr')
-        && queueListValid(request.resource.data, 'wantExpr');
+        && queueListValid(request.resource.data, 'wantExpr')
+        && queueListValid(request.resource.data, 'topics');
     }
 
     function convHasParticipants(convId, a, b) {

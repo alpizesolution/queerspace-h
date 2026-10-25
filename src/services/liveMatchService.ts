@@ -84,6 +84,8 @@ export interface QueueMatchPrefs extends QueueAgePrefs {
   wantAreas?: string[];
   expr?: string[];
   wantExpr?: string[];
+  /** Chat topics, lowercased. People who picked topics only match people sharing one. */
+  topics?: string[];
 }
 
 /** Longest list a queue entry may carry (must match firestore.rules). */
@@ -99,16 +101,20 @@ export function agesCompatible(a: QueueAgePrefs, b: QueueAgePrefs): boolean {
 }
 
 /**
- * Both people pass each other's location and gender expression filters. Someone who didn't
- * share a location or expression is never excluded, matching the setup screen's promise.
+ * Both people pass each other's location and gender expression filters, and share a topic when
+ * either picked any (so "open to anything" chatters don't land in a topic match). Someone who
+ * didn't share a location or expression is never excluded, matching the setup screen's promise.
  */
 export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boolean {
   const fitsArea = (want?: string[], theirs?: string[]) =>
     !want?.length || !theirs?.length || theirs.some((area) => want.some((w) => locationsOverlap(w, area)));
   const fitsExpr = (want?: string[], theirs?: string[]) =>
     !want?.length || !theirs?.length || theirs.some((e) => want.includes(e));
+  const sharesTopic = () =>
+    (!a.topics?.length && !b.topics?.length) || (a.topics ?? []).some((t) => b.topics?.includes(t));
   return (
     agesCompatible(a, b) &&
+    sharesTopic() &&
     fitsArea(a.wantAreas, b.areas) &&
     fitsArea(b.wantAreas, a.areas) &&
     fitsExpr(a.wantExpr, b.expr) &&
@@ -138,6 +144,8 @@ export function queueMatchFields(prefs: Partial<UserPreferences>): QueueMatchPre
   if (prefs.applyGenderExpressionFilter && wantExpr.length && !wantExpr.includes('Any / No preference')) {
     fields.wantExpr = wantExpr.slice(0, MAX_QUEUE_LIST);
   }
+  const topics = [...new Set((prefs.topics ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean))];
+  if (topics.length) fields.topics = topics.slice(0, MAX_QUEUE_LIST);
   return fields;
 }
 
