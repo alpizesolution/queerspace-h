@@ -43,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
         <AnimatedBrandTitle sizeClass="text-[17px] sm:text-lg" />
       </button>
 
-      <nav className="hidden md:flex items-center gap-1 mx-auto" aria-label="Main">
+      <nav className="hidden desk:flex items-center gap-1 mx-auto" aria-label="Main">
         {NAV_ITEMS.map(({ id, label }) => {
           const active = isNavActive(id, currentView);
           return (
@@ -61,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
         })}
       </nav>
 
-      <div className="flex items-center gap-0.5 ml-auto md:ml-0 shrink-0">
+      <div className="flex items-center gap-0.5 ml-auto desk:ml-0 shrink-0">
         <AuthStatusBadge className="mr-1.5" />
         {SHOW_ADMIN_LINK && (
           <a href="/admin" className="icon-btn text-berry hidden sm:inline-flex" title="Admin dashboard" aria-label="Open admin dashboard">

@@ -246,7 +246,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const openComposer = () => setShowCreateModal(true);
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-[calc(var(--tabbar-h)+6rem)] md:pb-16">
+    <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-[calc(var(--tabbar-h)+6rem)] desk:pb-16">
       <div className="flex items-center justify-between gap-3 mb-4">
         <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-fg">Community</h1>
         <button onClick={openComposer} className="btn btn-primary btn-sm hidden sm:inline-flex">

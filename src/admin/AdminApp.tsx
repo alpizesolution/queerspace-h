@@ -85,7 +85,7 @@ const Shell: React.FC<{ children: React.ReactNode; user?: User | null }> = ({ ch
         )}
       </div>
     </header>
-    <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10 pb-[calc(var(--tabbar-h)+1.5rem)] sm:pb-10">
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10 pb-[calc(var(--tabbar-h)+1.5rem)] desk:pb-10">
       {children}
     </main>
   </div>
@@ -276,7 +276,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <>
-      <div role="tablist" aria-label="Admin sections" className="hidden md:flex gap-2 mb-6 flex-wrap">
+      <div role="tablist" aria-label="Admin sections" className="hidden desk:flex gap-2 mb-6 flex-wrap">
         {tabs.map(({ id, label, badge }) => (
           <button
             key={id}
@@ -327,9 +327,9 @@ const Dashboard: React.FC = () => {
 
       <nav
         aria-label="Admin sections"
-        className="tabbar md:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
+        className="tabbar desk:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
       >
-        <div className="grid grid-cols-5 h-14">
+        <div className="grid grid-cols-5 h-14 max-w-2xl mx-auto">
           {tabs.map(({ id, short, icon: Icon, badge }) => {
             const active = tab === id;
             return (

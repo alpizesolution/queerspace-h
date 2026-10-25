@@ -25,9 +25,9 @@ export const Hero: React.FC<HeroProps> = ({
   const open = { public: onOpenPublicRoom, unsaid: onOpenUnsaid, community: onOpenCommunity };
 
   return (
-    <section className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-6 sm:pt-12 pb-8">
-      <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-        <div className="lg:col-span-6 anim-rise">
+    <section className="max-w-2xl desk:max-w-6xl mx-auto w-full px-4 sm:px-6 pt-6 sm:pt-12 pb-8">
+      <div className="grid desk:grid-cols-12 gap-8 desk:gap-12 items-center">
+        <div className="desk:col-span-6 anim-rise">
           <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-lavender mb-3">
             ✦ A sapphic space for women · WLW ✦
           </p>
@@ -56,8 +56,8 @@ export const Hero: React.FC<HeroProps> = ({
           </p>
         </div>
 
-        <div className="lg:col-span-6 order-first lg:order-none">
-          <div className="relative aspect-[16/10] sm:aspect-[4/3] w-full max-w-xl mx-auto rounded-3xl overflow-hidden border border-line bg-surface">
+        <div className="desk:col-span-6 order-first desk:order-none">
+          <div className="relative aspect-[16/10] sm:aspect-[4/3] w-full desk:max-w-xl mx-auto rounded-3xl overflow-hidden border border-line bg-surface">
             <img
               src="/assets/aistudio/hero_illustration.png"
               alt="Two women smiling together"

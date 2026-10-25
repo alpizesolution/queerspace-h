@@ -23,9 +23,9 @@ interface Props {
 export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate }) => (
   <nav
     aria-label="Main"
-    className="tabbar md:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
+    className="tabbar desk:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
   >
-    <div className="grid grid-cols-5 h-14">
+    <div className="grid grid-cols-5 h-14 max-w-2xl mx-auto">
       {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
         const active = isNavActive(id, currentView);
         return (

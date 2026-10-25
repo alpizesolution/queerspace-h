@@ -4,6 +4,17 @@
  * QUEERSPACE design tokens.
  * Deep plum surfaces, berry as the single accent, lavender for quiet highlights.
  */
+/*
+ * "desk" = a real desktop: wide AND a mouse/trackpad. Phones and tablets (touch-first, even
+ * iPad landscape) get the phone layout with the bottom tab bar. Keep in sync with the
+ * media queries below that set --tabbar-h.
+ */
+@custom-variant desk {
+  @media (min-width: 1024px) and (pointer: fine), (min-width: 1440px) {
+    @slot;
+  }
+}
+
 @theme {
   --color-ink: #120b17;
   --color-surface: #1a111f;
@@ -29,7 +40,7 @@
   --tabbar-h: calc(3.5rem + env(safe-area-inset-bottom));
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) and (pointer: fine), (min-width: 1440px) {
   :root {
     --header-h: 4rem;
     --tabbar-h: 0px;
@@ -241,8 +252,8 @@ body {
   border-radius: 9999px;
 }
 
-/* Hide the tab bar while typing on phones so the keyboard never stacks on top of it. */
-@media (max-width: 767px) {
+/* Hide the tab bar while typing on phones and tablets so the keyboard never stacks on top of it. */
+@media (max-width: 1023px), (pointer: coarse) and (max-width: 1439px), (pointer: none) and (max-width: 1439px) {
   :root:has(input[type="text"]:focus, input[type="search"]:focus, textarea:focus) {
     --tabbar-h: 0px;
   }
