@@ -10,9 +10,9 @@ interface HeroProps {
 }
 
 const DESTINATIONS = [
-  { key: 'public', icon: Users, title: 'Public Room', text: 'Drop in and say hi' },
-  { key: 'unsaid', icon: Feather, title: 'Unsaid', text: 'Say it anonymously' },
-  { key: 'community', icon: MessagesSquare, title: 'Community', text: 'Stories and recs' },
+  { key: 'public', icon: Users, title: 'Galaxy', text: 'Drop in and say hi' },
+  { key: 'unsaid', icon: Feather, title: 'Echoes', text: 'Say it anonymously' },
+  { key: 'community', icon: MessagesSquare, title: 'Cosmos', text: 'Stories and recs' },
 ] as const;
 
 export const Hero: React.FC<HeroProps> = ({
