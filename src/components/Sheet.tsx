@@ -100,6 +100,8 @@ interface ConfirmDialogProps {
   confirmLabel: string;
   cancelLabel?: string;
   tone?: 'primary' | 'danger';
+  /** Disables both buttons while the confirmed action runs, so it can't be submitted twice. */
+  busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -110,6 +112,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   confirmLabel,
   cancelLabel = 'Cancel',
   tone = 'primary',
+  busy = false,
   onConfirm,
   onCancel,
 }) => (
@@ -120,11 +123,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     hideClose
     footer={
       <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-        <button onClick={onCancel} className="btn btn-ghost w-full sm:w-auto">
+        <button onClick={onCancel} disabled={busy} className="btn btn-ghost w-full sm:w-auto">
           {cancelLabel}
         </button>
         <button
           onClick={onConfirm}
+          disabled={busy}
           className={`btn w-full sm:w-auto ${tone === 'danger' ? 'btn-danger' : 'btn-primary'}`}
         >
           {confirmLabel}

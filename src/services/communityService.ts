@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   FirestoreError,
+  getDocs,
   increment,
   limit,
   onSnapshot,
@@ -17,6 +18,7 @@ import {
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { CommunityPost, CommunityReply, UserPreferences } from '../types.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
+import { checkAdmin } from './adminService.ts';
 
 /**
  * Community board shared through Firestore `community_posts`. Like and reply counts
@@ -237,4 +239,66 @@ export async function deleteCommunityPost(postId: string): Promise<boolean> {
     console.warn('[Community] Could not delete:', err);
     return false;
   }
+}
+
+/**
+ * Whether this session is a moderator. Only decides whether to show the controls: it reads
+ * admins/{uid}, which only the Firebase Console can write, and firestore.rules re-check
+ * every admin delete on the server.
+ */
+export async function fetchIsCommunityAdmin(): Promise<boolean> {
+  try {
+    const user = auth?.currentUser ?? (await ensureAnonymousAuth());
+    return (await checkAdmin(user)) === 'admin';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Admin removal of a reply. The rules require the post's replyCount to drop by one in the
+ * same batch, so the two writes succeed or fail together.
+ */
+export async function adminDeleteCommunityReply(postId: string, replyId: string): Promise<boolean> {
+  if (!db) return false;
+  try {
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'community_posts', postId, 'replies', replyId));
+    batch.update(doc(db, 'community_posts', postId), { replyCount: increment(-1) });
+    await batch.commit();
+    return true;
+  } catch (err) {
+    console.warn('[Community] Admin could not delete reply:', err);
+    return false;
+  }
+}
+
+/**
+ * Admin removal of any post. Replies go first (one by one, each with its counter) so none are
+ * left orphaned; if any step fails the post is kept and the admin can retry. Likes markers
+ * are cleared afterwards, best-effort: they're invisible without the post.
+ */
+export async function adminDeleteCommunityPost(postId: string): Promise<boolean> {
+  if (!db) return false;
+  try {
+    const replies = collection(db, 'community_posts', postId, 'replies');
+    for (let round = 0; round < 20; round++) {
+      const snap = await getDocs(query(replies, limit(50)));
+      if (snap.empty) break;
+      for (const reply of snap.docs) {
+        if (!(await adminDeleteCommunityReply(postId, reply.id))) return false;
+      }
+    }
+    await deleteDoc(doc(db, 'community_posts', postId));
+  } catch (err) {
+    console.warn('[Community] Admin could not delete post:', err);
+    return false;
+  }
+  try {
+    const likes = await getDocs(collection(db, 'community_posts', postId, 'likes'));
+    await Promise.all(likes.docs.map((d) => deleteDoc(d.ref)));
+  } catch {
+    // Leftover like markers are harmless; the post itself is gone.
+  }
+  return true;
 }

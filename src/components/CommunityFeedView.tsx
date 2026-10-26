@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowUp, Check, Heart, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
+import { ArrowUp, Check, CheckCircle2, Heart, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { CommunityPost, CommunityReply, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import {
+  adminDeleteCommunityPost,
+  adminDeleteCommunityReply,
   COMMUNITY_REPLY_MAX_LENGTH,
   createCommunityPost,
   deleteCommunityPost,
+  fetchIsCommunityAdmin,
   isCommunityAvailable,
   replyToCommunityPost,
   setCommunityLike,
@@ -15,6 +18,11 @@ import {
   subscribeToReplies,
 } from '../services/communityService.ts';
 import { whileActive } from '../utils/whileActive.ts';
+
+/** What the confirmation dialog is about to remove. */
+type PendingDelete =
+  | { kind: 'post'; postId: string; admin: boolean }
+  | { kind: 'reply'; postId: string; replyId: string };
 
 interface CommunityFeedViewProps {
   userPrefs: UserPreferences;
@@ -40,7 +48,12 @@ function saveLiked(map: Record<string, boolean>) {
 }
 
 /** Live replies for one expanded post, plus the reply box. */
-const Replies: React.FC<{ post: CommunityPost; userPrefs: UserPreferences }> = ({ post, userPrefs }) => {
+const Replies: React.FC<{
+  post: CommunityPost;
+  userPrefs: UserPreferences;
+  isAdmin: boolean;
+  onDeleteReply: (replyId: string) => void;
+}> = ({ post, userPrefs, isAdmin, onDeleteReply }) => {
   const [replies, setReplies] = useState<CommunityReply[] | null>(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -75,13 +88,23 @@ const Replies: React.FC<{ post: CommunityPost; userPrefs: UserPreferences }> = (
         replies.map((reply) => (
           <div key={reply.id} className="flex gap-2.5 text-[14px]">
             <AnimalAvatar avatar={reply.authorAvatar} seed={reply.authorId || reply.author} className="w-7 h-7 mt-0.5" />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-[12px] text-subtle">
                 <span className="font-semibold text-fg">{reply.author}</span> {reply.authorPronouns} ·{' '}
                 {formatChatTime(reply.timestamp)}
               </p>
               <p className="text-muted leading-relaxed whitespace-pre-wrap break-words mt-0.5">{reply.content}</p>
             </div>
+            {isAdmin && (
+              <button
+                onClick={() => onDeleteReply(reply.id)}
+                className="icon-btn w-8 h-8 -mr-1.5 -mt-1 text-subtle"
+                aria-label={`Delete reply by ${reply.author} (moderator)`}
+                title="Delete reply (moderator)"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         ))
       )}
@@ -139,7 +162,10 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const [postError, setPostError] = useState<string | null>(null);
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
 
   const available = isCommunityAvailable();
 
@@ -160,6 +186,39 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
       )
     );
   }, [available]);
+
+  useEffect(() => {
+    if (!available) return;
+    let cancelled = false;
+    fetchIsCommunityAdmin().then((admin) => {
+      if (!cancelled) setIsAdmin(admin);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [available]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const confirmDelete = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    let ok: boolean;
+    if (pendingDelete.kind === 'reply') ok = await adminDeleteCommunityReply(pendingDelete.postId, pendingDelete.replyId);
+    else if (pendingDelete.admin) ok = await adminDeleteCommunityPost(pendingDelete.postId);
+    else ok = await deleteCommunityPost(pendingDelete.postId);
+    setDeleting(false);
+    setToast(
+      ok
+        ? { text: pendingDelete.kind === 'reply' ? 'Reply deleted.' : 'Post deleted.', ok: true }
+        : { text: "Couldn't delete that. Nothing was removed, please try again.", ok: false }
+    );
+    setPendingDelete(null);
+  };
 
   const updateLiked = (postId: string, value: boolean) => {
     setLiked((prev) => {
@@ -312,11 +371,12 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                       {CATEGORY_EMOJI[post.category] ?? '🌸'} {CATEGORY_LABELS[post.category] ?? post.category} · {formatChatTime(post.timestamp)}
                     </p>
                   </div>
-                  {uid && post.authorId === uid && (
+                  {(isAdmin || (uid && post.authorId === uid)) && (
                     <button
-                      onClick={() => setDeletingId(post.id)}
+                      onClick={() => setPendingDelete({ kind: 'post', postId: post.id, admin: isAdmin })}
                       className="icon-btn w-9 h-9 -mr-2"
-                      aria-label="Delete your post"
+                      aria-label={isAdmin && post.authorId !== uid ? 'Delete post (moderator)' : 'Delete your post'}
+                      title={isAdmin && post.authorId !== uid ? 'Delete post (moderator)' : 'Delete your post'}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -377,7 +437,14 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                   </button>
                 </div>
 
-                {isRepliesExpanded && <Replies post={post} userPrefs={userPrefs} />}
+                {isRepliesExpanded && (
+                  <Replies
+                    post={post}
+                    userPrefs={userPrefs}
+                    isAdmin={isAdmin}
+                    onDeleteReply={(replyId) => setPendingDelete({ kind: 'reply', postId: post.id, replyId })}
+                  />
+                )}
               </article>
             );
           })}
@@ -490,19 +557,35 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
         </Sheet>
       )}
 
-      {deletingId && (
+      {pendingDelete && (
         <ConfirmDialog
-          title="Delete your post?"
-          message="It disappears for everyone right away."
-          confirmLabel="Delete"
+          title={pendingDelete.kind === 'reply' ? 'Delete this reply?' : 'Delete this post?'}
+          message={
+            pendingDelete.kind === 'reply'
+              ? 'This reply will be removed for everyone. This action cannot be undone.'
+              : pendingDelete.admin
+                ? 'This post and all of its replies will be removed for everyone. This action cannot be undone.'
+                : 'This post will be removed for everyone. This action cannot be undone.'
+          }
+          confirmLabel={deleting ? 'Deleting…' : 'Delete permanently'}
           tone="danger"
-          onConfirm={() => {
-            const id = deletingId;
-            setDeletingId(null);
-            deleteCommunityPost(id);
+          busy={deleting}
+          onConfirm={confirmDelete}
+          onCancel={() => {
+            if (!deleting) setPendingDelete(null);
           }}
-          onCancel={() => setDeletingId(null)}
         />
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed z-[60] left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] w-[calc(100%-2rem)] max-w-sm flex items-start gap-2.5 bg-raised/95 backdrop-blur-xl text-fg px-4 py-3 rounded-2xl shadow-2xl shadow-black/50 border border-line text-sm anim-pop"
+        >
+          <CheckCircle2 className={`w-[18px] h-[18px] shrink-0 mt-px ${toast.ok ? 'text-berry' : 'text-danger'}`} />
+          <span>{toast.text}</span>
+        </div>
       )}
     </div>
   );

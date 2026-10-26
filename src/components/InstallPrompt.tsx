@@ -124,16 +124,19 @@ export const InstallPrompt: React.FC = () => {
   };
 
   return (
+    <>
+    {/* Room to scroll the last content clear of the fixed card on phones and tablets. */}
+    <div aria-hidden="true" className="h-28 desk:hidden" />
     <div
       role="dialog"
       aria-label="Install QUEERSPACE PH"
-      className="fixed z-30 inset-x-3 top-[calc(env(safe-area-inset-top)+var(--header-h)+0.5rem)] sm:top-auto sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[22rem] card !bg-raised/95 backdrop-blur-xl shadow-2xl shadow-black/50 p-4 anim-pop"
+      className="fixed z-30 inset-x-3 bottom-[calc(var(--tabbar-h)+0.5rem)] mx-auto max-w-md desk:inset-x-auto desk:mx-0 desk:right-6 desk:bottom-6 desk:w-[22rem] card !bg-raised/95 backdrop-blur-xl shadow-2xl shadow-black/50 p-3 desk:p-4 anim-pop"
     >
       <div className="flex items-start gap-3">
-        <img src="/icon-192.png" alt="" className="w-11 h-11 rounded-xl border border-line shrink-0" />
+        <img src="/icon-192.png" alt="" className="w-9 h-9 desk:w-11 desk:h-11 rounded-xl border border-line shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold text-fg">Get the QUEERSPACE PH app</p>
-          <p className="text-[13px] text-muted mt-0.5 leading-relaxed">
+          <p className="text-sm desk:text-[15px] font-semibold text-fg">Get the QUEERSPACE PH app</p>
+          <p className="text-[12px] desk:text-[13px] text-muted mt-0.5 leading-snug">
             <Steps platform={platform} />
           </p>
         </div>
@@ -152,5 +155,6 @@ export const InstallPrompt: React.FC = () => {
         </div>
       )}
     </div>
+    </>
   );
 };

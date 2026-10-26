@@ -86,7 +86,7 @@ export default function App() {
             hasUnreadSupportReply().then((unread) => {
               if (!unread) return;
               setHasSupportReply(true);
-              showToast('The QUEERSPACE Team replied. Open "Chat with us" in the footer.');
+              showToast('The QUEERSPACE Team replied. Open "Chat with us" in the menu or footer.');
             });
           }
         })
@@ -249,6 +249,9 @@ export default function App() {
             setSetupPurpose('profile');
             setSetupModalOpen(true);
           }}
+          onOpenInfo={(modal) => setActiveInfoModal(modal)}
+          onOpenSupport={openSupport}
+          hasSupportReply={hasSupportReply}
           profile={userPrefs}
         />
       )}
@@ -316,7 +319,7 @@ export default function App() {
           onOpenModal={(modal) => setActiveInfoModal(modal)}
           onOpenSupport={openSupport}
           hasSupportReply={hasSupportReply}
-          className={currentView === 'community' ? 'hidden sm:block' : ''}
+          className="hidden desk:block"
         />
       )}
 
