@@ -3,7 +3,7 @@ import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ArrowUp, BadgeCheck, CheckCircle2, Reply, SmilePlus, Trash2, Users, X } from 'lucide-react';
 import { ConfirmDialog } from './Sheet.tsx';
 import { SwipeToReply } from './SwipeToReply.tsx';
-import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
+import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
@@ -68,7 +68,18 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   const [asTeam, setAsTeam] = useState(false);
   // Admins can answer a specific message; replies always go out as the team.
   const [replyingTo, setReplyingTo] = useState<PublicRoomMessage | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  // True while the reader is at (or near) the bottom, so new messages follow along but reading history isn't interrupted.
+  const stickToBottomRef = useRef(true);
+  const coarsePointer = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches);
+  // On phones and tablets, a focused composer means the on-screen keyboard is up.
+  const [composerFocused, setComposerFocused] = useState(false);
+  // The room's normal height, kept as a spacer while the room is lifted over the app header for typing.
+  const [spacerHeight, setSpacerHeight] = useState<number | null>(null);
+  const { height: viewportHeight, offsetTop: viewportTop } = useVisualViewport();
+  const lifted = coarsePointer && composerFocused && viewportHeight !== null;
 
   const [reacted, setReacted] = useState<Record<string, RoomReactionId>>(loadReacted);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
@@ -174,10 +185,28 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
     );
   }, []);
 
-  // Auto-scroll and chime when someone else's message arrives.
+  const scrollToBottom = (smooth: boolean) => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  };
+
+  // The keyboard opening or closing changes the visible height: stay on the latest message if that's where we were.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    if (stickToBottomRef.current) scrollToBottom(false);
+  }, [viewportHeight, lifted]);
+
+  // Grow the composer with its text, up to its max height, then scroll inside it.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [inputText]);
+
+  // Follow new messages only if the reader is at the bottom or just sent one; chime when someone else's arrives.
+  useEffect(() => {
     const latest = messages[messages.length - 1];
+    if (stickToBottomRef.current || latest?.isSelf) scrollToBottom(true);
     if (lastCountRef.current > 0 && messages.length > lastCountRef.current && latest && !latest.isSelf && !isSoundMuted) {
       soundEffects.playMessageReceived();
     }
@@ -220,13 +249,24 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
     if (!isSoundMuted) soundEffects.playMessageSent();
   };
 
-  const viewportHeight = useVisualViewportHeight();
   const chrome = 'var(--header-h) - env(safe-area-inset-top) - var(--tabbar-h)';
 
   return (
+    <>
+    {/* Keeps the page the same height while the room is lifted over the header and tab bar. */}
+    {lifted && spacerHeight !== null && <div aria-hidden="true" style={{ height: spacerHeight }} />}
     <div
-      className="flex flex-col max-w-3xl mx-auto w-full md:border-x md:border-line"
-      style={{ height: `calc(${viewportHeight ? `${viewportHeight}px` : '100dvh'} - ${chrome})` }}
+      ref={wrapperRef}
+      className={
+        lifted
+          ? 'fixed inset-x-0 top-0 z-[45] flex flex-col bg-ink max-w-3xl mx-auto w-full md:border-x md:border-line'
+          : 'flex flex-col max-w-3xl mx-auto w-full md:border-x md:border-line'
+      }
+      style={
+        lifted
+          ? { height: viewportHeight!, transform: viewportTop ? `translateY(${viewportTop}px)` : undefined }
+          : { height: `calc(${viewportHeight ? `${viewportHeight}px` : '100dvh'} - ${chrome})` }
+      }
     >
       <div className="px-4 sm:px-5 py-3 border-b border-line flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-raised border border-line flex items-center justify-center text-berry shrink-0">
@@ -238,7 +278,15 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4 space-y-4" aria-live="polite">
+      <div
+        ref={scrollRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4 space-y-4"
+        aria-live="polite"
+      >
         {status === 'error' && (
           <div className="h-full flex flex-col items-center justify-center text-center px-6">
             <p className="text-[15px] font-medium text-fg">Can't reach the room</p>
@@ -440,11 +488,23 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
       )}
       <form
         onSubmit={handleSendMessage}
-        className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 ${teamAvailable ? '' : 'border-t border-line'}`}
+        className={`flex items-end gap-2 px-3 sm:px-4 py-2.5 ${teamAvailable ? '' : 'border-t border-line'}`}
       >
-        <input
-          type="text"
+        <textarea
+          rows={1}
           value={inputText}
+          onFocus={() => {
+            if (wrapperRef.current) setSpacerHeight(wrapperRef.current.getBoundingClientRect().height);
+            setComposerFocused(true);
+          }}
+          onBlur={() => setComposerFocused(false)}
+          onKeyDown={(e) => {
+            // Phones: Enter is a new line (the send button sends). Desktop: Enter sends, Shift+Enter is a new line.
+            if (e.key === 'Enter' && !e.shiftKey && !coarsePointer && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              handleSendMessage();
+            }
+          }}
           onChange={(e) => {
             setInputText(e.target.value);
             if (sendError) setSendError(null);
@@ -454,9 +514,9 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           placeholder={`Message as ${teamAvailable && asTeam ? TEAM_NAME : userPrefs.displayName || 'Sapphic Guest'}`}
           ref={inputRef}
           aria-label="Message the public room"
-          enterKeyHint="send"
+          enterKeyHint={coarsePointer ? 'enter' : 'send'}
           autoComplete="off"
-          className="flex-1 min-w-0 h-11 px-4 rounded-full bg-surface border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+          className="flex-1 min-w-0 min-h-11 max-h-[7.5rem] px-4 py-[10px] leading-6 resize-none overflow-y-auto rounded-[22px] bg-surface border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
         />
         <button
           type="submit"
@@ -496,5 +556,6 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
         </div>
       )}
     </div>
+    </>
   );
 };
