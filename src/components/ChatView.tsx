@@ -688,7 +688,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
         </div>
       ) : (
-        <div className="border-t border-line bg-ink pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="border-t border-line bg-ink pb-[max(0.5rem,env(safe-area-inset-bottom))] focus-within:pb-2">
           {!hasExchange && !shortViewport && (
             <div className="flex gap-2 overflow-x-auto scrollbar-none px-3 pt-2.5" aria-label="Icebreakers">
               {ICEBREAKER_PROMPTS.map((prompt) => (
