@@ -22,11 +22,12 @@ export { fetchIsCommunityAdmin as fetchIsRoomModerator } from './communityServic
 
 /** Reaction types on room messages. Ids must match the lists in firestore.rules. */
 export const ROOM_REACTIONS = [
-  { id: 'heart', emoji: '❤️', label: 'Love' },
-  { id: 'laugh', emoji: '😂', label: 'Haha' },
-  { id: 'hug', emoji: '🫂', label: 'Hug' },
-  { id: 'fire', emoji: '🔥', label: 'Fire' },
-  { id: 'cry', emoji: '😢', label: 'Sad' },
+  // Cat faces, like the chat's quick reactions. The ids are what's stored, so they stay fixed.
+  { id: 'heart', emoji: '😻', label: 'Love' },
+  { id: 'laugh', emoji: '😹', label: 'Haha' },
+  { id: 'hug', emoji: '😽', label: 'Kiss' },
+  { id: 'fire', emoji: '🙀', label: 'Shook' },
+  { id: 'cry', emoji: '😿', label: 'Sad' },
 ] as const;
 export type RoomReactionId = (typeof ROOM_REACTIONS)[number]['id'];
 
