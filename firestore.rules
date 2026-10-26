@@ -443,7 +443,9 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorId || isAdmin());
 
       match /likes/{userId} {
-        allow read: if isOwner(userId);
+        // Admins can list likes only so they can clear them once a post is gone (below).
+        allow read: if isOwner(userId) || isAdmin();
+        allow delete: if isAdmin() && !exists(postPath(postId));
         allow create: if isOwner(userId)
           && request.resource.data.keys().hasOnly(['createdAt'])
           && request.resource.data.createdAt == request.time

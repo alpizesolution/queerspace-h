@@ -802,6 +802,46 @@ test('C-05: Only the author or an admin CAN delete a post', async () => {
   await assertSucceeds(adminDb().doc('community_posts/p2').delete());
 });
 
+test('C-06: Only an admin CAN delete someone else\'s reply, and only with the counter', async () => {
+  await seedCommunityPost('p1', 'alice', { replyCount: 1 });
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('community_posts/p1/replies/r1').set({
+      authorId: 'bob', authorName: 'Ivy', authorPronouns: 'she/her', content: 'hi', timestamp: new Date(),
+    });
+  });
+  await seedAdmin();
+  const del = (fs: firebase.firestore.Firestore, bump = -1) => {
+    const batch = fs.batch();
+    batch.delete(fs.doc('community_posts/p1/replies/r1'));
+    batch.update(fs.doc('community_posts/p1'), { replyCount: firebase.firestore.FieldValue.increment(bump) });
+    return batch.commit();
+  };
+  // Neither the post author, the reply author nor a stranger can.
+  await assertFails(del(testEnv.authenticatedContext('alice').firestore()));
+  await assertFails(del(testEnv.authenticatedContext('bob').firestore()));
+  await assertFails(del(testEnv.authenticatedContext('eve').firestore()));
+  // An anonymous session on the admin's uid isn't an admin either.
+  await assertFails(del(testEnv.authenticatedContext('cha').firestore()));
+  // The admin can't leave the counter wrong.
+  await assertFails(del(adminDb(), 0));
+  await assertSucceeds(del(adminDb()));
+});
+
+test('C-07: Only an admin CAN clear a deleted post\'s likes, and not while the post exists', async () => {
+  await seedCommunityPost('p1', 'alice', { likes: 1 });
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('community_posts/p1/likes/bob').set({ createdAt: new Date() });
+  });
+  await seedAdmin();
+  await assertFails(testEnv.authenticatedContext('eve').firestore().collection('community_posts/p1/likes').get());
+  await assertFails(adminDb().doc('community_posts/p1/likes/bob').delete());
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('community_posts/p1').delete();
+  });
+  await assertFails(testEnv.authenticatedContext('eve').firestore().doc('community_posts/p1/likes/bob').delete());
+  await assertSucceeds(adminDb().doc('community_posts/p1/likes/bob').delete());
+});
+
 // ---------------------------------------------------------------- Support chat
 
 function supportSend(uid: string, text: string, fs = testEnv.authenticatedContext(uid).firestore()) {
