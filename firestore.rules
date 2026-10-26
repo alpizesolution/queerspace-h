@@ -269,6 +269,15 @@ service cloud.firestore {
     // 2. 1-ON-1 CONVERSATIONS & EPHEMERAL MESSAGES
     // ====================================================
 
+    // Typing indicator: conversations/{id}.typing is a map of uid -> server time. Each person may
+    // only add, refresh or remove their own entry (removing = not typing).
+    function typingChangeOk() {
+      let after = request.resource.data.get('typing', {});
+      let before = resource.data.get('typing', {});
+      return after.diff(before).affectedKeys().hasOnly([request.auth.uid])
+        && (!(request.auth.uid in after) || after[request.auth.uid] == request.time);
+    }
+
     match /conversations/{convId} {
       // Admins can count conversations, but never read their messages.
       allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
@@ -286,10 +295,11 @@ service cloud.firestore {
         && request.auth.uid in resource.data.participants
         && areParticipantsUnchanged()
         && resource.data.status == 'active'
-        && request.resource.data.keys().hasOnly(['participants', 'createdAt', 'updatedAt', 'status'])
+        && request.resource.data.keys().hasOnly(['participants', 'createdAt', 'updatedAt', 'status', 'typing'])
         && request.resource.data.status in ['active', 'ended', 'blocked']
         && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.updatedAt is timestamp;
+        && request.resource.data.updatedAt is timestamp
+        && typingChangeOk();
 
       allow delete: if false;
 

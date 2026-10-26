@@ -8,6 +8,8 @@ import {
   addDoc,
   FirestoreError,
   updateDoc,
+  deleteField,
+  FieldPath,
   onSnapshot,
   query,
   orderBy,
@@ -164,7 +166,9 @@ export function toReplyQuote(value: unknown, myUid: string): ReplyQuote | undefi
 export async function sendCloudMessage(
   convId: string,
   text: string,
-  replyTo?: { id: string; text: string; senderId: string }
+  replyTo?: { id: string; text: string; senderId: string },
+  /** I was showing as typing: clear it in the same write that bumps updatedAt. */
+  clearTyping = false
 ): Promise<{ success: boolean; error?: string }> {
   const currentUser = auth?.currentUser;
   if (!isFirebaseConfigured || !db || !currentUser) {
@@ -203,9 +207,17 @@ export async function sendCloudMessage(
 
     // Update conversation updatedAt timestamp
     const convRef = doc(db, 'conversations', convId);
-    await updateDoc(convRef, {
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      if (clearTyping) {
+        await updateDoc(convRef, 'updatedAt', serverTimestamp(), new FieldPath('typing', currentUser.uid), deleteField());
+      } else {
+        await updateDoc(convRef, { updatedAt: serverTimestamp() });
+      }
+    } catch (err) {
+      // Rules published before the typing field existed refuse it; the message itself is already sent.
+      if (!clearTyping || (err as FirestoreError)?.code !== 'permission-denied') throw err;
+      await updateDoc(convRef, { updatedAt: serverTimestamp() });
+    }
 
     return { success: true };
   } catch (err: unknown) {
@@ -272,7 +284,9 @@ export function subscribeToCloudMessages(
  */
 export function subscribeToConversationStatus(
   convId: string,
-  onStatus: (status: 'active' | 'ended' | 'blocked') => void
+  onStatus: (status: 'active' | 'ended' | 'blocked') => void,
+  /** The other person's typing stamp (ms), or null. Rides the same listener: no extra reads. */
+  onTyping?: (stampMs: number | null) => void
 ): () => void {
   if (!isFirebaseConfigured || !db || !auth?.currentUser) return () => {};
   return onSnapshot(
@@ -280,6 +294,12 @@ export function subscribeToConversationStatus(
     (snap) => {
       const status = snap.data()?.status;
       if (status === 'active' || status === 'ended' || status === 'blocked') onStatus(status);
+      if (onTyping) {
+        const me = auth?.currentUser?.uid;
+        const typing = (snap.data()?.typing ?? {}) as Record<string, unknown>;
+        const stamp = Object.entries(typing).find(([uid]) => uid !== me)?.[1];
+        onTyping(status === 'active' && stamp instanceof Timestamp ? stamp.toMillis() : null);
+      }
     },
     (err) => console.warn('[ChatService] Conversation status listener notice:', err)
   );
@@ -327,5 +347,20 @@ export async function submitCloudReport(
   } catch (err) {
     console.warn('[ChatService] Error submitting report:', err);
     return false;
+  }
+}
+
+/**
+ * Marks me as typing (server time) or clears it. One field per person inside the conversation
+ * doc, so there's no new collection and no listener beyond the existing status one.
+ */
+export async function setTypingState(convId: string, typing: boolean): Promise<void> {
+  const uid = auth?.currentUser?.uid;
+  if (!isFirebaseConfigured || !db || !uid) return;
+  try {
+    await updateDoc(doc(db, 'conversations', convId), new FieldPath('typing', uid), typing ? serverTimestamp() : deleteField());
+  } catch (err) {
+    // Not worth surfacing: the indicator is cosmetic, and readers expire a stamp on their own.
+    console.warn('[ChatService] Typing status notice:', err);
   }
 }

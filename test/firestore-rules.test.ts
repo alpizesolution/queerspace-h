@@ -853,6 +853,73 @@ test('R-ADM: Only an admin CAN delete a public room message', async () => {
   await assertSucceeds(adminDb().doc('public_room_messages/m9').delete());
 });
 
+test('T-01: Participants CAN set, refresh and clear only their own typing stamp', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('conversations/tc').set({
+      participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date(),
+    });
+  });
+  const FV = firebase.firestore.FieldValue;
+  const FP = firebase.firestore.FieldPath;
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertSucceeds(alice.doc('conversations/tc').update(new FP('typing', 'alice'), FV.serverTimestamp()));
+  await assertSucceeds(alice.doc('conversations/tc').update(new FP('typing', 'alice'), FV.serverTimestamp()));
+  // Not someone else's entry, not a made-up time, not stray fields.
+  await assertFails(alice.doc('conversations/tc').update(new FP('typing', 'bob'), FV.serverTimestamp()));
+  await assertFails(alice.doc('conversations/tc').update(new FP('typing', 'alice'), new Date(0)));
+  await assertFails(alice.doc('conversations/tc').update({ typingNow: true }));
+  // Bob's stamp doesn't block Alice sending (updatedAt bump + clearing her own).
+  await assertSucceeds(bob.doc('conversations/tc').update(new FP('typing', 'bob'), FV.serverTimestamp()));
+  await assertFails(alice.doc('conversations/tc').update(new FP('typing', 'bob'), FV.delete()));
+  await assertSucceeds(
+    alice.doc('conversations/tc').update('updatedAt', FV.serverTimestamp(), new FP('typing', 'alice'), FV.delete())
+  );
+  await assertSucceeds(alice.doc('conversations/tc').update(new FP('typing', 'alice'), FV.delete()));
+  // Strangers can neither read nor write it.
+  const eve = testEnv.authenticatedContext('eve').firestore();
+  await assertFails(eve.doc('conversations/tc').get());
+  await assertFails(eve.doc('conversations/tc').update(new FP('typing', 'eve'), FV.serverTimestamp()));
+});
+
+test('T-03: A typing update CAN\'T smuggle in other changes or a replaced map', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('conversations/tx').set({
+      participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date(),
+      typing: { bob: new Date() },
+    });
+  });
+  const FV = firebase.firestore.FieldValue;
+  const FP = firebase.firestore.FieldPath;
+  const ref = () => testEnv.authenticatedContext('alice').firestore().doc('conversations/tx');
+  const stamp = new FP('typing', 'alice');
+  // Whole-map replacement would wipe or forge Bob's entry.
+  await assertFails(ref().update({ typing: { alice: FV.serverTimestamp() } }));
+  await assertFails(ref().update({ typing: { alice: FV.serverTimestamp(), bob: FV.serverTimestamp() } }));
+  await assertFails(ref().update({ typing: 'yes' }));
+  // Protected fields can't ride along.
+  await assertFails(ref().update(stamp, FV.serverTimestamp(), 'participants', ['alice', 'eve']));
+  await assertFails(ref().update(stamp, FV.serverTimestamp(), 'createdAt', new Date()));
+  await assertFails(ref().update(stamp, FV.serverTimestamp(), 'admin', true));
+  // Clearing when no entry exists yet (a message sent without typing first) is fine.
+  await assertSucceeds(ref().update('updatedAt', FV.serverTimestamp(), stamp, FV.delete()));
+  // The legacy write (updatedAt only) still works, with Bob's stamp present.
+  await assertSucceeds(ref().update({ updatedAt: FV.serverTimestamp() }));
+});
+
+test('T-02: Typing CAN\'T be written once a conversation has ended', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('conversations/te').set({
+      participants: ['alice', 'bob'], status: 'ended', createdAt: new Date(), updatedAt: new Date(),
+    });
+  });
+  const FP = firebase.firestore.FieldPath;
+  await assertFails(
+    testEnv.authenticatedContext('alice').firestore().doc('conversations/te')
+      .update(new FP('typing', 'alice'), firebase.firestore.FieldValue.serverTimestamp())
+  );
+});
+
 // ---------------------------------------------------------------- Support chat
 
 function supportSend(uid: string, text: string, fs = testEnv.authenticatedContext(uid).firestore()) {

@@ -25,12 +25,14 @@ import { ChatMessage, PartnerProfile, PartnerStatus, UserPreferences } from '../
 import { ICEBREAKER_PROMPTS } from '../utils/mock-partners.ts';
 import { INTENTION_LABELS, formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
+import { createTypingSender, createTypingWatcher, TypingSender } from '../utils/typing-indicator.ts';
 import { chatEventManager } from '../utils/chat-events.ts';
 import {
   startOrCreateConversation,
   sendCloudMessage,
   subscribeToCloudMessages,
   subscribeToConversationStatus,
+  setTypingState,
   endCloudConversation,
   submitCloudReport,
 } from '../services/chatService.ts';
@@ -131,8 +133,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
     };
   }, [partner.id, partner.status]);
 
-  const isPartnerTyping = partnerStatus === 'typing';
 
+  const [remoteTyping, setRemoteTyping] = useState(false);
+  const typingSenderRef = useRef<TypingSender | null>(null);
+  const isPartnerTyping = (partnerStatus === 'typing' || remoteTyping) && !partnerLeft;
   const soundMutedRef = useRef(isSoundMuted);
   soundMutedRef.current = isSoundMuted;
 
@@ -142,6 +146,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
     let unsubscribeMessages: (() => void) | null = null;
     let unsubscribeStatus: (() => void) | null = null;
     let partnerMessageCount = 0;
+    const watcher = createTypingWatcher((typing) => {
+      if (!cancelled) setRemoteTyping(typing);
+    });
+    let sender: TypingSender | null = null;
+    setRemoteTyping(false);
 
     setMessages([]);
     setReplyingTo(null);
@@ -180,9 +189,18 @@ export const ChatView: React.FC<ChatViewProps> = ({
         (err) => console.warn('[ChatView] Cloud message listener notice:', err)
       );
 
-      unsubscribeStatus = subscribeToConversationStatus(convId, (status) => {
-        if (!cancelled && status !== 'active') setPartnerLeft(true);
-      });
+      sender = createTypingSender((typing) => void setTypingState(convId, typing));
+      typingSenderRef.current = sender;
+
+      unsubscribeStatus = subscribeToConversationStatus(
+        convId,
+        (status) => {
+          if (cancelled || status === 'active') return;
+          sender?.reset();
+          setPartnerLeft(true);
+        },
+        (stamp) => watcher.update(stamp)
+      );
     };
 
     if (conversationId) {
@@ -198,8 +216,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
       cancelled = true;
       unsubscribeMessages?.();
       unsubscribeStatus?.();
+      watcher.dispose();
+      // Leaving: clear my stamp if I'm showing as typing (if this can't be sent, readers expire it).
+      sender?.stop();
+      typingSenderRef.current = null;
     };
   }, [partner.id, conversationId]);
+
+  // Backgrounding the tab or closing the page ends typing right away; if the write can't make it, readers expire it.
+  useEffect(() => {
+    const stop = () => typingSenderRef.current?.stop();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') stop();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', stop);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', stop);
+    };
+  }, []);
 
   // Scroll to bottom on new messages or typing
   useEffect(() => {
@@ -241,6 +277,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
         const quoted = replyingTo;
         setReplyingTo(null);
+        // The message write clears my typing stamp too, so sending costs no extra write.
+        const wasTyping = typingSenderRef.current?.isActive() ?? false;
+        typingSenderRef.current?.reset();
         const res = await sendCloudMessage(
           cloudConvId,
           sanitized.cleanText,
@@ -250,7 +289,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 text: quoted.text,
                 senderId: quoted.sender === 'user' ? auth?.currentUser?.uid ?? '' : partner.id,
               }
-            : undefined
+            : undefined,
+          wasTyping
         );
         if (!res.success) {
           setInputError(res.error || 'Cloud send failed.');
@@ -579,11 +619,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <div data-testid="partner-typing-bubble" aria-live="polite" className="flex items-start anim-fade">
               <div
                 className="bg-raised rounded-[20px] rounded-bl-md px-4 py-3 flex items-center gap-1"
-                aria-label={`${partner.displayName} is typing`}
+                aria-label="Stranger is typing"
               >
                 <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce" />
                 <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:0.15s]" />
                 <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:0.3s]" />
+                <span className="ml-1.5 text-[12px] text-lavender">Stranger is typing…</span>
               </div>
             </div>
           )}
@@ -679,7 +720,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
               ref={inputRef}
               type="text"
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                typingSenderRef.current?.input(e.target.value.trim().length > 0);
+              }}
               onKeyDown={handleKeyDown}
               placeholder="Message"
               aria-label={`Message ${partner.displayName}`}
