@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -18,6 +19,26 @@ import { isValidAvatar } from '../utils/avatar.ts';
 import { isAdminDevice } from '../utils/adminDevice.ts';
 import { TEAM_NAME } from './supportService.ts';
 export { fetchIsCommunityAdmin as fetchIsRoomModerator } from './communityService.ts';
+
+/** Reaction types on room messages. Ids must match the lists in firestore.rules. */
+export const ROOM_REACTIONS = [
+  // Cat faces, like the chat's quick reactions. The ids are what's stored, so they stay fixed.
+  { id: 'heart', emoji: '😻', label: 'Love' },
+  { id: 'laugh', emoji: '😹', label: 'Haha' },
+  { id: 'hug', emoji: '😽', label: 'Kiss' },
+  { id: 'fire', emoji: '🙀', label: 'Shook' },
+  { id: 'cry', emoji: '😿', label: 'Sad' },
+] as const;
+export type RoomReactionId = (typeof ROOM_REACTIONS)[number]['id'];
+
+function toReactionCounts(data: Record<string, unknown>): Record<string, number> | undefined {
+  const counts: Record<string, number> = {};
+  for (const { id } of ROOM_REACTIONS) {
+    const n = Number(data[id]);
+    if (Number.isFinite(n) && n > 0) counts[id] = Math.floor(n);
+  }
+  return Object.keys(counts).length ? counts : undefined;
+}
 
 /** How many recent messages the room shows. */
 export const PUBLIC_ROOM_HISTORY = 15;
@@ -41,6 +62,7 @@ export function toPublicRoomMessage(id: string, data: Record<string, unknown>, s
     isSelf: Boolean(selfUid) && authorId === selfUid,
     ...(data.team === true ? { team: true } : {}),
     ...(toRoomQuote(data.replyTo) ? { replyTo: toRoomQuote(data.replyTo) } : {}),
+    ...(toReactionCounts(data) ? { reactions: toReactionCounts(data) } : {}),
   };
 }
 
@@ -162,6 +184,29 @@ export async function adminDeleteRoomMessage(messageId: string): Promise<boolean
     return true;
   } catch (err) {
     console.warn('[PublicRoom] Admin could not delete message:', err);
+    return false;
+  }
+}
+
+/**
+ * Adds my reaction (+1 on the message counter with a marker doc) or removes it (-1 and delete
+ * the marker), in one batch. One reaction per person per message; the rules enforce it.
+ * Returns false if the server refused, e.g. I'd already reacted from another device.
+ */
+export async function setRoomReaction(messageId: string, type: RoomReactionId, on: boolean): Promise<boolean> {
+  if (!db) return false;
+  try {
+    const uid = auth?.currentUser?.uid ?? (await ensureAnonymousAuth())?.uid;
+    if (!uid) return false;
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'public_room_messages', messageId), { [type]: increment(on ? 1 : -1) });
+    const marker = doc(db, 'public_room_messages', messageId, 'reactions', uid);
+    if (on) batch.set(marker, { type, createdAt: serverTimestamp() });
+    else batch.delete(marker);
+    await batch.commit();
+    return true;
+  } catch (err) {
+    console.warn('[PublicRoom] Could not update reaction:', err);
     return false;
   }
 }

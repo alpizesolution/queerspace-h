@@ -920,6 +920,40 @@ test('T-02: Typing CAN\'T be written once a conversation has ended', async () =>
   );
 });
 
+test('RX-01: Room reactions CAN be added once per person, changed only by one counter, and removed', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('public_room_messages/m1').set({ ...roomMessage('alice'), timestamp: new Date() });
+  });
+  const FV = firebase.firestore.FieldValue;
+  const react = (uid: string, type: string, by: 1 | -1, fieldType = type) => {
+    const fs = testEnv.authenticatedContext(uid).firestore();
+    const batch = fs.batch();
+    batch.update(fs.doc('public_room_messages/m1'), { [type]: FV.increment(by) });
+    if (by === 1) batch.set(fs.doc(`public_room_messages/m1/reactions/${uid}`), { type: fieldType, createdAt: now() });
+    else batch.delete(fs.doc(`public_room_messages/m1/reactions/${uid}`));
+    return batch.commit();
+  };
+  await assertSucceeds(react('bob', 'heart', 1));
+  await assertSucceeds(react('carol', 'heart', 1));
+  // Twice, or a marker that disagrees with the counter, or an unknown type: no.
+  await assertFails(react('bob', 'fire', 1));
+  await assertFails(react('dave', 'heart', 1, 'fire'));
+  await assertFails(react('dave', 'wow', 1));
+  // Can't bump by more than one or edit the text.
+  const dave = testEnv.authenticatedContext('dave').firestore();
+  await assertFails(dave.doc('public_room_messages/m1').update({ heart: 50 }));
+  await assertFails(dave.doc('public_room_messages/m1').update({ text: 'hijacked' }));
+  // Can't take back someone else's reaction, or fake one without a marker.
+  await assertFails(react('dave', 'heart', -1));
+  await assertFails(dave.doc('public_room_messages/m1').update({ heart: FV.increment(1) }));
+  // The owner can remove theirs.
+  await assertSucceeds(react('bob', 'heart', -1));
+  await assertSucceeds(react('bob', 'laugh', 1));
+  // Markers are private to their owner.
+  await assertFails(dave.doc('public_room_messages/m1/reactions/bob').get());
+  await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('public_room_messages/m1/reactions/bob').get());
+});
+
 // ---------------------------------------------------------------- Support chat
 
 function supportSend(uid: string, text: string, fs = testEnv.authenticatedContext(uid).firestore()) {

@@ -132,6 +132,8 @@ export interface PublicRoomMessage {
   team?: boolean;
   /** The message a team post answers, as a short quote. */
   replyTo?: RoomQuote;
+  /** Reaction counts by type id (see ROOM_REACTIONS); missing means none. */
+  reactions?: Record<string, number>;
 }
 
 export interface RoomQuote {

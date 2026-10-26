@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
-import { ArrowUp, BadgeCheck, CheckCircle2, Reply, Trash2, Users, X } from 'lucide-react';
+import { ArrowUp, BadgeCheck, CheckCircle2, Reply, SmilePlus, Trash2, Users, X } from 'lucide-react';
 import { ConfirmDialog } from './Sheet.tsx';
 import { SwipeToReply } from './SwipeToReply.tsx';
 import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
@@ -13,12 +13,36 @@ import {
   fetchIsRoomModerator,
   isPublicRoomAvailable,
   quoteOf,
+  ROOM_REACTIONS,
+  RoomReactionId,
+  setRoomReaction,
   sendPublicRoomMessage,
   sendTeamRoomMessage,
   subscribeToPublicRoom,
 } from '../services/publicRoomService.ts';
 import { TEAM_NAME } from '../services/supportService.ts';
 import { whileActive } from '../utils/whileActive.ts';
+
+// Which reaction this device left on each message, so it shows highlighted. The server still allows one per person.
+const REACTED_KEY = 'qs_room_reacted';
+const REACTED_KEEP = 100;
+
+function loadReacted(): Record<string, RoomReactionId> {
+  try {
+    return JSON.parse(localStorage.getItem(REACTED_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveReacted(map: Record<string, RoomReactionId>) {
+  try {
+    const entries = Object.entries(map).slice(-REACTED_KEEP);
+    localStorage.setItem(REACTED_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch {
+    // Per-device convenience only.
+  }
+}
 
 interface PublicRoomViewProps {
   userPrefs: UserPreferences;
@@ -45,6 +69,39 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   // Admins can answer a specific message; replies always go out as the team.
   const [replyingTo, setReplyingTo] = useState<PublicRoomMessage | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const [reacted, setReacted] = useState<Record<string, RoomReactionId>>(loadReacted);
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+
+  const updateReacted = (messageId: string, type: RoomReactionId | null) => {
+    setReacted((prev) => {
+      const next = { ...prev };
+      delete next[messageId];
+      if (type) next[messageId] = type;
+      saveReacted(next);
+      return next;
+    });
+  };
+
+  // Tap a reaction to add it, tap your own again to take it back, tap another to switch.
+  const react = async (messageId: string, type: RoomReactionId) => {
+    setPickerFor(null);
+    const current = reacted[messageId];
+    if (current === type) {
+      updateReacted(messageId, null);
+      if (!(await setRoomReaction(messageId, type, false))) updateReacted(messageId, type);
+      return;
+    }
+    if (current) {
+      updateReacted(messageId, null);
+      if (!(await setRoomReaction(messageId, current, false))) {
+        updateReacted(messageId, current);
+        return;
+      }
+    }
+    updateReacted(messageId, type);
+    if (!(await setRoomReaction(messageId, type, true))) updateReacted(messageId, null);
+  };
 
   // Moderator controls: shown only when admins/{uid} exists for this session; the rules re-check every delete.
   const [isModerator, setIsModerator] = useState(false);
@@ -249,6 +306,51 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                   <p className="whitespace-pre-wrap">{msg.text}</p>
                 </div>
               </SwipeToReply>
+
+              <div className={`flex flex-wrap items-center gap-1 mt-1 ${msg.isSelf ? 'justify-end' : ''}`}>
+                {ROOM_REACTIONS.filter((r) => msg.reactions?.[r.id] || reacted[msg.id] === r.id).map((r) => {
+                  const mine = reacted[msg.id] === r.id;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => react(msg.id, r.id)}
+                      aria-pressed={mine}
+                      aria-label={`${r.label} reaction, ${msg.reactions?.[r.id] ?? 0}${mine ? ', yours' : ''}`}
+                      className={`inline-flex items-center gap-1 h-7 px-2 rounded-full text-[12px] border transition-colors cursor-pointer ${
+                        mine ? 'bg-plum/40 border-berry/60 text-fg' : 'bg-surface border-line text-muted hover:text-fg'
+                      }`}
+                    >
+                      <span aria-hidden="true">{r.emoji}</span>
+                      {msg.reactions?.[r.id] ?? 0}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setPickerFor(pickerFor === msg.id ? null : msg.id)}
+                  aria-expanded={pickerFor === msg.id}
+                  aria-label="Add a reaction"
+                  className="icon-btn w-7 h-7 text-subtle"
+                >
+                  <SmilePlus className="w-4 h-4" />
+                </button>
+                {pickerFor === msg.id && (
+                  <div role="group" aria-label="Pick a reaction" className="flex items-center gap-0.5 p-0.5 rounded-full bg-raised border border-line anim-pop">
+                    {ROOM_REACTIONS.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => react(msg.id, r.id)}
+                        aria-label={r.label}
+                        className="w-8 h-8 rounded-full text-[17px] hover:bg-surface cursor-pointer"
+                      >
+                        {r.emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {(teamAvailable || isModerator) && (
