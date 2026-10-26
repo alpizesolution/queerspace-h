@@ -853,6 +853,48 @@ test('R-ADM: Only an admin CAN delete a public room message', async () => {
   await assertSucceeds(adminDb().doc('public_room_messages/m9').delete());
 });
 
+test('T-01: Participants CAN set, refresh and clear only their own typing stamp', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('conversations/tc').set({
+      participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date(),
+    });
+  });
+  const FV = firebase.firestore.FieldValue;
+  const FP = firebase.firestore.FieldPath;
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertSucceeds(alice.doc('conversations/tc').update(new FP('typing', 'alice'), FV.serverTimestamp()));
+  await assertSucceeds(alice.doc('conversations/tc').update(new FP('typing', 'alice'), FV.serverTimestamp()));
+  // Not someone else's entry, not a made-up time, not stray fields.
+  await assertFails(alice.doc('conversations/tc').update(new FP('typing', 'bob'), FV.serverTimestamp()));
+  await assertFails(alice.doc('conversations/tc').update(new FP('typing', 'alice'), new Date(0)));
+  await assertFails(alice.doc('conversations/tc').update({ typingNow: true }));
+  // Bob's stamp doesn't block Alice sending (updatedAt bump + clearing her own).
+  await assertSucceeds(bob.doc('conversations/tc').update(new FP('typing', 'bob'), FV.serverTimestamp()));
+  await assertFails(alice.doc('conversations/tc').update(new FP('typing', 'bob'), FV.delete()));
+  await assertSucceeds(
+    alice.doc('conversations/tc').update('updatedAt', FV.serverTimestamp(), new FP('typing', 'alice'), FV.delete())
+  );
+  await assertSucceeds(alice.doc('conversations/tc').update(new FP('typing', 'alice'), FV.delete()));
+  // Strangers can neither read nor write it.
+  const eve = testEnv.authenticatedContext('eve').firestore();
+  await assertFails(eve.doc('conversations/tc').get());
+  await assertFails(eve.doc('conversations/tc').update(new FP('typing', 'eve'), FV.serverTimestamp()));
+});
+
+test('T-02: Typing CAN\'T be written once a conversation has ended', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('conversations/te').set({
+      participants: ['alice', 'bob'], status: 'ended', createdAt: new Date(), updatedAt: new Date(),
+    });
+  });
+  const FP = firebase.firestore.FieldPath;
+  await assertFails(
+    testEnv.authenticatedContext('alice').firestore().doc('conversations/te')
+      .update(new FP('typing', 'alice'), firebase.firestore.FieldValue.serverTimestamp())
+  );
+});
+
 // ---------------------------------------------------------------- Support chat
 
 function supportSend(uid: string, text: string, fs = testEnv.authenticatedContext(uid).firestore()) {
