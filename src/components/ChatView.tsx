@@ -437,15 +437,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <div className="min-w-0 flex-1 pl-2">
             <h1 className="text-[15px] font-semibold text-fg truncate">{partner.displayName}</h1>
             <p className="text-[12px] text-muted truncate" aria-live="polite">
-              {isPartnerTyping ? (
-                <span className="text-berry font-medium">typing…</span>
-              ) : (
-                <>
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${partnerLeft ? 'bg-subtle' : 'bg-emerald-400'}`} />
-                  {partner.pronouns} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}
-                  {visibleLocation && <> · {visibleLocation}</>}
-                </>
-              )}
+              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${partnerLeft ? 'bg-subtle' : 'bg-emerald-400'}`} />
+              {partner.pronouns} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}
+              {visibleLocation && <> · {visibleLocation}</>}
             </p>
           </div>
 
