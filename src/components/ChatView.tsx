@@ -20,7 +20,7 @@ import { SwipeToReply } from './SwipeToReply.tsx';
 import { MatchCelebration } from './MatchCelebration.tsx';
 import { auth } from '../lib/firebase.ts';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
-import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
+import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
 import { ChatMessage, PartnerProfile, PartnerStatus, UserPreferences } from '../types.ts';
 import { ICEBREAKER_PROMPTS } from '../utils/mock-partners.ts';
 import { INTENTION_LABELS, formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
@@ -116,7 +116,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [partnerLeft, setPartnerLeft] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // True while the reader is at (or near) the bottom, so new messages follow along but reading history isn't interrupted.
+  const stickToBottomRef = useRef(true);
+  const sendingRef = useRef(false);
+  const coarsePointer = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches);
 
   // Set up real-time status change listener
   useEffect(() => {
@@ -237,13 +242,39 @@ export const ChatView: React.FC<ChatViewProps> = ({
     };
   }, []);
 
-  // Scroll to bottom on new messages or typing
+  const { height: viewportHeight, offsetTop: viewportTop } = useVisualViewport();
+
+  // Landscape, or a small phone with the keyboard up: drop the optional icebreaker chips so the history keeps room.
+  const shortViewport = viewportHeight !== null && viewportHeight < 520;
+
+  const scrollToBottom = useCallback((smooth: boolean) => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  }, []);
+
+  // Follow new messages and the typing bubble, but only if the reader is at the bottom or just sent one.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, isPartnerTyping]);
+    const last = messages[messages.length - 1];
+    if (stickToBottomRef.current || last?.sender === 'user') scrollToBottom(true);
+  }, [messages, isPartnerTyping, scrollToBottom]);
+
+  // Grow the composer with its text, up to its max height, then scroll inside it.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [inputText]);
+
+  // The keyboard opening or closing changes the visible height: stay on the latest message if that's where we were.
+  useEffect(() => {
+    if (stickToBottomRef.current) scrollToBottom(false);
+  }, [viewportHeight, scrollToBottom]);
 
   const handleSendMessage = async (textToSend?: string) => {
-    if (isSending) return;
+    // The ref closes the gap before isSending re-renders (double tap, or Enter plus a tap).
+    if (isSending || sendingRef.current) return;
+    sendingRef.current = true;
 
     const raw = textToSend !== undefined ? textToSend : inputText;
     if (raw.trim() === '/donate') {
@@ -251,6 +282,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       if (onOpenDonationModal) {
         onOpenDonationModal();
       }
+      sendingRef.current = false;
       return;
     }
 
@@ -261,6 +293,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         setInputError(sanitized.warning);
         setTimeout(() => setInputError(null), 3500);
       }
+      sendingRef.current = false;
       return;
     }
 
@@ -302,6 +335,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       setInputError(partnerLeft ? `${partner.displayName} has left the chat.` : 'Still connecting…');
       setTimeout(() => setInputError(null), 3500);
     } finally {
+      sendingRef.current = false;
       setIsSending(false);
     }
   };
@@ -363,8 +397,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setEmojiPickerOpen(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Phones: Enter is a new line (the send button sends). Desktop: Enter sends, Shift+Enter is a new line.
+    if (e.key === 'Enter' && !e.shiftKey && !coarsePointer && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSendMessage();
     } else if (e.key === 'Escape' && replyingTo) {
@@ -379,12 +414,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const hasExchange = messages.filter((m) => m.sender !== 'system').length > 3;
 
   const closeMenu = () => setMenuOpen(false);
-  const viewportHeight = useVisualViewportHeight();
 
   return (
     <div
       className="fixed inset-x-0 top-0 h-[100dvh] z-30 flex flex-col bg-ink desk:relative desk:z-auto desk:max-w-3xl desk:mx-auto desk:w-full desk:border-x desk:border-line"
-      style={viewportHeight ? { height: viewportHeight } : undefined}
+      style={viewportHeight ? { height: viewportHeight, transform: viewportTop ? `translateY(${viewportTop}px)` : undefined } : undefined}
     >
       {/* Header */}
       <header className="pt-safe bg-ink/90 backdrop-blur-xl border-b border-line z-20">
@@ -483,7 +517,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 sm:px-5 py-4">
+      <div
+        ref={scrollRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 sm:px-5 py-4"
+      >
         {/* Match context */}
         <div className="text-center mb-5 space-y-2">
           <p className="text-[12px] text-subtle">
@@ -648,7 +689,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       ) : (
         <div className="border-t border-line bg-ink pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-          {!hasExchange && (
+          {!hasExchange && !shortViewport && (
             <div className="flex gap-2 overflow-x-auto scrollbar-none px-3 pt-2.5" aria-label="Icebreakers">
               {ICEBREAKER_PROMPTS.map((prompt) => (
                 <button
@@ -708,6 +749,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
             <button
               type="button"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
               className="icon-btn w-11 h-11"
               aria-label="Emoji"
@@ -716,9 +758,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <Smile className="w-[22px] h-[22px]" />
             </button>
 
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
+              rows={1}
+              maxLength={1000}
               value={inputText}
               onChange={(e) => {
                 setInputText(e.target.value);
@@ -727,13 +770,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
               onKeyDown={handleKeyDown}
               placeholder="Message"
               aria-label={`Message ${partner.displayName}`}
-              enterKeyHint="send"
+              enterKeyHint={coarsePointer ? 'enter' : 'send'}
               autoComplete="off"
-              className="flex-1 min-w-0 h-11 px-4 rounded-full bg-surface border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+              className="flex-1 min-w-0 min-h-11 max-h-[7.5rem] px-4 py-[10px] leading-6 resize-none overflow-y-auto rounded-[22px] bg-surface border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
             />
 
             <button
               type="button"
+              // Keep focus (and the keyboard) in the field when tapping send.
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => handleSendMessage()}
               disabled={!inputText.trim()}
               className="w-11 h-11 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center transition-all disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed active:scale-95"
