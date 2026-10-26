@@ -74,3 +74,93 @@ test('buildPublicProfilePayload keeps a valid avatar and drops an invalid one', 
   assert.equal('avatar' in buildPublicProfilePayload({ ...mockPrefs, avatar: '<script>' }), false);
   assert.equal('avatar' in buildPublicProfilePayload(mockPrefs), false);
 });
+
+// ---------------------------------------------------------------- Cloud restore
+
+import { mergeCloudProfile, cloudProfileSignature } from './profilePersistence.ts';
+
+const local: UserPreferences = {
+  displayName: 'Local_Name',
+  pronouns: 'fae/faer',
+  customPronouns: 'fae/faer',
+  intention: 'dating',
+  topics: ['Books'],
+  region: 'Cebu',
+  genderIdentity: 'Non-binary',
+  genderExpression: ['Andro'],
+  showLocationOnProfile: false,
+  locationSelection: ['Cebu'],
+  applyLocationFilter: true,
+  applyGenderExpressionFilter: true,
+  preferredGenderExpressions: ['Femme'],
+  age: 29,
+  applyAgeFilter: true,
+  ageMin: 25,
+  ageMax: 35,
+};
+
+test('cloud restore keeps every field the cloud does not store', () => {
+  const restored = mergeCloudProfile(
+    local,
+    { displayName: 'Cloud_Name', pronouns: 'fae/faer', intention: 'dating', region: 'Cebu', topics: ['Books', 'Art'] },
+    { sexualOrientation: 'Lesbian', genderExpression: ['Andro'], preferredGenderExpressions: ['Femme'] }
+  );
+  assert.equal(restored.displayName, 'Cloud_Name');
+  assert.deepEqual(restored.topics, ['Books', 'Art']);
+  assert.equal(restored.sexualOrientation, 'Lesbian');
+  // Previously reset by a cloud restore:
+  assert.equal(restored.customPronouns, 'fae/faer');
+  assert.equal(restored.genderIdentity, 'Non-binary');
+  assert.deepEqual(restored.locationSelection, ['Cebu']);
+  assert.equal(restored.applyLocationFilter, true);
+  assert.equal(restored.applyGenderExpressionFilter, true);
+  assert.equal(restored.age, 29);
+  assert.equal(restored.applyAgeFilter, true);
+  assert.equal(restored.ageMin, 25);
+  assert.equal(restored.ageMax, 35);
+  // A visibility flag the cloud doesn't have keeps the local value.
+  assert.equal(restored.showLocationOnProfile, false);
+});
+
+test('legacy or partial cloud data restores safely without overwriting valid local values', () => {
+  const restored = mergeCloudProfile(local, { displayName: '', intention: 'not-a-real-intention', topics: 'x' }, {});
+  assert.equal(restored.displayName, 'Local_Name');
+  assert.equal(restored.intention, 'dating');
+  assert.deepEqual(restored.topics, ['Books']);
+  assert.deepEqual(restored.genderExpression, ['Andro']);
+
+  const fresh = mergeCloudProfile(
+    { displayName: 'X', pronouns: 'she/her', intention: 'open', topics: [], region: '' },
+    {},
+    { exactLocation: 'Davao City' }
+  );
+  assert.deepEqual(fresh.locationSelection, ['Davao City']);
+});
+
+test('a self-described orientation saves its text and restores as Self-described', () => {
+  const prefs: UserPreferences = { ...local, sexualOrientation: 'Self-described', sexualOrientationCustom: 'Sapphic & proud' };
+  const saved = buildPrivateSettingsPayload(prefs).sexualOrientation;
+  assert.equal(saved, 'Sapphic & proud');
+  const restored = mergeCloudProfile(local, {}, { sexualOrientation: saved });
+  assert.equal(restored.sexualOrientation, 'Self-described');
+  assert.equal(restored.sexualOrientationCustom, 'Sapphic & proud');
+  // Older saves stored the custom text the same way, so they restore the same.
+  assert.equal(buildPrivateSettingsPayload({ ...local, sexualOrientation: 'Bisexual' }).sexualOrientation, 'Bisexual');
+});
+
+test('cloud save then restore round-trips every cloud-stored field', () => {
+  const prefs: UserPreferences = { ...local, avatar: 'cat.1.2', showGenderExpressionOnProfile: true, showSogieOnProfile: false, sexualOrientation: 'Bisexual' };
+  const { updatedAt: _a, ...pub } = buildPublicProfilePayload(prefs);
+  const { updatedAt: _b, ...priv } = buildPrivateSettingsPayload(prefs, ['b1']);
+  const restored = mergeCloudProfile({ displayName: 'Other', pronouns: 'she/her', intention: 'open', topics: [], region: '' }, pub, priv);
+  for (const key of ['displayName', 'avatar', 'pronouns', 'intention', 'region', 'topics', 'showGenderExpressionOnProfile', 'showSogieOnProfile', 'showLocationOnProfile', 'sexualOrientation', 'genderExpression', 'preferredGenderExpressions'] as const) {
+    assert.deepEqual(restored[key], prefs[key], key);
+  }
+});
+
+test('the cloud signature ignores device-only fields, so changing them skips the cloud write', () => {
+  const base = cloudProfileSignature(local, ['b1']);
+  assert.equal(cloudProfileSignature({ ...local, age: 40, applyAgeFilter: false, ageMin: 30 }, ['b1']), base);
+  assert.notEqual(cloudProfileSignature({ ...local, displayName: 'Changed' }, ['b1']), base);
+  assert.notEqual(cloudProfileSignature(local, ['b1', 'b2']), base);
+});

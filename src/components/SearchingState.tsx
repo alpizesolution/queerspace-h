@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Heart, Shield, RefreshCw } from 'lucide-react';
 import { UserPreferences } from '../types.ts';
 import { joinLiveMatchQueue, LiveMatch, queueMatchFields } from '../services/liveMatchService.ts';
+import { startSearchAttempt } from '../utils/search-attempt.ts';
 
 interface SearchingStateProps {
   mode: 'quick' | 'custom';
@@ -31,34 +32,13 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
     setSearchTimedOut(false);
     setError(null);
 
-    const leaveQueue = joinLiveMatchQueue(
-      blockedPartnerIds,
-      {
-        onMatched,
-        onError: (message) => {
-          setError(message);
-          clearInterval(ticker);
-        },
-      },
-      queueMatchFields(prefs)
-    );
-
-    const ticker = setInterval(() => {
-      setSecondsElapsed((prev) => {
-        const next = prev + 1;
-        if (next >= SEARCH_WINDOW_S) {
-          clearInterval(ticker);
-          leaveQueue();
-          setSearchTimedOut(true);
-        }
-        return next;
-      });
-    }, 1000);
-
-    return () => {
-      clearInterval(ticker);
-      leaveQueue();
-    };
+    return startSearchAttempt({
+      join: (onError) => joinLiveMatchQueue(blockedPartnerIds, { onMatched, onError }, queueMatchFields(prefs)),
+      windowSeconds: SEARCH_WINDOW_S,
+      onTick: setSecondsElapsed,
+      onTimeout: () => setSearchTimedOut(true),
+      onError: setError,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt]);
 

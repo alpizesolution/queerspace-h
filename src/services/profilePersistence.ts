@@ -4,11 +4,14 @@ import { UserPreferences } from '../types.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.ts';
 import { formatSyncFeedback, StorageOperationResult } from '../utils/sync-feedback.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
+import { INTENTION_LABELS, SEXUAL_ORIENTATIONS } from '../utils/matching-logic.ts';
 
 export interface ProfileLoadResult {
   prefs: UserPreferences;
   source: 'cloud' | 'local';
   fromCloudSuccess: boolean;
+  /** Blocked IDs saved in the cloud (merge with this device's list; never shrink it). */
+  blockedPartnerIds?: string[];
 }
 
 /**
@@ -41,7 +44,9 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
 export function buildPrivateSettingsPayload(prefs: UserPreferences, blockedPartnerIds: string[] = []) {
   return {
     exactLocation: prefs.locationSelection?.[0] || prefs.region || '',
-    sexualOrientation: prefs.sexualOrientationCustom || prefs.sexualOrientation || '',
+    // One field in the rules: a listed option, or the person's own words when self-described.
+    sexualOrientation:
+      prefs.sexualOrientation === 'Self-described' ? prefs.sexualOrientationCustom?.trim() || '' : prefs.sexualOrientation || '',
     genderExpression: prefs.genderExpression || [],
     preferredGenderExpressions: prefs.preferredGenderExpressions || [],
     blockedPartnerIds: blockedPartnerIds || [],
@@ -50,11 +55,74 @@ export function buildPrivateSettingsPayload(prefs: UserPreferences, blockedPartn
 }
 
 /**
+ * The cloud-stored content of a save, without timestamps. Equal signatures mean a cloud write
+ * would change nothing, so it can be skipped (no reads, no writes).
+ */
+export function cloudProfileSignature(prefs: UserPreferences, blockedPartnerIds: string[] = []): string {
+  const { updatedAt: _p, ...pub } = buildPublicProfilePayload(prefs);
+  const { updatedAt: _s, ...priv } = buildPrivateSettingsPayload(prefs, blockedPartnerIds);
+  return JSON.stringify([pub, priv]);
+}
+
+const strings = (value: unknown): string[] | undefined =>
+  Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : undefined;
+const text = (value: unknown): string | undefined => (typeof value === 'string' && value ? value : undefined);
+const flag = (value: unknown): boolean | undefined => (typeof value === 'boolean' ? value : undefined);
+
+/**
+ * Layers what the cloud holds over this device's copy. Only fields the cloud actually stores (and
+ * that are valid) replace local values; everything else, like age and filter switches that the
+ * rules don't let us store yet, is kept from the device instead of being reset.
+ */
+export function mergeCloudProfile(
+  local: UserPreferences,
+  publicData: Record<string, unknown>,
+  privateData: Record<string, unknown>
+): UserPreferences {
+  const merged: UserPreferences = { ...local };
+  const set = <K extends keyof UserPreferences>(key: K, value: UserPreferences[K] | undefined) => {
+    if (value !== undefined) merged[key] = value;
+  };
+
+  set('displayName', text(publicData.displayName));
+  set('avatar', isValidAvatar(publicData.avatar) ? publicData.avatar : undefined);
+  set('pronouns', text(publicData.pronouns));
+  const intention = text(publicData.intention);
+  if (intention && intention in INTENTION_LABELS) merged.intention = intention as UserPreferences['intention'];
+  set('region', text(publicData.region));
+  set('topics', strings(publicData.topics));
+  set('showGenderExpressionOnProfile', flag(publicData.showGenderExpressionOnProfile));
+  set('showSogieOnProfile', flag(publicData.showSogieOnProfile));
+  set('showLocationOnProfile', flag(publicData.showLocationOnProfile));
+
+  const orientation = text(privateData.sexualOrientation);
+  if (orientation) {
+    if (SEXUAL_ORIENTATIONS.includes(orientation) && orientation !== 'Self-described') {
+      merged.sexualOrientation = orientation;
+      merged.sexualOrientationCustom = undefined;
+    } else {
+      merged.sexualOrientation = 'Self-described';
+      merged.sexualOrientationCustom = orientation === 'Self-described' ? local.sexualOrientationCustom : orientation;
+    }
+  }
+  const expression = strings(privateData.genderExpression);
+  if (expression?.length) merged.genderExpression = expression as UserPreferences['genderExpression'];
+  const preferred = strings(privateData.preferredGenderExpressions);
+  if (preferred?.length) merged.preferredGenderExpressions = preferred;
+  const area = text(privateData.exactLocation);
+  if (area && !local.locationSelection?.length) merged.locationSelection = [area];
+
+  return merged;
+}
+
+/**
  * Saves profile to local storage and attempts cloud save to Firestore under the authenticated UID
  */
 export async function saveAnonymousProfile(
   prefs: UserPreferences,
-  blockedPartnerIds: string[] = []
+  blockedPartnerIds: string[] = [],
+  /** false: save on this device only (nothing the cloud stores has changed). */
+  cloud = true
 ): Promise<StorageOperationResult> {
   let localSaved = false;
   try {
@@ -68,7 +136,7 @@ export async function saveAnonymousProfile(
   const currentUser = auth?.currentUser;
   const canCloudSave = isFirebaseConfigured && Boolean(db) && Boolean(currentUser);
 
-  if (!canCloudSave || !currentUser || !db) {
+  if (!cloud || !canCloudSave || !currentUser || !db) {
     return formatSyncFeedback('Profile', localSaved, false, false, null);
   }
 
@@ -161,22 +229,7 @@ export async function loadAnonymousProfile(): Promise<ProfileLoadResult> {
     const publicData = publicSnap.exists() ? publicSnap.data() : {};
     const privateData = privateSnap.exists() ? privateSnap.data() : {};
 
-    const restoredPrefs: UserPreferences = {
-      displayName: publicData.displayName || defaultLocal.displayName,
-      avatar: isValidAvatar(publicData.avatar) ? publicData.avatar : defaultLocal.avatar,
-      pronouns: publicData.pronouns || defaultLocal.pronouns,
-      intention: publicData.intention || defaultLocal.intention,
-      region: publicData.region || defaultLocal.region,
-      topics: Array.isArray(publicData.topics) ? publicData.topics : defaultLocal.topics,
-      showGenderExpressionOnProfile: publicData.showGenderExpressionOnProfile,
-      showSogieOnProfile: publicData.showSogieOnProfile,
-      showLocationOnProfile: publicData.showLocationOnProfile,
-
-      // Private settings
-      sexualOrientation: privateData.sexualOrientation || defaultLocal.sexualOrientation,
-      genderExpression: privateData.genderExpression || defaultLocal.genderExpression,
-      preferredGenderExpressions: privateData.preferredGenderExpressions || defaultLocal.preferredGenderExpressions,
-    };
+    const restoredPrefs = mergeCloudProfile(defaultLocal, publicData, privateData);
 
     // Cache to local storage
     setStorageItem(STORAGE_KEYS.USER_PREFS.current, JSON.stringify(restoredPrefs));
@@ -185,6 +238,7 @@ export async function loadAnonymousProfile(): Promise<ProfileLoadResult> {
       prefs: restoredPrefs,
       source: 'cloud',
       fromCloudSuccess: true,
+      blockedPartnerIds: strings(privateData.blockedPartnerIds) ?? [],
     };
   } catch (err: unknown) {
     console.warn('[ProfilePersistence] Error loading cloud profile:', err);

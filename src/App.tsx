@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Header } from './components/Header.tsx';
 import { Hero } from './components/Hero.tsx';
 import { SafetySection } from './components/SafetySection.tsx';
@@ -20,7 +20,9 @@ import { generateSapphicPseudonym } from './utils/matching-logic.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from './utils/storage.ts';
 import { ensureAnonymousAuth, isFirebaseConfigured, logScreenView } from './lib/firebase.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
-import { saveAnonymousProfile, loadAnonymousProfile } from './services/profilePersistence.ts';
+import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature } from './services/profilePersistence.ts';
+import { applyFilters, applyProfile, FilterFields, matchPrefsForMode, ProfileFields } from './utils/preferences.ts';
+import { ProfileEditorSheet } from './components/ProfileEditorSheet.tsx';
 import { hasUnreadSupportReply } from './services/supportService.ts';
 import { getMySuspension } from './services/suspensionService.ts';
 import { SuspendedNotice } from './components/SuspendedNotice.tsx';
@@ -42,7 +44,9 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [setupPurpose, setSetupPurpose] = useState<'match' | 'profile'>('match');
+  const [profileOpen, setProfileOpen] = useState(false);
+  // What the cloud last held, so saves that change nothing there skip Firestore entirely.
+  const cloudSignatureRef = useRef<string | null>(null);
   const [activeInfoModal, setActiveInfoModal] = useState<
     'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact' | null
   >(null);
@@ -79,9 +83,17 @@ export default function App() {
         .then((user) => {
           if (user) {
             loadAnonymousProfile().then((res) => {
-              if (res.fromCloudSuccess) {
-                setUserPrefs(res.prefs);
-              }
+              if (!res.fromCloudSuccess) return;
+              setUserPrefs(res.prefs);
+              cloudSignatureRef.current = cloudProfileSignature(res.prefs, res.blockedPartnerIds ?? []);
+              // Never shrink the blocklist: keep this device's blocks and add any saved in the cloud.
+              const cloudBlocked = res.blockedPartnerIds ?? [];
+              setBlockedPartnerIds((current) => {
+                if (cloudBlocked.every((id) => current.includes(id))) return current;
+                const merged = [...new Set([...current, ...cloudBlocked])];
+                setStorageItem(STORAGE_KEYS.BLOCKED_IDS.current, JSON.stringify(merged));
+                return merged;
+              });
             });
             getMySuspension().then((s) => setSuspended(Boolean(s)));
             hasUnreadSupportReply().then((unread) => {
@@ -118,11 +130,22 @@ export default function App() {
     setSupportOpen(true);
   };
 
-  const handleSaveProfile = async (prefs: UserPreferences) => {
-    setUserPrefs(prefs);
-    setSetupModalOpen(false);
-    const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds);
-    showToast(feedback.savedToCloud ? 'Profile updated.' : feedback.userMessage);
+  /** Saves on this device, and to the cloud only when something the cloud stores has changed. */
+  const persistPrefs = async (prefs: UserPreferences) => {
+    const signature = cloudProfileSignature(prefs, blockedPartnerIds);
+    const cloudChanged = signature !== cloudSignatureRef.current;
+    const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds, cloudChanged);
+    if (feedback.savedToCloud) cloudSignatureRef.current = signature;
+    return { feedback, cloudChanged };
+  };
+
+  // Profile and filters are saved separately: each only replaces its own fields.
+  const handleSaveProfile = async (profile: ProfileFields) => {
+    const next = applyProfile(userPrefs, profile);
+    setUserPrefs(next);
+    setProfileOpen(false);
+    const { feedback, cloudChanged } = await persistPrefs(next);
+    showToast(feedback.savedToCloud || !cloudChanged ? 'Profile updated.' : feedback.userMessage);
   };
 
   const handleOpenSetup = (mode: 'quick' | 'custom' = 'quick') => {
@@ -130,7 +153,6 @@ export default function App() {
       showToast('Matching is paused on this account while the team reviews a report.');
       return;
     }
-    setSetupPurpose('match');
     setSetupInitialMode(mode);
     setSetupModalOpen(true);
   };
@@ -145,15 +167,17 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
 
-  const handleStartMatching = async (mode: 'quick' | 'custom', prefs: UserPreferences) => {
-    setUserPrefs(prefs);
+  const handleStartMatching = async (mode: 'quick' | 'custom', filters: FilterFields) => {
+    // Quick only changes how this search runs; the saved Custom filters are kept as chosen.
+    const next = applyFilters(userPrefs, filters);
+    setUserPrefs(next);
     setSetupInitialMode(mode);
     setSetupModalOpen(false);
 
-    const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds);
+    const { feedback, cloudChanged } = await persistPrefs(next);
 
     // Only speak up when something went wrong; a normal save stays quiet.
-    if (feedback.userMessage && !feedback.savedToCloud) {
+    if (cloudChanged && feedback.userMessage && !feedback.savedToCloud) {
       showToast(feedback.userMessage);
     }
 
@@ -246,10 +270,7 @@ export default function App() {
           isSoundMuted={isSoundMuted}
           onToggleSound={handleToggleSound}
           onOpenSafetyModal={() => setActiveInfoModal('guidelines')}
-          onOpenProfile={() => {
-            setSetupPurpose('profile');
-            setSetupModalOpen(true);
-          }}
+          onOpenProfile={() => setProfileOpen(true)}
           onOpenInfo={(modal) => setActiveInfoModal(modal)}
           onOpenSupport={openSupport}
           hasSupportReply={hasSupportReply}
@@ -276,7 +297,7 @@ export default function App() {
         {currentView === 'searching' && (
           <SearchingState
             mode={setupInitialMode}
-            prefs={userPrefs}
+            prefs={matchPrefsForMode(userPrefs, setupInitialMode)}
             blockedPartnerIds={blockedPartnerIds}
             onCancel={() => setCurrentView('home')}
             onMatched={({ partner, convId }) => {
@@ -334,9 +355,15 @@ export default function App() {
           currentPrefs={userPrefs}
           onClose={() => setSetupModalOpen(false)}
           onStartMatching={handleStartMatching}
-          purpose={setupPurpose}
-          onSaveProfile={handleSaveProfile}
+          onEditProfile={() => {
+            setSetupModalOpen(false);
+            setProfileOpen(true);
+          }}
         />
+      )}
+
+      {profileOpen && (
+        <ProfileEditorSheet currentPrefs={userPrefs} onClose={() => setProfileOpen(false)} onSave={handleSaveProfile} />
       )}
 
       <DonationModal isOpen={donationModalOpen} onClose={() => setDonationModalOpen(false)} />
