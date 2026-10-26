@@ -842,6 +842,17 @@ test('C-07: Only an admin CAN clear a deleted post\'s likes, and not while the p
   await assertSucceeds(adminDb().doc('community_posts/p1/likes/bob').delete());
 });
 
+test('R-ADM: Only an admin CAN delete a public room message', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('public_room_messages/m9').set({ ...roomMessage('alice'), timestamp: new Date() });
+  });
+  await seedAdmin();
+  await assertFails(testEnv.authenticatedContext('alice').firestore().doc('public_room_messages/m9').delete());
+  await assertFails(testEnv.authenticatedContext('eve').firestore().doc('public_room_messages/m9').delete());
+  await assertFails(testEnv.authenticatedContext('cha').firestore().doc('public_room_messages/m9').delete());
+  await assertSucceeds(adminDb().doc('public_room_messages/m9').delete());
+});
+
 // ---------------------------------------------------------------- Support chat
 
 function supportSend(uid: string, text: string, fs = testEnv.authenticatedContext(uid).firestore()) {

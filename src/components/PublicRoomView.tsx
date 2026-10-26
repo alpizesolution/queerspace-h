@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
-import { ArrowUp, BadgeCheck, Reply, Users, X } from 'lucide-react';
+import { ArrowUp, BadgeCheck, CheckCircle2, Reply, Trash2, Users, X } from 'lucide-react';
+import { ConfirmDialog } from './Sheet.tsx';
 import { SwipeToReply } from './SwipeToReply.tsx';
 import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
 import {
+  adminDeleteRoomMessage,
   canPostAsTeam,
+  fetchIsRoomModerator,
   isPublicRoomAvailable,
   quoteOf,
   sendPublicRoomMessage,
@@ -42,6 +45,41 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   // Admins can answer a specific message; replies always go out as the team.
   const [replyingTo, setReplyingTo] = useState<PublicRoomMessage | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Moderator controls: shown only when admins/{uid} exists for this session; the rules re-check every delete.
+  const [isModerator, setIsModerator] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchIsRoomModerator().then((ok) => {
+      if (!cancelled) setIsModerator(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const confirmDelete = async () => {
+    if (!pendingDeleteId || deleting) return;
+    setDeleting(true);
+    const ok = await adminDeleteRoomMessage(pendingDeleteId);
+    setDeleting(false);
+    setToast(
+      ok
+        ? { text: 'Message deleted.', ok: true }
+        : { text: "Couldn't delete that. Nothing was removed, please try again.", ok: false }
+    );
+    setPendingDeleteId(null);
+  };
 
   const startReply = (msg: PublicRoomMessage) => {
     setReplyingTo(msg);
@@ -213,6 +251,8 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
               </SwipeToReply>
             </div>
 
+            {(teamAvailable || isModerator) && (
+              <div className="flex shrink-0 self-center">
             {teamAvailable && (
               <button
                 type="button"
@@ -224,6 +264,20 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
               >
                 <Reply className="w-4 h-4" />
               </button>
+            )}
+            {isModerator && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setPendingDeleteId(msg.id)}
+                className="icon-btn w-8 h-8 shrink-0 text-subtle"
+                aria-label={`Delete message by ${msg.isSelf ? 'you' : msg.author} (moderator)`}
+                title="Delete message (moderator)"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+              </div>
             )}
           </div>
         ))}
@@ -314,6 +368,31 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           <ArrowUp className="w-5 h-5" strokeWidth={2.5} />
         </button>
       </form>
+
+      {pendingDeleteId && (
+        <ConfirmDialog
+          title="Delete this message?"
+          message="This message will be removed for everyone in the Public Room. This action cannot be undone."
+          confirmLabel={deleting ? 'Deleting…' : 'Delete permanently'}
+          tone="danger"
+          busy={deleting}
+          onConfirm={confirmDelete}
+          onCancel={() => {
+            if (!deleting) setPendingDeleteId(null);
+          }}
+        />
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed z-[60] left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] w-[calc(100%-2rem)] max-w-sm flex items-start gap-2.5 bg-raised/95 backdrop-blur-xl text-fg px-4 py-3 rounded-2xl shadow-2xl shadow-black/50 border border-line text-sm anim-pop"
+        >
+          <CheckCircle2 className={`w-[18px] h-[18px] shrink-0 mt-px ${toast.ok ? 'text-berry' : 'text-danger'}`} />
+          <span>{toast.text}</span>
+        </div>
+      )}
     </div>
   );
 };
