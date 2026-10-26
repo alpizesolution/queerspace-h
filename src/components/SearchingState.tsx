@@ -95,7 +95,7 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
           {error
             ? error
             : searchTimedOut
-            ? 'Try again in a moment, or visit the Public Room.'
+            ? 'Try again in a moment, or drop by Galaxy.'
             : (
               <>
                 Chatting as <span className="text-fg font-medium">{prefs.displayName}</span> ({prefs.pronouns})

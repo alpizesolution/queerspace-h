@@ -273,7 +273,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           <Users className="w-5 h-5" />
         </div>
         <div className="min-w-0">
-          <h1 className="text-[15px] font-semibold text-fg">Public Room</h1>
+          <h1 className="text-[15px] font-semibold text-fg">Galaxy</h1>
           <p className="text-[12px] text-subtle truncate">Everyone here can see what you write. Be kind.</p>
         </div>
       </div>
@@ -534,7 +534,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
       {pendingDeleteId && (
         <ConfirmDialog
           title="Delete this message?"
-          message="This message will be removed for everyone in the Public Room. This action cannot be undone."
+          message="This message will be removed for everyone in Galaxy. This action cannot be undone."
           confirmLabel={deleting ? 'Deleting…' : 'Delete permanently'}
           tone="danger"
           busy={deleting}

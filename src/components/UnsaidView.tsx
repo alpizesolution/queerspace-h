@@ -197,11 +197,11 @@ export const UnsaidView: React.FC = () => {
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-10 md:pb-16">
-      <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-fg">Unsaid</h1>
+      <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-fg">Echoes</h1>
       <p className="text-[13px] text-muted mt-1 mb-5">Vent or confess anonymously. Gone in 48 hours.</p>
 
       {!available ? (
-        <p className="card p-5 text-sm text-muted">Unsaid isn't available right now. Please try again later.</p>
+        <p className="card p-5 text-sm text-muted">Echoes isn't available right now. Please try again later.</p>
       ) : (
         <>
           <form onSubmit={handlePost} className="card p-3 sm:p-4 flex flex-col gap-3 mb-5">

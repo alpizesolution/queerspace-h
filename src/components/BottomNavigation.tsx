@@ -1,15 +1,16 @@
 import React from 'react';
-import { Home, MessageCircle, Users, MessagesSquare, Feather } from 'lucide-react';
+import { Home, MessageCircle, Users, MessagesSquare, Feather, RadioTower } from 'lucide-react';
 
-export type NavTarget = 'home' | 'setup' | 'public' | 'unsaid' | 'community';
+export type NavTarget = 'home' | 'setup' | 'public' | 'unsaid' | 'community' | 'signals';
 
 /** Single source of truth for primary navigation (bottom tab bar on mobile, header tabs on desktop). */
 export const NAV_ITEMS: { id: NavTarget; label: string; icon: React.ElementType }[] = [
   { id: 'home', label: 'Home', icon: Home },
-  { id: 'setup', label: 'Chat', icon: MessageCircle },
-  { id: 'public', label: 'Public Room', icon: Users },
-  { id: 'unsaid', label: 'Unsaid', icon: Feather },
-  { id: 'community', label: 'Community', icon: MessagesSquare },
+  { id: 'setup', label: 'Seek', icon: MessageCircle },
+  { id: 'public', label: 'Galaxy', icon: Users },
+  { id: 'unsaid', label: 'Echoes', icon: Feather },
+  { id: 'community', label: 'Cosmos', icon: MessagesSquare },
+  { id: 'signals', label: 'Signals', icon: RadioTower },
 ];
 
 export const isNavActive = (id: NavTarget, currentView: string) =>
@@ -25,7 +26,7 @@ export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate }) =
     aria-label="Main"
     className="tabbar desk:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
   >
-    <div className="grid grid-cols-5 h-14 max-w-2xl mx-auto">
+    <div className="grid grid-cols-6 h-14 max-w-2xl mx-auto">
       {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
         const active = isNavActive(id, currentView);
         return (
@@ -33,12 +34,12 @@ export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate }) =
             key={id}
             onClick={() => onNavigate(id)}
             aria-current={active ? 'page' : undefined}
-            className={`flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+            className={`min-w-0 flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
               active ? 'text-berry' : 'text-subtle hover:text-fg'
             }`}
           >
             <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.25 : 1.75} />
-            <span className="text-[11px] font-medium leading-none">{label}</span>
+            <span className="max-w-full truncate px-0.5 text-[11px] font-medium leading-none">{label}</span>
           </button>
         );
       })}

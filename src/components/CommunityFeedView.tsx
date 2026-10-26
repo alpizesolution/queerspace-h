@@ -310,7 +310,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-[calc(var(--tabbar-h)+6rem)] desk:pb-16">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-fg">Community</h1>
+        <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-fg">Cosmos</h1>
         <button onClick={openComposer} className="btn btn-primary btn-sm hidden sm:inline-flex">
           <Plus className="w-4 h-4" />
           New post
@@ -336,7 +336,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
       </div>
 
       {!available ? (
-        <p className="card p-5 text-sm text-muted">Community isn't available right now. Please try again later.</p>
+        <p className="card p-5 text-sm text-muted">Cosmos isn't available right now. Please try again later.</p>
       ) : loading ? (
         <div className="space-y-3" aria-hidden="true">
           {[0, 1, 2].map((i) => (

@@ -9,6 +9,7 @@ import { ChatView } from './components/ChatView.tsx';
 import { PublicRoomView } from './components/PublicRoomView.tsx';
 import { CommunityFeedView } from './components/CommunityFeedView.tsx';
 import { UnsaidView } from './components/UnsaidView.tsx';
+import { SignalsView } from './components/SignalsView.tsx';
 import { InfoModals } from './components/InfoModals.tsx';
 import { DonationModal } from './components/DonationModal.tsx';
 import { SupportChat } from './components/SupportChat.tsx';
@@ -27,7 +28,7 @@ import { CheckCircle2 } from 'lucide-react';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community' | 'signals'>('home');
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [donationModalOpen, setDonationModalOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -312,6 +313,8 @@ export default function App() {
         {currentView === 'unsaid' && <UnsaidView />}
 
         {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} />}
+
+        {currentView === 'signals' && <SignalsView />}
       </main>
 
       {showChrome && currentView !== 'public' && (
