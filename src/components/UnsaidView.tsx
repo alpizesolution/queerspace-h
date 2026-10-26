@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Flag, HeartHandshake, Phone, Trash2 } from 'lucide-react';
+import { CheckCircle2, Flag, HeartHandshake, Phone, Trash2 } from 'lucide-react';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import {
   deleteUnsaid,
@@ -18,6 +18,7 @@ import {
   UnsaidReaction,
   validateUnsaidText,
 } from '../services/unsaidService.ts';
+import { fetchIsCommunityAdmin } from '../services/communityService.ts';
 import { whileActive } from '../utils/whileActive.ts';
 
 const REACTED_KEY = 'qs_unsaid_reacted';
@@ -88,6 +89,10 @@ export const UnsaidView: React.FC = () => {
   const [reportingId, setReportingId] = useState<string | null>(null);
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  // Moderator controls: shown only when admins/{uid} exists for this session; firestore.rules re-check every delete.
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const available = isUnsaidAvailable();
@@ -114,6 +119,23 @@ export const UnsaidView: React.FC = () => {
       clearInterval(tick);
     };
   }, [available]);
+
+  useEffect(() => {
+    if (!available) return;
+    let cancelled = false;
+    fetchIsCommunityAdmin().then((ok) => {
+      if (!cancelled) setIsAdmin(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [available]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const showCrisis = needsCrisisSupport(draft);
 
@@ -155,10 +177,20 @@ export const UnsaidView: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!deletingId) return;
+    if (!deletingId || deleting) return;
     const id = deletingId;
+    setDeleting(true);
+    const ok = await deleteUnsaid(id);
+    setDeleting(false);
     setDeletingId(null);
-    await deleteUnsaid(id);
+    // Quiet for members deleting their own post; moderators get an explicit result.
+    if (isAdmin) {
+      setToast(
+        ok
+          ? { text: 'Post deleted.', ok: true }
+          : { text: "Couldn't delete that. Nothing was removed, please try again.", ok: false }
+      );
+    }
   };
 
   const visible = posts.filter((p) => !reportedIds.has(p.id) && (filter === 'all' || p.kind === filter));
@@ -291,8 +323,13 @@ export const UnsaidView: React.FC = () => {
                         <span className="text-[12px] text-subtle whitespace-nowrap">
                           {formatFadesIn(post.expiresAt, now)}
                         </span>
-                        {mine ? (
-                          <button onClick={() => setDeletingId(post.id)} className="icon-btn w-9 h-9" aria-label="Delete your post">
+                        {mine || isAdmin ? (
+                          <button
+                            onClick={() => setDeletingId(post.id)}
+                            className="icon-btn w-9 h-9"
+                            aria-label={mine ? 'Delete your post' : 'Delete post (moderator)'}
+                            title={mine ? 'Delete your post' : 'Delete post (moderator)'}
+                          >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         ) : (
@@ -331,13 +368,31 @@ export const UnsaidView: React.FC = () => {
 
       {deletingId && (
         <ConfirmDialog
-          title="Delete your post?"
-          message="It disappears for everyone right away."
-          confirmLabel="Delete"
+          title={myIds.has(deletingId) ? 'Delete your post?' : 'Delete this post?'}
+          message={
+            myIds.has(deletingId)
+              ? 'It disappears for everyone right away.'
+              : 'This post will be removed for everyone, for breaking the guidelines. This action cannot be undone.'
+          }
+          confirmLabel={deleting ? 'Deleting…' : myIds.has(deletingId) ? 'Delete' : 'Delete permanently'}
           tone="danger"
+          busy={deleting}
           onConfirm={handleDelete}
-          onCancel={() => setDeletingId(null)}
+          onCancel={() => {
+            if (!deleting) setDeletingId(null);
+          }}
         />
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed z-[60] left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] w-[calc(100%-2rem)] max-w-sm flex items-start gap-2.5 bg-raised/95 backdrop-blur-xl text-fg px-4 py-3 rounded-2xl shadow-2xl shadow-black/50 border border-line text-sm anim-pop"
+        >
+          <CheckCircle2 className={`w-[18px] h-[18px] shrink-0 mt-px ${toast.ok ? 'text-berry' : 'text-danger'}`} />
+          <span>{toast.text}</span>
+        </div>
       )}
     </div>
   );

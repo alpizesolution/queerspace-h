@@ -954,6 +954,22 @@ test('RX-01: Room reactions CAN be added once per person, changed only by one co
   await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('public_room_messages/m1/reactions/bob').get());
 });
 
+test('AD-05: Only a real admin CAN delete someone else\'s Unsaid post (post and owner record together)', async () => {
+  await seedUnsaid('p5', 'alice');
+  await seedAdmin();
+  const del = (fs: firebase.firestore.Firestore) => {
+    const batch = fs.batch();
+    batch.delete(fs.doc('unsaid/p5'));
+    batch.delete(fs.doc('unsaid_owners/p5'));
+    return batch.commit();
+  };
+  await assertFails(del(testEnv.authenticatedContext('bob').firestore()));
+  // Admin uid but an anonymous session, and a Google account that isn't in admins/.
+  await assertFails(del(testEnv.authenticatedContext('cha').firestore()));
+  await assertFails(del(testEnv.authenticatedContext('eve', google).firestore()));
+  await assertSucceeds(del(adminDb()));
+});
+
 // ---------------------------------------------------------------- Support chat
 
 function supportSend(uid: string, text: string, fs = testEnv.authenticatedContext(uid).firestore()) {
