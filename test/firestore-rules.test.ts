@@ -882,6 +882,31 @@ test('T-01: Participants CAN set, refresh and clear only their own typing stamp'
   await assertFails(eve.doc('conversations/tc').update(new FP('typing', 'eve'), FV.serverTimestamp()));
 });
 
+test('T-03: A typing update CAN\'T smuggle in other changes or a replaced map', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('conversations/tx').set({
+      participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date(),
+      typing: { bob: new Date() },
+    });
+  });
+  const FV = firebase.firestore.FieldValue;
+  const FP = firebase.firestore.FieldPath;
+  const ref = () => testEnv.authenticatedContext('alice').firestore().doc('conversations/tx');
+  const stamp = new FP('typing', 'alice');
+  // Whole-map replacement would wipe or forge Bob's entry.
+  await assertFails(ref().update({ typing: { alice: FV.serverTimestamp() } }));
+  await assertFails(ref().update({ typing: { alice: FV.serverTimestamp(), bob: FV.serverTimestamp() } }));
+  await assertFails(ref().update({ typing: 'yes' }));
+  // Protected fields can't ride along.
+  await assertFails(ref().update(stamp, FV.serverTimestamp(), 'participants', ['alice', 'eve']));
+  await assertFails(ref().update(stamp, FV.serverTimestamp(), 'createdAt', new Date()));
+  await assertFails(ref().update(stamp, FV.serverTimestamp(), 'admin', true));
+  // Clearing when no entry exists yet (a message sent without typing first) is fine.
+  await assertSucceeds(ref().update('updatedAt', FV.serverTimestamp(), stamp, FV.delete()));
+  // The legacy write (updatedAt only) still works, with Bob's stamp present.
+  await assertSucceeds(ref().update({ updatedAt: FV.serverTimestamp() }));
+});
+
 test('T-02: Typing CAN\'T be written once a conversation has ended', async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await ctx.firestore().doc('conversations/te').set({

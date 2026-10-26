@@ -724,7 +724,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 setInputText(e.target.value);
                 typingSenderRef.current?.input(e.target.value.trim().length > 0);
               }}
-              onBlur={() => typingSenderRef.current?.stop()}
               onKeyDown={handleKeyDown}
               placeholder="Message"
               aria-label={`Message ${partner.displayName}`}
