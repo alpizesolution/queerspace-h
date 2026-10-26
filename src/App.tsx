@@ -88,11 +88,12 @@ export default function App() {
               cloudSignatureRef.current = cloudProfileSignature(res.prefs, res.blockedPartnerIds ?? []);
               // Never shrink the blocklist: keep this device's blocks and add any saved in the cloud.
               const cloudBlocked = res.blockedPartnerIds ?? [];
-              if (cloudBlocked.some((id) => !blockedPartnerIds.includes(id))) {
-                const merged = [...new Set([...blockedPartnerIds, ...cloudBlocked])];
-                setBlockedPartnerIds(merged);
+              setBlockedPartnerIds((current) => {
+                if (cloudBlocked.every((id) => current.includes(id))) return current;
+                const merged = [...new Set([...current, ...cloudBlocked])];
                 setStorageItem(STORAGE_KEYS.BLOCKED_IDS.current, JSON.stringify(merged));
-              }
+                return merged;
+              });
             });
             getMySuspension().then((s) => setSuspended(Boolean(s)));
             hasUnreadSupportReply().then((unread) => {

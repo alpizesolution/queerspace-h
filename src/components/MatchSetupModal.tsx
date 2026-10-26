@@ -115,9 +115,13 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 
     // Filter switches only matter for a Custom search, so only check them then.
     const checked = activeTab === 'custom' ? filters : { ...filters, applyAgeFilter: false };
-    const validation = validateSetupProfile({ displayName: currentPrefs.displayName || 'Sapphic Guest', ...checked }, isAgeConfirmed);
-    if (!validation.isValid) {
-      setErrors(validation.errors);
+    // Only filter rules apply here; the name is checked (and fixable) in "Your profile".
+    const { displayName: _name, ...filterErrors } = validateSetupProfile(
+      { displayName: 'ok', ...checked },
+      isAgeConfirmed
+    ).errors;
+    if (Object.keys(filterErrors).length > 0) {
+      setErrors(filterErrors);
       return;
     }
 
