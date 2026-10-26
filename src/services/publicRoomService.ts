@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   limit,
   onSnapshot,
@@ -16,6 +17,7 @@ import { PublicRoomMessage, RoomQuote, UserPreferences } from '../types.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { isAdminDevice } from '../utils/adminDevice.ts';
 import { TEAM_NAME } from './supportService.ts';
+export { fetchIsCommunityAdmin as fetchIsRoomModerator } from './communityService.ts';
 
 /** How many recent messages the room shows. */
 export const PUBLIC_ROOM_HISTORY = 15;
@@ -149,5 +151,17 @@ export async function sendTeamRoomMessage(text: string, replyTo?: RoomQuote): Pr
   } catch (err) {
     console.warn('[PublicRoom] Could not post as team:', err);
     return null;
+  }
+}
+
+/** Admin removal of any room message. firestore.rules allow it only for admins/{uid} Google sessions. */
+export async function adminDeleteRoomMessage(messageId: string): Promise<boolean> {
+  if (!db) return false;
+  try {
+    await deleteDoc(doc(db, 'public_room_messages', messageId));
+    return true;
+  } catch (err) {
+    console.warn('[PublicRoom] Admin could not delete message:', err);
+    return false;
   }
 }
