@@ -25,23 +25,23 @@ export const Hero: React.FC<HeroProps> = ({
   const open = { public: onOpenPublicRoom, unsaid: onOpenUnsaid, community: onOpenCommunity };
 
   return (
-    <section className="max-w-2xl desk:max-w-6xl mx-auto w-full px-4 sm:px-6 pt-6 sm:pt-12 pb-8">
-      <div className="grid desk:grid-cols-12 gap-8 desk:gap-12 items-center">
+    <section className="max-w-2xl sm:max-w-3xl desk:max-w-6xl mx-auto w-full px-4 sm:px-8 desk:px-6 pt-4 sm:pt-10 pb-8">
+      <div className="grid desk:grid-cols-12 gap-5 sm:gap-8 desk:gap-12 items-center">
         <div className="desk:col-span-6 anim-rise">
-          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-lavender mb-3">
+          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.16em] min-[380px]:tracking-[0.18em] text-lavender mb-2.5 sm:mb-3">
             ✦ A sapphic space for women · WLW ✦
           </p>
-          <h1 className="font-serif text-[34px] leading-[1.1] sm:text-5xl font-semibold tracking-tight text-fg">
-            Somewhere between
-            <br />
+          <h1 className="font-serif text-[clamp(1.75rem,9vw,2.25rem)] leading-[1.12] sm:text-5xl font-semibold tracking-tight text-fg text-balance">
+            Somewhere between{' '}
+            <br className="hidden desk:block" />
             strangers and <em className="text-berry">stardust.</em>
           </h1>
-          <p className="mt-4 text-[15px] sm:text-base text-muted max-w-md leading-relaxed">
+          <p className="mt-3 sm:mt-4 text-[15px] sm:text-base text-muted max-w-md leading-relaxed">
             A little universe for women who love women. Find your people, share a secret, and discover the magic of
             an unexpected connection.
           </p>
 
-          <div className="mt-7 flex flex-col sm:flex-row gap-2.5">
+          <div className="mt-5 sm:mt-7 flex flex-col sm:flex-row gap-2.5">
             <button onClick={onStartChat} className="btn btn-primary h-12 px-7 text-[15px] w-full sm:w-auto">
               Find Your Someone
               <ArrowRight className="w-4 h-4" />
@@ -57,7 +57,7 @@ export const Hero: React.FC<HeroProps> = ({
         </div>
 
         <div className="desk:col-span-6 order-first desk:order-none">
-          <div className="relative aspect-[16/10] sm:aspect-[4/3] w-full desk:max-w-xl mx-auto rounded-3xl overflow-hidden border border-line bg-surface">
+          <div className="relative aspect-[16/9] sm:aspect-[2/1] desk:aspect-[4/3] w-full desk:max-w-xl mx-auto rounded-3xl overflow-hidden border border-line bg-surface">
             <img
               src="/assets/aistudio/hero_illustration.png"
               alt="Two women smiling together"
@@ -68,7 +68,7 @@ export const Hero: React.FC<HeroProps> = ({
         </div>
       </div>
 
-      <div className="mt-10 sm:mt-14 grid sm:grid-cols-3 gap-3">
+      <div className="mt-8 sm:mt-12 grid sm:grid-cols-3 gap-3">
         {DESTINATIONS.map(({ key, icon: Icon, title, text }) => (
           <button
             key={key}

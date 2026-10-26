@@ -6,7 +6,7 @@ import { isAdminDevice } from '../utils/adminDevice.ts';
 const SHOW_ADMIN_LINK = isAdminDevice();
 
 /** Buy Me a Coffee page, styled like their official button (their embed script can't run in this app). */
-const BMC_URL = 'https://www.buymeacoffee.com/donotdm';
+export const BMC_URL = 'https://www.buymeacoffee.com/donotdm';
 
 interface FooterProps {
   onOpenModal: (modal: 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact') => void;
