@@ -38,3 +38,17 @@ The token is verified server-side, including revocation checks. User identity is
 - Replaying the same idempotency key returns the original invitation without consuming another cooldown slot.
 - Firebase Authentication token errors return HTTP 401 rather than a generic 500.
 - This cooldown is a basic friction control, not comprehensive abuse prevention; production still needs monitoring and stronger adaptive limits if abuse appears.
+
+
+## Security test coverage added
+
+- `api/signals.test.js` covers unsupported methods and missing/malformed bearer headers. These are lightweight Node tests and do not require Firebase credentials.
+- `test/firestore-rules.test.ts` now includes SIG-01 through SIG-03 to verify that client SDK users cannot read or write invitation, pair, idempotency, or rate-limit documents.
+- The Firestore rules tests require the Firestore emulator configured in `firebase.json`. Run them from the repository root with:
+
+```sh
+firebase emulators:exec --only firestore "npx tsx --test test/firestore-rules.test.ts"
+```
+
+- The API tests are included by the existing `npm test` script through `api/*.test.js`; they have not yet been executed in this change session.
+- These tests verify the client-deny boundary, not server-side transaction behavior. Acceptance, expiry, block/suspension rechecks, idempotency races, and cooldown concurrency still need integration tests against an isolated Firebase project/emulator setup.
