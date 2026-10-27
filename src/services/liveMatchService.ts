@@ -114,8 +114,6 @@ export function agesCompatible(a: QueueAgePrefs, b: QueueAgePrefs): boolean {
 export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boolean {
   const fitsArea = (want?: string[], theirs?: string[]) =>
     !want?.length || !theirs?.length || theirs.some((area) => want.some((w) => locationsOverlap(w, area)));
-  const fitsExpr = (want?: string[], theirs?: string[]) =>
-    !want?.length || !theirs?.length || theirs.some((e) => want.includes(e));
   const sharesTopic = () =>
     (!a.topics?.length && !b.topics?.length) || (a.topics ?? []).some((t) => b.topics?.includes(t));
   return (
@@ -123,9 +121,7 @@ export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boole
     (a.intent ?? 'open') === (b.intent ?? 'open') &&
     sharesTopic() &&
     fitsArea(a.wantAreas, b.areas) &&
-    fitsArea(b.wantAreas, a.areas) &&
-    fitsExpr(a.wantExpr, b.expr) &&
-    fitsExpr(b.wantExpr, a.expr)
+    fitsArea(b.wantAreas, a.areas)
   );
 }
 
@@ -168,7 +164,14 @@ export function pickQueueCandidates(
   return entries
     .filter((e) => e.data.status === 'waiting' && !excluded.has(e.id) && isFreshQueueEntry(e.data, now))
     .filter((e) => filtersCompatible(mine, e.data))
-    .sort((a, b) => toMillis(a.data.createdAt) - toMillis(b.data.createdAt))
+    // My Type is a soft preference, not an exclusion: people outside a preference can still connect.
+    .sort((a, b) => {
+      const typeScore = (candidate: QueueMatchPrefs) =>
+        Number(Boolean(mine.wantExpr?.length && candidate.expr?.some((v) => mine.wantExpr?.includes(v)))) +
+        Number(Boolean(candidate.wantExpr?.length && mine.expr?.some((v) => candidate.wantExpr?.includes(v))));
+      return typeScore(b.data) - typeScore(a.data) ||
+        toMillis(a.data.createdAt) - toMillis(b.data.createdAt);
+    })
     .map((e) => e.id);
 }
 
