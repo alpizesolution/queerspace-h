@@ -5,6 +5,7 @@ import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.t
 import { formatSyncFeedback, StorageOperationResult } from '../utils/sync-feedback.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { INTENTION_LABELS, SEXUAL_ORIENTATIONS } from '../utils/matching-logic.ts';
+import { calculateAge } from '../utils/ageEligibility.ts';
 
 export interface ProfileLoadResult {
   prefs: UserPreferences;
@@ -24,6 +25,7 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
     intention: prefs.intention || 'open',
     region: prefs.region || 'Anywhere / Worldwide',
     topics: (prefs.topics || []).slice(0, 8),
+    ...(prefs.birthDate && calculateAge(prefs.birthDate) !== null ? { age: calculateAge(prefs.birthDate)! } : {}),
     aboutMe: (prefs.aboutMe || '').trim().slice(0, 160),
     myVibe: (prefs.myVibe || '').slice(0, 24),
     profileComplete: prefs.profileComplete === true,
