@@ -62,6 +62,7 @@ export type PartnerStatus = 'online' | 'typing' | 'idle' | 'away';
 export interface PartnerProfile {
   id: string;
   displayName: string;
+  age?: number;
   pronouns: string;
   intention: Intention;
   topics: string[];
