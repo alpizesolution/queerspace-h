@@ -103,7 +103,7 @@ export const SignalsView: React.FC = () => {
     void loadPairs();
   }, [loadPairs]);
 
-  const endPair = async (pairId: string) => {
+  const endPair = async (pairId: string): Promise<boolean> => {
     setEndingId(pairId);
     setError(null);
     setNotice(null);
@@ -116,8 +116,10 @@ export const SignalsView: React.FC = () => {
         pair.id === pairId ? { ...pair, status: 'ended', endedAt: new Date().toISOString() } : pair
       ));
       setNotice('Connection ended. You can leave it here; no message was sent.');
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not end this connection.');
+      return false;
     } finally {
       setEndingId(null);
     }
@@ -318,9 +320,9 @@ export const SignalsView: React.FC = () => {
           tone="danger"
           busy={endingId === pairToEnd}
           onCancel={() => setPairToEnd(null)}
-          onConfirm={() => {
+          onConfirm={async () => {
             const id = pairToEnd;
-            void endPair(id).then(() => setPairToEnd(null));
+            if (await endPair(id)) setPairToEnd(null);
           }}
         />
       )}
