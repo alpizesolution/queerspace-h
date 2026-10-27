@@ -55,7 +55,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
     {errorList.length > 0 && <p role="alert" className="mb-2 text-[13px] text-danger">{errorList[0]}</p>}
     <button type="button" onClick={handleSubmit} className="btn btn-primary w-full h-12 text-[15px]">Save profile</button>
   </>}>
-    <div className="space-y-7 text-fg">
+    <div className="space-y-4 text-fg">
       <section>
         <button type="button" onClick={() => setAvatar((current) => randomAvatar(current))} className="group flex items-center gap-3 mb-4 -ml-1 p-1 pr-3 rounded-full hover:bg-raised transition-colors" aria-label="Shuffle your anonymous avatar">
           <span className="relative"><AnimalAvatar key={avatar} avatar={avatar} seed={displayName} className="w-12 h-12 anim-pop" /><span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-raised border border-line flex items-center justify-center text-muted"><Shuffle className="w-3 h-3" /></span></span>
@@ -74,7 +74,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
       </section>
       <section>
         <div className="flex items-baseline justify-between mb-2"><label htmlFor="qs-about-me" className="label !mb-0">About Me <span className="font-normal text-subtle">· optional</span></label><span className={`text-xs tabular-nums ${aboutMe.length >= 150 ? 'text-berry' : 'text-subtle'}`}>{aboutMe.length}/160</span></div>
-        <textarea id="qs-about-me" value={aboutMe} onChange={(e) => setAboutMe(e.target.value.slice(0, 160))} maxLength={160} rows={3} placeholder="A little about your world…" className="input resize-none" aria-describedby="qs-about-hint" />
+        <textarea id="qs-about-me" value={aboutMe} onChange={(e) => setAboutMe(e.target.value.slice(0, 160))} maxLength={160} rows={2} placeholder="A little about your world…" className="input resize-none" aria-describedby="qs-about-hint" />
         <p id="qs-about-hint" className="mt-1.5 text-xs text-subtle">Keep it short, personal, and as anonymous as you like.</p>
       </section>
       <section><p className="label">My Vibe <span className="font-normal text-subtle">· optional</span></p><p className="mb-2 text-xs text-subtle">Pick a personality or interest, not a gender label.</p><div className="flex flex-wrap gap-2">
@@ -112,7 +112,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
             aria-label="Search gender expression options"
             className="input"
           />
-          <div className="flex flex-wrap gap-2 max-h-56 overflow-y-auto rounded-xl border border-line p-3" role="group" aria-label="Gender expression options">
+          <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto rounded-xl border border-line p-2" role="group" aria-label="Gender expression options">
             {GENDER_EXPRESSIONS.filter((value) => value.toLowerCase().includes(genderExpressionSearch.trim().toLowerCase())).map((value) => {
               const selected = genderExpression.includes(value);
               return <button key={value} type="button" aria-pressed={selected} onClick={() => setGenderExpression((old) => {
