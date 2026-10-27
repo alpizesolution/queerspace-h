@@ -49,19 +49,76 @@ export const MY_VIBE_OPTIONS = [
   'Night Owl',
 ] as const;
 
-/** Preserve existing gender-expression choices for SOGIE profiles and legacy preferences. */
+/**
+ * Inclusive predefined gender-expression and presentation labels.
+ * This is a profile self-description list, not a matching or eligibility rule.
+ */
 export const GENDER_EXPRESSIONS: GenderExpressionOption[] = [
+  // Feminine
   'Femme',
+  'High Femme',
   'Hyperfemme',
-  'Softmasc',
+  'Soft Femme',
+  'Feminine',
+  'Ultra-Feminine',
+  'Girly',
+  'Chapstick Femme',
+  'Lipstick Lesbian',
+  // Masculine
   'Masc',
+  'Soft Masc',
+  'Softmasc',
+  'Hard Masc',
   'Butch',
-  'Andro',
+  'Stone Butch',
+  'Stud',
   'Stem',
   'Tomboy',
-  'Soft Masc',
-  'Hard Masc',
+  'Masculine',
+  'Ultra-Masculine',
+  'Chapstick',
+  'Gentle Masc',
+  // Androgynous and mixed
+  'Androgynous',
+  'Andro',
+  'Futch',
+  'Femme-Masc Mix',
+  'Soft Androgynous',
+  'Masc-Femme',
+  'Gender-Neutral Presentation',
+  'Balanced Expression',
+  'Mixed Expression',
+  // Fluid and gender-diverse expression
+  'Gender-Fluid Expression',
+  'Gender-Nonconforming',
+  'Gender-Expansive',
+  'Gender-Ambiguous',
+  'Fluid Presentation',
+  'Nonbinary Expression',
+  'Neutral Expression',
+  'Unisex Style',
+  'Changing Expression',
+  // Personal style
+  'Sporty',
+  'Casual',
+  'Streetwear',
+  'Alternative',
+  'Goth',
+  'Punk',
+  'Grunge',
+  'Artistic',
+  'Vintage',
+  'Preppy',
+  'Elegant',
+  'Minimalist',
+  'Soft / Cozy',
+  'Edgy',
+  'Bohemian',
+  'Athletic',
+  // Self-description
+  'No Label',
   'No label / Other',
+  'Still Exploring',
   'Prefer not to say',
 ];
 
