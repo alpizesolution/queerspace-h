@@ -1,10 +1,10 @@
-import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp, deleteField } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { UserPreferences } from '../types.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.ts';
 import { formatSyncFeedback, StorageOperationResult } from '../utils/sync-feedback.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
-import { INTENTION_LABELS, SEXUAL_ORIENTATIONS } from '../utils/matching-logic.ts';
+import { INTENTION_LABELS, SEXUAL_ORIENTATIONS, GENDER_IDENTITIES } from '../utils/matching-logic.ts';
 import { calculateAge } from '../utils/ageEligibility.ts';
 
 export interface ProfileLoadResult {
@@ -29,15 +29,15 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
     aboutMe: (prefs.aboutMe || '').trim().slice(0, 160),
     myVibe: (prefs.myVibe || '').slice(0, 24),
     // Public SOGIE values are included only when that exact field is opted into visibility.
-    ...(prefs.showSexualOrientationOnProfile && prefs.sexualOrientation
-      ? { sexualOrientation: (prefs.sexualOrientation === 'Self-described' ? prefs.sexualOrientationCustom : prefs.sexualOrientation || '').trim().slice(0, 40) }
-      : {}),
-    ...(prefs.showGenderIdentityOnProfile && prefs.genderIdentity
-      ? { genderIdentity: (prefs.genderIdentity === 'Self-described' ? prefs.genderIdentityCustom : prefs.genderIdentity || '').trim().slice(0, 40) }
-      : {}),
-    ...(prefs.showGenderExpressionOnProfile && prefs.genderExpression?.length
-      ? { genderExpression: prefs.genderExpression.slice(0, 8) }
-      : {}),
+    sexualOrientation: prefs.showSexualOrientationOnProfile && prefs.sexualOrientation
+      ? (prefs.sexualOrientation === 'Self-described' ? prefs.sexualOrientationCustom : prefs.sexualOrientation || '').trim().slice(0, 40)
+      : deleteField(),
+    genderIdentity: prefs.showGenderIdentityOnProfile && prefs.genderIdentity
+      ? (prefs.genderIdentity === 'Self-described' ? prefs.genderIdentityCustom : prefs.genderIdentity || '').trim().slice(0, 40)
+      : deleteField(),
+    genderExpression: prefs.showGenderExpressionOnProfile && prefs.genderExpression?.length
+      ? prefs.genderExpression.slice(0, 8)
+      : deleteField(),
     profileComplete: prefs.profileComplete === true,
     ...(isValidAvatar(prefs.avatar) ? { avatar: prefs.avatar } : {}),
     ...(typeof prefs.showGenderExpressionOnProfile === 'boolean'
@@ -141,9 +141,13 @@ export function mergeCloudProfile(
   if (expression) merged.genderExpression = expression as UserPreferences['genderExpression'];
   const identity = text(privateData.genderIdentity);
   if (identity) {
-    if (identity in {}) { /* no-op: keep values below normalized from known options */ }
-    merged.genderIdentity = identity;
-    merged.genderIdentityCustom = undefined;
+    if (GENDER_IDENTITIES.includes(identity) && identity !== 'Self-described') {
+      merged.genderIdentity = identity;
+      merged.genderIdentityCustom = undefined;
+    } else {
+      merged.genderIdentity = 'Self-described';
+      merged.genderIdentityCustom = identity;
+    }
   }
   const preferred = strings(privateData.preferredGenderExpressions);
   if (preferred) merged.preferredGenderExpressions = preferred;
