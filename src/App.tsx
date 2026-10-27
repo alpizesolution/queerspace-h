@@ -29,6 +29,7 @@ import { SuspendedNotice } from './components/SuspendedNotice.tsx';
 import { CheckCircle2 } from 'lucide-react';
 import { AgeEligibilityGate } from './components/AgeEligibilityGate.tsx';
 import { calculateAge, isAdultBirthDate } from './utils/ageEligibility.ts';
+import { submitAgeEligibilityReview } from './services/ageReviewService.ts';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 
 export default function App() {
@@ -80,6 +81,7 @@ export default function App() {
 
   const [ageGateOpen, setAgeGateOpen] = useState(() => !isAdultBirthDate(userPrefs.birthDate));
   const [ageRestricted, setAgeRestricted] = useState(() => getStorageItem('queerspace_age_restricted') === 'true');
+  const [ageReviewSubmitted, setAgeReviewSubmitted] = useState(() => getStorageItem('queerspace_age_review_requested') === 'true');
 
   // Initialize anonymous auth session on startup and restore cloud profile if available
   useEffect(() => {
@@ -267,12 +269,17 @@ export default function App() {
       <FloatingCatsBackground />
 
       {(ageGateOpen || (ageRestricted && !supportOpen)) && (
-        <AgeEligibilityGate initialBirthDate={userPrefs.birthDate} restricted={ageRestricted}
+        <AgeEligibilityGate initialBirthDate={userPrefs.birthDate} restricted={ageRestricted} reviewSubmitted={ageReviewSubmitted}
           onSubmit={async (birthDate) => {
             const age = calculateAge(birthDate);
-            if (age === null || age < 18) { setAgeRestricted(true); setAgeGateOpen(true); setStorageItem('queerspace_age_restricted', 'true'); return; }
+            if (age === null || age < 18) {
+              const submitted = await submitAgeEligibilityReview();
+              setAgeReviewSubmitted(submitted || ageReviewSubmitted);
+              if (submitted) setStorageItem('queerspace_age_review_requested', 'true');
+              setAgeRestricted(true); setAgeGateOpen(true); setStorageItem('queerspace_age_restricted', 'true'); return;
+            }
             const next = { ...userPrefs, birthDate, age, profileComplete: userPrefs.profileComplete === true };
-            setUserPrefs(next); setAgeRestricted(false); setStorageItem('queerspace_age_restricted', 'false');
+            setUserPrefs(next); setAgeRestricted(false); setAgeReviewSubmitted(false); setStorageItem('queerspace_age_restricted', 'false');
             const { feedback } = await persistPrefs(next);
             if (!feedback.savedToCloud && isFirebaseConfigured) showToast('Birthday saved on this device. Cloud sync needs attention.');
             setAgeGateOpen(false);
