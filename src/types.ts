@@ -2,20 +2,7 @@ export type ChatMode = 'quick' | 'custom' | 'public' | 'community';
 
 export type Intention = 'friendship' | 'dating' | 'casual' | 'deep_talk' | 'open';
 
-export type GenderExpressionOption =
-  | 'Femme'
-  | 'Hyperfemme'
-  | 'Softmasc'
-  | 'Masc'
-  | 'Tomboy'
-  | 'Soft Masc'
-  | 'Hard Masc'
-  | 'Andro'
-  | 'Hyperfemme'
-  | 'Butch'
-  | 'Stem'
-  | 'No label / Other'
-  | 'Prefer not to say';
+export type GenderExpressionOption = string;
 
 export interface UserPreferences {
   displayName: string;
