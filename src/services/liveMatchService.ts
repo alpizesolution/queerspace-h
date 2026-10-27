@@ -198,6 +198,8 @@ async function loadPartnerProfile(partnerId: string): Promise<PartnerProfile> {
       displayName: data.displayName ? String(data.displayName).slice(0, 30) : fallback.displayName,
       avatar: isValidAvatar(data.avatar) ? data.avatar : undefined,
       pronouns: data.pronouns ? String(data.pronouns).slice(0, 20) : fallback.pronouns,
+      aboutMe: typeof data.aboutMe === 'string' ? data.aboutMe.slice(0, 160) : undefined,
+      myVibe: typeof data.myVibe === 'string' ? data.myVibe.slice(0, 24) : undefined,
       intention: (data.intention as Intention) || 'open',
       topics: Array.isArray(data.topics) ? data.topics.slice(0, 8) : [],
       region: showLocation && data.region ? String(data.region) : '',
