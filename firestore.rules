@@ -57,6 +57,18 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/suspensions/$(request.auth.uid));
     }
 
+    // Self-reported birthday stays private; this is an access gate, not identity verification.
+    function isAgeEligible(userId) {
+      let p = /databases/$(database)/documents/users/$(userId)/private/settings;
+      return exists(p) && get(p).data.birthDate is timestamp
+        && get(p).data.birthDate <= request.time - duration.value(6575, 'd');
+    }
+    function isProfileComplete(userId) {
+      let p = /databases/$(database)/documents/users/$(userId)/public/profile;
+      return exists(p) && get(p).data.get('profileComplete', false) == true;
+    }
+    function isEligibleMember(userId) { return isAgeEligible(userId) && isProfileComplete(userId); }
+
     // An admin marking an inbox item (suggestion or report) as open or done.
     function isAdminStatusChange() {
       return isAdmin()
@@ -122,7 +134,7 @@ service cloud.firestore {
     
     // Allow querying all public profiles across all users
     match /{path=**}/profile/{profileId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && resource.data.get('profileComplete', false) == true;
     }
 
     // ====================================================
@@ -139,19 +151,23 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['createdAt', 'updatedAt'])
         && request.resource.data.keys().hasOnly([
              'exactLocation', 'sexualOrientation', 'genderExpression', 
-             'preferredGenderExpressions', 'blockedPartnerIds', 'createdAt', 'updatedAt'
+             'preferredGenderExpressions', 'birthDate', 'blockedPartnerIds', 'createdAt', 'updatedAt'
            ])
         && request.resource.data.createdAt is timestamp
-        && request.resource.data.updatedAt is timestamp;
+        && request.resource.data.updatedAt is timestamp
+        && (!('birthDate' in request.resource.data)
+            || (request.resource.data.birthDate is timestamp && request.resource.data.birthDate <= request.time - duration.value(6575, 'd')));
 
       allow update: if isOwner(userId)
         && hasNoPrivilegedFields()
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.keys().hasOnly([
              'exactLocation', 'sexualOrientation', 'genderExpression', 
-             'preferredGenderExpressions', 'blockedPartnerIds', 'createdAt', 'updatedAt'
+             'preferredGenderExpressions', 'birthDate', 'blockedPartnerIds', 'createdAt', 'updatedAt'
            ])
-        && request.resource.data.updatedAt is timestamp;
+        && request.resource.data.updatedAt is timestamp
+        && (!('birthDate' in request.resource.data)
+            || (request.resource.data.birthDate is timestamp && request.resource.data.birthDate <= request.time - duration.value(6575, 'd')));
 
       allow delete: if false;
     }
@@ -159,7 +175,7 @@ service cloud.firestore {
     // Public Profile (displayName, pronouns, intention, region, topics)
     // READABLE BY ALL AUTHENTICATED USERS. WRITABLE ONLY BY OWNER.
     match /users/{userId}/public/profile {
-      allow read: if isAuthenticated();
+      allow read: if isOwner(userId) || (isAuthenticated() && resource.data.get('profileComplete', false) == true);
 
       allow create, update: if isOwner(userId)
         && hasNoPrivilegedFields()
@@ -167,7 +183,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
              'displayName', 'pronouns', 'intention', 'topics', 
              'region', 'showGenderExpressionOnProfile', 'showSogieOnProfile', 
-             'showLocationOnProfile', 'avatar', 'createdAt', 'updatedAt'
+             'showLocationOnProfile', 'avatar', 'aboutMe', 'myVibe', 'profileComplete', 'createdAt', 'updatedAt'
            ])
         // createdAt marks when someone joined: set once to "now", then never changed.
         && (resource != null && 'createdAt' in resource.data
@@ -185,6 +201,9 @@ service cloud.firestore {
         && request.resource.data.region is string
         && request.resource.data.topics is list
         && request.resource.data.topics.size() <= 8
+        && (!('aboutMe' in request.resource.data) || (request.resource.data.aboutMe is string && request.resource.data.aboutMe.size() <= 160))
+        && (!('myVibe' in request.resource.data) || (request.resource.data.myVibe is string && request.resource.data.myVibe.size() <= 24))
+        && (!('profileComplete' in request.resource.data) || request.resource.data.profileComplete is bool)
         && request.resource.data.updatedAt is timestamp;
 
       allow delete: if false;
@@ -240,6 +259,7 @@ service cloud.firestore {
 
       allow create: if isOwner(userId)
         && !isSuspended()
+        && isEligibleMember(userId)
         && queueKeysValid()
         && request.resource.data.status == 'waiting'
         && request.resource.data.createdAt is timestamp
@@ -247,6 +267,7 @@ service cloud.firestore {
 
       // Owner: heartbeat, reset to waiting, or mark self matched with a real conversation.
       allow update: if isOwner(userId)
+        && isEligibleMember(userId)
         && queueKeysValid()
         && (request.resource.data.status == 'waiting'
             || convHasParticipants(request.resource.data.convId, userId, request.resource.data.partnerId));
@@ -256,6 +277,8 @@ service cloud.firestore {
       allow update: if isAuthenticated()
         && request.auth.uid != userId
         && !isSuspended()
+        && isEligibleMember(request.auth.uid)
+        && isEligibleMember(userId)
         && resource.data.status == 'waiting'
         && request.resource.data.status == 'matched'
         && request.resource.data.partnerId == request.auth.uid
@@ -283,6 +306,9 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
 
       allow create: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
+        && isEligibleMember(request.resource.data.participants[0])
+        && isEligibleMember(request.resource.data.participants[1])
         && isValidNewConversation()
         && request.resource.data.keys().hasAll(['participants', 'createdAt', 'updatedAt', 'status'])
         && request.resource.data.keys().hasOnly(['participants', 'createdAt', 'updatedAt', 'status'])
@@ -364,6 +390,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp'])
         && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'text', 'timestamp'])
         && request.resource.data.authorId == request.auth.uid
@@ -459,6 +486,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'title', 'content', 'category', 'tags', 'likes', 'replyCount', 'timestamp'])
         && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'content', 'category', 'tags', 'likes', 'replyCount', 'timestamp'])
         && validAuthorFields(request.resource.data)
@@ -571,6 +599,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && request.resource.data.keys().hasAll(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
         && request.resource.data.keys().hasOnly(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
         && request.resource.data.kind in ['vent', 'confession']
