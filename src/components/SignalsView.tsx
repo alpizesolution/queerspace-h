@@ -157,19 +157,19 @@ export const SignalsView: React.FC = () => {
   return (
     <section
       aria-labelledby="signals-title"
-      className="relative mx-auto flex min-h-[min(620px,calc(100dvh-9rem))] w-full max-w-xl flex-col px-5 py-8 anim-rise sm:px-6 sm:py-10"
+      className="relative mx-auto flex min-h-[min(620px,calc(100dvh-9rem))] w-full max-w-xl flex-col px-5 py-4 anim-rise sm:px-6 sm:py-6"
     >
-      <div className="mb-7 flex items-center gap-4">
-        <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-berry/20 bg-raised text-berry">
-          <RadioTower className="h-6 w-6" strokeWidth={1.6} />
+      <div className="mb-4 flex items-center gap-3">
+        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-berry/20 bg-raised text-berry">
+          <RadioTower className="h-5 w-5" strokeWidth={1.6} />
           <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-ink bg-lavender" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-lavender">A private frequency</p>
-          <h1 id="signals-title" className="mt-1 font-serif text-3xl font-semibold leading-tight tracking-tight text-fg sm:text-4xl">
+          <h1 id="signals-title" className="mt-0.5 font-serif text-2xl font-semibold leading-tight tracking-tight text-fg sm:text-3xl">
             Signals
           </h1>
-          <p className="mt-1 text-sm leading-relaxed text-muted">Connections that began with a mutual yes.</p>
+          <p className="mt-1 text-xs leading-snug text-muted">Connections that began with a mutual yes.</p>
         </div>
         <button
           type="button"
@@ -182,10 +182,10 @@ export const SignalsView: React.FC = () => {
         </button>
       </div>
 
-      <div className="mb-6 flex items-start gap-3 rounded-2xl border border-line bg-raised/60 p-4">
-        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-lavender" />
-        <p className="text-xs leading-relaxed text-muted">
-          Only you can view your connections. Ending one closes the connection here; it does not send a message.
+      <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-line bg-raised/60 px-3 py-2.5">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-lavender" />
+        <p className="text-[11px] leading-snug text-muted">
+          Only you can view your connections. Ending one closes it here; no message is sent.
         </p>
       </div>
 
@@ -209,15 +209,15 @@ export const SignalsView: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="mb-8">
-            <div className="mb-3 flex items-center justify-between">
+          <div className="mb-5">
+            <div className="mb-2 flex items-center justify-between">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Inbox className="h-4 w-4 text-lavender" /> Invitations</h2>
               <span className="rounded-full border border-line px-2.5 py-1 text-xs tabular-nums text-muted">{pendingReceived.length + pendingSent.length}</span>
             </div>
             {pendingReceived.length === 0 && pendingSent.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-line px-4 py-5 text-center">
+              <div className="rounded-xl border border-dashed border-line px-3 py-3 text-center">
                 <p className="text-sm text-muted">No pending invitations.</p>
-                <p className="mt-1 text-xs text-subtle">When someone sends you a Signal, you can choose whether to accept.</p>
+                <p className="mt-1 text-[11px] leading-snug text-subtle">When someone sends a Signal, you decide whether to accept.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -257,8 +257,8 @@ export const SignalsView: React.FC = () => {
             <span className="rounded-full border border-line px-2.5 py-1 text-xs tabular-nums text-muted">{activePairs.length}</span>
           </div>
           {activePairs.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-line px-5 py-8 text-center">
-              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-raised text-lavender"><RadioTower className="h-5 w-5" /></div>
+            <div className="rounded-xl border border-dashed border-line px-4 py-4 text-center">
+              <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-raised text-lavender"><RadioTower className="h-5 w-5" /></div>
               <p className="text-sm font-medium text-fg">Nothing lingering just yet.</p>
               <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted">When an invitation is accepted, the connection will appear here.</p>
             </div>
@@ -290,7 +290,7 @@ export const SignalsView: React.FC = () => {
           )}
 
           {endedPairs.length > 0 && (
-            <div className="mt-8">
+            <div className="mt-5">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-fg">Past connections</h2>
                 <span className="rounded-full border border-line px-2.5 py-1 text-xs tabular-nums text-muted">{endedPairs.length}</span>
