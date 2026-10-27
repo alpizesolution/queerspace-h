@@ -161,7 +161,6 @@ export const SignalsView: React.FC = () => {
     if (selectedPair?.status === 'active') {
       return <SignalsConversation pairId={openPairId} onBack={() => setOpenPairId(null)} />;
     }
-    if (!selectedPair) setOpenPairId(null);
   }
 
   return (
