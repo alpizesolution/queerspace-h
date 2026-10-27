@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Check, Inbox, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { auth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { ConfirmDialog } from './Sheet.tsx';
+import { SignalsConversation } from './SignalsConversation.tsx';
 
 type SignalInvitation = {
   id: string;
@@ -76,6 +77,7 @@ export const SignalsView: React.FC = () => {
   const [pairToEnd, setPairToEnd] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [openPairId, setOpenPairId] = useState<string | null>(null);
 
   const loadPairs = useCallback(async () => {
     if (!isFirebaseConfigured) {
@@ -153,6 +155,14 @@ export const SignalsView: React.FC = () => {
   const pendingSent = invitations.filter((item) => item.direction === 'sent' && item.status === 'pending');
   const activePairs = pairs.filter((pair) => pair.status === 'active');
   const endedPairs = pairs.filter((pair) => pair.status === 'ended');
+
+  if (openPairId) {
+    const selectedPair = pairs.find((pair) => pair.id === openPairId);
+    if (selectedPair?.status === 'active') {
+      return <SignalsConversation pairId={openPairId} onBack={() => setOpenPairId(null)} />;
+    }
+    if (!selectedPair) setOpenPairId(null);
+  }
 
   return (
     <section
@@ -274,7 +284,14 @@ export const SignalsView: React.FC = () => {
                     </div>
                     <span className="rounded-full bg-lavender/10 px-2.5 py-1 text-[10px] font-semibold text-lavender">Active</span>
                   </div>
-                  <div className="mt-4 flex justify-end border-t border-line pt-3">
+                  <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setOpenPairId(pair.id)}
+                      className="rounded-full bg-berry px-4 py-2 text-xs font-semibold text-ink transition hover:brightness-110"
+                    >
+                      Open chat
+                    </button>
                     <button
                       type="button"
                       onClick={() => setPairToEnd(pair.id)}
