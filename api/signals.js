@@ -9,6 +9,11 @@ const CREATE_COOLDOWN_MS = 30 * 1000;
 
 function getAdminApp() {
   if (getApps().length) return getApps()[0];
+  // Emulator mode is deliberately opt-in and requires both emulator hosts.
+  // Production continues to require the server-only service-account secret.
+  if (process.env.FIREBASE_AUTH_EMULATOR_HOST && process.env.FIRESTORE_EMULATOR_HOST) {
+    return initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'demo-queerspace-test' });
+  }
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_JSON');
   const credentials = JSON.parse(raw);
