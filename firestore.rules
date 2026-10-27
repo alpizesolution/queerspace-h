@@ -771,4 +771,23 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
   }
+
+    // ====================================================
+    // SIGNALS (SERVER-MANAGED CONSENT RECORDS)
+    // ====================================================
+    // Invitation acceptance, expiry, idempotency, and pair creation are handled
+    // by the authenticated Node.js API using Firebase Admin. Client SDK access
+    // is intentionally denied; Admin SDK requests bypass these client rules.
+    match /signalsInvitations/{invitationId} {
+      allow read, write: if false;
+    }
+
+    match /signalsPairs/{pairId} {
+      allow read, write: if false;
+    }
+
+    match /signalsIdempotency/{requestId} {
+      allow read, write: if false;
+    }
+
 }
