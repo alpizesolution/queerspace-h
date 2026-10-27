@@ -770,7 +770,6 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if isAdmin();
     }
-  }
 
     // ====================================================
     // SIGNALS (SERVER-MANAGED CONSENT RECORDS)
@@ -790,4 +789,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+
+  }
 }
