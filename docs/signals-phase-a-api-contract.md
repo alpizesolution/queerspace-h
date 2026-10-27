@@ -30,3 +30,11 @@ The token is verified server-side, including revocation checks. User identity is
 - The existing client chat flow is separate and must not be treated as Signals consent.
 - The Firestore rules deny browser SDK reads/writes to Signals collections. The UI must call this API rather than query these collections directly.
 - Add emulator and API tests for every authorization and state-transition invariant before enabling the feature in production.
+
+
+## Abuse-control update
+
+- Invitation creation has a server-side per-sender cooldown of one new invitation per 30 seconds, stored in `signalsRateLimits/{uid}` and inaccessible to client SDKs.
+- Replaying the same idempotency key returns the original invitation without consuming another cooldown slot.
+- Firebase Authentication token errors return HTTP 401 rather than a generic 500.
+- This cooldown is a basic friction control, not comprehensive abuse prevention; production still needs monitoring and stronger adaptive limits if abuse appears.
