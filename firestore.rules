@@ -345,6 +345,7 @@ service cloud.firestore {
         allow read: if isConversationParticipant(convId);
 
         allow create: if isConversationParticipant(convId)
+          && isEligibleMember(request.auth.uid)
           && !isSuspended()
           && request.resource.data.keys().hasAll(['senderId', 'text', 'timestamp'])
           && request.resource.data.keys().hasOnly(['senderId', 'text', 'timestamp', 'replyTo'])
@@ -431,11 +432,13 @@ service cloud.firestore {
       // reactions/{uid} marker of that type (one reaction per person), or -1 when removing it.
       // Counters start missing (counted as 0). Keep the types in sync with ROOM_REACTIONS.
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && !isSuspended()
         && (bumpsOnly('heart') || bumpsOnly('laugh') || bumpsOnly('hug') || bumpsOnly('fire') || bumpsOnly('cry'))
         && !exists(roomReactionPath(messageId))
         && getAfter(roomReactionPath(messageId)).data.type in request.resource.data.diff(resource.data).affectedKeys();
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && (dropsOnly('heart') || dropsOnly('laugh') || dropsOnly('hug') || dropsOnly('fire') || dropsOnly('cry'))
         && get(roomReactionPath(messageId)).data.type in request.resource.data.diff(resource.data).affectedKeys()
         && !existsAfter(roomReactionPath(messageId));
@@ -443,12 +446,14 @@ service cloud.firestore {
       match /reactions/{userId} {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
           && request.resource.data.keys().hasOnly(['type', 'createdAt'])
           && request.resource.data.type in ['heart', 'laugh', 'hug', 'fire', 'cry']
           && request.resource.data.createdAt == request.time
           && getAfter(roomMessagePath(messageId)).data[request.resource.data.type]
                == get(roomMessagePath(messageId)).data.get(request.resource.data.type, 0) + 1;
         allow delete: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
           && getAfter(roomMessagePath(messageId)).data.get(resource.data.type, 0)
                == get(roomMessagePath(messageId)).data.get(resource.data.type, 0) - 1;
         allow update: if false;
@@ -508,15 +513,17 @@ service cloud.firestore {
 
       // Like: +1 with a new likes/{uid} doc. Unlike: -1 while removing it.
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && counterMoves('likes', 1)
         && !exists(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid))
         && existsAfter(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid));
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && counterMoves('likes', -1)
         && exists(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid))
         && !existsAfter(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid));
       // Reply: +1, written in the same batch as the reply (checked on the reply doc).
-      allow update: if isAuthenticated() && counterMoves('replyCount', 1) && slowMode('communityReply', 5);
+      allow update: if isAuthenticated() && isEligibleMember(request.auth.uid) && counterMoves('replyCount', 1) && slowMode('communityReply', 5);
       // Admin removing a reply: -1.
       allow update: if isAdmin() && counterMoves('replyCount', -1);
 
@@ -527,10 +534,12 @@ service cloud.firestore {
         allow read: if isOwner(userId) || isAdmin();
         allow delete: if isAdmin() && !exists(postPath(postId));
         allow create: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
           && request.resource.data.keys().hasOnly(['createdAt'])
           && request.resource.data.createdAt == request.time
           && getAfter(postPath(postId)).data.likes == get(postPath(postId)).data.likes + 1;
         allow delete: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
           && getAfter(postPath(postId)).data.likes == get(postPath(postId)).data.likes - 1;
         allow update: if false;
       }
@@ -538,6 +547,7 @@ service cloud.firestore {
       match /replies/{replyId} {
         allow read: if isAuthenticated();
         allow create: if isAuthenticated()
+          && isEligibleMember(request.auth.uid)
           && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'content', 'timestamp'])
           && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'content', 'timestamp'])
           && validAuthorFields(request.resource.data)
@@ -621,6 +631,7 @@ service cloud.firestore {
       // A reaction: +1 on one reaction counter alongside a new reactions/{uid} doc of that type.
       // Counters added after launch (felt, strong, proud, cry) start missing and count from 0.
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && (bumpsOnly('hugs') || bumpsOnly('same') || bumpsOnly('felt') || bumpsOnly('strong') || bumpsOnly('proud')
             || bumpsOnly('cry'))
         && !exists(/databases/$(database)/documents/unsaid/$(postId)/reactions/$(request.auth.uid))
@@ -629,6 +640,7 @@ service cloud.firestore {
 
       // A flag: +1 on 'flags' alongside a new flags/{uid} doc.
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && bumpsOnly('flags')
         && !exists(/databases/$(database)/documents/unsaid/$(postId)/flags/$(request.auth.uid))
         && existsAfter(/databases/$(database)/documents/unsaid/$(postId)/flags/$(request.auth.uid));
@@ -644,6 +656,7 @@ service cloud.firestore {
       match /reactions/{userId} {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
           && request.resource.data.keys().hasOnly(['type', 'createdAt'])
           && request.resource.data.type in ['hugs', 'same', 'felt', 'strong', 'proud', 'cry']
           && request.resource.data.createdAt == request.time
