@@ -38,8 +38,8 @@ async function isBlocked(db, a, b) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
+  if (!['GET', 'POST'].includes(req.method)) {
+    res.setHeader('Allow', 'GET, POST');
     return send(res, 405, { error: 'method_not_allowed' });
   }
 
@@ -52,6 +52,29 @@ export default async function handler(req, res) {
     const decoded = await getAuth(app).verifyIdToken(match[1], true);
     const uid = decoded.uid;
     const db = getFirestore(app);
+    if (req.method === 'GET') {
+      const [received, sent] = await Promise.all([
+        db.collection('signalsInvitations').where('recipientId', '==', uid).limit(50).get(),
+        db.collection('signalsInvitations').where('senderId', '==', uid).limit(50).get(),
+      ]);
+      const byId = new Map();
+      for (const snap of [...received.docs, ...sent.docs]) {
+        const data = snap.data();
+        const expired = data.status === 'pending' && data.expiresAt instanceof Timestamp && data.expiresAt.toMillis() <= Date.now();
+        byId.set(snap.id, {
+          id: snap.id,
+          senderId: data.senderId,
+          recipientId: data.recipientId,
+          message: data.message || '',
+          status: expired ? 'expired' : data.status,
+          createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
+          expiresAt: data.expiresAt?.toDate?.().toISOString?.() || null,
+          direction: data.senderId === uid ? 'sent' : 'received',
+        });
+      }
+      const invitations = [...byId.values()].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      return send(res, 200, { invitations });
+    }
     const { action, recipientId, invitationId, message, idempotencyKey } = req.body || {};
 
     if (['create'].includes(action)) {
