@@ -37,14 +37,12 @@ export const REGIONS: string[] = [
   'CALABARZON',
 ];
 
+export const MY_VIBE_OPTIONS = ['Femme', 'Hyperfemme', 'Softmasc', 'Masc', 'Butch', 'Andro', 'Stem', 'Tomboy'] as const;
+
 export const GENDER_EXPRESSIONS: GenderExpressionOption[] = [
-  'Femme',
+  ...MY_VIBE_OPTIONS,
   'Soft Masc',
   'Hard Masc',
-  'Andro',
-  'Hyperfemme',
-  'Butch',
-  'Stem',
   'No label / Other',
   'Prefer not to say',
 ];
@@ -83,13 +81,9 @@ export const PRONOUN_OPTIONS: string[] = [
 
 export const DISCOVERY_FILTER_OPTIONS: string[] = [
   'Any / No preference',
-  'Femme',
+  ...MY_VIBE_OPTIONS,
   'Soft Masc',
   'Hard Masc',
-  'Andro',
-  'Hyperfemme',
-  'Butch',
-  'Stem',
   'No label / Other',
 ];
 
