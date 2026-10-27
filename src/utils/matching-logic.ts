@@ -251,28 +251,16 @@ export function calculateCompatibilityScore(
     score += 10;
   }
 
-  // Optional Gender Expression Filter (used ONLY when explicitly enabled by user)
+  // My Type compares only with the person's optional public My Vibe label.
+  // SOGIE identity fields never rank, exclude, or penalize anyone.
   if (
     userPrefs.applyGenderExpressionFilter &&
-    userPrefs.preferredGenderExpressions &&
-    userPrefs.preferredGenderExpressions.length > 0 &&
-    !userPrefs.preferredGenderExpressions.includes('Any / No preference')
+    userPrefs.preferredGenderExpressions?.length &&
+    !userPrefs.preferredGenderExpressions.includes('Any / No preference') &&
+    partner.myVibe
   ) {
-    const preferredSet = new Set(userPrefs.preferredGenderExpressions);
-    const partnerExpressions = partner.genderExpression || [];
-
-    // "Prefer not to say" or unset does not exclude or penalize (inclusive privacy protection)
-    const hasPreferNotToSay =
-      partnerExpressions.length === 0 || partnerExpressions.includes('Prefer not to say');
-
-    if (!hasPreferNotToSay) {
-      const hasMatch = partnerExpressions.some((expr) => preferredSet.has(expr));
-      if (hasMatch) {
-        score += 25; // boost partner matching chosen filter
-      } else {
-        score -= 20; // lower priority relative to matched partners
-      }
-    }
+    if (userPrefs.preferredGenderExpressions.includes(partner.myVibe)) score += 25;
+    else score -= 20;
   }
 
   return Math.min(Math.max(score, 10), 100);
