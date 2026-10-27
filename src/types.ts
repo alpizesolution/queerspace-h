@@ -4,6 +4,10 @@ export type Intention = 'friendship' | 'dating' | 'casual' | 'deep_talk' | 'open
 
 export type GenderExpressionOption =
   | 'Femme'
+  | 'Hyperfemme'
+  | 'Softmasc'
+  | 'Masc'
+  | 'Tomboy'
   | 'Soft Masc'
   | 'Hard Masc'
   | 'Andro'
@@ -37,6 +41,14 @@ export interface UserPreferences {
   preferredGenderExpressions?: string[];
   locationSelection?: string[];
   applyLocationFilter?: boolean;
+  /** ISO date (YYYY-MM-DD), stored only in private settings. */
+  birthDate?: string;
+  /** Short optional public introduction, limited to 160 characters. */
+  aboutMe?: string;
+  /** Self-selected public presentation label. */
+  myVibe?: string;
+  /** True only after the member explicitly saves their profile. */
+  profileComplete?: boolean;
   /** Self-declared age (18-99). Kept on this device and in the live queue, never on the public profile. */
   age?: number;
   /** Only match people whose age is within ageMin-ageMax (and who fit theirs). */
@@ -56,6 +68,8 @@ export interface PartnerProfile {
   region: string;
   location?: string;
   bioSnippet?: string;
+  aboutMe?: string;
+  myVibe?: string;
   avatarColor: string;
   avatar?: string;
   status?: PartnerStatus;
