@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Check, Inbox, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { auth, isFirebaseConfigured } from '../lib/firebase.ts';
+import { ConfirmDialog } from './Sheet.tsx';
 
 type SignalInvitation = {
   id: string;
@@ -72,6 +73,7 @@ export const SignalsView: React.FC = () => {
   const [invitationActionId, setInvitationActionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [endingId, setEndingId] = useState<string | null>(null);
+  const [pairToEnd, setPairToEnd] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -273,7 +275,7 @@ export const SignalsView: React.FC = () => {
                   <div className="mt-4 flex justify-end border-t border-line pt-3">
                     <button
                       type="button"
-                      onClick={() => void endPair(pair.id)}
+                      onClick={() => setPairToEnd(pair.id)}
                       disabled={endingId !== null}
                       className="rounded-full border border-line px-3.5 py-2 text-xs font-semibold text-muted transition hover:border-berry/50 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -306,6 +308,21 @@ export const SignalsView: React.FC = () => {
             </div>
           )}
         </>
+      )}
+      {pairToEnd && (
+        <ConfirmDialog
+          title="End this connection?"
+          message="This will close the mutual connection in QUEERSPACE. You can’t undo this action, and no message will be sent to the other person."
+          confirmLabel={endingId === pairToEnd ? 'Ending…' : 'End connection'}
+          cancelLabel="Keep connection"
+          tone="danger"
+          busy={endingId === pairToEnd}
+          onCancel={() => setPairToEnd(null)}
+          onConfirm={() => {
+            const id = pairToEnd;
+            void endPair(id).then(() => setPairToEnd(null));
+          }}
+        />
       )}
     </section>
   );
