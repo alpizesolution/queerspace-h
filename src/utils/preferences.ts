@@ -20,6 +20,8 @@ export const PROFILE_KEYS = [
   'genderIdentityCustom',
   'genderExpression',
   'showGenderExpressionOnProfile',
+  'showSexualOrientationOnProfile',
+  'showGenderIdentityOnProfile',
   'showSogieOnProfile',
   'showLocationOnProfile',
 ] as const satisfies readonly (keyof UserPreferences)[];
