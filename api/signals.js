@@ -27,16 +27,6 @@ function idempotencyDocId(uid, key) {
   return createHash('sha256').update(uid + ':' + key).digest('hex');
 }
 
-async function isBlocked(db, a, b) {
-  const [aSettings, bSettings] = await Promise.all([
-    db.doc(`users/${a}/private/settings`).get(),
-    db.doc(`users/${b}/private/settings`).get(),
-  ]);
-  const aBlocked = aSettings.data()?.blockedPartnerIds;
-  const bBlocked = bSettings.data()?.blockedPartnerIds;
-  return (Array.isArray(aBlocked) && aBlocked.includes(b))
-    || (Array.isArray(bBlocked) && bBlocked.includes(a));
-}
 
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
