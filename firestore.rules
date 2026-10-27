@@ -162,7 +162,7 @@ service cloud.firestore {
         && hasNoPrivilegedFields()
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.keys().hasOnly([
-             'exactLocation', 'sexualOrientation', 'genderExpression', 
+             'exactLocation', 'sexualOrientation', 'genderIdentity', 'genderExpression', 
              'preferredGenderExpressions', 'birthDate', 'blockedPartnerIds', 'createdAt', 'updatedAt'
            ])
         && request.resource.data.updatedAt is timestamp
