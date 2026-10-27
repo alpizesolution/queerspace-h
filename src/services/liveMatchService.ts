@@ -143,10 +143,9 @@ export function queueMatchFields(prefs: Partial<UserPreferences>): QueueMatchPre
   if (areas.length && prefs.showLocationOnProfile !== false) fields.areas = areas;
   if (areas.length && prefs.applyLocationFilter) fields.wantAreas = areas;
 
-  const expr = prefs.genderExpression ?? [];
-  if (expr.length && !expr.includes('Prefer not to say') && prefs.showGenderExpressionOnProfile !== false) {
-    fields.expr = expr.slice(0, MAX_QUEUE_LIST);
-  }
+  // My Type compares against the member's explicitly chosen public My Vibe label.
+  // SOGIE identity fields are never used as matching criteria.
+  if (prefs.myVibe?.trim()) fields.expr = [prefs.myVibe.trim().slice(0, 24)];
   const wantExpr = prefs.preferredGenderExpressions ?? [];
   if (prefs.applyGenderExpressionFilter && wantExpr.length && !wantExpr.includes('Any / No preference')) {
     fields.wantExpr = wantExpr.slice(0, MAX_QUEUE_LIST);
