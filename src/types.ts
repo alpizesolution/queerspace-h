@@ -34,6 +34,9 @@ export interface UserPreferences {
   genderExpression?: GenderExpressionOption[];
   // Privacy & visibility controls
   showGenderExpressionOnProfile?: boolean;
+  showSexualOrientationOnProfile?: boolean;
+  showGenderIdentityOnProfile?: boolean;
+  /** Legacy all-SOGIE visibility switch, retained for old saved profiles. */
   showSogieOnProfile?: boolean;
   showLocationOnProfile?: boolean;
   // Matching discovery preferences (optional)
@@ -79,6 +82,8 @@ export interface PartnerProfile {
   genderIdentity?: string;
   genderExpression?: GenderExpressionOption[];
   showGenderExpressionOnProfile?: boolean;
+  showSexualOrientationOnProfile?: boolean;
+  showGenderIdentityOnProfile?: boolean;
   showSogieOnProfile?: boolean;
   showLocationOnProfile?: boolean;
 }
