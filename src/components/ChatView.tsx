@@ -525,16 +525,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
             Looking for <span className="text-muted font-medium">{INTENTION_LABELS[partner.intention] ?? partner.intention}</span>
             {partner.topics.length > 0 && <> · {partner.topics.slice(0, 2).join(', ')}</>}
           </p>
-          {(visibleExpressions.length > 0 || visibleOrientation) && (
+          {(partner.myVibe || visibleExpressions.length > 0 || visibleOrientation) && (
             <div className="flex flex-wrap justify-center gap-1.5">
-              {visibleExpressions.map((expr) => (
-                <span key={expr} className="tag">
-                  {expr}
-                </span>
-              ))}
+              {partner.myVibe && <span className="tag">{partner.myVibe}</span>}
+              {visibleExpressions.map((expr) => <span key={expr} className="tag">{expr}</span>)}
               {visibleOrientation && <span className="tag">{visibleOrientation}</span>}
             </div>
           )}
+          {partner.aboutMe && <p className="mx-auto max-w-md text-sm text-muted leading-relaxed px-4">{partner.aboutMe}</p>}
         </div>
 
         <div className="space-y-1.5">
