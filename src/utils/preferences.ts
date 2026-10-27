@@ -10,6 +10,8 @@ import { UserPreferences } from '../types.ts';
 export const PROFILE_KEYS = [
   'displayName',
   'avatar',
+  'aboutMe',
+  'myVibe',
   'pronouns',
   'customPronouns',
   'sexualOrientation',
