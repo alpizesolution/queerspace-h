@@ -50,11 +50,6 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     const recipient = (await signInAnonymously(clientAuth)).user;
     const outsider = (await signInAnonymously(clientAuth)).user;
 
-    // Initialize the API's server SDK only in emulator mode; never use production credentials.
-    const adminApp = getAdminApps().find(app => app.options.projectId === projectId);
-    assert.ok(adminApp, 'Signals API should initialize its Firebase Admin app against the emulator project');
-    const db = getFirestore(adminApp);
-
     const key = `signals-test-${Date.now()}-create`;
     const created = await callApi(sender, 'POST', {
       action: 'create',
@@ -65,6 +60,11 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     assert.equal(created.statusCode, 201);
     assert.equal(created.body.replayed, false);
     assert.ok(created.body.invitationId);
+
+    // The first API request initializes its Admin SDK in emulator mode; never use production credentials.
+    const adminApp = getAdminApps().find(app => app.options.projectId === projectId);
+    assert.ok(adminApp, 'Signals API should initialize its Firebase Admin app against the emulator project');
+    const db = getFirestore(adminApp);
 
     const retry = await callApi(sender, 'POST', {
       action: 'create',
