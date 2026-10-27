@@ -14,7 +14,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
   const [pronouns, setPronouns] = useState(currentPrefs.customPronouns ? 'Self-described' : currentPrefs.pronouns || 'she/her');
   const [customPronouns, setCustomPronouns] = useState(currentPrefs.customPronouns || '');
   const [aboutMe, setAboutMe] = useState((currentPrefs.aboutMe || '').slice(0, 160));
-  const [myVibe, setMyVibe] = useState(currentPrefs.myVibe || '');
+  const [myVibe, setMyVibe] = useState(currentPrefs.myVibe && (MY_VIBE_OPTIONS as readonly string[]).includes(currentPrefs.myVibe) ? currentPrefs.myVibe : '');
   const [sexualOrientation, setSexualOrientation] = useState(currentPrefs.sexualOrientation || '');
   const [sexualOrientationCustom, setSexualOrientationCustom] = useState(currentPrefs.sexualOrientationCustom || '');
   const [genderIdentity, setGenderIdentity] = useState(currentPrefs.genderIdentity || '');
@@ -76,7 +76,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
         <textarea id="qs-about-me" value={aboutMe} onChange={(e) => setAboutMe(e.target.value.slice(0, 160))} maxLength={160} rows={3} placeholder="A little about your world…" className="input resize-none" aria-describedby="qs-about-hint" />
         <p id="qs-about-hint" className="mt-1.5 text-xs text-subtle">Keep it short, personal, and as anonymous as you like.</p>
       </section>
-      <section><p className="label">My Vibe <span className="font-normal text-subtle">· optional</span></p><div className="flex flex-wrap gap-2">
+      <section><p className="label">My Vibe <span className="font-normal text-subtle">· optional</span></p><p className="mb-2 text-xs text-subtle">Pick a personality or interest, not a gender label.</p><div className="flex flex-wrap gap-2">
         {MY_VIBE_OPTIONS.map((vibe) => { const selected = myVibe === vibe; return <button key={vibe} type="button" aria-pressed={selected} onClick={() => setMyVibe((current) => current === vibe ? '' : vibe)} className="chip">{selected && <Check className="w-3.5 h-3.5 text-berry" />}{vibe}</button>; })}
       </div><p className="mt-2 text-xs text-subtle">Choose the label that feels right to you, or leave it blank.</p></section>
       <section className="space-y-4 rounded-2xl border border-line p-4">
