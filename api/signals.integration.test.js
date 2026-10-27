@@ -36,19 +36,24 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
   skip: !enabled ? 'Set SIGNALS_INTEGRATION_TESTS=true to run against Firebase emulators.' : false,
 }, async () => {
   const projectId = process.env.GCLOUD_PROJECT;
-  const clientApp = initializeClientApp({
-    apiKey: 'fake-api-key',
-    authDomain: `${projectId}.firebaseapp.com`,
-    projectId,
-    appId: '1:123456789:web:signals-integration-test',
-  }, `signals-integration-${Date.now()}`);
-  const clientAuth = getAuth(clientApp);
-  connectAuthEmulator(clientAuth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  const clientApps = [];
+  async function newAnonymousUser(label) {
+    const app = initializeClientApp({
+      apiKey: 'fake-api-key',
+      authDomain: `${projectId}.firebaseapp.com`,
+      projectId,
+      appId: `1:123456789:web:signals-${label}`,
+    }, `signals-integration-${label}-${Date.now()}-${Math.random()}`);
+    clientApps.push(app);
+    const auth = getAuth(app);
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+    return (await signInAnonymously(auth)).user;
+  }
 
   try {
-    const sender = (await signInAnonymously(clientAuth)).user;
-    const recipient = (await signInAnonymously(clientAuth)).user;
-    const outsider = (await signInAnonymously(clientAuth)).user;
+    const sender = await newAnonymousUser('sender');
+    const recipient = await newAnonymousUser('recipient');
+    const outsider = await newAnonymousUser('outsider');
 
     const key = `signals-test-${Date.now()}-create`;
     const created = await callApi(sender, 'POST', {
@@ -104,8 +109,8 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     assert.deepEqual(inbox.body.invitations, []);
 
     // A recipient-side block must prevent a new invitation from being created.
-    const blockedSender = (await signInAnonymously(clientAuth)).user;
-    const blockedRecipient = (await signInAnonymously(clientAuth)).user;
+    const blockedSender = await newAnonymousUser('blocked-sender');
+    const blockedRecipient = await newAnonymousUser('blocked-recipient');
     await db.doc(`users/${blockedRecipient.uid}/private/settings`).set({
       blockedPartnerIds: [blockedSender.uid],
     });
@@ -120,6 +125,6 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
       .where('senderId', '==', blockedSender.uid).get();
     assert.equal(blockedInvites.size, 0);
   } finally {
-    await deleteApp(clientApp);
+    await Promise.all(clientApps.map(app => deleteApp(app)));
   }
 });
