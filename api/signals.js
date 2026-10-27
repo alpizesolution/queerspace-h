@@ -5,6 +5,7 @@ import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 
 const MAX_MESSAGE_LENGTH = 240;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const CREATE_COOLDOWN_MS = 30 * 1000;
 
 function getAdminApp() {
   if (getApps().length) return getApps()[0];
@@ -94,18 +95,23 @@ export default async function handler(req, res) {
       if (await isBlocked(db, uid, recipientId)) return send(res, 403, { error: 'not_allowed' });
 
       const idemRef = db.doc(`signalsIdempotency/${idempotencyDocId(uid, idempotencyKey)}`);
+      const rateRef = db.doc(`signalsRateLimits/${uid}`);
       const invitationRef = db.collection('signalsInvitations').doc(randomUUID());
       const now = Timestamp.now();
       const expiresAt = Timestamp.fromMillis(now.toMillis() + INVITE_TTL_MS);
 
       const result = await db.runTransaction(async tx => {
-        const prior = await tx.get(idemRef);
+        const [prior, rateSnap] = await Promise.all([tx.get(idemRef), tx.get(rateRef)]);
         if (prior.exists) {
           const priorData = prior.data();
           if (priorData?.action !== 'create' || priorData?.recipientId !== recipientId) {
             throw Object.assign(new Error('idempotency_conflict'), { statusCode: 409 });
           }
           return { invitationId: priorData.invitationId, replayed: true };
+        }
+        const lastCreatedAt = rateSnap.data()?.lastCreatedAt;
+        if (lastCreatedAt instanceof Timestamp && now.toMillis() - lastCreatedAt.toMillis() < CREATE_COOLDOWN_MS) {
+          throw Object.assign(new Error('rate_limited'), { statusCode: 429 });
         }
         tx.create(invitationRef, {
           senderId: uid,
@@ -116,6 +122,7 @@ export default async function handler(req, res) {
           expiresAt,
           updatedAt: FieldValue.serverTimestamp(),
         });
+        tx.set(rateRef, { lastCreatedAt: now }, { merge: true });
         tx.create(idemRef, {
           action: 'create',
           recipientId,
@@ -183,7 +190,7 @@ export default async function handler(req, res) {
     });
     return send(res, 200, result);
   } catch (error) {
-    const status = Number(error?.statusCode) || (error?.code === 'auth/id-token-revoked' || error?.code === 'auth/argument-error' ? 401 : 500);
+    const status = Number(error?.statusCode) || (typeof error?.code === 'string' && error.code.startsWith('auth/') ? 401 : 500);
     if (status === 500) console.error('[Signals API]', error);
     return send(res, status, { error: status === 500 ? 'internal_error' : (error.message || 'request_failed') });
   }
