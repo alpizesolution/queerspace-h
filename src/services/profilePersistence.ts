@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { UserPreferences } from '../types.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.ts';
@@ -24,6 +24,9 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
     intention: prefs.intention || 'open',
     region: prefs.region || 'Anywhere / Worldwide',
     topics: (prefs.topics || []).slice(0, 8),
+    aboutMe: (prefs.aboutMe || '').trim().slice(0, 160),
+    myVibe: (prefs.myVibe || '').slice(0, 24),
+    profileComplete: prefs.profileComplete === true,
     ...(isValidAvatar(prefs.avatar) ? { avatar: prefs.avatar } : {}),
     ...(typeof prefs.showGenderExpressionOnProfile === 'boolean'
       ? { showGenderExpressionOnProfile: prefs.showGenderExpressionOnProfile }
@@ -49,6 +52,7 @@ export function buildPrivateSettingsPayload(prefs: UserPreferences, blockedPartn
       prefs.sexualOrientation === 'Self-described' ? prefs.sexualOrientationCustom?.trim() || '' : prefs.sexualOrientation || '',
     genderExpression: prefs.genderExpression || [],
     preferredGenderExpressions: prefs.preferredGenderExpressions || [],
+    ...(prefs.birthDate ? { birthDate: Timestamp.fromDate(new Date(`${prefs.birthDate}T00:00:00.000Z`)) } : {}),
     blockedPartnerIds: blockedPartnerIds || [],
     updatedAt: serverTimestamp(),
   };
@@ -91,6 +95,9 @@ export function mergeCloudProfile(
   if (intention && intention in INTENTION_LABELS) merged.intention = intention as UserPreferences['intention'];
   set('region', text(publicData.region));
   set('topics', strings(publicData.topics));
+  set('aboutMe', typeof publicData.aboutMe === 'string' ? publicData.aboutMe.slice(0, 160) : undefined);
+  set('myVibe', text(publicData.myVibe));
+  set('profileComplete', flag(publicData.profileComplete));
   set('showGenderExpressionOnProfile', flag(publicData.showGenderExpressionOnProfile));
   set('showSogieOnProfile', flag(publicData.showSogieOnProfile));
   set('showLocationOnProfile', flag(publicData.showLocationOnProfile));
@@ -108,7 +115,9 @@ export function mergeCloudProfile(
   const expression = strings(privateData.genderExpression);
   if (expression?.length) merged.genderExpression = expression as UserPreferences['genderExpression'];
   const preferred = strings(privateData.preferredGenderExpressions);
-  if (preferred?.length) merged.preferredGenderExpressions = preferred;
+  if (preferred) merged.preferredGenderExpressions = preferred;
+  const birthDate = privateData.birthDate;
+  if (birthDate instanceof Timestamp) merged.birthDate = birthDate.toDate().toISOString().slice(0, 10);
   const area = text(privateData.exactLocation);
   if (area && !local.locationSelection?.length) merged.locationSelection = [area];
 
