@@ -49,6 +49,32 @@ export default async function handler(req, res) {
     const uid = decoded.uid;
     const db = getFirestore(app);
     if (req.method === 'GET') {
+      const view = req.query?.view || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('view');
+      if (view === 'pairs') {
+        const pairSnapshots = await Promise.all([
+          db.collection('signalsPairs').where('participants', 'array-contains', uid).limit(100).get(),
+        ]);
+        const pairs = pairSnapshots[0].docs
+          .map(snap => ({ id: snap.id, ...snap.data() }))
+          .filter(pair => Array.isArray(pair.participants)
+            && pair.participants.includes(uid)
+            && ['active', 'ended'].includes(pair.status))
+          .sort((a, b) => {
+            const aTime = a.createdAt?.toMillis?.() || 0;
+            const bTime = b.createdAt?.toMillis?.() || 0;
+            return bTime - aTime;
+          })
+          .map(pair => ({
+            id: pair.id,
+            invitationId: pair.invitationId || pair.id,
+            participants: pair.participants,
+            status: pair.status,
+            createdAt: pair.createdAt?.toDate?.().toISOString?.() || null,
+            endedAt: pair.endedAt?.toDate?.().toISOString?.() || null,
+            endedBy: pair.endedBy || null,
+          }));
+        return send(res, 200, { pairs });
+      }
       const [received, sent] = await Promise.all([
         db.collection('signalsInvitations').where('recipientId', '==', uid).limit(50).get(),
         db.collection('signalsInvitations').where('senderId', '==', uid).limit(50).get(),
@@ -136,6 +162,32 @@ export default async function handler(req, res) {
         return { invitationId: invitationRef.id, replayed: false };
       });
       return send(res, result.replayed ? 200 : 201, result);
+    }
+
+    if (action === 'end') {
+      const pairId = req.body?.pairId;
+      if (!safeId(pairId)) return send(res, 400, { error: 'invalid_request' });
+      const pairRef = db.doc(`signalsPairs/${pairId}`);
+      const result = await db.runTransaction(async tx => {
+        const pairSnap = await tx.get(pairRef);
+        if (!pairSnap.exists) throw Object.assign(new Error('pair_not_found'), { statusCode: 404 });
+        const pair = pairSnap.data();
+        if (!Array.isArray(pair.participants) || !pair.participants.includes(uid)) {
+          throw Object.assign(new Error('not_allowed'), { statusCode: 403 });
+        }
+        if (pair.status === 'ended') return { status: 'ended', alreadyEnded: true };
+        if (pair.status !== 'active') {
+          throw Object.assign(new Error('pair_not_active'), { statusCode: 409 });
+        }
+        tx.update(pairRef, {
+          status: 'ended',
+          endedBy: uid,
+          endedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        return { status: 'ended', alreadyEnded: false };
+      });
+      return send(res, 200, result);
     }
 
     if (!['accept', 'decline', 'revoke'].includes(action) || !safeId(invitationId)) {
