@@ -19,7 +19,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
   const [sexualOrientationCustom, setSexualOrientationCustom] = useState(currentPrefs.sexualOrientationCustom || '');
   const [genderIdentity, setGenderIdentity] = useState(currentPrefs.genderIdentity || '');
   const [genderIdentityCustom, setGenderIdentityCustom] = useState(currentPrefs.genderIdentityCustom || '');
-  const [genderExpression, setGenderExpression] = useState<string[]>(currentPrefs.genderExpression || []);
+  const [genderExpression, setGenderExpression] = useState<string[]>((currentPrefs.genderExpression || []).slice(0, 2));
   const [genderExpressionSearch, setGenderExpressionSearch] = useState('');
   const [showSexualOrientation, setShowSexualOrientation] = useState(currentPrefs.showSexualOrientationOnProfile ?? false);
   const [showGenderIdentity, setShowGenderIdentity] = useState(currentPrefs.showGenderIdentityOnProfile ?? false);
@@ -103,7 +103,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
             <p className="label !mb-0">Gender expression <span className="font-normal text-subtle">· optional</span></p>
             <span className="text-xs text-subtle tabular-nums">{genderExpression.length} selected</span>
           </div>
-          <p className="text-xs text-subtle">Choose any labels that feel right. You can select more than one.</p>
+          <p className="text-xs text-subtle">Choose up to 2 labels that best describe your gender presentation.</p>
           <input
             type="search"
             value={genderExpressionSearch}
@@ -117,7 +117,9 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
               const selected = genderExpression.includes(value);
               return <button key={value} type="button" aria-pressed={selected} onClick={() => setGenderExpression((old) => {
                 if (value === 'Prefer not to say') return old.includes(value) ? [] : [value];
-                return selected ? old.filter((v) => v !== value) : [...old.filter((v) => v !== 'Prefer not to say'), value];
+                if (selected) return old.filter((v) => v !== value);
+                if (old.length >= 2) return old;
+                return [...old.filter((v) => v !== 'Prefer not to say'), value];
               })} className="chip">{selected && <Check className="w-3.5 h-3.5 text-berry" />}{value}</button>;
             })}
             {GENDER_EXPRESSIONS.filter((value) => value.toLowerCase().includes(genderExpressionSearch.trim().toLowerCase())).length === 0 && <p className="w-full py-2 text-sm text-subtle">No matching options.</p>}
