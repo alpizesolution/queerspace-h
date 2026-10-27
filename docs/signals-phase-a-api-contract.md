@@ -17,10 +17,12 @@ All requests go to `/api/signals` and must include:
 The token is verified server-side, including revocation checks. User identity is derived from the verified token.
 
 - `GET /api/signals`: returns up to 50 sent and 50 received invitations for the authenticated user.
+- `GET /api/signals?view=pairs`: returns active and ended pair records in which the authenticated user is a participant. The server filters membership before returning pair summaries.
 - `POST /api/signals` with `{ "action": "create", "recipientId": "...", "idempotencyKey": "...", "message": "..." }`: creates a pending invitation with a seven-day expiry. Message is optional and capped at 240 characters. Reuse the same idempotency key only for retries of the same create operation.
 - `POST /api/signals` with `{ "action": "accept", "invitationId": "..." }`: recipient-only acceptance; creates a server-managed pair.
 - `POST /api/signals` with `{ "action": "decline", "invitationId": "..." }`: recipient-only decline.
 - `POST /api/signals` with `{ "action": "revoke", "invitationId": "..." }`: sender-only revocation.
+- `POST /api/signals` with `{ "action": "end", "pairId": "..." }`: either participant can end an active pair. Repeating the request for an already-ended pair returns `{ "status": "ended", "alreadyEnded": true }`.
 
 ## Important limits before launch
 
