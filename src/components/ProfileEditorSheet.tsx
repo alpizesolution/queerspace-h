@@ -4,7 +4,7 @@ import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { Sheet } from './Sheet.tsx';
 import { isValidAvatar, randomAvatar } from '../utils/avatar.ts';
 import { UserPreferences } from '../types.ts';
-import { MY_VIBE_OPTIONS, PRONOUN_OPTIONS, generateSapphicPseudonym } from '../utils/matching-logic.ts';
+import { MY_VIBE_OPTIONS, PRONOUN_OPTIONS, SEXUAL_ORIENTATIONS, GENDER_IDENTITIES, GENDER_EXPRESSIONS, generateSapphicPseudonym } from '../utils/matching-logic.ts';
 import { ProfileFields } from '../utils/preferences.ts';
 interface ProfileEditorSheetProps { currentPrefs: UserPreferences; onClose: () => void; onSave: (profile: ProfileFields) => void; }
 /** Anonymous profile: a pseudonym and illustrated avatar, never a required photo or real name. */
@@ -14,7 +14,15 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
   const [pronouns, setPronouns] = useState(currentPrefs.customPronouns ? 'Self-described' : currentPrefs.pronouns || 'she/her');
   const [customPronouns, setCustomPronouns] = useState(currentPrefs.customPronouns || '');
   const [aboutMe, setAboutMe] = useState((currentPrefs.aboutMe || '').slice(0, 160));
-  const [myVibe, setMyVibe] = useState(currentPrefs.myVibe || currentPrefs.genderExpression?.[0] || '');
+  const [myVibe, setMyVibe] = useState(currentPrefs.myVibe || '');
+  const [sexualOrientation, setSexualOrientation] = useState(currentPrefs.sexualOrientation || '');
+  const [sexualOrientationCustom, setSexualOrientationCustom] = useState(currentPrefs.sexualOrientationCustom || '');
+  const [genderIdentity, setGenderIdentity] = useState(currentPrefs.genderIdentity || '');
+  const [genderIdentityCustom, setGenderIdentityCustom] = useState(currentPrefs.genderIdentityCustom || '');
+  const [genderExpression, setGenderExpression] = useState<string[]>(currentPrefs.genderExpression || []);
+  const [showSexualOrientation, setShowSexualOrientation] = useState(currentPrefs.showSexualOrientationOnProfile ?? false);
+  const [showGenderIdentity, setShowGenderIdentity] = useState(currentPrefs.showGenderIdentityOnProfile ?? false);
+  const [showGenderExpression, setShowGenderExpression] = useState(currentPrefs.showGenderExpressionOnProfile ?? false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const handleSubmit = () => {
     const name = displayName.trim();
@@ -23,9 +31,15 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
       displayName: name || 'Sapphic Guest', avatar, pronouns: pronounValue || 'she/her',
       customPronouns: pronouns === 'Self-described' ? customPronouns.trim() || undefined : undefined,
       aboutMe: aboutMe.trim().slice(0, 160), myVibe: myVibe || undefined,
-      genderExpression: myVibe ? [myVibe as NonNullable<UserPreferences['genderExpression']>[number]] : undefined,
-      sexualOrientation: undefined, sexualOrientationCustom: undefined, genderIdentity: undefined, genderIdentityCustom: undefined,
-      showGenderExpressionOnProfile: true, showSogieOnProfile: false,
+      sexualOrientation: sexualOrientation || undefined,
+      sexualOrientationCustom: sexualOrientation === 'Self-described' ? sexualOrientationCustom.trim() || undefined : undefined,
+      genderIdentity: genderIdentity || undefined,
+      genderIdentityCustom: genderIdentity === 'Self-described' ? genderIdentityCustom.trim() || undefined : undefined,
+      genderExpression: genderExpression as NonNullable<UserPreferences['genderExpression']>,
+      showSexualOrientationOnProfile: showSexualOrientation,
+      showGenderIdentityOnProfile: showGenderIdentity,
+      showGenderExpressionOnProfile: showGenderExpression,
+      showSogieOnProfile: showSexualOrientation || showGenderIdentity || showGenderExpression,
       showLocationOnProfile: currentPrefs.showLocationOnProfile ?? true,
     };
     const validation: Record<string, string> = {};
@@ -65,6 +79,31 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
       <section><p className="label">My Vibe <span className="font-normal text-subtle">· optional</span></p><div className="flex flex-wrap gap-2">
         {MY_VIBE_OPTIONS.map((vibe) => { const selected = myVibe === vibe; return <button key={vibe} type="button" aria-pressed={selected} onClick={() => setMyVibe((current) => current === vibe ? '' : vibe)} className="chip">{selected && <Check className="w-3.5 h-3.5 text-berry" />}{vibe}</button>; })}
       </div><p className="mt-2 text-xs text-subtle">Choose the label that feels right to you, or leave it blank.</p></section>
+      <section className="space-y-4 rounded-2xl border border-line p-4">
+        <div><p className="label !mb-1">SOGIE <span className="font-normal text-subtle">· optional</span></p><p className="text-xs text-subtle">Share only what feels comfortable. Each field has its own visibility switch and is hidden by default.</p></div>
+        <div className="space-y-2">
+          <label className="label" htmlFor="qs-orientation">Sexual orientation</label>
+          <select id="qs-orientation" value={sexualOrientation} onChange={(e) => setSexualOrientation(e.target.value)} className="input">
+            <option value="">Prefer not to share</option>{SEXUAL_ORIENTATIONS.filter((v) => v !== 'Prefer not to say').map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+          {sexualOrientation === 'Self-described' && <input value={sexualOrientationCustom} onChange={(e) => setSexualOrientationCustom(e.target.value.slice(0, 40))} maxLength={40} placeholder="Describe in your own words" aria-label="Self-described sexual orientation" className="input" />}
+          <label className="flex items-center justify-between gap-3 text-sm"><span>Show sexual orientation on my profile</span><input type="checkbox" className="check" checked={showSexualOrientation} onChange={(e) => setShowSexualOrientation(e.target.checked && Boolean(sexualOrientation))} disabled={!sexualOrientation} /></label>
+        </div>
+        <div className="space-y-2">
+          <label className="label" htmlFor="qs-gender-identity">Gender identity</label>
+          <select id="qs-gender-identity" value={genderIdentity} onChange={(e) => setGenderIdentity(e.target.value)} className="input">
+            <option value="">Prefer not to share</option>{GENDER_IDENTITIES.filter((v) => v !== 'Prefer not to say').map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+          {genderIdentity === 'Self-described' && <input value={genderIdentityCustom} onChange={(e) => setGenderIdentityCustom(e.target.value.slice(0, 40))} maxLength={40} placeholder="Describe in your own words" aria-label="Self-described gender identity" className="input" />}
+          <label className="flex items-center justify-between gap-3 text-sm"><span>Show gender identity on my profile</span><input type="checkbox" className="check" checked={showGenderIdentity} onChange={(e) => setShowGenderIdentity(e.target.checked && Boolean(genderIdentity))} disabled={!genderIdentity} /></label>
+        </div>
+        <div className="space-y-2">
+          <p className="label">Gender expression</p><div className="flex flex-wrap gap-2">
+            {GENDER_EXPRESSIONS.filter((v) => v !== 'Prefer not to say').map((value) => { const selected = genderExpression.includes(value); return <button key={value} type="button" aria-pressed={selected} onClick={() => setGenderExpression((old) => selected ? old.filter((v) => v !== value) : [...old, value])} className="chip">{selected && <Check className="w-3.5 h-3.5 text-berry" />}{value}</button>; })}
+          </div>
+          <label className="flex items-center justify-between gap-3 text-sm"><span>Show gender expression on my profile</span><input type="checkbox" className="check" checked={showGenderExpression} onChange={(e) => setShowGenderExpression(e.target.checked && genderExpression.length > 0)} disabled={!genderExpression.length} /></label>
+        </div>
+      </section>
       <p className="text-xs text-subtle">Your birthday and My Type preferences stay private. You never need to share your real name or photo.</p>
     </div>
   </Sheet>;
