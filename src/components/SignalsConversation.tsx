@@ -1,5 +1,5 @@
 import React, { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, LoaderCircle, MessageCircle, RefreshCw, Send, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, LoaderCircle, MessageCircle, RefreshCw, Reply, Send, ShieldCheck, X } from 'lucide-react';
 import { auth } from '../lib/firebase.ts';
 
 type SignalMessage = {
@@ -7,6 +7,8 @@ type SignalMessage = {
   senderId: string;
   text: string;
   createdAt: string | null;
+  replyTo?: { messageId: string; senderId: string; text: string } | null;
+  reactions?: { emoji: string; count: number; userReacted: boolean }[];
 };
 
 type SignalsConversationProps = {
@@ -55,6 +57,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<SignalMessage | null>(null);
+  const [reactingId, setReactingId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const userId = auth?.currentUser?.uid;
@@ -94,19 +98,42 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     setSending(true);
     setError(null);
     try {
+      const reply = replyingTo;
       const result = await request<SignalMessage>('/api/signals', {
         action: 'send-message',
         pairId,
         text,
+        ...(reply ? {
+          replyTo: {
+            messageId: reply.id,
+            text: reply.text,
+            sender: reply.senderId === userId ? 'self' : 'partner',
+          },
+        } : {}),
       });
       setMessages((current) => current.some((item) => item.id === result.id) ? current : [...current, result]);
       setDraft('');
+      setReplyingTo(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Message could not be sent.';
       if (message.toLowerCase().includes('ended')) setEnded(true);
       setError(message);
     } finally {
       setSending(false);
+    }
+  };
+
+  const toggleReaction = async (message: SignalMessage, emoji: string) => {
+    if (reactingId || ended) return;
+    setReactingId(message.id);
+    setError(null);
+    try {
+      await request('/api/signals', { action: 'react-message', pairId, messageId: message.id, emoji });
+      await loadMessages(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update reaction.');
+    } finally {
+      setReactingId(null);
     }
   };
 
@@ -149,9 +176,30 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
             const mine = message.senderId === userId;
             return (
               <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 sm:max-w-[78%] ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}>
-                  <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.text}</p>
-                  {message.createdAt && <p className={`mt-1 text-right text-[10px] ${mine ? 'text-ink/70' : 'text-subtle'}`}>{formatTime(message.createdAt)}</p>}
+                <div className={`max-w-[88%] sm:max-w-[80%] ${mine ? 'text-right' : 'text-left'}`}>
+                  <div className={`rounded-2xl px-3.5 py-2.5 text-left ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}>
+                    {message.replyTo && (
+                      <div className={`mb-2 rounded-lg border-l-2 px-2 py-1 text-left text-[11px] ${mine ? 'border-ink/40 bg-ink/10 text-ink/80' : 'border-lavender bg-surface/70 text-muted'}`}>
+                        <p className="font-semibold">{message.replyTo.senderId === userId ? 'You replied to yourself' : message.replyTo.senderId === message.senderId ? 'Reply to your message' : 'Replying to a message'}</p>
+                        <p className="truncate">{message.replyTo.text}</p>
+                      </div>
+                    )}
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.text}</p>
+                    {message.createdAt && <p className={`mt-1 text-right text-[10px] ${mine ? 'text-ink/70' : 'text-subtle'}`}>{formatTime(message.createdAt)}</p>}
+                  </div>
+                  <div className={`mt-1 flex flex-wrap items-center gap-1.5 ${mine ? 'justify-end' : 'justify-start'}`}>
+                    {(message.reactions || []).map((reaction) => (
+                      <button key={reaction.emoji} type="button" onClick={() => void toggleReaction(message, reaction.emoji)} disabled={reactingId === message.id} aria-label={`${reaction.emoji} reaction, ${reaction.count} total`} className={`rounded-full border px-2 py-0.5 text-xs transition ${reaction.userReacted ? 'border-berry/60 bg-plum/40' : 'border-line bg-raised/70'} disabled:opacity-50`}>
+                        {reaction.emoji} {reaction.count}
+                      </button>
+                    ))}
+                    <button type="button" onClick={() => setReplyingTo(message)} aria-label="Reply to message" className="rounded-full px-2 py-1 text-[10px] text-muted transition hover:bg-raised hover:text-fg">
+                      <Reply className="inline h-3 w-3" /> Reply
+                    </button>
+                    {['💜', '🥹', '😂', '✨'].map((emoji) => (
+                      <button key={emoji} type="button" onClick={() => void toggleReaction(message, emoji)} disabled={reactingId === message.id} aria-label={`React with ${emoji}`} className="rounded-full px-1 py-0.5 text-xs opacity-70 transition hover:bg-raised hover:opacity-100 disabled:opacity-40">{emoji}</button>
+                    ))}
+                  </div>
                 </div>
               </div>
             );
@@ -173,6 +221,16 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
           <button type="button" onClick={onBack} className="ml-2 font-semibold text-berry underline underline-offset-4">Back to Signals</button>
         </div>
       ) : (
+        {replyingTo && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-raised/70 px-3 py-2">
+            <Reply className="h-4 w-4 shrink-0 text-lavender" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold text-muted">Replying to {replyingTo.senderId === userId ? 'your message' : 'their message'}</p>
+              <p className="truncate text-xs text-fg">{replyingTo.text}</p>
+            </div>
+            <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancel reply" className="rounded-full p-1 text-muted hover:text-fg"><X className="h-4 w-4" /></button>
+          </div>
+        )}
         <form onSubmit={sendMessage} className="mt-3 flex items-end gap-2">
           <label className="sr-only" htmlFor="signals-message">Your message</label>
           <textarea
