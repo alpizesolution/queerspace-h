@@ -27,6 +27,8 @@ import { hasUnreadSupportReply } from './services/supportService.ts';
 import { getMySuspension } from './services/suspensionService.ts';
 import { SuspendedNotice } from './components/SuspendedNotice.tsx';
 import { CheckCircle2 } from 'lucide-react';
+import { AgeEligibilityGate } from './components/AgeEligibilityGate.tsx';
+import { calculateAge, isAdultBirthDate } from './utils/ageEligibility.ts';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 
 export default function App() {
@@ -76,6 +78,9 @@ export default function App() {
     };
   });
 
+  const [ageGateOpen, setAgeGateOpen] = useState(() => !isAdultBirthDate(userPrefs.birthDate));
+  const [ageRestricted, setAgeRestricted] = useState(() => getStorageItem('queerspace_age_restricted') === 'true');
+
   // Initialize anonymous auth session on startup and restore cloud profile if available
   useEffect(() => {
     if (isFirebaseConfigured) {
@@ -85,6 +90,8 @@ export default function App() {
             loadAnonymousProfile().then((res) => {
               if (!res.fromCloudSuccess) return;
               setUserPrefs(res.prefs);
+              setAgeGateOpen(!isAdultBirthDate(res.prefs.birthDate));
+              setAgeRestricted(false);
               cloudSignatureRef.current = cloudProfileSignature(res.prefs, res.blockedPartnerIds ?? []);
               // Never shrink the blocklist: keep this device's blocks and add any saved in the cloud.
               const cloudBlocked = res.blockedPartnerIds ?? [];
@@ -141,7 +148,7 @@ export default function App() {
 
   // Profile and filters are saved separately: each only replaces its own fields.
   const handleSaveProfile = async (profile: ProfileFields) => {
-    const next = applyProfile(userPrefs, profile);
+    const next = { ...applyProfile(userPrefs, profile), profileComplete: true };
     setUserPrefs(next);
     setProfileOpen(false);
     const { feedback, cloudChanged } = await persistPrefs(next);
@@ -149,6 +156,8 @@ export default function App() {
   };
 
   const handleOpenSetup = (mode: 'quick' | 'custom' = 'quick') => {
+    if (!isAdultBirthDate(userPrefs.birthDate)) { setAgeGateOpen(true); return; }
+    if (userPrefs.profileComplete !== true) { setProfileOpen(true); showToast('Save your anonymous profile before matching.'); return; }
     if (suspended) {
       showToast('Matching is paused on this account while the team reviews a report.');
       return;
@@ -168,6 +177,11 @@ export default function App() {
   };
 
   const handleStartMatching = async (mode: 'quick' | 'custom', filters: FilterFields) => {
+    if (!isAdultBirthDate(userPrefs.birthDate) || userPrefs.profileComplete !== true) {
+      setSetupModalOpen(false);
+      if (!isAdultBirthDate(userPrefs.birthDate)) setAgeGateOpen(true); else setProfileOpen(true);
+      return;
+    }
     // Quick only changes how this search runs; the saved Custom filters are kept as chosen.
     const next = applyFilters(userPrefs, filters);
     setUserPrefs(next);
@@ -251,6 +265,20 @@ export default function App() {
       }`}
     >
       <FloatingCatsBackground />
+
+      {(ageGateOpen || (ageRestricted && !supportOpen)) && (
+        <AgeEligibilityGate initialBirthDate={userPrefs.birthDate} restricted={ageRestricted}
+          onSubmit={async (birthDate) => {
+            const age = calculateAge(birthDate);
+            if (age === null || age < 18) { setAgeRestricted(true); setAgeGateOpen(true); setStorageItem('queerspace_age_restricted', 'true'); return; }
+            const next = { ...userPrefs, birthDate, age, profileComplete: userPrefs.profileComplete === true };
+            setUserPrefs(next); setAgeRestricted(false); setStorageItem('queerspace_age_restricted', 'false');
+            const { feedback } = await persistPrefs(next);
+            if (!feedback.savedToCloud && isFirebaseConfigured) showToast('Birthday saved on this device. Cloud sync needs attention.');
+            setAgeGateOpen(false);
+          }}
+          onContactSupport={() => { setAgeGateOpen(false); openSupport(); }} />
+      )}
 
       {toastMessage && (
         <div
@@ -362,7 +390,7 @@ export default function App() {
         />
       )}
 
-      {profileOpen && (
+      {profileOpen && !ageGateOpen && !ageRestricted && (
         <ProfileEditorSheet currentPrefs={userPrefs} onClose={() => setProfileOpen(false)} onSave={handleSaveProfile} />
       )}
 
