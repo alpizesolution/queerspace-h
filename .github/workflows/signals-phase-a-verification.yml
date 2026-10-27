@@ -1,0 +1,50 @@
+name: Signals Phase A verification
+
+on:
+  push:
+    branches:
+      - signals-phase-a-review-ui
+  pull_request:
+    branches:
+      - signals-phase-a-review-ui
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signals-phase-a-verification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Set up Java for Firebase Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies from bun.lock
+        run: bun install --frozen-lockfile
+
+      - name: Run unit and API tests
+        run: bun run test
+
+      - name: TypeScript check
+        run: bun run lint
+
+      - name: Production build
+        run: bun run build
+
+      - name: Firestore security rules tests
+        run: bunx firebase emulators:exec --only firestore "bunx tsx --test test/firestore-rules.test.ts"
