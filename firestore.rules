@@ -183,7 +183,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
              'displayName', 'pronouns', 'intention', 'topics', 
              'region', 'showGenderExpressionOnProfile', 'showSogieOnProfile', 
-             'showLocationOnProfile', 'avatar', 'aboutMe', 'myVibe', 'profileComplete', 'createdAt', 'updatedAt'
+             'showLocationOnProfile', 'avatar', 'aboutMe', 'myVibe', 'profileComplete', 'age', 'createdAt', 'updatedAt'
            ])
         // createdAt marks when someone joined: set once to "now", then never changed.
         && (resource != null && 'createdAt' in resource.data
@@ -204,6 +204,7 @@ service cloud.firestore {
         && (!('aboutMe' in request.resource.data) || (request.resource.data.aboutMe is string && request.resource.data.aboutMe.size() <= 160))
         && (!('myVibe' in request.resource.data) || (request.resource.data.myVibe is string && request.resource.data.myVibe.size() <= 24))
         && (!('profileComplete' in request.resource.data) || request.resource.data.profileComplete is bool)
+        && (!('age' in request.resource.data) || (request.resource.data.age is int && request.resource.data.age >= 18 && request.resource.data.age <= 99))
         && request.resource.data.updatedAt is timestamp;
 
       allow delete: if false;
