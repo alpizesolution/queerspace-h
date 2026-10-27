@@ -1,6 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { Check, Inbox, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { auth, isFirebaseConfigured } from '../lib/firebase.ts';
+
+type SignalInvitation = {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  message: string;
+  status: 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
+  createdAt: string | null;
+  expiresAt: string | null;
+  direction: 'sent' | 'received';
+};
 
 type SignalPair = {
   id: string;
@@ -57,6 +68,8 @@ function formatDate(value: string | null): string {
 
 export const SignalsView: React.FC = () => {
   const [pairs, setPairs] = useState<SignalPair[]>([]);
+  const [invitations, setInvitations] = useState<SignalInvitation[]>([]);
+  const [invitationActionId, setInvitationActionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [endingId, setEndingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,8 +84,12 @@ export const SignalsView: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await signalsRequest<{ pairs: SignalPair[] }>('/api/signals?view=pairs');
-      setPairs(Array.isArray(result.pairs) ? result.pairs : []);
+      const [pairResult, invitationResult] = await Promise.all([
+        signalsRequest<{ pairs: SignalPair[] }>('/api/signals?view=pairs'),
+        signalsRequest<{ invitations: SignalInvitation[] }>('/api/signals'),
+      ]);
+      setPairs(Array.isArray(pairResult.pairs) ? pairResult.pairs : []);
+      setInvitations(Array.isArray(invitationResult.invitations) ? invitationResult.invitations : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load your connections.');
     } finally {
@@ -104,6 +121,32 @@ export const SignalsView: React.FC = () => {
     }
   };
 
+  const respondToInvitation = async (invitation: SignalInvitation, action: 'accept' | 'decline' | 'revoke') => {
+    setInvitationActionId(invitation.id);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await signalsRequest<{ status: string }>('/api/signals', { action, invitationId: invitation.id });
+      setInvitations((current) => current.map((item) => item.id === invitation.id ? { ...item, status: result.status as SignalInvitation['status'] } : item));
+      if (action === 'accept' && result.status === 'accepted') {
+        setNotice('Invitation accepted. Your mutual connection is now active.');
+        await loadPairs();
+      } else if (action === 'decline') {
+        setNotice('Invitation declined. No message was sent.');
+      } else if (action === 'revoke') {
+        setNotice('Invitation withdrawn.');
+      } else {
+        setNotice('This invitation is no longer available.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update this invitation.');
+    } finally {
+      setInvitationActionId(null);
+    }
+  };
+
+  const pendingReceived = invitations.filter((item) => item.direction === 'received' && item.status === 'pending');
+  const pendingSent = invitations.filter((item) => item.direction === 'sent' && item.status === 'pending');
   const activePairs = pairs.filter((pair) => pair.status === 'active');
   const endedPairs = pairs.filter((pair) => pair.status === 'ended');
 
@@ -162,6 +205,49 @@ export const SignalsView: React.FC = () => {
         </div>
       ) : (
         <>
+          <div className="mb-8">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Inbox className="h-4 w-4 text-lavender" /> Invitations</h2>
+              <span className="rounded-full border border-line px-2.5 py-1 text-xs tabular-nums text-muted">{pendingReceived.length + pendingSent.length}</span>
+            </div>
+            {pendingReceived.length === 0 && pendingSent.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-line px-4 py-5 text-center">
+                <p className="text-sm text-muted">No pending invitations.</p>
+                <p className="mt-1 text-xs text-subtle">When someone sends you a Signal, you can choose whether to accept.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pendingReceived.map((invitation) => (
+                  <article key={invitation.id} className="rounded-2xl border border-lavender/20 bg-raised/70 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-plum/30 text-lavender"><RadioTower className="h-4 w-4" /></div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-fg">Someone would like to connect</p>
+                        <p className="mt-1 text-xs text-muted">Received {formatDate(invitation.createdAt)}</p>
+                        {invitation.message && <p className="mt-3 whitespace-pre-wrap break-words rounded-xl bg-surface/70 p-3 text-sm leading-relaxed text-fg">{invitation.message}</p>}
+                        <p className="mt-2 text-[11px] leading-relaxed text-subtle">Accept only if you feel comfortable. You can end a connection later.</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+                      <button type="button" onClick={() => void respondToInvitation(invitation, 'decline')} disabled={invitationActionId !== null} className="rounded-full border border-line px-3.5 py-2 text-xs font-semibold text-muted transition hover:text-fg disabled:opacity-50">Decline</button>
+                      <button type="button" onClick={() => void respondToInvitation(invitation, 'accept')} disabled={invitationActionId !== null} className="rounded-full bg-berry px-4 py-2 text-xs font-semibold text-ink transition hover:brightness-110 disabled:opacity-50">{invitationActionId === invitation.id ? 'Saving…' : 'Accept'}</button>
+                    </div>
+                  </article>
+                ))}
+                {pendingSent.map((invitation) => (
+                  <article key={invitation.id} className="flex items-center gap-3 rounded-xl border border-line/70 bg-raised/40 p-3">
+                    <RadioTower className="h-4 w-4 shrink-0 text-muted" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-fg">Invitation sent</p>
+                      <p className="mt-0.5 text-xs text-subtle">Sent {formatDate(invitation.createdAt)} · Expires {formatDate(invitation.expiresAt)}</p>
+                    </div>
+                    <button type="button" onClick={() => void respondToInvitation(invitation, 'revoke')} disabled={invitationActionId !== null} className="shrink-0 rounded-full border border-line px-3 py-2 text-xs font-semibold text-muted hover:border-berry/50 hover:text-fg disabled:opacity-50">{invitationActionId === invitation.id ? 'Withdrawing…' : 'Withdraw'}</button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-fg">Active connections</h2>
             <span className="rounded-full border border-line px-2.5 py-1 text-xs tabular-nums text-muted">{activePairs.length}</span>
