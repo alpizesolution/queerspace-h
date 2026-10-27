@@ -31,14 +31,12 @@ The token is verified server-side, including revocation checks. User identity is
 - The Firestore rules deny browser SDK reads/writes to Signals collections. The UI must call this API rather than query these collections directly.
 - Add emulator and API tests for every authorization and state-transition invariant before enabling the feature in production.
 
-
 ## Abuse-control update
 
 - Invitation creation has a server-side per-sender cooldown of one new invitation per 30 seconds, stored in `signalsRateLimits/{uid}` and inaccessible to client SDKs.
 - Replaying the same idempotency key returns the original invitation without consuming another cooldown slot.
 - Firebase Authentication token errors return HTTP 401 rather than a generic 500.
 - This cooldown is a basic friction control, not comprehensive abuse prevention; production still needs monitoring and stronger adaptive limits if abuse appears.
-
 
 ## Security test coverage added
 
@@ -52,7 +50,7 @@ firebase emulators:exec --only firestore "npx tsx --test test/firestore-rules.te
 
 - The API tests are included by the existing `npm test` script through `api/*.test.js`; they have not yet been executed in this change session.
 - These tests verify the client-deny boundary, not server-side transaction behavior. Acceptance, expiry, block/suspension rechecks, idempotency races, and cooldown concurrency still need integration tests against an isolated Firebase project/emulator setup.
-
+- The planned server-side lifecycle scenarios are documented in [Signals Phase A — Server Integration Test Plan](./signals-phase-a-integration-test-plan.md). This is a test plan, not evidence that the cases have run or passed.
 
 ## Transactional create checks and idempotent retries
 
