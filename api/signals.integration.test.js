@@ -57,7 +57,7 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
       idempotencyKey: key,
       message: 'Hello, if you would like to talk.',
     });
-    assert.equal(created.statusCode, 201);
+    assert.equal(created.statusCode, 201, `create failed: ${JSON.stringify(created.body)}; sender=${sender.uid}; recipient=${recipient.uid}`);
     assert.equal(created.body.replayed, false);
     assert.ok(created.body.invitationId);
 
