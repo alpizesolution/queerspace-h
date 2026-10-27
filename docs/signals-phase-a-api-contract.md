@@ -25,7 +25,7 @@ The token is verified server-side, including revocation checks. User identity is
 ## Important limits before launch
 
 - The API has not yet been built or exercised in a local environment; no test or deployment result is claimed.
-- Pair chat, pair ending/block handling after acceptance, rate limits, and production observability still need implementation.
+- Pair chat, pair ending/block handling after acceptance, stronger adaptive abuse controls, and production observability still need implementation. A basic 30-second invitation-creation cooldown exists, but it is not comprehensive rate limiting.
 - Expiry is surfaced on inbox reads and enforced during acceptance; no scheduled cleanup job is included.
 - The existing client chat flow is separate and must not be treated as Signals consent.
 - The Firestore rules deny browser SDK reads/writes to Signals collections. The UI must call this API rather than query these collections directly.
