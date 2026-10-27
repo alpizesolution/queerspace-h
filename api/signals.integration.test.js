@@ -32,6 +32,21 @@ async function callApi(user, method, body) {
   return res;
 }
 
+async function handlerGetPairs(user) {
+  const res = response();
+  await handler({
+    method: 'GET',
+    url: '/api/signals?view=pairs',
+    query: { view: 'pairs' },
+    headers: { authorization: `Bearer ${await user.getIdToken(true)}` },
+  }, res);
+  return res;
+}
+
+function pairRefFor(db, pairId) {
+  return db.doc(`signalsPairs/${pairId}`);
+}
+
 test('Signals API emulator lifecycle: create, idempotent retry, accept, block, and private inbox', {
   skip: !enabled ? 'Set SIGNALS_INTEGRATION_TESTS=true to run against Firebase emulators.' : false,
 }, async () => {
@@ -103,6 +118,46 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     assert.equal(pair.exists, true);
     assert.deepEqual(pair.data()?.participants, [sender.uid, recipient.uid].sort());
     assert.equal(pair.data()?.status, 'active');
+
+    const senderPairs = await callApi(sender, 'GET');
+    assert.equal(senderPairs.statusCode, 200);
+    assert.equal(senderPairs.body.pairs, undefined, 'default GET remains the invitation inbox');
+    const senderActivePairs = await handlerGetPairs(sender);
+    assert.equal(senderActivePairs.statusCode, 200);
+    assert.equal(senderActivePairs.body.pairs.length, 1);
+    assert.equal(senderActivePairs.body.pairs[0].id, created.body.invitationId);
+    assert.equal(senderActivePairs.body.pairs[0].status, 'active');
+
+    const outsiderPairs = await handlerGetPairs(outsider);
+    assert.equal(outsiderPairs.statusCode, 200);
+    assert.deepEqual(outsiderPairs.body.pairs, []);
+
+    const outsiderEnd = await callApi(outsider, 'POST', {
+      action: 'end',
+      pairId: created.body.invitationId,
+    });
+    assert.equal(outsiderEnd.statusCode, 403);
+    assert.equal((await pairRefFor(db, created.body.invitationId).get()).data()?.status, 'active');
+
+    const ended = await callApi(sender, 'POST', {
+      action: 'end',
+      pairId: created.body.invitationId,
+    });
+    assert.equal(ended.statusCode, 200);
+    assert.deepEqual(ended.body, { status: 'ended', alreadyEnded: false });
+    const endedPair = await pairRefFor(db, created.body.invitationId).get();
+    assert.equal(endedPair.data()?.status, 'ended');
+    assert.equal(endedPair.data()?.endedBy, sender.uid);
+
+    const endRetry = await callApi(recipient, 'POST', {
+      action: 'end',
+      pairId: created.body.invitationId,
+    });
+    assert.equal(endRetry.statusCode, 200);
+    assert.deepEqual(endRetry.body, { status: 'ended', alreadyEnded: true });
+
+    const recipientPairs = await handlerGetPairs(recipient);
+    assert.equal(recipientPairs.body.pairs[0].status, 'ended');
 
     const inbox = await callApi(outsider, 'GET');
     assert.equal(inbox.statusCode, 200);
