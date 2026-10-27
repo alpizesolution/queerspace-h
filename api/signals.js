@@ -84,7 +84,7 @@ export default async function handler(req, res) {
             createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
             replyTo: data.replyTo && typeof data.replyTo === 'object' ? {
               messageId: data.replyTo.messageId,
-              senderId: data.replyTo.senderId,
+              senderId: data.replyTo.sender === 'self' ? data.senderId : otherUid,
               text: data.replyTo.text,
             } : null,
             reactions: Object.entries(reactions).flatMap(([emoji, users]) =>
