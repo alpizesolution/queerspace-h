@@ -438,7 +438,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <h1 className="text-[15px] font-semibold text-fg truncate">{partner.displayName}</h1>
             <p className="text-[12px] text-muted truncate" aria-live="polite">
               <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${partnerLeft ? 'bg-subtle' : 'bg-emerald-400'}`} />
-              {partner.pronouns} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}
+              {partner.pronouns}{partner.age ? ` · ${partner.age}` : ''} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}
               {visibleLocation && <> · {visibleLocation}</>}
             </p>
           </div>
