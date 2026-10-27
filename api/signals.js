@@ -50,6 +50,21 @@ export default async function handler(req, res) {
     const db = getFirestore(app);
     if (req.method === 'GET') {
       const view = req.query?.view || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('view');
+      if (view === 'messages') {
+        const pairId = req.query?.pairId || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('pairId');
+        if (!safeId(pairId)) return send(res, 400, { error: 'invalid_request' });
+        const pairSnap = await db.doc(`signalsPairs/${pairId}`).get();
+        if (!pairSnap.exists) return send(res, 404, { error: 'pair_not_found' });
+        const pair = pairSnap.data();
+        if (!Array.isArray(pair.participants) || !pair.participants.includes(uid)) return send(res, 403, { error: 'not_allowed' });
+        if (pair.status !== 'active') return send(res, 409, { error: 'pair_not_active' });
+        const messageSnap = await db.collection('signalsPairs').doc(pairId).collection('messages').orderBy('createdAt', 'asc').limit(100).get();
+        const messages = messageSnap.docs.map(snap => {
+          const data = snap.data();
+          return { id: snap.id, senderId: data.senderId, text: data.text, createdAt: data.createdAt?.toDate?.().toISOString?.() || null };
+        });
+        return send(res, 200, { messages });
+      }
       if (view === 'pairs') {
         const pairSnapshots = await Promise.all([
           db.collection('signalsPairs').where('participants', 'array-contains', uid).limit(100).get(),
@@ -162,6 +177,30 @@ export default async function handler(req, res) {
         return { invitationId: invitationRef.id, replayed: false };
       });
       return send(res, result.replayed ? 200 : 201, result);
+    }
+
+    if (action === 'send-message') {
+      const pairId = req.body?.pairId;
+      const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      if (!safeId(pairId) || !text || text.length > 1000) return send(res, 400, { error: 'invalid_message' });
+      const pairRef = db.doc(`signalsPairs/${pairId}`);
+      const [pairSnap, suspensionSnap, settingsSnap] = await Promise.all([
+        pairRef.get(),
+        db.doc(`suspensions/${uid}`).get(),
+        db.doc(`users/${uid}/private/settings`).get(),
+      ]);
+      if (!pairSnap.exists) return send(res, 404, { error: 'pair_not_found' });
+      const pair = pairSnap.data();
+      if (!Array.isArray(pair.participants) || !pair.participants.includes(uid)) return send(res, 403, { error: 'not_allowed' });
+      if (pair.status !== 'active') return send(res, 409, { error: 'pair_not_active' });
+      if (suspensionSnap.exists) return send(res, 403, { error: 'account_unavailable' });
+      const blocked = settingsSnap.data()?.blockedPartnerIds;
+      if (Array.isArray(blocked) && pair.participants.some(participant => participant !== uid && blocked.includes(participant))) {
+        return send(res, 403, { error: 'not_allowed' });
+      }
+      const messageRef = pairRef.collection('messages').doc(randomUUID());
+      await messageRef.create({ senderId: uid, text, createdAt: FieldValue.serverTimestamp() });
+      return send(res, 201, { id: messageRef.id, senderId: uid, text, createdAt: new Date().toISOString() });
     }
 
     if (action === 'end') {
