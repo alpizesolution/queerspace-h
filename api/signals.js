@@ -87,13 +87,6 @@ export default async function handler(req, res) {
         return send(res, 400, { error: 'invalid_message' });
       }
 
-      const [senderSuspension, recipientSuspension] = await Promise.all([
-        db.doc(`suspensions/${uid}`).get(),
-        db.doc(`suspensions/${recipientId}`).get(),
-      ]);
-      if (senderSuspension.exists || recipientSuspension.exists) return send(res, 403, { error: 'account_unavailable' });
-      if (await isBlocked(db, uid, recipientId)) return send(res, 403, { error: 'not_allowed' });
-
       const idemRef = db.doc(`signalsIdempotency/${idempotencyDocId(uid, idempotencyKey)}`);
       const rateRef = db.doc(`signalsRateLimits/${uid}`);
       const invitationRef = db.collection('signalsInvitations').doc(randomUUID());
@@ -101,13 +94,29 @@ export default async function handler(req, res) {
       const expiresAt = Timestamp.fromMillis(now.toMillis() + INVITE_TTL_MS);
 
       const result = await db.runTransaction(async tx => {
-        const [prior, rateSnap] = await Promise.all([tx.get(idemRef), tx.get(rateRef)]);
+        const [prior, rateSnap, senderSettings, recipientSettings, senderSuspension, recipientSuspension] = await Promise.all([
+          tx.get(idemRef),
+          tx.get(rateRef),
+          tx.get(db.doc(`users/${uid}/private/settings`)),
+          tx.get(db.doc(`users/${recipientId}/private/settings`)),
+          tx.get(db.doc(`suspensions/${uid}`)),
+          tx.get(db.doc(`suspensions/${recipientId}`)),
+        ]);
         if (prior.exists) {
           const priorData = prior.data();
           if (priorData?.action !== 'create' || priorData?.recipientId !== recipientId) {
             throw Object.assign(new Error('idempotency_conflict'), { statusCode: 409 });
           }
           return { invitationId: priorData.invitationId, replayed: true };
+        }
+        if (senderSuspension.exists || recipientSuspension.exists) {
+          throw Object.assign(new Error('account_unavailable'), { statusCode: 403 });
+        }
+        const aBlocked = senderSettings.data()?.blockedPartnerIds;
+        const bBlocked = recipientSettings.data()?.blockedPartnerIds;
+        if ((Array.isArray(aBlocked) && aBlocked.includes(recipientId))
+          || (Array.isArray(bBlocked) && bBlocked.includes(uid))) {
+          throw Object.assign(new Error('not_allowed'), { statusCode: 403 });
         }
         const lastCreatedAt = rateSnap.data()?.lastCreatedAt;
         if (lastCreatedAt instanceof Timestamp && now.toMillis() - lastCreatedAt.toMillis() < CREATE_COOLDOWN_MS) {
@@ -131,7 +140,7 @@ export default async function handler(req, res) {
         });
         return { invitationId: invitationRef.id, replayed: false };
       });
-      return send(res, 201, result);
+      return send(res, result.replayed ? 200 : 201, result);
     }
 
     if (!['accept', 'decline', 'revoke'].includes(action) || !safeId(invitationId)) {
