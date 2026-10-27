@@ -23,6 +23,7 @@ import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature } from './services/profilePersistence.ts';
 import { applyFilters, applyProfile, FilterFields, matchPrefsForMode, ProfileFields } from './utils/preferences.ts';
 import { ProfileEditorSheet } from './components/ProfileEditorSheet.tsx';
+import { ProfilePageSheet } from './components/ProfilePageSheet.tsx';
 import { hasUnreadSupportReply } from './services/supportService.ts';
 import { getMySuspension } from './services/suspensionService.ts';
 import { SuspendedNotice } from './components/SuspendedNotice.tsx';
@@ -48,6 +49,7 @@ export default function App() {
   });
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileEditOpen, setProfileEditOpen] = useState(false);
   // What the cloud last held, so saves that change nothing there skip Firestore entirely.
   const cloudSignatureRef = useRef<string | null>(null);
   const [activeInfoModal, setActiveInfoModal] = useState<
@@ -152,14 +154,15 @@ export default function App() {
   const handleSaveProfile = async (profile: ProfileFields) => {
     const next = { ...applyProfile(userPrefs, profile), profileComplete: true };
     setUserPrefs(next);
-    setProfileOpen(false);
+    setProfileEditOpen(false);
+    setProfileOpen(true);
     const { feedback, cloudChanged } = await persistPrefs(next);
     showToast(feedback.savedToCloud || !cloudChanged ? 'Profile updated.' : feedback.userMessage);
   };
 
   const handleOpenSetup = (mode: 'quick' | 'custom' = 'quick') => {
     if (!isAdultBirthDate(userPrefs.birthDate)) { setAgeGateOpen(true); return; }
-    if (userPrefs.profileComplete !== true) { setProfileOpen(true); showToast('Save your anonymous profile before matching.'); return; }
+    if (userPrefs.profileComplete !== true) { setProfileEditOpen(true); showToast('Save your anonymous profile before matching.'); return; }
     if (suspended) {
       showToast('Matching is paused on this account while the team reviews a report.');
       return;
@@ -181,7 +184,7 @@ export default function App() {
   const handleStartMatching = async (mode: 'quick' | 'custom', filters: FilterFields) => {
     if (!isAdultBirthDate(userPrefs.birthDate) || userPrefs.profileComplete !== true) {
       setSetupModalOpen(false);
-      if (!isAdultBirthDate(userPrefs.birthDate)) setAgeGateOpen(true); else setProfileOpen(true);
+      if (!isAdultBirthDate(userPrefs.birthDate)) setAgeGateOpen(true); else setProfileEditOpen(true);
       return;
     }
     // Quick only changes how this search runs; the saved Custom filters are kept as chosen.
@@ -392,13 +395,19 @@ export default function App() {
           onStartMatching={handleStartMatching}
           onEditProfile={() => {
             setSetupModalOpen(false);
-            setProfileOpen(true);
+            setProfileEditOpen(true);
           }}
         />
       )}
 
       {profileOpen && !ageGateOpen && !ageRestricted && (
-        <ProfileEditorSheet currentPrefs={userPrefs} onClose={() => setProfileOpen(false)} onSave={handleSaveProfile} />
+        <ProfilePageSheet currentPrefs={userPrefs} onClose={() => setProfileOpen(false)}
+          onEditProfile={() => { setProfileOpen(false); setProfileEditOpen(true); }}
+          onEditPreferences={() => { setProfileOpen(false); setSetupInitialMode('custom'); setSetupModalOpen(true); }} />
+      )}
+
+      {profileEditOpen && !ageGateOpen && !ageRestricted && (
+        <ProfileEditorSheet currentPrefs={userPrefs} onClose={() => setProfileEditOpen(false)} onSave={handleSaveProfile} />
       )}
 
       <DonationModal isOpen={donationModalOpen} onClose={() => setDonationModalOpen(false)} />
