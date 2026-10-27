@@ -1,7 +1,7 @@
 import React from 'react';
 import { RadioTower } from 'lucide-react';
 
-// A few fixed specks of starlight around the beacon (percent positions, size in px).
+// Small, fixed points of starlight around the signal.
 const STARS = [
   { top: 8, left: 14, size: 2 },
   { top: 22, left: 84, size: 3 },
@@ -11,50 +11,66 @@ const STARS = [
   { top: 92, left: 30, size: 1.5 },
 ];
 
-// Short screens (e.g. 320×568, ~450px between header and tab bar) get a tighter layout via max-height variants.
-
-/** Placeholder for the future private inbox: no data, no listeners, nothing to tap. */
+/**
+ * Signals is intentionally a visual placeholder until the consent and inbox
+ * flow is implemented. Keep the state clear; do not imply that messaging works.
+ */
 export const SignalsView: React.FC = () => (
-  <section className="relative max-w-xl mx-auto w-full px-6 pt-12 sm:pt-20 pb-12 [@media(max-height:640px)]:pt-4 [@media(max-height:640px)]:pb-6 flex flex-col items-center text-center anim-rise">
-    <div className="relative w-36 h-36 mb-8 [@media(max-height:640px)]:w-24 [@media(max-height:640px)]:h-24 [@media(max-height:640px)]:mb-3" aria-hidden="true">
-      {STARS.map((s, i) => (
+  <section
+    aria-labelledby="signals-title"
+    className="relative mx-auto flex min-h-[min(620px,calc(100dvh-9rem))] w-full max-w-xl flex-col items-center justify-center px-6 py-10 text-center anim-rise [@media(max-height:640px)]:py-4"
+  >
+    <div
+      className="relative mb-8 h-32 w-32 [@media(max-height:640px)]:mb-5 [@media(max-height:640px)]:h-24 [@media(max-height:640px)]:w-24"
+      aria-hidden="true"
+    >
+      {STARS.map((star, index) => (
         <span
-          key={i}
+          key={index}
           className="absolute rounded-full bg-lavender/70"
-          style={{ top: `${s.top}%`, left: `${s.left}%`, width: s.size, height: s.size }}
+          style={{
+            top: `${star.top}%`,
+            left: `${star.left}%`,
+            width: star.size,
+            height: star.size,
+          }}
         />
       ))}
-      {/* Rings pulsing outward, like a signal; with reduced motion only the steady ring stays. */}
-      <span className="absolute inset-6 [@media(max-height:640px)]:inset-3 rounded-full border border-lavender/20" />
-      {[0, 0.6, 1.2].map((delay) => (
+      <span className="absolute inset-5 rounded-full border border-lavender/20 [@media(max-height:640px)]:inset-3" />
+      {[0, 0.8, 1.6].map((delay) => (
         <span
           key={delay}
-          className="absolute inset-6 [@media(max-height:640px)]:inset-3 rounded-full border border-berry/40 anim-ping"
-          style={{ animationDelay: `${delay}s`, animationDuration: '2.4s' }}
+          className="absolute inset-5 rounded-full border border-berry/35 anim-ping [@media(max-height:640px)]:inset-3"
+          style={{ animationDelay: `${delay}s`, animationDuration: '3s' }}
         />
       ))}
-      <span className="absolute inset-10 [@media(max-height:640px)]:inset-6 rounded-full bg-raised border border-line flex items-center justify-center text-berry shadow-[0_0_48px_rgb(224_123_184_/_0.3)]">
-        <RadioTower className="w-7 h-7" strokeWidth={1.75} />
+      <span className="absolute inset-9 flex items-center justify-center rounded-full border border-line bg-raised text-berry shadow-[0_0_42px_rgb(224_123_184_/_0.22)] [@media(max-height:640px)]:inset-6">
+        <RadioTower className="h-7 w-7" strokeWidth={1.6} />
       </span>
     </div>
 
-    <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.22em] text-lavender">A new frequency</p>
-    <h1 className="mt-3 [@media(max-height:640px)]:mt-2 font-serif text-[40px] [@media(max-height:640px)]:text-[34px] sm:text-5xl leading-none font-semibold tracking-tight text-fg">Signals</h1>
-    <p className="mt-4 [@media(max-height:640px)]:mt-2 font-serif italic text-[17px] sm:text-lg text-fg/90 text-balance">
-      Some connections deserve a little more time.
+    <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-lavender sm:text-[11px]">
+      A private frequency
     </p>
-    <p className="mt-3 [@media(max-height:640px)]:mt-2 text-[14px] [@media(max-height:640px)]:text-[13px] sm:text-[15px] text-muted leading-relaxed [@media(max-height:640px)]:leading-snug max-w-sm text-balance">
-      Private conversations are coming to QUEERSPACE. Meet someone, find your frequency, and continue your connection
-      beyond the moment.
+    <h1
+      id="signals-title"
+      className="mt-3 max-w-md text-balance font-serif text-[38px] font-semibold leading-[1.04] tracking-tight text-fg sm:text-5xl [@media(max-height:640px)]:mt-2 [@media(max-height:640px)]:text-[32px]"
+    >
+      Let the connection linger.
+    </h1>
+    <p className="mt-4 max-w-sm text-balance text-sm leading-relaxed text-muted sm:text-[15px]">
+      A quieter place to continue a conversation, when the moment feels right.
     </p>
 
-    <p className="mt-7 [@media(max-height:640px)]:mt-4 inline-flex items-center gap-2 h-8 px-3.5 rounded-full border border-berry/40 bg-plum/20 text-berry text-[11px] font-semibold uppercase tracking-[0.2em]">
-      <span className="relative flex w-1.5 h-1.5" aria-hidden="true">
-        <span className="absolute inset-0 rounded-full bg-berry anim-ping" />
-        <span className="relative w-1.5 h-1.5 rounded-full bg-berry" />
+    <div className="mt-7 inline-flex h-8 items-center gap-2 rounded-full border border-berry/30 bg-plum/20 px-3.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-berry [@media(max-height:640px)]:mt-5">
+      <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+        <span className="absolute inset-0 rounded-full bg-berry opacity-60 anim-ping" />
+        <span className="relative h-1.5 w-1.5 rounded-full bg-berry" />
       </span>
-      Coming soon
+      In the making
+    </div>
+    <p className="mt-4 max-w-xs text-xs leading-relaxed text-subtle">
+      Signals is not available just yet.
     </p>
-    <p className="mt-4 [@media(max-height:640px)]:mt-2.5 text-[12px] text-subtle">A new way to stay connected is on the horizon.</p>
   </section>
 );
