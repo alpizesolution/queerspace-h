@@ -176,7 +176,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
           </div>
           <p className="mt-2 text-[13px] text-muted">
             {isCustom
-              ? 'Match on intention, topics, age, location and expression.'
+              ? 'Match on intention, topics, age, location and My Type.'
               : 'Meet anyone available right now. Your Custom filters are kept for next time.'}
           </p>
         </div>
@@ -391,13 +391,13 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 
             </section>
 
-            {/* Gender expression filter */}
+            {/* My Type filter */}
             <section className="card p-4 space-y-3">
               <ToggleRow
                 icon={<SlidersHorizontal className="w-4 h-4 text-lavender" />}
                 checked={applyGenderExpressionFilter}
                 onChange={(v) => (v ? setApplyGenderExpressionFilter(true) : handleResetFilters())}
-                title="Filter by gender expression"
+                title="Filter by My Type"
                 hint="People who prefer not to say are never excluded."
               />
               {applyGenderExpressionFilter && (
