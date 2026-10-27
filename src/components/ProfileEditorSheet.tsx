@@ -20,6 +20,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
   const [genderIdentity, setGenderIdentity] = useState(currentPrefs.genderIdentity || '');
   const [genderIdentityCustom, setGenderIdentityCustom] = useState(currentPrefs.genderIdentityCustom || '');
   const [genderExpression, setGenderExpression] = useState<string[]>(currentPrefs.genderExpression || []);
+  const [genderExpressionSearch, setGenderExpressionSearch] = useState('');
   const [showSexualOrientation, setShowSexualOrientation] = useState(currentPrefs.showSexualOrientationOnProfile ?? false);
   const [showGenderIdentity, setShowGenderIdentity] = useState(currentPrefs.showGenderIdentityOnProfile ?? false);
   const [showGenderExpression, setShowGenderExpression] = useState(currentPrefs.showGenderExpressionOnProfile ?? false);
@@ -98,8 +99,28 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
           <label className="flex items-center justify-between gap-3 text-sm"><span>Show gender identity on my profile</span><input type="checkbox" className="check" checked={showGenderIdentity} onChange={(e) => setShowGenderIdentity(e.target.checked && Boolean(genderIdentity))} disabled={!genderIdentity} /></label>
         </div>
         <div className="space-y-2">
-          <p className="label">Gender expression</p><div className="flex flex-wrap gap-2">
-            {GENDER_EXPRESSIONS.filter((v) => v !== 'Prefer not to say').map((value) => { const selected = genderExpression.includes(value); return <button key={value} type="button" aria-pressed={selected} onClick={() => setGenderExpression((old) => selected ? old.filter((v) => v !== value) : [...old, value])} className="chip">{selected && <Check className="w-3.5 h-3.5 text-berry" />}{value}</button>; })}
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="label !mb-0">Gender expression <span className="font-normal text-subtle">· optional</span></p>
+            <span className="text-xs text-subtle tabular-nums">{genderExpression.length} selected</span>
+          </div>
+          <p className="text-xs text-subtle">Choose any labels that feel right. You can select more than one.</p>
+          <input
+            type="search"
+            value={genderExpressionSearch}
+            onChange={(e) => setGenderExpressionSearch(e.target.value)}
+            placeholder="Search gender expressions…"
+            aria-label="Search gender expression options"
+            className="input"
+          />
+          <div className="flex flex-wrap gap-2 max-h-56 overflow-y-auto rounded-xl border border-line p-3" role="group" aria-label="Gender expression options">
+            {GENDER_EXPRESSIONS.filter((value) => value.toLowerCase().includes(genderExpressionSearch.trim().toLowerCase())).map((value) => {
+              const selected = genderExpression.includes(value);
+              return <button key={value} type="button" aria-pressed={selected} onClick={() => setGenderExpression((old) => {
+                if (value === 'Prefer not to say') return old.includes(value) ? [] : [value];
+                return selected ? old.filter((v) => v !== value) : [...old.filter((v) => v !== 'Prefer not to say'), value];
+              })} className="chip">{selected && <Check className="w-3.5 h-3.5 text-berry" />}{value}</button>;
+            })}
+            {GENDER_EXPRESSIONS.filter((value) => value.toLowerCase().includes(genderExpressionSearch.trim().toLowerCase())).length === 0 && <p className="w-full py-2 text-sm text-subtle">No matching options.</p>}
           </div>
           <label className="flex items-center justify-between gap-3 text-sm"><span>Show gender expression on my profile</span><input type="checkbox" className="check" checked={showGenderExpression} onChange={(e) => setShowGenderExpression(e.target.checked && genderExpression.length > 0)} disabled={!genderExpression.length} /></label>
         </div>
