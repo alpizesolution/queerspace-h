@@ -398,7 +398,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
                 checked={applyGenderExpressionFilter}
                 onChange={(v) => (v ? setApplyGenderExpressionFilter(true) : handleResetFilters())}
                 title="Filter by My Type"
-                hint="People who prefer not to say are never excluded."
+                hint="Prioritize shared personality and interests; other people can still match with you."
               />
               {applyGenderExpressionFilter && (
                 <div className="flex flex-wrap gap-2 pt-3 border-t border-line">
