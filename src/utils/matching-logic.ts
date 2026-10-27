@@ -37,10 +37,28 @@ export const REGIONS: string[] = [
   'CALABARZON',
 ];
 
-export const MY_VIBE_OPTIONS = ['Femme', 'Hyperfemme', 'Softmasc', 'Masc', 'Butch', 'Andro', 'Stem', 'Tomboy'] as const;
+/** Personality and interests, intentionally distinct from SOGIE identity labels. */
+export const MY_VIBE_OPTIONS = [
+  'Soft & Sweet',
+  'Introvert',
+  'Adventurous',
+  'Book Lover',
+  'Gamer',
+  'Creative',
+  'Cozy Homebody',
+  'Night Owl',
+] as const;
 
+/** Preserve existing gender-expression choices for SOGIE profiles and legacy preferences. */
 export const GENDER_EXPRESSIONS: GenderExpressionOption[] = [
-  ...MY_VIBE_OPTIONS,
+  'Femme',
+  'Hyperfemme',
+  'Softmasc',
+  'Masc',
+  'Butch',
+  'Andro',
+  'Stem',
+  'Tomboy',
   'Soft Masc',
   'Hard Masc',
   'No label / Other',
@@ -212,10 +230,7 @@ export function generateSapphicPseudonym(): { name: string; pronouns: string } {
 
 /**
  * Calculates a match score between 0 and 100 based on shared intention and topics.
- * When applyGenderExpressionFilter is enabled, matches preferred expressions.
- * IMPORTANT: Never automatically ranks, excludes, or penalizes users based on SOGIE
- * or gender expression when filters are not explicitly activated by the user.
- * "Prefer not to say" is never penalized.
+ * My Type is based on a member's optional public My Vibe label, never SOGIE fields.
  */
 export function calculateCompatibilityScore(
   userPrefs: UserPreferences,
