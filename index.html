@@ -13,6 +13,13 @@
     <link rel="canonical" href="https://queerspaceph.com/" />
     <meta name="twitter:card" content="summary" />
     <meta name="theme-color" content="#120b17" />
+    <script>
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem('queerspace_theme') === 'light' ? 'light' : 'dark';
+      } catch (_) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -26,14 +33,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Cookie&display=swap" rel="stylesheet">
     <style>
       html, body {
-        background-color: #120b17 !important;
-        color: #F7F0F6;
+        background-color: var(--color-ink, #120b17);
+        color: var(--color-fg, #F7F0F6);
       }
       /* Splash screen: drawn before any JavaScript loads, removed by src/utils/splash.ts. */
       #splash {
         position: fixed; inset: 0; z-index: 9999;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        background: radial-gradient(60% 45% at 50% 42%, rgba(124, 58, 110, 0.35), rgba(18, 11, 23, 0) 70%), #120b17;
+        background: radial-gradient(60% 45% at 50% 42%, rgba(124, 58, 110, 0.18), transparent 70%), var(--color-ink, #120b17);
         transition: opacity 450ms ease, transform 450ms ease;
       }
       #splash.splash-out { opacity: 0; transform: scale(1.04); pointer-events: none; }
@@ -44,13 +51,13 @@
       }
       #splash .splash-name {
         margin-top: 22px; font-family: "Playfair Display", Georgia, serif; font-weight: 600;
-        font-size: 24px; letter-spacing: 0.04em; color: #f7f0f6;
+        font-size: 24px; letter-spacing: 0.04em; color: var(--color-fg, #f7f0f6);
         animation: splash-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) 250ms both;
       }
       #splash .splash-name span { color: #e07bb8; margin-left: 0.28em; }
       #splash .splash-tag {
         margin-top: 8px; font-family: "Plus Jakarta Sans", system-ui, sans-serif; font-size: 13px;
-        letter-spacing: 0.02em; color: rgba(247, 240, 246, 0.55);
+        letter-spacing: 0.02em; color: var(--color-muted, rgba(247, 240, 246, 0.55));
         animation: splash-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) 450ms both;
       }
       #splash .splash-bar {
