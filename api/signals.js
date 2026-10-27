@@ -58,6 +58,21 @@ export default async function handler(req, res) {
         const pair = pairSnap.data();
         if (!Array.isArray(pair.participants) || !pair.participants.includes(uid)) return send(res, 403, { error: 'not_allowed' });
         if (pair.status !== 'active') return send(res, 409, { error: 'pair_not_active' });
+        const otherUid = pair.participants.find(participant => participant !== uid);
+        if (!otherUid) return send(res, 403, { error: 'not_allowed' });
+        const [ownSettings, otherSettings, ownSuspension, otherSuspension] = await Promise.all([
+          db.doc(`users/${uid}/private/settings`).get(),
+          db.doc(`users/${otherUid}/private/settings`).get(),
+          db.doc(`suspensions/${uid}`).get(),
+          db.doc(`suspensions/${otherUid}`).get(),
+        ]);
+        const ownBlocked = ownSettings.data()?.blockedPartnerIds;
+        const otherBlocked = otherSettings.data()?.blockedPartnerIds;
+        if ((Array.isArray(ownBlocked) && ownBlocked.includes(otherUid))
+          || (Array.isArray(otherBlocked) && otherBlocked.includes(uid))
+          || ownSuspension.exists || otherSuspension.exists) {
+          return send(res, 403, { error: 'not_allowed' });
+        }
         const messageSnap = await db.collection('signalsPairs').doc(pairId).collection('messages').orderBy('createdAt', 'asc').limit(100).get();
         const messages = messageSnap.docs.map(snap => {
           const data = snap.data();
@@ -184,18 +199,24 @@ export default async function handler(req, res) {
       const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
       if (!safeId(pairId) || !text || text.length > 1000) return send(res, 400, { error: 'invalid_message' });
       const pairRef = db.doc(`signalsPairs/${pairId}`);
-      const [pairSnap, suspensionSnap, settingsSnap] = await Promise.all([
-        pairRef.get(),
-        db.doc(`suspensions/${uid}`).get(),
-        db.doc(`users/${uid}/private/settings`).get(),
-      ]);
+      const pairSnap = await pairRef.get();
       if (!pairSnap.exists) return send(res, 404, { error: 'pair_not_found' });
       const pair = pairSnap.data();
       if (!Array.isArray(pair.participants) || !pair.participants.includes(uid)) return send(res, 403, { error: 'not_allowed' });
       if (pair.status !== 'active') return send(res, 409, { error: 'pair_not_active' });
-      if (suspensionSnap.exists) return send(res, 403, { error: 'account_unavailable' });
-      const blocked = settingsSnap.data()?.blockedPartnerIds;
-      if (Array.isArray(blocked) && pair.participants.some(participant => participant !== uid && blocked.includes(participant))) {
+      const otherUid = pair.participants.find(participant => participant !== uid);
+      if (!otherUid) return send(res, 403, { error: 'not_allowed' });
+      const [ownSettings, otherSettings, ownSuspension, otherSuspension] = await Promise.all([
+        db.doc(`users/${uid}/private/settings`).get(),
+        db.doc(`users/${otherUid}/private/settings`).get(),
+        db.doc(`suspensions/${uid}`).get(),
+        db.doc(`suspensions/${otherUid}`).get(),
+      ]);
+      const ownBlocked = ownSettings.data()?.blockedPartnerIds;
+      const otherBlocked = otherSettings.data()?.blockedPartnerIds;
+      if (ownSuspension.exists || otherSuspension.exists) return send(res, 403, { error: 'account_unavailable' });
+      if ((Array.isArray(ownBlocked) && ownBlocked.includes(otherUid))
+        || (Array.isArray(otherBlocked) && otherBlocked.includes(uid))) {
         return send(res, 403, { error: 'not_allowed' });
       }
       const messageRef = pairRef.collection('messages').doc(randomUUID());
