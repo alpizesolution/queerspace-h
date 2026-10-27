@@ -789,6 +789,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /signalsRateLimits/{userId} {
+      allow read, write: if false;
+    }
+
 
   }
 }
