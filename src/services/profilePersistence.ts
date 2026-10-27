@@ -28,10 +28,26 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
     ...(prefs.birthDate && calculateAge(prefs.birthDate) !== null ? { age: calculateAge(prefs.birthDate)! } : {}),
     aboutMe: (prefs.aboutMe || '').trim().slice(0, 160),
     myVibe: (prefs.myVibe || '').slice(0, 24),
+    // Public SOGIE values are included only when that exact field is opted into visibility.
+    ...(prefs.showSexualOrientationOnProfile && prefs.sexualOrientation
+      ? { sexualOrientation: (prefs.sexualOrientation === 'Self-described' ? prefs.sexualOrientationCustom : prefs.sexualOrientation || '').trim().slice(0, 40) }
+      : {}),
+    ...(prefs.showGenderIdentityOnProfile && prefs.genderIdentity
+      ? { genderIdentity: (prefs.genderIdentity === 'Self-described' ? prefs.genderIdentityCustom : prefs.genderIdentity || '').trim().slice(0, 40) }
+      : {}),
+    ...(prefs.showGenderExpressionOnProfile && prefs.genderExpression?.length
+      ? { genderExpression: prefs.genderExpression.slice(0, 8) }
+      : {}),
     profileComplete: prefs.profileComplete === true,
     ...(isValidAvatar(prefs.avatar) ? { avatar: prefs.avatar } : {}),
     ...(typeof prefs.showGenderExpressionOnProfile === 'boolean'
       ? { showGenderExpressionOnProfile: prefs.showGenderExpressionOnProfile }
+      : {}),
+    ...(typeof prefs.showSexualOrientationOnProfile === 'boolean'
+      ? { showSexualOrientationOnProfile: prefs.showSexualOrientationOnProfile }
+      : {}),
+    ...(typeof prefs.showGenderIdentityOnProfile === 'boolean'
+      ? { showGenderIdentityOnProfile: prefs.showGenderIdentityOnProfile }
       : {}),
     ...(typeof prefs.showSogieOnProfile === 'boolean'
       ? { showSogieOnProfile: prefs.showSogieOnProfile }
@@ -53,6 +69,7 @@ export function buildPrivateSettingsPayload(prefs: UserPreferences, blockedPartn
     sexualOrientation:
       prefs.sexualOrientation === 'Self-described' ? prefs.sexualOrientationCustom?.trim() || '' : prefs.sexualOrientation || '',
     genderExpression: prefs.genderExpression || [],
+    genderIdentity: prefs.genderIdentity === 'Self-described' ? prefs.genderIdentityCustom?.trim() || '' : prefs.genderIdentity || '',
     preferredGenderExpressions: prefs.preferredGenderExpressions || [],
     ...(prefs.birthDate ? { birthDate: Timestamp.fromDate(new Date(`${prefs.birthDate}T00:00:00.000Z`)) } : {}),
     blockedPartnerIds: blockedPartnerIds || [],
@@ -101,7 +118,13 @@ export function mergeCloudProfile(
   set('myVibe', text(publicData.myVibe));
   set('profileComplete', flag(publicData.profileComplete));
   set('showGenderExpressionOnProfile', flag(publicData.showGenderExpressionOnProfile));
+  set('showSexualOrientationOnProfile', flag(publicData.showSexualOrientationOnProfile));
+  set('showGenderIdentityOnProfile', flag(publicData.showGenderIdentityOnProfile));
   set('showSogieOnProfile', flag(publicData.showSogieOnProfile));
+  // Public SOGIE fields are restored only when they were explicitly shared.
+  set('sexualOrientation', text(publicData.sexualOrientation));
+  set('genderIdentity', text(publicData.genderIdentity));
+  set('genderExpression', strings(publicData.genderExpression) as UserPreferences['genderExpression'] | undefined);
   set('showLocationOnProfile', flag(publicData.showLocationOnProfile));
 
   const orientation = text(privateData.sexualOrientation);
@@ -115,7 +138,13 @@ export function mergeCloudProfile(
     }
   }
   const expression = strings(privateData.genderExpression);
-  if (expression?.length) merged.genderExpression = expression as UserPreferences['genderExpression'];
+  if (expression) merged.genderExpression = expression as UserPreferences['genderExpression'];
+  const identity = text(privateData.genderIdentity);
+  if (identity) {
+    if (identity in {}) { /* no-op: keep values below normalized from known options */ }
+    merged.genderIdentity = identity;
+    merged.genderIdentityCustom = undefined;
+  }
   const preferred = strings(privateData.preferredGenderExpressions);
   if (preferred) merged.preferredGenderExpressions = preferred;
   const birthDate = privateData.birthDate;
