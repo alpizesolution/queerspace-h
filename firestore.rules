@@ -205,7 +205,7 @@ service cloud.firestore {
         && (!('myVibe' in request.resource.data) || (request.resource.data.myVibe is string && request.resource.data.myVibe.size() <= 24))
         && (!('sexualOrientation' in request.resource.data) || (request.resource.data.sexualOrientation is string && request.resource.data.sexualOrientation.size() <= 40))
         && (!('genderIdentity' in request.resource.data) || (request.resource.data.genderIdentity is string && request.resource.data.genderIdentity.size() <= 40))
-        && (!('genderExpression' in request.resource.data) || (request.resource.data.genderExpression is list && request.resource.data.genderExpression.size() <= 20))
+        && (!('genderExpression' in request.resource.data) || (request.resource.data.genderExpression is list && request.resource.data.genderExpression.size() <= 2))
         && (!('profileComplete' in request.resource.data) || request.resource.data.profileComplete is bool)
         && (!('age' in request.resource.data) || (request.resource.data.age is int && request.resource.data.age >= 18 && request.resource.data.age <= 99))
         && request.resource.data.updatedAt is timestamp;
