@@ -205,6 +205,11 @@ async function loadPartnerProfile(partnerId: string): Promise<PartnerProfile> {
       region: showLocation && data.region ? String(data.region) : '',
       location: showLocation && data.region ? String(data.region) : undefined,
       showLocationOnProfile: showLocation,
+      sexualOrientation: data.showSexualOrientationOnProfile && typeof data.sexualOrientation === 'string' ? data.sexualOrientation.slice(0, 40) : undefined,
+      genderIdentity: data.showGenderIdentityOnProfile && typeof data.genderIdentity === 'string' ? data.genderIdentity.slice(0, 40) : undefined,
+      genderExpression: data.showGenderExpressionOnProfile && Array.isArray(data.genderExpression) ? data.genderExpression.filter((v): v is string => typeof v === 'string').slice(0, 8) as PartnerProfile['genderExpression'] : undefined,
+      showSexualOrientationOnProfile: Boolean(data.showSexualOrientationOnProfile),
+      showGenderIdentityOnProfile: Boolean(data.showGenderIdentityOnProfile),
       showGenderExpressionOnProfile: Boolean(data.showGenderExpressionOnProfile),
     };
   } catch {
