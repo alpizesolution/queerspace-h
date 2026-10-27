@@ -76,7 +76,23 @@ export default async function handler(req, res) {
         const messageSnap = await db.collection('signalsPairs').doc(pairId).collection('messages').orderBy('createdAt', 'asc').limit(100).get();
         const messages = messageSnap.docs.map(snap => {
           const data = snap.data();
-          return { id: snap.id, senderId: data.senderId, text: data.text, createdAt: data.createdAt?.toDate?.().toISOString?.() || null };
+          const reactions = data.reactions && typeof data.reactions === 'object' ? data.reactions : {};
+          return {
+            id: snap.id,
+            senderId: data.senderId,
+            text: data.text,
+            createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
+            replyTo: data.replyTo && typeof data.replyTo === 'object' ? {
+              messageId: data.replyTo.messageId,
+              senderId: data.replyTo.senderId,
+              text: data.replyTo.text,
+            } : null,
+            reactions: Object.entries(reactions).flatMap(([emoji, users]) =>
+              Array.isArray(users) && users.length
+                ? [{ emoji, count: users.length, userReacted: users.includes(uid) }]
+                : []
+            ),
+          };
         });
         return send(res, 200, { messages });
       }
@@ -194,10 +210,66 @@ export default async function handler(req, res) {
       return send(res, result.replayed ? 200 : 201, result);
     }
 
+    if (action === 'react-message') {
+      const pairId = req.body?.pairId;
+      const messageId = req.body?.messageId;
+      const emoji = req.body?.emoji;
+      const allowedReactions = ['💜', '🥹', '😂', '✨'];
+      if (!safeId(pairId) || !safeId(messageId) || !allowedReactions.includes(emoji)) {
+        return send(res, 400, { error: 'invalid_reaction' });
+      }
+      const pairRef = db.doc(`signalsPairs/${pairId}`);
+      const pairSnap = await pairRef.get();
+      if (!pairSnap.exists) return send(res, 404, { error: 'pair_not_found' });
+      const pair = pairSnap.data();
+      if (!Array.isArray(pair.participants) || !pair.participants.includes(uid)) return send(res, 403, { error: 'not_allowed' });
+      if (pair.status !== 'active') return send(res, 409, { error: 'pair_not_active' });
+      const otherUid = pair.participants.find(participant => participant !== uid);
+      if (!otherUid) return send(res, 403, { error: 'not_allowed' });
+      const [ownSettings, otherSettings, ownSuspension, otherSuspension] = await Promise.all([
+        db.doc(`users/${uid}/private/settings`).get(),
+        db.doc(`users/${otherUid}/private/settings`).get(),
+        db.doc(`suspensions/${uid}`).get(),
+        db.doc(`suspensions/${otherUid}`).get(),
+      ]);
+      const ownBlocked = ownSettings.data()?.blockedPartnerIds;
+      const otherBlocked = otherSettings.data()?.blockedPartnerIds;
+      if (ownSuspension.exists || otherSuspension.exists
+        || (Array.isArray(ownBlocked) && ownBlocked.includes(otherUid))
+        || (Array.isArray(otherBlocked) && otherBlocked.includes(uid))) {
+        return send(res, 403, { error: 'not_allowed' });
+      }
+      const messageRef = pairRef.collection('messages').doc(messageId);
+      const result = await db.runTransaction(async tx => {
+        const messageSnap = await tx.get(messageRef);
+        if (!messageSnap.exists) throw Object.assign(new Error('message_not_found'), { statusCode: 404 });
+        const data = messageSnap.data();
+        const reactions = data.reactions && typeof data.reactions === 'object' ? { ...data.reactions } : {};
+        const users = Array.isArray(reactions[emoji]) ? [...reactions[emoji]] : [];
+        const index = users.indexOf(uid);
+        if (index >= 0) users.splice(index, 1);
+        else users.push(uid);
+        if (users.length) reactions[emoji] = users;
+        else delete reactions[emoji];
+        tx.update(messageRef, { reactions, updatedAt: FieldValue.serverTimestamp() });
+        return { emoji, count: users.length, userReacted: index < 0 };
+      });
+      return send(res, 200, result);
+    }
+
     if (action === 'send-message') {
       const pairId = req.body?.pairId;
       const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      const replyToInput = req.body?.replyTo;
       if (!safeId(pairId) || !text || text.length > 1000) return send(res, 400, { error: 'invalid_message' });
+      let replyTo = null;
+      if (replyToInput !== undefined && replyToInput !== null) {
+        if (!safeId(replyToInput.messageId) || typeof replyToInput.text !== 'string'
+          || replyToInput.text.length > 1000 || !['self', 'partner'].includes(replyToInput.sender)) {
+          return send(res, 400, { error: 'invalid_reply' });
+        }
+        replyTo = { messageId: replyToInput.messageId, text: replyToInput.text, sender: replyToInput.sender };
+      }
       const pairRef = db.doc(`signalsPairs/${pairId}`);
       const pairSnap = await pairRef.get();
       if (!pairSnap.exists) return send(res, 404, { error: 'pair_not_found' });
@@ -220,8 +292,15 @@ export default async function handler(req, res) {
         return send(res, 403, { error: 'not_allowed' });
       }
       const messageRef = pairRef.collection('messages').doc(randomUUID());
-      await messageRef.create({ senderId: uid, text, createdAt: FieldValue.serverTimestamp() });
-      return send(res, 201, { id: messageRef.id, senderId: uid, text, createdAt: new Date().toISOString() });
+      await messageRef.create({ senderId: uid, text, ...(replyTo ? { replyTo } : {}), createdAt: FieldValue.serverTimestamp() });
+      return send(res, 201, {
+        id: messageRef.id,
+        senderId: uid,
+        text,
+        replyTo: replyTo ? { ...replyTo, senderId: replyTo.sender === 'self' ? uid : otherUid } : null,
+        reactions: [],
+        createdAt: new Date().toISOString(),
+      });
     }
 
     if (action === 'end') {
