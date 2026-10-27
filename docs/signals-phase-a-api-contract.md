@@ -52,3 +52,10 @@ firebase emulators:exec --only firestore "npx tsx --test test/firestore-rules.te
 
 - The API tests are included by the existing `npm test` script through `api/*.test.js`; they have not yet been executed in this change session.
 - These tests verify the client-deny boundary, not server-side transaction behavior. Acceptance, expiry, block/suspension rechecks, idempotency races, and cooldown concurrency still need integration tests against an isolated Firebase project/emulator setup.
+
+
+## Transactional create checks and idempotent retries
+
+Invitation creation now reads the sender/recipient private settings and suspension records inside the same Firestore transaction that creates the invitation and updates the cooldown/idempotency records. This closes the gap where a block or suspension could change after a pre-transaction check but before the invitation write. The transaction checks both directions of `blockedPartnerIds`.
+
+A newly created invitation returns HTTP 201. A matching idempotent retry returns HTTP 200 with `replayed: true`; a reused key with a different action/recipient remains a conflict. This behavior has been inspected in source but has not yet been verified by executing tests against Firestore.
