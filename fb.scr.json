@@ -1,1 +1,0 @@
-{"firestore":{"rules":"firestore.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8123},"auth":{"host":"127.0.0.1","port":9123},"ui":{"enabled":false},"hub":{"port":4423},"logging":{"port":4523}}}
