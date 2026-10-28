@@ -69,7 +69,7 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
               role="radio"
               aria-checked={fontSize === id}
               onClick={() => onChangeFontSize(id)}
-              className={`h-9 rounded-full text-[13px] font-semibold transition-colors cursor-pointer ${fontSize === id ? 'bg-berry text-ink' : 'text-muted hover:text-fg'}`}
+              className={`h-9 rounded-full text-[length:calc(13px_*_var(--fs,1))] font-semibold transition-colors cursor-pointer ${fontSize === id ? 'bg-berry text-ink' : 'text-muted hover:text-fg'}`}
             >
               {label}
             </button>
