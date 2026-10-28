@@ -57,8 +57,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
     currentPrefs.preferredGenderExpressions?.length ? currentPrefs.preferredGenderExpressions : ['Any / No preference']
   );
 
-  // Age: optional for everyone, required to use the age filter.
-  const [age, setAge] = useState(currentPrefs.age ? String(currentPrefs.age) : '');
+  // My age comes from my birthday on the server; only the range I want is chosen here (and kept private).
   const [applyAgeFilter, setApplyAgeFilter] = useState<boolean>(currentPrefs.applyAgeFilter ?? false);
   const [ageMin, setAgeMin] = useState(String(currentPrefs.ageMin ?? 18));
   const [ageMax, setAgeMax] = useState(String(currentPrefs.ageMax ?? 35));
@@ -107,7 +106,6 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
       applyLocationFilter,
       applyGenderExpressionFilter,
       preferredGenderExpressions: applyGenderExpressionFilter ? preferredGenderExpressions : ['Any / No preference'],
-      age: age.trim() ? Number(age) : undefined,
       applyAgeFilter,
       ageMin: Number(ageMin),
       ageMax: Number(ageMax),
@@ -284,7 +282,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
                     <AgeInput label="Oldest age" value={ageMax} onChange={setAgeMax} invalid={!!errors.ageRange} />
                   </div>
                   <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle leading-snug">
-                    You'll only match people in this range who added their age, and whose own filter fits you.
+                    You'll only match people in this range, and whose own filter fits you. Your range stays private.
                   </p>
                 </div>
               )}
@@ -425,15 +423,6 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 
         {/* Consent */}
         <section className="space-y-3">
-          <label className="flex items-center gap-3 text-sm text-fg">
-            <span className="flex-1 min-w-0">
-              <span className="block font-medium">Your age</span>
-              <span className="block text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-0.5">
-                Optional. Used only for age filters, never shown to anyone.
-              </span>
-            </span>
-            <AgeInput label="Your age" value={age} onChange={setAge} invalid={!!errors.age} placeholder="18+" />
-          </label>
           <label className="flex items-start gap-3 cursor-pointer text-sm text-fg">
             <input
               type="checkbox"

@@ -41,8 +41,8 @@ export interface UserPreferences {
   personalStyle?: string;
   /** True only after the member explicitly saves their profile. */
   profileComplete?: boolean;
-  /** Self-declared age (18-99). Kept on this device and in the live queue, never on the public profile. */
-  age?: number;
+  /** Opt-in (default off): lets chat partners see my age. The age itself is never stored in a readable document. */
+  showAgeOnProfile?: boolean;
   /** Only match people whose age is within ageMin-ageMax (and who fit theirs). */
   applyAgeFilter?: boolean;
   ageMin?: number;
@@ -54,7 +54,10 @@ export type PartnerStatus = 'online' | 'typing' | 'idle' | 'away';
 export interface PartnerProfile {
   id: string;
   displayName: string;
+  /** Filled only after the partner opted in, fetched from the trusted age API (never stored on the profile). */
   age?: number;
+  /** The partner's "Show my age" switch. */
+  showAgeOnProfile?: boolean;
   pronouns: string;
   intention: Intention;
   topics: string[];

@@ -322,22 +322,24 @@ test('Q-02: Authenticated users CAN list waiting entries; signed-out users canno
   await assertFails(testEnv.unauthenticatedContext().firestore().collection('match_queue').where('status', '==', 'waiting').get());
 });
 
-test('Q-03: Searcher CAN claim a waiting user together with a new shared conversation', async () => {
+test('Q-03: Clients CANNOT claim a waiting user or create the conversation (the matching API does)', async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await ctx.firestore().doc('match_queue/alice').set(waitingEntry());
     await ctx.firestore().doc('match_queue/bob').set(waitingEntry());
   });
   const alice = testEnv.authenticatedContext('alice').firestore();
   const convRef = alice.collection('conversations').doc();
-  await assertSucceeds(
-    alice.runTransaction(async (tx) => {
-      await tx.get(alice.doc('match_queue/bob'));
-      tx.set(convRef, { participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date() });
-      tx.update(alice.doc('match_queue/bob'), { status: 'matched', partnerId: 'alice', convId: convRef.id, updatedAt: new Date() });
-      tx.update(alice.doc('match_queue/alice'), { status: 'matched', partnerId: 'bob', convId: convRef.id, updatedAt: new Date() });
-    })
-  );
-  // Bob can read his matched entry; an outsider cannot.
+  const batch = alice.batch();
+  batch.set(convRef, { participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date() });
+  batch.update(alice.doc('match_queue/bob'), { status: 'matched', partnerId: 'alice', convId: convRef.id, updatedAt: new Date() });
+  batch.update(alice.doc('match_queue/alice'), { status: 'matched', partnerId: 'bob', convId: convRef.id, updatedAt: new Date() });
+  await assertFails(batch.commit());
+  await assertFails(alice.doc('conversations/solo').set({ participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date() }));
+  // The server (Admin SDK) pairs them; each side can then read their own matched entry, an outsider cannot.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('conversations/c9').set({ participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date() });
+    await ctx.firestore().doc('match_queue/bob').update({ status: 'matched', partnerId: 'alice', convId: 'c9' });
+  });
   await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('match_queue/bob').get());
   await assertFails(testEnv.authenticatedContext('carol').firestore().doc('match_queue/bob').get());
 });
@@ -1144,15 +1146,12 @@ test('SU-03: A suspended account CANNOT match, chat or post publicly, but CAN st
   );
 });
 
-test('Q-06: Queue entries CAN carry an 18+ age and a valid age range, nothing else', async () => {
+test('Q-06: Queue entries CANNOT carry an age or an age range', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
-  await assertSucceeds(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 22, ageMax: 35 }));
-  await assertSucceeds(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27 }));
-  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 16 }));
-  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 30, ageMax: 20 }));
-  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 17, ageMax: 30 }));
-  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 20 }));
-  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: '27' }));
+  await assertSucceeds(alice.doc('match_queue/alice').set(waitingEntry()));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), ageMin: 22, ageMax: 35 }));
+  await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), age: 27, ageMin: 22, ageMax: 35 }));
 });
 
 test('Q-07: Queue entries CAN carry short location, gender expression and topic lists', async () => {
@@ -1248,4 +1247,69 @@ test('N-01: Only the owner can read their Signals inbox, and nobody can write it
   // The invitations themselves stay server-only; a recipient cannot read or forge them directly.
   await assertFails(alice.doc('signalsInvitations/x').get());
   await assertFails(alice.doc('signalsInvitations/x').set({ senderId: 'bob', recipientId: 'alice', status: 'pending' }));
+});
+
+// ------------------------------------------------------------------
+// Age privacy and birthday integrity
+// ------------------------------------------------------------------
+const publicProfile = (extra: Record<string, unknown> = {}) => ({
+  displayName: 'Alice', pronouns: 'she/her', intention: 'open', region: 'Anywhere', topics: [], profileComplete: true, updatedAt: new Date(), ...extra,
+});
+
+test('P-01: The public profile CANNOT carry an age, but CAN carry the Show my age switch', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('users/alice/public/profile').set(publicProfile({ age: 27 })));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(publicProfile({ showAgeOnProfile: true })));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(publicProfile({ showAgeOnProfile: false })));
+  await assertFails(alice.doc('users/alice/public/profile').set(publicProfile({ showAgeOnProfile: 'yes' })));
+});
+
+test('P-02: A legacy age field can be cleared by a merge write (the client scrubs it on next save)', async () => {
+  await testEnv.withSecurityRulesDisabled((ctx) => ctx.firestore().doc('users/alice/public/profile').set(publicProfile({ age: 31 })));
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(publicProfile({ age: firebase.firestore.FieldValue.delete() }), { merge: true }));
+  assert.equal((await alice.doc('users/alice/public/profile').get()).data()?.age, undefined);
+});
+
+test('P-03: Birthday is set once; a client CANNOT change it afterwards, and cannot set an under-18 one', async () => {
+  const ref = (uid: string) => testEnv.authenticatedContext(uid).firestore().doc(`users/${uid}/private/settings`);
+  const adult = new Date(Date.now() - 30 * 365 * 86400000);
+  const other = new Date(Date.now() - 40 * 365 * 86400000);
+  const base = { createdAt: new Date(), updatedAt: new Date() };
+  await testEnv.withSecurityRulesDisabled((ctx) => ctx.firestore().doc('users/zed/private/settings').set(base));
+  await assertFails(ref('zed').update({ birthDate: new Date(), updatedAt: new Date() }));
+  await assertSucceeds(ref('zed').update({ birthDate: adult, updatedAt: new Date() }));
+  await assertFails(ref('zed').update({ birthDate: other, updatedAt: new Date() }));
+  await assertFails(ref('zed').set({ ...base, birthDate: other }));
+  // Saving other private fields alongside the same birthday still works.
+  await assertSucceeds(ref('zed').update({ birthDate: adult, exactLocation: 'Cebu', updatedAt: new Date() }));
+  await assertSucceeds(ref('zed').update({ exactLocation: 'Manila', updatedAt: new Date() }));
+});
+
+test('P-04: Private birthdays, age ranges, corrections, audit entries and rate limits are unreadable and unwritable from clients', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc('matchPrefs/alice').set({ ageMin: 20, ageMax: 30 });
+    await db.doc('birthdayCorrections/alice').set({ uid: 'alice', status: 'pending' });
+    await db.doc('ageAudit/a1').set({ action: 'x' });
+    await db.doc('apiRateLimits/alice_x').set({ start: 1, count: 1 });
+  });
+  for (const uid of ['alice', 'bob']) {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    for (const path of ['matchPrefs/alice', 'birthdayCorrections/alice', 'ageAudit/a1', 'apiRateLimits/alice_x']) {
+      await assertFails(db.doc(path).get());
+      await assertFails(db.doc(path).set({ status: 'approved', ageMin: 18, ageMax: 99 }));
+    }
+  }
+  // Another member cannot read your private settings (birthday).
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('users/alice/private/settings').get());
+});
+
+test('P-05: An under-18 account is blocked from queue, chat and posting by the eligibility rules', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('users/minor/public/profile').set(publicProfile({ displayName: 'minor' }));
+    // A birthday that is not an adult one can only exist if written server-side or tampered with; rules still refuse access.
+    await ctx.firestore().doc('users/minor/private/settings').set({ birthDate: new Date(Date.now() - 15 * 365 * 86400000), createdAt: new Date(), updatedAt: new Date() });
+  });
+  await assertFails(testEnv.authenticatedContext('minor').firestore().doc('match_queue/minor').set(waitingEntry()));
 });

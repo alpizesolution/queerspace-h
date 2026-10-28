@@ -93,7 +93,6 @@ const local: UserPreferences = {
   applyLocationFilter: true,
   applyGenderExpressionFilter: true,
   preferredGenderExpressions: ['Femme'],
-  age: 29,
   applyAgeFilter: true,
   ageMin: 25,
   ageMax: 35,
@@ -114,7 +113,6 @@ test('cloud restore keeps every field the cloud does not store', () => {
   assert.deepEqual(restored.locationSelection, ['Cebu']);
   assert.equal(restored.applyLocationFilter, true);
   assert.equal(restored.applyGenderExpressionFilter, true);
-  assert.equal(restored.age, 29);
   assert.equal(restored.applyAgeFilter, true);
   assert.equal(restored.ageMin, 25);
   assert.equal(restored.ageMax, 35);
@@ -160,7 +158,28 @@ test('cloud save then restore round-trips every cloud-stored field', () => {
 
 test('the cloud signature ignores device-only fields, so changing them skips the cloud write', () => {
   const base = cloudProfileSignature(local, ['b1']);
-  assert.equal(cloudProfileSignature({ ...local, age: 40, applyAgeFilter: false, ageMin: 30 }, ['b1']), base);
+  assert.equal(cloudProfileSignature({ ...local, applyAgeFilter: false, ageMin: 30 }, ['b1']), base);
   assert.notEqual(cloudProfileSignature({ ...local, displayName: 'Changed' }, ['b1']), base);
   assert.notEqual(cloudProfileSignature(local, ['b1', 'b2']), base);
+});
+
+test('age is never part of the public profile and the Show my age switch defaults to off', () => {
+  const withBirthday = { ...mockPrefs, birthDate: '1995-04-02' } as typeof mockPrefs;
+  const payload = buildPublicProfilePayload(withBirthday) as Record<string, unknown>;
+  assert.equal(typeof payload.age === 'number', false, 'no numeric age is written');
+  assert.equal(payload.showAgeOnProfile, false);
+  assert.equal((buildPublicProfilePayload({ ...withBirthday, showAgeOnProfile: true }) as Record<string, unknown>).showAgeOnProfile, true);
+  assert.equal(JSON.stringify(payload).includes('1995'), false, 'the birthday is not in the public payload');
+});
+
+test('the birthday is sent to private settings only on first submission', () => {
+  const prefs = { ...mockPrefs, birthDate: '1995-04-02' } as typeof mockPrefs;
+  assert.equal('birthDate' in buildPrivateSettingsPayload(prefs, []), false);
+  assert.equal('birthDate' in buildPrivateSettingsPayload(prefs, [], { withBirthDate: true }), true);
+});
+
+test('a legacy profile without the switch restores as hidden', () => {
+  const restored = mergeCloudProfile({ ...mockPrefs } as typeof mockPrefs, { displayName: 'Old', age: 33 }, {});
+  assert.notEqual(restored.showAgeOnProfile, true);
+  assert.equal((restored as unknown as Record<string, unknown>).age, undefined);
 });

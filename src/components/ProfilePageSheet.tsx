@@ -5,6 +5,7 @@ import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { UserPreferences } from '../types.ts';
 import { INTENTION_LABELS } from '../utils/matching-logic.ts';
 import { calculateAge } from '../utils/ageEligibility.ts';
+import { BirthdayCorrectionSheet } from './BirthdayCorrectionSheet.tsx';
 
 interface ProfilePageSheetProps {
   currentPrefs: UserPreferences;
@@ -16,6 +17,7 @@ interface ProfilePageSheetProps {
 /** Private self-view for the member; only the public fields are visible to other members. */
 export const ProfilePageSheet: React.FC<ProfilePageSheetProps> = ({ currentPrefs, onClose, onEditProfile, onEditPreferences }) => {
   const age = currentPrefs.birthDate ? calculateAge(currentPrefs.birthDate) : null;
+  const [correcting, setCorrecting] = React.useState(false);
   const myType = currentPrefs.applyGenderExpressionFilter
     ? (currentPrefs.preferredGenderExpressions || []).filter((value) => value !== 'Any / No preference')
     : [];
@@ -28,7 +30,8 @@ export const ProfilePageSheet: React.FC<ProfilePageSheetProps> = ({ currentPrefs
         <div className="min-w-0 flex-1">
           <h2 className="text-xl font-semibold tracking-tight truncate">{currentPrefs.displayName || 'Anonymous member'}</h2>
           <p className="text-sm text-muted mt-1">{[age !== null ? String(age) : '', currentPrefs.pronouns].filter(Boolean).join(' · ')}</p>
-          <p className="text-xs text-subtle mt-1">Anonymous member</p>
+          <p className="text-xs text-subtle mt-1">Anonymous member{age !== null ? ' · only you see your age unless Show my age is on' : ''}</p>
+          {age !== null && <button type="button" onClick={() => setCorrecting(true)} className="mt-1 text-xs font-semibold text-berry underline underline-offset-4">Correct my birthday</button>}
         </div>
       </section>
       {!currentPrefs.profileComplete && <div className="rounded-2xl border border-berry/30 bg-raised p-3 flex items-start gap-3">
@@ -70,5 +73,6 @@ export const ProfilePageSheet: React.FC<ProfilePageSheetProps> = ({ currentPrefs
       </section>
       <p className="text-xs leading-5 text-subtle">Your birthday and My Type stay private. You never need to share your real name or photo.</p>
     </div>
+    {correcting && <BirthdayCorrectionSheet onClose={() => setCorrecting(false)} />}
   </Sheet>;
 };

@@ -13,6 +13,8 @@ export interface ProfileLoadResult {
   fromCloudSuccess: boolean;
   /** Blocked IDs saved in the cloud (merge with this device's list; never shrink it). */
   blockedPartnerIds?: string[];
+  /** True when the cloud already holds the member's birthday (which is then never rewritten from the client). */
+  cloudHasBirthDate?: boolean;
 }
 
 /**
@@ -25,7 +27,10 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
     intention: prefs.intention || 'open',
     region: prefs.region || 'Anywhere / Worldwide',
     topics: (prefs.topics || []).slice(0, 8),
-    ...(prefs.birthDate && calculateAge(prefs.birthDate) !== null ? { age: calculateAge(prefs.birthDate)! } : {}),
+    // Age is never stored on the public profile (the trusted API serves it to opted-in chat partners).
+    // Clearing the field also scrubs any legacy value on the next save.
+    age: deleteField(),
+    showAgeOnProfile: prefs.showAgeOnProfile === true,
     aboutMe: (prefs.aboutMe || '').trim().slice(0, 160),
     myVibe: (prefs.myVibe || '').slice(0, 24),
     personalStyle: (prefs.personalStyle || '').slice(0, 24),
@@ -63,7 +68,12 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
 /**
  * Normalizes private settings payload (SOGIE, exact location, filters, blocklist)
  */
-export function buildPrivateSettingsPayload(prefs: UserPreferences, blockedPartnerIds: string[] = []) {
+export function buildPrivateSettingsPayload(
+  prefs: UserPreferences,
+  blockedPartnerIds: string[] = [],
+  /** Only the first submission sends the birthday; afterwards it is immutable and corrected through the reviewed API. */
+  options: { withBirthDate?: boolean } = {}
+) {
   return {
     exactLocation: prefs.locationSelection?.[0] || prefs.region || '',
     // One field in the rules: a listed option, or the person's own words when self-described.
@@ -72,7 +82,7 @@ export function buildPrivateSettingsPayload(prefs: UserPreferences, blockedPartn
     genderExpression: prefs.genderExpression || [],
     genderIdentity: prefs.genderIdentity === 'Self-described' ? prefs.genderIdentityCustom?.trim() || '' : prefs.genderIdentity || '',
     preferredGenderExpressions: prefs.preferredGenderExpressions || [],
-    ...(prefs.birthDate ? { birthDate: Timestamp.fromDate(new Date(`${prefs.birthDate}T00:00:00.000Z`)) } : {}),
+    ...(options.withBirthDate && prefs.birthDate ? { birthDate: Timestamp.fromDate(new Date(`${prefs.birthDate}T00:00:00.000Z`)) } : {}),
     blockedPartnerIds: blockedPartnerIds || [],
     updatedAt: serverTimestamp(),
   };
@@ -120,6 +130,7 @@ export function mergeCloudProfile(
   set('personalStyle', text(publicData.personalStyle));
   set('profileComplete', flag(publicData.profileComplete));
   set('showGenderExpressionOnProfile', flag(publicData.showGenderExpressionOnProfile));
+  set('showAgeOnProfile', flag(publicData.showAgeOnProfile));
   set('showSexualOrientationOnProfile', flag(publicData.showSexualOrientationOnProfile));
   set('showGenderIdentityOnProfile', flag(publicData.showGenderIdentityOnProfile));
   set('showSogieOnProfile', flag(publicData.showSogieOnProfile));
@@ -168,7 +179,9 @@ export async function saveAnonymousProfile(
   prefs: UserPreferences,
   blockedPartnerIds: string[] = [],
   /** false: save on this device only (nothing the cloud stores has changed). */
-  cloud = true
+  cloud = true,
+  /** withBirthDate: the member is submitting their birthday for the first time. */
+  options: { withBirthDate?: boolean } = {}
 ): Promise<StorageOperationResult> {
   let localSaved = false;
   try {
@@ -195,7 +208,7 @@ export async function saveAnonymousProfile(
     const privateRef = doc(db, 'users', uid, 'private', 'settings');
 
     const publicPayload = buildPublicProfilePayload(prefs);
-    const privatePayload = buildPrivateSettingsPayload(prefs, blockedPartnerIds);
+    const privatePayload = buildPrivateSettingsPayload(prefs, blockedPartnerIds, options);
 
     // Save public profile. createdAt is stamped once, so the admin page can chart new members.
     const existingPublicSnap = await getDoc(publicRef);
@@ -285,6 +298,7 @@ export async function loadAnonymousProfile(): Promise<ProfileLoadResult> {
       source: 'cloud',
       fromCloudSuccess: true,
       blockedPartnerIds: strings(privateData.blockedPartnerIds) ?? [],
+      cloudHasBirthDate: privateData.birthDate instanceof Timestamp,
     };
   } catch (err: unknown) {
     console.warn('[ProfilePersistence] Error loading cloud profile:', err);

@@ -42,6 +42,7 @@ import {
 import { BarChart } from './BarChart.tsx';
 import { rememberAdminDevice } from '../utils/adminDevice.ts';
 import { SupportTab } from './SupportTab.tsx';
+import { BirthdayCorrectionsTab } from './BirthdayCorrectionsTab.tsx';
 import { RoomTab } from './RoomTab.tsx';
 import { countUnreadSupport } from '../services/supportService.ts';
 import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
@@ -274,7 +275,7 @@ const Dashboard: React.FC = () => {
   const openSuggestions = suggestions?.filter((s) => s.status === 'open').length ?? 0;
   const openReports = reports?.filter((r) => r.status === 'open').length ?? 0;
 
-  const [inboxView, setInboxView] = useState<'suggestions' | 'reports'>('suggestions');
+  const [inboxView, setInboxView] = useState<'suggestions' | 'reports' | 'birthdays'>('suggestions');
 
   const tabs: { id: Tab; label: string; short: string; icon: typeof Inbox; badge?: number }[] = [
     { id: 'overview', label: 'Overview', short: 'Home', icon: LayoutDashboard },
@@ -318,6 +319,7 @@ const Dashboard: React.FC = () => {
               [
                 ['suggestions', 'Suggestions', openSuggestions],
                 ['reports', 'Reports', openReports],
+                ['birthdays', 'Birthdays', 0],
               ] as const
             ).map(([id, label, count]) => (
               <button
@@ -331,7 +333,9 @@ const Dashboard: React.FC = () => {
               </button>
             ))}
           </div>
-          {inboxView === 'suggestions' ? (
+          {inboxView === 'birthdays' ? (
+            <BirthdayCorrectionsTab />
+          ) : inboxView === 'suggestions' ? (
             <SuggestionsTab items={suggestions} setItems={setSuggestions} onConfirm={setConfirm} />
           ) : (
             <ReportsTab items={reports} setItems={setReports} onConfirm={setConfirm} />

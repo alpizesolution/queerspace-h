@@ -28,6 +28,7 @@ import { ICEBREAKER_PROMPTS } from '../utils/mock-partners.ts';
 import { INTENTION_LABELS, formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
 import { createTypingSender, createTypingWatcher, TypingSender } from '../utils/typing-indicator.ts';
+import { usePartnerAge } from '../hooks/usePartnerAge.ts';
 import { chatEventManager } from '../utils/chat-events.ts';
 import {
   startOrCreateConversation,
@@ -81,6 +82,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [signalNotice, setSignalNotice] = useState<string | null>(null);
   const [signalError, setSignalError] = useState<string | null>(null);
   const [showPartnerProfile, setShowPartnerProfile] = useState(false);
+  // Shown only while the partner has "Show my age" on; follows their switch live.
+  const partnerAge = usePartnerAge(partner.id, conversationId);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [reportReason, setReportReason] = useState('Harassment or disrespectful behavior');
@@ -446,7 +449,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <h1 className="text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg truncate">{partner.displayName}</h1>
             <p className="text-[length:calc(12px_*_var(--fs,1))] text-muted truncate" aria-live="polite">
               <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${partnerLeft ? 'bg-subtle' : 'bg-emerald-400'}`} />
-              {partner.pronouns}{partner.age ? ` · ${partner.age}` : ''} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}
+              {partner.pronouns}{partnerAge ? ` · ${partnerAge}` : ''} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}
               {visibleLocation && <> · {visibleLocation}</>}
             </p>
           </div>
@@ -815,7 +818,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <div className="space-y-5 text-fg">
             <section className="flex items-center gap-3">
               <AnimalAvatar avatar={partner.avatar} seed={partner.id} className="w-14 h-14" />
-              <div className="min-w-0"><h2 className="text-lg font-semibold truncate">{partner.displayName}</h2><p className="text-sm text-muted">{[partner.age ? String(partner.age) : '', partner.pronouns].filter(Boolean).join(' · ')}</p></div>
+              <div className="min-w-0"><h2 className="text-lg font-semibold truncate">{partner.displayName}</h2><p className="text-sm text-muted">{[partnerAge ? String(partnerAge) : '', partner.pronouns].filter(Boolean).join(' · ')}</p></div>
             </section>
             {partner.aboutMe && <section><p className="label">About Me</p><p className="text-sm leading-6 whitespace-pre-wrap break-words">{partner.aboutMe}</p></section>}
             {partner.myVibe && <section><p className="label">My Vibe</p><span className="chip">{partner.myVibe}</span></section>}
