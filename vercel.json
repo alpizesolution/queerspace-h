@@ -1,13 +1,12 @@
 {
   "buildCommand": "npm run build",
+  "cleanUrls": true,
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/__/auth/:path*", "destination": "/api/firebase-auth?p=__/auth/:path*" },
     { "source": "/__/firebase/:path*", "destination": "/api/firebase-auth?p=__/firebase/:path*" },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/", "destination": "/index.html" }
   ],
   "headers": [
     {
@@ -34,7 +33,15 @@
       ]
     },
     {
+      "source": "/admin/:path*",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+    },
+    {
       "source": "/admin",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+    },
+    {
+      "source": "/api/:path*",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     }
   ]

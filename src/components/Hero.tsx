@@ -86,6 +86,19 @@ export const Hero: React.FC<HeroProps> = ({
           </button>
         ))}
       </div>
+
+      <div className="mt-8 max-w-2xl text-[length:calc(13px_*_var(--fs,1))] leading-relaxed text-muted">
+        <p>
+          QUEERSPACE PH is an anonymous space for women who love women in the Philippines: 1-on-1 chat, a public room,
+          anonymous posts and a community feed, for adults 18 and over.
+        </p>
+        <nav aria-label="Learn more about QUEERSPACE PH" className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          <a href="/anonymous-wlw-chat" className="text-berry underline underline-offset-4 hover:text-fg">Anonymous WLW chat</a>
+          <a href="/sapphic-community-philippines" className="text-berry underline underline-offset-4 hover:text-fg">Sapphic community in the Philippines</a>
+          <a href="/wlw-dating-philippines" className="text-berry underline underline-offset-4 hover:text-fg">WLW dating in the Philippines</a>
+          <a href="/wlw-sapphic-guide" className="text-berry underline underline-offset-4 hover:text-fg">WLW and sapphic guide</a>
+        </nav>
+      </div>
     </section>
   );
 };

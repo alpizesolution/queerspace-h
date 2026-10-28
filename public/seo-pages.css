@@ -1,0 +1,28 @@
+:root{color-scheme:dark;--ink:#120b17;--surface:#1a111f;--line:#33253a;--fg:#f7f0f6;--muted:#c4b6c9;--berry:#e07bb8;--lav:#c8b5e6}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ink);color:var(--fg);font:17px/1.7 "Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--berry);text-underline-offset:3px}a:hover{color:var(--fg)}
+a:focus-visible{outline:2px solid var(--berry);outline-offset:3px;border-radius:4px}
+header.site{border-bottom:1px solid var(--line);background:rgba(18,11,23,.9)}
+.wrap{max-width:46rem;margin:0 auto;padding:0 1.25rem}
+header.site .wrap{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-height:3.5rem;flex-wrap:wrap;padding-top:.4rem;padding-bottom:.4rem}
+.brand{font-family:"Playfair Display",Georgia,serif;font-weight:600;font-size:1.15rem;color:var(--fg);text-decoration:none;letter-spacing:.02em}
+.brand span{color:var(--berry);margin-left:.25em}
+.open{display:inline-flex;align-items:center;min-height:2.75rem;padding:0 1.1rem;border-radius:999px;background:var(--berry);color:var(--ink);font-weight:600;font-size:.95rem;text-decoration:none}
+.open:hover{color:var(--ink);filter:brightness(1.08)}
+nav.crumbs{font-size:.85rem;color:var(--muted);padding-top:1.25rem}
+nav.crumbs a{color:var(--muted)}
+main{padding-bottom:3rem}
+h1{font-family:"Playfair Display",Georgia,serif;font-weight:600;font-size:clamp(1.9rem,6vw,2.6rem);line-height:1.15;letter-spacing:-.01em;margin:1rem 0 .75rem}
+h2{font-family:"Playfair Display",Georgia,serif;font-weight:600;font-size:1.5rem;line-height:1.25;margin:2.4rem 0 .6rem}
+h3{font-size:1.05rem;margin:1.5rem 0 .25rem}
+p.lead{font-size:1.15rem;color:var(--muted);margin-top:0}
+li{margin:.35rem 0}
+ol,ul{padding-left:1.25rem}
+.cta{margin:2.5rem 0 0;padding:1.4rem;border:1px solid var(--line);border-radius:1.25rem;background:var(--surface)}
+.cta p{margin:.2rem 0 .9rem;color:var(--muted)}
+.more{margin-top:2.5rem;border-top:1px solid var(--line);padding-top:1.25rem}
+.more h2{font-size:1.1rem;margin:0 0 .5rem}
+footer.site{border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;padding:1.5rem 0 2.5rem}
+footer.site a{color:var(--muted)}
+footer.site ul{list-style:none;padding:0;margin:.5rem 0 0;display:flex;flex-wrap:wrap;gap:.25rem 1.25rem}
