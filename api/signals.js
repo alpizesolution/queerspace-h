@@ -51,6 +51,17 @@ export function touchInbox(tx, db, uid, pending) {
   }, { merge: true });
 }
 
+/** True when `conversation` is an active chat between exactly these two members. */
+export function isActiveMatch(conversation, uid, otherId) {
+  const participants = conversation?.participants;
+  return conversation?.status === 'active'
+    && Array.isArray(participants)
+    && participants.length === 2
+    && participants.includes(uid)
+    && participants.includes(otherId)
+    && uid !== otherId;
+}
+
 function idempotencyDocId(uid, key) {
   return createHash('sha256').update(uid + ':' + key).digest('hex');
 }
@@ -186,7 +197,7 @@ export default async function handler(req, res) {
       const invitations = sorted.map(invite => ({ ...invite, partner: profiles.get(otherId(invite)) || partnerSummary(null) }));
       return send(res, 200, { invitations });
     }
-    const { action, recipientId, invitationId, message, idempotencyKey } = req.body || {};
+    const { action, recipientId, invitationId, message, idempotencyKey, convId } = req.body || {};
 
     if (['create'].includes(action)) {
       if (!safeId(recipientId) || recipientId === uid) return send(res, 400, { error: 'invalid_recipient' });
@@ -204,13 +215,15 @@ export default async function handler(req, res) {
       const expiresAt = Timestamp.fromMillis(now.toMillis() + INVITE_TTL_MS);
 
       const result = await db.runTransaction(async tx => {
-        const [prior, rateSnap, senderSettings, recipientSettings, senderSuspension, recipientSuspension] = await Promise.all([
+        const [prior, rateSnap, senderSettings, recipientSettings, senderSuspension, recipientSuspension, convSnap] = await Promise.all([
           tx.get(idemRef),
           tx.get(rateRef),
           tx.get(db.doc(`users/${uid}/private/settings`)),
           tx.get(db.doc(`users/${recipientId}/private/settings`)),
           tx.get(db.doc(`suspensions/${uid}`)),
           tx.get(db.doc(`suspensions/${recipientId}`)),
+          // The conversation the match created; only the matching API can create one (clients are denied by rules).
+          tx.get(db.doc(`conversations/${safeId(convId) ? convId : 'invalid-conversation'}`)),
         ]);
         if (prior.exists) {
           const priorData = prior.data();
@@ -218,6 +231,11 @@ export default async function handler(req, res) {
             throw Object.assign(new Error('idempotency_conflict'), { statusCode: 409 });
           }
           return { invitationId: priorData.invitationId, replayed: true };
+        }
+        // A Signal is a way to stay in touch after a match: only between the two members of a conversation
+        // that is currently active. It is never a way to contact someone you have not been matched with.
+        if (!isActiveMatch(convSnap.exists ? convSnap.data() : null, uid, recipientId)) {
+          throw Object.assign(new Error('not_matched'), { statusCode: 403 });
         }
         if (senderSuspension.exists || recipientSuspension.exists) {
           throw Object.assign(new Error('account_unavailable'), { statusCode: 403 });

@@ -5,6 +5,7 @@ import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth';
 import { getApps as getAdminApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import handler from './signals.js';
+import { getAdminApp } from './_lib.js';
 
 const enabled = process.env.SIGNALS_INTEGRATION_TESTS === 'true';
 process.env.FIREBASE_AUTH_EMULATOR_HOST ||= '127.0.0.1:9099';
@@ -70,10 +71,14 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     const recipient = await newAnonymousUser('recipient');
     const outsider = await newAnonymousUser('outsider');
 
+    // Signals only travel inside an active, server-created match between the two members.
+    const seedDb = getFirestore(getAdminApp());
+    await seedDb.doc('conversations/signals-conv-main').set({ participants: [sender.uid, recipient.uid].sort(), status: 'active', createdAt: new Date(), updatedAt: new Date() });
     const key = `signals-test-${Date.now()}-create`;
     const created = await callApi(sender, 'POST', {
       action: 'create',
       recipientId: recipient.uid,
+      convId: 'signals-conv-main',
       idempotencyKey: key,
       message: 'Hello, if you would like to talk.',
     });
@@ -89,6 +94,7 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     const retry = await callApi(sender, 'POST', {
       action: 'create',
       recipientId: recipient.uid,
+      convId: 'signals-conv-main',
       idempotencyKey: key,
       message: 'Hello, if you would like to talk.',
     });
@@ -198,9 +204,11 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     await db.doc(`users/${blockedRecipient.uid}/private/settings`).set({
       blockedPartnerIds: [blockedSender.uid],
     });
+    await seedDb.doc('conversations/signals-conv-blocked').set({ participants: [blockedSender.uid, blockedRecipient.uid].sort(), status: 'active', createdAt: new Date(), updatedAt: new Date() });
     const blocked = await callApi(blockedSender, 'POST', {
       action: 'create',
       recipientId: blockedRecipient.uid,
+      convId: 'signals-conv-blocked',
       idempotencyKey: `signals-test-${Date.now()}-blocked`,
       message: 'This should not be created.',
     });

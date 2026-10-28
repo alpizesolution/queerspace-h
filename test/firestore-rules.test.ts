@@ -1313,3 +1313,12 @@ test('P-05: An under-18 account is blocked from queue, chat and posting by the e
   });
   await assertFails(testEnv.authenticatedContext('minor').firestore().doc('match_queue/minor').set(waitingEntry()));
 });
+
+test('SG-01: Clients CANNOT write Signals or conversations directly, so a Signal cannot bypass the match check', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('signalsInvitations/inv1').set({ senderId: 'alice', recipientId: 'bob', status: 'pending', message: 'hi', createdAt: new Date() }));
+  await assertFails(alice.doc('signalsPairs/pair1').set({ participants: ['alice', 'bob'], status: 'active', createdAt: new Date() }));
+  await assertFails(alice.doc('signalsInbox/bob').set({ rev: 99, pending: { x: new Date() } }));
+  await assertFails(alice.doc('conversations/fake-match').set({ participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date() }));
+  await assertFails(alice.collection('signalsInvitations').get());
+});
