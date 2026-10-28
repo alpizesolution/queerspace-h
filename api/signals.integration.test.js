@@ -108,6 +108,17 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     assert.equal(typeof revBefore, 'number');
     assert.equal((await db.doc(`signalsInbox/${outsider.uid}`).get()).exists, false);
 
+    // The recipient reviewing the invitation sees the SENDER's pseudonym (never their own, nothing private).
+    await db.doc(`users/${sender.uid}/public/profile`).set({ displayName: 'Moon_Fox', avatar: 'fox.1.2', birthDate: 'never exposed' });
+    await db.doc(`users/${recipient.uid}/public/profile`).set({ displayName: 'Night_Owl' });
+    const recipientInvites = await callApi(recipient, 'GET');
+    assert.equal(recipientInvites.body.invitations.length, 1);
+    assert.equal(recipientInvites.body.invitations[0].direction, 'received');
+    assert.deepEqual(recipientInvites.body.invitations[0].partner, { displayName: 'Moon_Fox', avatar: 'fox.1.2' });
+    assert.equal(JSON.stringify(recipientInvites.body).includes('never exposed'), false);
+    const senderInvites = await callApi(sender, 'GET');
+    assert.deepEqual(senderInvites.body.invitations[0].partner, { displayName: 'Night_Owl', avatar: null }, 'sender sees the recipient, not themselves');
+
     const forbiddenAccept = await callApi(outsider, 'POST', {
       action: 'accept',
       invitationId: created.body.invitationId,
@@ -127,7 +138,6 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     assert.ok(inboxAfter.data()?.rev > revBefore, 'accepting wakes the recipient listener');
     assert.ok((await db.doc(`signalsInbox/${sender.uid}`).get()).data()?.rev >= 2, 'and the sender listener');
 
-    await db.doc(`users/${sender.uid}/public/profile`).set({ displayName: 'Moon_Fox', avatar: 'fox.1.2', birthDate: 'never exposed' });
     const pair = await db.doc(`signalsPairs/${created.body.invitationId}`).get();
     assert.equal(pair.exists, true);
     assert.deepEqual(pair.data()?.participants, [sender.uid, recipient.uid].sort());
@@ -144,7 +154,7 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     // Each person sees the OTHER participant's pseudonym; a missing profile falls back to null.
     const recipientActivePairs = await handlerGetPairs(recipient);
     assert.deepEqual(recipientActivePairs.body.pairs[0].partner, { displayName: 'Moon_Fox', avatar: 'fox.1.2' });
-    assert.deepEqual(senderActivePairs.body.pairs[0].partner, { displayName: null, avatar: null });
+    assert.deepEqual(senderActivePairs.body.pairs[0].partner, { displayName: 'Night_Owl', avatar: null });
     assert.equal(JSON.stringify(recipientActivePairs.body).includes('never exposed'), false);
 
     const outsiderPairs = await handlerGetPairs(outsider);
