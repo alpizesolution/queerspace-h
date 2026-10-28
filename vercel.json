@@ -1,12 +1,22 @@
 {
   "buildCommand": "npm run build",
-  "cleanUrls": true,
   "outputDirectory": "dist",
+  "redirects": [
+    { "source": "/anonymous-wlw-chat.html", "destination": "/anonymous-wlw-chat", "permanent": true },
+    { "source": "/sapphic-community-philippines.html", "destination": "/sapphic-community-philippines", "permanent": true },
+    { "source": "/wlw-dating-philippines.html", "destination": "/wlw-dating-philippines", "permanent": true },
+    { "source": "/wlw-sapphic-guide.html", "destination": "/wlw-sapphic-guide", "permanent": true },
+    { "source": "/index.html", "destination": "/", "permanent": true }
+  ],
   "rewrites": [
     { "source": "/__/auth/:path*", "destination": "/api/firebase-auth?p=__/auth/:path*" },
     { "source": "/__/firebase/:path*", "destination": "/api/firebase-auth?p=__/firebase/:path*" },
-    { "source": "/admin", "destination": "/index.html" },
-    { "source": "/admin/", "destination": "/index.html" }
+    { "source": "/anonymous-wlw-chat", "destination": "/anonymous-wlw-chat.html" },
+    { "source": "/sapphic-community-philippines", "destination": "/sapphic-community-philippines.html" },
+    { "source": "/wlw-dating-philippines", "destination": "/wlw-dating-philippines.html" },
+    { "source": "/wlw-sapphic-guide", "destination": "/wlw-sapphic-guide.html" },
+    { "source": "/admin", "destination": "/" },
+    { "source": "/admin/", "destination": "/" }
   ],
   "headers": [
     {

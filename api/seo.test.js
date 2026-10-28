@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { HOME, PAGES, SITE } from '../scripts/seo/pages.mjs';
 
-const read = (f) => fs.readFileSync(f, 'utf8');
+// Line endings differ between Windows checkouts and the generator, so compare with LF only.
+const read = (f) => fs.readFileSync(f, 'utf8').split('\r\n').join('\n');
 const pageFile = (p) => `public/${p.path.slice(1)}.html`;
 const meta = (html, re) => (re.exec(html) || [])[1];
 const index = read('index.html');
@@ -70,7 +71,14 @@ test('robots.txt allows search engines on public pages, excludes admin and API, 
 });
 
 test('hosting config: no catch-all rewrite, clean URLs, noindex on admin and API', () => {
-  assert.equal(vercel.cleanUrls, true);
+  // cleanUrls stays off so the Search Console verification file is served at its exact .html URL;
+  // the landing pages get clean URLs through explicit rewrites, and their .html twins redirect to them.
+  assert.notEqual(vercel.cleanUrls, true);
+  for (const page of PAGES) {
+    assert.ok(vercel.rewrites.some((r) => r.source === page.path && r.destination === `${page.path}.html`), `${page.path} rewrite`);
+    assert.ok(vercel.redirects.some((r) => r.source === `${page.path}.html` && r.destination === page.path && r.permanent), `${page.path}.html redirect`);
+  }
+  assert.equal(vercel.redirects.some((r) => /google/.test(r.source)), false, 'the verification file is never redirected');
   const sources = vercel.rewrites.map((r) => r.source);
   assert.equal(sources.includes('/(.*)'), false, 'unknown URLs must 404 instead of returning the app');
   assert.ok(sources.includes('/admin'));
@@ -101,4 +109,15 @@ test('the generated files are up to date with scripts/seo/pages.mjs', async () =
   execFileSync(process.execPath, ['scripts/generate-seo-pages.mjs'], { stdio: 'ignore' });
   const after = ['public/robots.txt', 'public/sitemap.xml', 'public/404.html', ...PAGES.map(pageFile)].map(read);
   assert.deepEqual(after, before);
+});
+
+test('Google Search Console verification: exact file and a single exact meta tag', () => {
+  const file = fs.readFileSync('public/google2171650d1368b006.html', 'utf8');
+  assert.equal(file, 'google-site-verification: google2171650d1368b006.html');
+  const tags = index.match(/<meta name="google-site-verification"[^>]*>/g) || [];
+  assert.equal(tags.length, 1, 'exactly one verification tag');
+  assert.equal(tags[0], '<meta name="google-site-verification" content="d6_mLeo2OczliZysWty_P2zp9_MTZ4jhXWRSmPeCuvw" />');
+  assert.ok(index.indexOf('google-site-verification') < index.indexOf('</head>'), 'the tag is inside <head>');
+  for (const f of ['public/robots.txt', 'public/sitemap.xml']) assert.equal(read(f).includes('google2171650d1368b006'), false, `${f} does not list the file`);
+  assert.ok(read('vite.config.ts').includes('google['), 'the service worker never replaces the file with the app shell');
 });
