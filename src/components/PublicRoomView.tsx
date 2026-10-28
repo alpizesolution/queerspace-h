@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ReactableBubble } from './ReactionPicker.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
-import { ArrowUp, BadgeCheck, CheckCircle2, Reply, SmilePlus, Trash2, Users, X } from 'lucide-react';
+import { ArrowUp, BadgeCheck, CheckCircle2, Reply, Trash2, Users, X } from 'lucide-react';
 import { ConfirmDialog } from './Sheet.tsx';
 import { SwipeToReply } from './SwipeToReply.tsx';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
@@ -284,7 +285,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           const el = e.currentTarget;
           stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
         }}
-        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4 space-y-4"
+        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 py-3 space-y-3"
         aria-live="polite"
       >
         {status === 'error' && (
@@ -316,7 +317,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
               ))}
 
             <div className={`max-w-[80%] flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}>
-              <div className="flex items-baseline gap-1.5 mb-1 px-1 text-[12px]">
+              <div className="flex items-baseline gap-1.5 mb-0.5 px-1 text-[12px]">
                 {!msg.isSelf && <span className="font-semibold text-fg">{msg.author}</span>}
                 {msg.team && (
                   <span className="inline-flex items-center gap-1 self-center px-1.5 py-px rounded-full bg-berry/15 text-berry text-[10.5px] font-semibold uppercase tracking-wide">
@@ -328,8 +329,17 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                 <span className="text-subtle">{formatChatTime(msg.timestamp)}</span>
               </div>
               <SwipeToReply onReply={() => startReply(msg)} disabled={!teamAvailable} className="max-w-full">
-                <div
+                <ReactableBubble
                   id={`room-${msg.id}`}
+                  open={pickerFor === msg.id}
+                  onToggle={() => setPickerFor((current) => (current === msg.id ? null : msg.id))}
+                  onOpen={() => setPickerFor(msg.id)}
+                  onClose={() => setPickerFor((current) => (current === msg.id ? null : current))}
+                  reactions={ROOM_REACTIONS}
+                  mine={reacted[msg.id]}
+                  onPick={(id) => react(msg.id, id as RoomReactionId)}
+                  boundsRef={scrollRef}
+                  alignRight={msg.isSelf}
                   className={`px-3.5 py-2 text-[15px] leading-snug rounded-[20px] break-words transition-shadow ${
                     msg.isSelf
                       ? 'bg-plum text-fg rounded-br-md'
@@ -352,53 +362,31 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                     </button>
                   )}
                   <p className="whitespace-pre-wrap">{msg.text}</p>
-                </div>
+                </ReactableBubble>
               </SwipeToReply>
 
-              <div className={`flex flex-wrap items-center gap-1 mt-1 ${msg.isSelf ? 'justify-end' : ''}`}>
-                {ROOM_REACTIONS.filter((r) => msg.reactions?.[r.id] || reacted[msg.id] === r.id).map((r) => {
-                  const mine = reacted[msg.id] === r.id;
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => react(msg.id, r.id)}
-                      aria-pressed={mine}
-                      aria-label={`${r.label} reaction, ${msg.reactions?.[r.id] ?? 0}${mine ? ', yours' : ''}`}
-                      className={`inline-flex items-center gap-1 h-7 px-2 rounded-full text-[12px] border transition-colors cursor-pointer ${
-                        mine ? 'bg-plum/40 border-berry/60 text-fg' : 'bg-surface border-line text-muted hover:text-fg'
-                      }`}
-                    >
-                      <span aria-hidden="true">{r.emoji}</span>
-                      {msg.reactions?.[r.id] ?? 0}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => setPickerFor(pickerFor === msg.id ? null : msg.id)}
-                  aria-expanded={pickerFor === msg.id}
-                  aria-label="Add a reaction"
-                  className="icon-btn w-7 h-7 text-subtle"
-                >
-                  <SmilePlus className="w-4 h-4" />
-                </button>
-                {pickerFor === msg.id && (
-                  <div role="group" aria-label="Pick a reaction" className="flex items-center gap-0.5 p-0.5 rounded-full bg-raised border border-line anim-pop">
-                    {ROOM_REACTIONS.map((r) => (
+              {ROOM_REACTIONS.some((r) => msg.reactions?.[r.id] || reacted[msg.id] === r.id) && (
+                <div className={`flex flex-wrap items-center gap-1 mt-1 ${msg.isSelf ? 'justify-end' : ''}`}>
+                  {ROOM_REACTIONS.filter((r) => msg.reactions?.[r.id] || reacted[msg.id] === r.id).map((r) => {
+                    const mine = reacted[msg.id] === r.id;
+                    return (
                       <button
                         key={r.id}
                         type="button"
                         onClick={() => react(msg.id, r.id)}
-                        aria-label={r.label}
-                        className="w-8 h-8 rounded-full text-[17px] hover:bg-surface cursor-pointer"
+                        aria-pressed={mine}
+                        aria-label={`${r.label} reaction, ${msg.reactions?.[r.id] ?? 0}${mine ? ', yours' : ''}`}
+                        className={`inline-flex items-center gap-1 h-6 px-1.5 rounded-full text-[12px] border transition-colors cursor-pointer ${
+                          mine ? 'bg-plum/40 border-berry/60 text-fg' : 'bg-surface border-line text-muted hover:text-fg'
+                        }`}
                       >
-                        {r.emoji}
+                        <span aria-hidden="true">{r.emoji}</span>
+                        {msg.reactions?.[r.id] ?? 0}
                       </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {(teamAvailable || isModerator) && (
