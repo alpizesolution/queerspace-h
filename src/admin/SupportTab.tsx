@@ -44,59 +44,78 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
   const open = threads?.find((t) => t.id === openId) ?? null;
 
   return (
-    <div>
+    <div className="min-w-0">
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Support</h1>
-      <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mb-5">
-        Private chats from “Chat with us”. Replies show as {TEAM_NAME}, and the member sees them next time they open
-        the app.
+      <p className="mb-4 text-[length:calc(13px_*_var(--fs,1))] text-muted sm:mb-5">
+        <span className="sm:hidden">Private messages to the {TEAM_NAME}.</span>
+        <span className="hidden sm:inline">
+          Private chats from “Chat with us”. Replies show as {TEAM_NAME}, and the member sees them next time they open
+          the app.
+        </span>
       </p>
       {error && <p className="card p-4 mb-4 text-sm text-danger">Support chats couldn’t load. Try again.</p>}
 
-      <div className="grid gap-4 desk:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-        <ul className={`card divide-y divide-line self-start ${open ? 'hidden desk:block' : ''}`}>
+      {/* Single column on phones; inbox + conversation side by side from tablet width up. */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] desk:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+        <div
+          className={`min-w-0 self-start overflow-hidden rounded-2xl border border-line bg-surface md:max-h-[75dvh] md:overflow-y-auto ${
+            open ? 'hidden md:block' : ''
+          }`}
+        >
           {!threads ? (
-            <li className="p-4 text-[length:calc(13px_*_var(--fs,1))] text-subtle">Loading…</li>
+            <p className="px-4 py-4 text-[length:calc(13px_*_var(--fs,1))] text-subtle">Loading…</p>
           ) : threads.length === 0 ? (
-            <li className="p-4 text-[length:calc(13px_*_var(--fs,1))] text-subtle">No support chats yet.</li>
+            <p className="px-4 py-4 text-[length:calc(13px_*_var(--fs,1))] text-subtle">No support chats yet.</p>
           ) : (
-            threads.map((t) => (
-              <li key={t.id}>
-                <button
-                  onClick={() => setOpenId(t.id)}
-                  className={`w-full flex items-start gap-3 p-3 text-left hover:bg-raised transition-colors cursor-pointer ${
-                    t.id === openId ? 'bg-raised' : ''
-                  }`}
-                >
-                  <AnimalAvatar avatar={t.avatar} seed={t.id} className="w-9 h-9 shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline gap-2">
-                      <span className={`truncate text-[length:calc(14px_*_var(--fs,1))] ${t.unreadForTeam ? 'font-semibold text-fg' : 'text-muted'}`}>
-                        {t.displayName}
-                      </span>
-                      <span className="ml-auto shrink-0 text-[length:calc(11px_*_var(--fs,1))] text-subtle">{formatAgo(t.updatedAt)}</span>
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span className="truncate text-[length:calc(12.5px_*_var(--fs,1))] text-subtle">
-                        {t.lastFrom === 'team' ? 'You: ' : ''}
-                        {t.lastMessage}
-                      </span>
-                      {t.unreadForTeam && (
-                        <span className="ml-auto w-2 h-2 shrink-0 rounded-full bg-berry">
-                          <span className="sr-only">Unread</span>
+            <ul className="divide-y divide-line/60">
+              {threads.map((t) => (
+                <li key={t.id} className="min-w-0">
+                  <button
+                    onClick={() => setOpenId(t.id)}
+                    aria-current={t.id === openId ? 'true' : undefined}
+                    className={`flex w-full min-w-0 min-h-[64px] items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer hover:bg-raised/70 active:bg-raised focus-visible:outline-none focus-visible:bg-raised focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-berry/60 ${
+                      t.id === openId ? 'bg-raised' : ''
+                    }`}
+                  >
+                    <AnimalAvatar avatar={t.avatar} seed={t.id} className="h-11 w-11 shrink-0" />
+                    <span className="block min-w-0 flex-1">
+                      <span className="flex min-w-0 items-baseline gap-2">
+                        <span
+                          className={`min-w-0 flex-1 truncate text-[length:calc(15px_*_var(--fs,1))] leading-tight ${
+                            t.unreadForTeam ? 'font-semibold text-fg' : 'font-medium text-fg/90'
+                          }`}
+                        >
+                          {t.displayName}
                         </span>
-                      )}
+                        <span className="shrink-0 text-[length:calc(11px_*_var(--fs,1))] text-subtle">{formatAgo(t.updatedAt)}</span>
+                      </span>
+                      <span className="mt-0.5 flex min-w-0 items-start gap-2">
+                        <span
+                          className={`line-clamp-1 min-w-0 flex-1 break-words text-[length:calc(13px_*_var(--fs,1))] leading-snug sm:line-clamp-2 ${
+                            t.unreadForTeam ? 'text-muted' : 'text-subtle'
+                          }`}
+                        >
+                          {t.lastFrom === 'team' ? 'You: ' : ''}
+                          {t.lastMessage}
+                        </span>
+                        {t.unreadForTeam && (
+                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-berry">
+                            <span className="sr-only">Unread</span>
+                          </span>
+                        )}
+                      </span>
                     </span>
-                  </span>
-                </button>
-              </li>
-            ))
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
-        </ul>
+        </div>
 
         {open ? (
           <SupportConversation key={open.id} thread={open} onBack={() => setOpenId(null)} />
         ) : (
-          <div className="hidden desk:flex card p-8 items-center justify-center text-[length:calc(13px_*_var(--fs,1))] text-subtle">
+          <div className="hidden min-w-0 items-center justify-center rounded-2xl border border-line bg-surface p-8 text-[length:calc(13px_*_var(--fs,1))] text-subtle md:flex">
             Pick a chat to read and reply.
           </div>
         )}
@@ -138,9 +157,9 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
   };
 
   return (
-    <section className="card flex flex-col min-h-[60dvh] max-h-[75dvh]" aria-label={`Chat with ${thread.displayName}`}>
+    <section className="card flex min-w-0 flex-col min-h-[60dvh] max-h-[75dvh]" aria-label={`Chat with ${thread.displayName}`}>
       <header className="flex items-center gap-3 p-3 border-b border-line">
-        <button onClick={onBack} className="icon-btn w-9 h-9 desk:hidden" aria-label="Back to support chats">
+        <button onClick={onBack} className="icon-btn w-11 h-11 -ml-1 md:hidden" aria-label="Back to support chats">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <AnimalAvatar avatar={thread.avatar} seed={thread.id} className="w-8 h-8" />
