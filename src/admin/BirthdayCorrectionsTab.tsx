@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PendingCorrection, decideCorrection, listPendingCorrections } from '../services/birthdayCorrectionService.ts';
+import { CleanupResult, PendingCorrection, decideCorrection, listPendingCorrections, runAgePrivacyCleanup } from '../services/birthdayCorrectionService.ts';
 
 /** Admin review of birthday correction requests. Decisions are audited server-side without storing birthdays. */
 export const BirthdayCorrectionsTab: React.FC = () => {
@@ -20,8 +20,47 @@ export const BirthdayCorrectionsTab: React.FC = () => {
     else setFailed(true);
   };
 
+  const [cleanup, setCleanup] = useState<CleanupResult | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanupFailed, setCleanupFailed] = useState(false);
+
+  const runCleanup = async (dryRun: boolean) => {
+    setCleaning(true);
+    setCleanupFailed(false);
+    const result = await runAgePrivacyCleanup(dryRun);
+    setCleaning(false);
+    if (result) setCleanup(result);
+    else setCleanupFailed(true);
+  };
+
+  const cleanupPanel = (
+    <section className="mt-6 rounded-2xl border border-line bg-surface p-4">
+      <h2 className="text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg">Age privacy cleanup</h2>
+      <p className="mt-1 text-[length:calc(12px_*_var(--fs,1))] text-subtle">
+        Removes legacy age fields from profiles and queue entries. Nothing else is touched, and it is safe to run again.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button disabled={cleaning} onClick={() => runCleanup(true)} className="btn btn-secondary btn-sm">Dry run</button>
+        <button disabled={cleaning} onClick={() => runCleanup(false)} className="btn btn-primary btn-sm">{cleaning ? 'Working…' : 'Run cleanup'}</button>
+      </div>
+      {cleanupFailed && <p role="alert" className="mt-2 text-sm text-danger">Could not run the cleanup. Try again.</p>}
+      {cleanup && (
+        <p role="status" className="mt-2 text-[length:calc(13px_*_var(--fs,1))] text-fg">
+          {cleanup.dryRun ? 'Dry run' : 'Done'}: {cleanup.profiles.changed} of {cleanup.profiles.scanned} profiles and {cleanup.queue.changed} of {cleanup.queue.scanned} queue entries {cleanup.dryRun ? 'would be' : 'were'} cleaned.
+        </p>
+      )}
+    </section>
+  );
+
   if (!items) return <p className="text-[length:calc(13px_*_var(--fs,1))] text-subtle">Loading…</p>;
-  if (!items.length) return <p className="card p-4 text-[length:calc(13px_*_var(--fs,1))] text-subtle">No birthday corrections waiting.</p>;
+  if (!items.length) {
+    return (
+      <div>
+        <p className="card p-4 text-[length:calc(13px_*_var(--fs,1))] text-subtle">No birthday corrections waiting.</p>
+        {cleanupPanel}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -45,6 +84,7 @@ export const BirthdayCorrectionsTab: React.FC = () => {
           </li>
         ))}
       </ul>
+      {cleanupPanel}
     </div>
   );
 };
