@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowUp, Check, CheckCircle2, Heart, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
+import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { CommunityPost, CommunityReply, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import {
@@ -452,14 +453,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
       )}
 
       {/* Mobile compose button, kept clear of the tab bar */}
-      <button
-        onClick={openComposer}
-        className="sm:hidden fixed right-4 z-30 w-14 h-14 rounded-full bg-berry text-ink flex items-center justify-center shadow-xl shadow-black/40 active:scale-95 transition-transform cursor-pointer"
-        style={{ bottom: 'calc(var(--tabbar-h) + 1rem)' }}
-        aria-label="New post"
-      >
-        <Plus className="w-6 h-6" strokeWidth={2.25} />
-      </button>
+      <FloatingAddButton onClick={openComposer} label="New post" />
 
       {showCreateModal && (
         <Sheet
