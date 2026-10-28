@@ -61,7 +61,7 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
       </div>
       <div className="mt-5">
         <p id="font-size-label" className="text-sm font-semibold text-fg mb-2">Text size</p>
-        <div role="radiogroup" aria-labelledby="font-size-label" className="grid grid-cols-3 gap-1 rounded-full border border-line bg-ink p-1">
+        <div role="radiogroup" aria-labelledby="font-size-label" className="grid grid-cols-4 gap-1 rounded-full border border-line bg-ink p-1">
           {FONT_SIZE_OPTIONS.map(({ id, label }) => (
             <button
               key={id}
