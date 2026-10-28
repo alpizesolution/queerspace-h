@@ -13,6 +13,7 @@ import {
   TEAM_NAME,
 } from '../services/supportService.ts';
 import { whileActive } from '../utils/whileActive.ts';
+import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 
 /** Admin inbox for member support chats. Listeners run only while this tab is open. */
 export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadChange: (n: number) => void }> = ({
@@ -22,6 +23,17 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
   const [threads, setThreads] = useState<SupportThread[] | null>(null);
   const [error, setError] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  // On phones the conversation is its own screen, so remember where the inbox was scrolled and put it back.
+  const listScroll = useRef(0);
+  const openThread = (id: string) => {
+    listScroll.current = window.scrollY;
+    setOpenId(id);
+    window.scrollTo({ top: 0 });
+  };
+  const closeThread = () => {
+    setOpenId(null);
+    requestAnimationFrame(() => window.scrollTo({ top: listScroll.current }));
+  };
 
   useEffect(
     () =>
@@ -45,8 +57,8 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
 
   return (
     <div className="min-w-0">
-      <h1 className="text-2xl font-semibold tracking-tight mb-1">Support</h1>
-      <p className="mb-4 text-[length:calc(13px_*_var(--fs,1))] text-muted sm:mb-5">
+      <h1 className={`mb-1 text-2xl font-semibold tracking-tight ${open ? 'hidden md:block' : ''}`}>Support</h1>
+      <p className={`mb-4 text-[length:calc(13px_*_var(--fs,1))] text-muted sm:mb-5 ${open ? 'hidden md:block' : ''}`}>
         <span className="sm:hidden">Private messages to the {TEAM_NAME}.</span>
         <span className="hidden sm:inline">
           Private chats from “Chat with us”. Replies show as {TEAM_NAME}, and the member sees them next time they open
@@ -71,7 +83,7 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
               {threads.map((t) => (
                 <li key={t.id} className="min-w-0">
                   <button
-                    onClick={() => setOpenId(t.id)}
+                    onClick={() => openThread(t.id)}
                     aria-current={t.id === openId ? 'true' : undefined}
                     className={`flex w-full min-w-0 min-h-[64px] items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer hover:bg-raised/70 active:bg-raised focus-visible:outline-none focus-visible:bg-raised focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-berry/60 ${
                       t.id === openId ? 'bg-raised' : ''
@@ -113,7 +125,7 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
         </div>
 
         {open ? (
-          <SupportConversation key={open.id} thread={open} onBack={() => setOpenId(null)} />
+          <SupportConversation key={open.id} thread={open} onBack={closeThread} />
         ) : (
           <div className="hidden min-w-0 items-center justify-center rounded-2xl border border-line bg-surface p-8 text-[length:calc(13px_*_var(--fs,1))] text-subtle md:flex">
             Pick a chat to read and reply.
@@ -130,6 +142,9 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  // Phones: fill the screen between the admin header and tab bar, shrinking with the on-screen keyboard.
+  const viewportHeight = useVisualViewportHeight();
+  const screenHeight = `calc(${viewportHeight ? `${viewportHeight}px` : '100dvh'} - var(--header-h) - env(safe-area-inset-top) - var(--tabbar-h) - 1.5rem)`;
 
   useEffect(
     () => whileActive(() => subscribeToSupportMessages(thread.id, setMessages, () => setMessages([]))),
@@ -142,7 +157,9 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
   }, [thread.id, thread.unreadForTeam]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
+    // Scroll the message list itself, never the whole page.
+    const list = endRef.current?.parentElement;
+    if (list) list.scrollTop = list.scrollHeight;
   }, [messages?.length]);
 
   const send = async (e: React.FormEvent) => {
@@ -157,16 +174,20 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
   };
 
   return (
-    <section className="card flex min-w-0 flex-col min-h-[60dvh] max-h-[75dvh]" aria-label={`Chat with ${thread.displayName}`}>
-      <header className="flex items-center gap-3 p-3 border-b border-line">
+    <section
+      className="card flex min-w-0 flex-col h-[var(--conv-h)] md:h-[calc(var(--conv-h)-8.5rem)] desk:h-auto desk:min-h-[60dvh] desk:max-h-[75dvh]"
+      style={{ '--conv-h': screenHeight } as React.CSSProperties}
+      aria-label={`Chat with ${thread.displayName}`}
+    >
+      <header className="flex shrink-0 items-center gap-3 px-2 py-2 border-b border-line md:p-3">
         <button onClick={onBack} className="icon-btn w-11 h-11 -ml-1 md:hidden" aria-label="Back to support chats">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <AnimalAvatar avatar={thread.avatar} seed={thread.id} className="w-8 h-8" />
-        <p className="text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg truncate">{thread.displayName}</p>
+        <p className="min-w-0 flex-1 truncate text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg">{thread.displayName}</p>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 space-y-3 md:p-4">
         {!messages ? (
           <p className="text-[length:calc(13px_*_var(--fs,1))] text-subtle">Loading…</p>
         ) : (
@@ -176,7 +197,7 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
                 {m.from === 'team' ? TEAM_NAME : thread.displayName} · {formatChatTime(m.timestamp)}
               </p>
               <div
-                className={`max-w-[85%] px-3.5 py-2 text-[length:calc(14px_*_var(--fs,1))] leading-snug rounded-[18px] break-words whitespace-pre-wrap ${
+                className={`max-w-[85%] px-3.5 py-2 text-[length:calc(14px_*_var(--fs,1))] leading-snug rounded-[18px] break-words [overflow-wrap:anywhere] whitespace-pre-wrap ${
                   m.from === 'team' ? 'bg-plum text-fg rounded-br-md' : 'bg-raised text-fg rounded-bl-md'
                 }`}
               >
@@ -193,7 +214,7 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
           Couldn’t send the reply. Try again.
         </p>
       )}
-      <form onSubmit={send} className="flex items-end gap-2 p-3 border-t border-line">
+      <form onSubmit={send} className="flex shrink-0 items-end gap-2 p-3 border-t border-line">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -204,12 +225,12 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
           maxLength={SUPPORT_MAX_LENGTH}
           placeholder={`Reply as ${TEAM_NAME}`}
           aria-label={`Reply to ${thread.displayName}`}
-          className="flex-1 min-w-0 resize-none px-3.5 py-2.5 rounded-2xl bg-ink border border-line text-[length:calc(14px_*_var(--fs,1))] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+          className="flex-1 min-w-0 resize-none px-3.5 py-2.5 rounded-2xl bg-ink border border-line text-base md:text-[length:calc(14px_*_var(--fs,1))] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
         />
         <button
           type="submit"
           disabled={!text.trim() || sending}
-          className="w-10 h-10 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed"
+          className="w-11 h-11 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed"
           aria-label="Send reply"
         >
           <ArrowUp className="w-5 h-5" strokeWidth={2.5} />
