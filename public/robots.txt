@@ -1,0 +1,27 @@
+# QUEERSPACE PH. Public pages are open to search engines.
+# The app itself has no private URLs; /admin and /api/ are excluded and also send noindex headers.
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /__/
+
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /__/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /__/
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /__/
+
+Sitemap: https://www.queerspaceph.com/sitemap.xml
