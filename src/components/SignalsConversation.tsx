@@ -221,6 +221,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
           <button type="button" onClick={onBack} className="ml-2 font-semibold text-berry underline underline-offset-4">Back to Signals</button>
         </div>
       ) : (
+        <>
         {replyingTo && (
           <div className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-raised/70 px-3 py-2">
             <Reply className="h-4 w-4 shrink-0 text-lavender" />
@@ -247,6 +248,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
             {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </button>
         </form>
+        </>
       )}
       {!ended && <p className="mt-2 text-center text-[10px] text-subtle">Messages refresh automatically · Up to 1,000 characters</p>}
     </section>
