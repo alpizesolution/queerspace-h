@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Volume2, VolumeX, Shield, Menu } from 'lucide-react';
+import { LayoutDashboard, Volume2, VolumeX, Shield, Menu, Settings2 } from 'lucide-react';
 import { MenuDrawer, MenuInfoModal } from './MenuDrawer.tsx';
 import { AnimatedBrandTitle } from './AnimatedBrandTitle.tsx';
 import { AuthStatusBadge } from './AuthStatusBadge.tsx';
@@ -17,6 +17,7 @@ interface HeaderProps {
   onToggleSound: () => void;
   onOpenSafetyModal: () => void;
   onOpenProfile: () => void;
+  onOpenSettings: () => void;
   onOpenInfo: (modal: MenuInfoModal) => void;
   onOpenSupport: () => void;
   hasSupportReply?: boolean;
@@ -30,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSound,
   onOpenSafetyModal,
   onOpenProfile,
+  onOpenSettings,
   onOpenInfo,
   onOpenSupport,
   hasSupportReply = false,
@@ -87,6 +89,14 @@ export const Header: React.FC<HeaderProps> = ({
           {isSoundMuted ? <VolumeX className="w-[18px] h-[18px]" /> : <Volume2 className="w-[18px] h-[18px]" />}
         </button>
         <button
+          onClick={onOpenSettings}
+          className="icon-btn hidden desk:inline-flex"
+          title="Settings"
+          aria-label="Open settings"
+        >
+          <Settings2 className="w-[18px] h-[18px]" />
+        </button>
+        <button
           onClick={onOpenSafetyModal}
           className="icon-btn !w-9 sm:!w-10"
           title="Safety & guidelines"
@@ -125,6 +135,7 @@ export const Header: React.FC<HeaderProps> = ({
         onOpenInfo={onOpenInfo}
         onOpenSupport={onOpenSupport}
         onOpenProfile={onOpenProfile}
+        onOpenSettings={onOpenSettings}
         hasSupportReply={hasSupportReply}
         showAdmin={SHOW_ADMIN_LINK}
       />

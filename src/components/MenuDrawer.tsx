@@ -10,6 +10,7 @@ import {
   MessageCircleHeart,
   Coffee,
   UserRound,
+  Settings2,
   LayoutDashboard,
 } from 'lucide-react';
 import { BMC_URL } from './Footer.tsx';
@@ -21,6 +22,7 @@ interface MenuDrawerProps {
   onOpenInfo: (modal: MenuInfoModal) => void;
   onOpenSupport: () => void;
   onOpenProfile: () => void;
+  onOpenSettings: () => void;
   hasSupportReply?: boolean;
   showAdmin: boolean;
 }
@@ -47,6 +49,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   onOpenInfo,
   onOpenSupport,
   onOpenProfile,
+  onOpenSettings,
   hasSupportReply = false,
   showAdmin,
 }) => {
@@ -154,6 +157,15 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
                 <Coffee className="w-[18px] h-[18px] text-lavender shrink-0" />
                 Buy me a coffee
               </a>
+            </li>
+          </Group>
+
+          <Group title="Preferences">
+            <li>
+              <button className={rowClass} onClick={then(onOpenSettings)}>
+                <Settings2 className="w-[18px] h-[18px] text-lavender shrink-0" />
+                Settings & appearance
+              </button>
             </li>
           </Group>
 
