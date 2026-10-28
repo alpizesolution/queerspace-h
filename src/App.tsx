@@ -61,6 +61,8 @@ export default function App() {
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   // What the cloud last held, so saves that change nothing there skip Firestore entirely.
   const cloudSignatureRef = useRef<string | null>(null);
+  /** True once the cloud holds this member's birthday (restored from it, or saved). It is never rewritten afterwards. */
+  const cloudHasBirthDateRef = useRef(false);
   const [activeInfoModal, setActiveInfoModal] = useState<
     'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact' | null
   >(null);
@@ -137,8 +139,8 @@ export default function App() {
               setAgeGateOpen(!isAdultBirthDate(res.prefs.birthDate));
               setAgeRestricted(false);
               cloudSignatureRef.current = cloudProfileSignature(res.prefs, res.blockedPartnerIds ?? []);
-              // A birthday that only lives on this device (an earlier sync failed) is sent once; after that it is immutable.
-              if (!res.cloudHasBirthDate && isAdultBirthDate(res.prefs.birthDate)) void persistPrefs(res.prefs, { withBirthDate: true });
+              // A birthday that only lives on this device is sent with the next profile save; the cloud copy is never overwritten.
+              cloudHasBirthDateRef.current = Boolean(res.cloudHasBirthDate);
               // Never shrink the blocklist: keep this device's blocks and add any saved in the cloud.
               const cloudBlocked = res.blockedPartnerIds ?? [];
               setBlockedPartnerIds((current) => {
@@ -186,9 +188,14 @@ export default function App() {
   /** Saves on this device, and to the cloud only when something the cloud stores has changed. */
   const persistPrefs = async (prefs: UserPreferences, options: { withBirthDate?: boolean } = {}) => {
     const signature = cloudProfileSignature(prefs, blockedPartnerIds);
-    const cloudChanged = options.withBirthDate || signature !== cloudSignatureRef.current;
-    const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds, cloudChanged, options);
-    if (feedback.savedToCloud) cloudSignatureRef.current = signature;
+    // The birthday is immutable once the cloud has it, so it is sent only until the cloud is known to hold it.
+    const withBirthDate = Boolean(options.withBirthDate || (!cloudHasBirthDateRef.current && isAdultBirthDate(prefs.birthDate)));
+    const cloudChanged = withBirthDate || signature !== cloudSignatureRef.current;
+    const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds, cloudChanged, { withBirthDate });
+    if (feedback.savedToCloud) {
+      cloudSignatureRef.current = signature;
+      if (withBirthDate) cloudHasBirthDateRef.current = true;
+    }
     return { feedback, cloudChanged };
   };
 
