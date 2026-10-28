@@ -1,6 +1,9 @@
-import React, { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, LoaderCircle, MessageCircle, RefreshCw, Reply, Send, ShieldCheck, X } from 'lucide-react';
+import React, { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ArrowDown, ArrowLeft, LoaderCircle, MessageCircle, RefreshCw, Reply, Send, X } from 'lucide-react';
 import { auth } from '../lib/firebase.ts';
+import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
+import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { isValidAvatar } from '../utils/avatar.ts';
 
 type SignalMessage = {
   id: string;
@@ -11,8 +14,12 @@ type SignalMessage = {
   reactions?: { emoji: string; count: number; userReacted: boolean }[];
 };
 
+/** The other member's public pseudonym and avatar, as returned by the Signals API. */
+export type SignalsPartner = { displayName: string | null; avatar: string | null };
+
 type SignalsConversationProps = {
   pairId: string;
+  partner?: SignalsPartner;
   onBack: () => void;
 };
 
@@ -50,7 +57,7 @@ function formatTime(value: string | null): string {
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
-export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, onBack }) => {
+export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, onBack }) => {
   const [messages, setMessages] = useState<SignalMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -59,9 +66,23 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [ended, setEnded] = useState(false);
   const [replyingTo, setReplyingTo] = useState<SignalMessage | null>(null);
   const [reactingId, setReactingId] = useState<string | null>(null);
+  /** Message whose Reply / reaction actions are open (tap or Enter on the bubble). */
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [hasUnseen, setHasUnseen] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  /** True while the reader is at (or near) the newest message; scrolling up pauses auto-scroll. */
+  const stickToBottom = useRef(true);
+  const lastCount = useRef(0);
+  const lastOwnSend = useRef(false);
   const userId = auth?.currentUser?.uid;
+  const partnerName = partner?.displayName?.trim() || 'Anonymous member';
+  const { height: viewportHeight, offsetTop: viewportTop } = useVisualViewport();
+  const coarsePointer = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+  // On phones the keyboard overlays the page (iOS), so lift the conversation to the visible area while typing.
+  const lifted = coarsePointer && composerFocused && viewportHeight !== null;
+  const chrome = 'var(--header-h) - env(safe-area-inset-top) - var(--tabbar-h)';
 
   const loadMessages = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -87,9 +108,37 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     return () => window.clearInterval(timer);
   }, [loadMessages]);
 
+  const scrollToBottom = useCallback((smooth: boolean) => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    stickToBottom.current = true;
+    setHasUnseen(false);
+  }, []);
+
+  // Follow new messages only while the reader is at the bottom (or just sent one); otherwise flag them.
+  useLayoutEffect(() => {
+    const grew = messages.length > lastCount.current;
+    const first = lastCount.current === 0;
+    lastCount.current = messages.length;
+    if (!grew) return;
+    if (first || stickToBottom.current || lastOwnSend.current) scrollToBottom(!first);
+    else setHasUnseen(true);
+    lastOwnSend.current = false;
+  }, [messages, scrollToBottom]);
+
+  // Opening the keyboard shrinks the list; keep the newest message in view if the reader was there.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: messages.length > 1 ? 'smooth' : 'auto', block: 'end' });
-  }, [messages]);
+    if (stickToBottom.current) scrollToBottom(false);
+  }, [viewportHeight, lifted, scrollToBottom]);
+
+  // Grow the composer with its text, up to a few lines.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
+  }, [draft]);
 
   const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -111,6 +160,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
           },
         } : {}),
       });
+      lastOwnSend.current = true;
       setMessages((current) => current.some((item) => item.id === result.id) ? current : [...current, result]);
       setDraft('');
       setReplyingTo(null);
@@ -138,119 +188,167 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   };
 
   return (
-    <section aria-label="Private Signals conversation" className="relative mx-auto flex min-h-[min(620px,calc(100dvh-9rem))] w-full max-w-xl flex-col px-4 py-3 anim-rise sm:px-6 sm:py-5">
-      <header className="mb-3 flex items-center gap-3 border-b border-line pb-3">
-        <button type="button" onClick={onBack} aria-label="Back to Signals" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line text-muted transition hover:border-berry/50 hover:text-fg">
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-lavender/20 bg-plum/30 text-lavender">
-          <MessageCircle className="h-4 w-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-base font-semibold text-fg">A mutual connection</h1>
-          <p className="mt-0.5 text-xs text-muted">{ended ? 'Connection ended' : 'Private conversation'}</p>
-        </div>
-        <button type="button" onClick={() => void loadMessages()} disabled={loading} aria-label="Refresh messages" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-fg disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
-      </header>
-
-      <div className="mb-3 flex items-start gap-2 rounded-xl border border-line bg-raised/50 px-3 py-2.5">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-lavender" />
-        <p className="text-[11px] leading-relaxed text-muted">A space for the two of you. Be kind, protect your privacy, and only share what feels comfortable.</p>
-      </div>
-
-      <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border border-line/70 bg-surface/40 p-3 sm:p-4" aria-live="polite" aria-relevant="additions">
-        {loading && messages.length === 0 ? (
-          <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted">
-            <LoaderCircle className="h-4 w-4 animate-spin text-berry" /> Opening your conversation…
+    <>
+      {/* Keeps the page height while the conversation is lifted over the app header for typing. */}
+      {lifted && <div aria-hidden="true" style={{ height: `calc(100dvh - ${chrome})` }} />}
+      <section
+        aria-label={`Private conversation with ${partnerName}`}
+        className={`flex min-w-0 flex-col overflow-hidden bg-ink ${
+          lifted ? 'fixed inset-x-0 top-0 z-[45] mx-auto w-full max-w-xl' : 'relative mx-auto w-full max-w-xl'
+        }`}
+        style={
+          lifted
+            ? { height: viewportHeight!, transform: viewportTop ? `translateY(${viewportTop}px)` : undefined }
+            : { height: `calc(${viewportHeight ? `${viewportHeight}px` : '100dvh'} - ${chrome})` }
+        }
+      >
+        <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3 py-2">
+          <button type="button" onClick={onBack} aria-label="Back to Signals" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-fg">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          {isValidAvatar(partner?.avatar)
+            ? <AnimalAvatar avatar={partner?.avatar} seed={pairId} className="h-9 w-9" />
+            : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-lavender/20 bg-plum/30 text-lavender"><MessageCircle className="h-4 w-4" /></div>}
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[15px] font-semibold leading-tight text-fg" title={partnerName}>{partnerName}</h1>
+            <p className="truncate text-[11px] leading-tight text-subtle">{ended ? 'Connection ended' : 'Private conversation · just the two of you'}</p>
           </div>
-        ) : messages.length === 0 ? (
-          <div className="flex min-h-48 flex-col items-center justify-center px-4 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-plum/30 text-lavender"><MessageCircle className="h-5 w-5" /></div>
-            <p className="text-sm font-medium text-fg">A quiet little beginning</p>
-            <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">Say hello when you're ready. There's no need to rush.</p>
+          <button type="button" onClick={() => void loadMessages()} disabled={loading} aria-label="Refresh messages" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-fg disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </header>
+
+        <div className="relative min-h-0 flex-1">
+          <div
+            ref={listRef}
+            onScroll={(event) => {
+              const el = event.currentTarget;
+              const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+              stickToBottom.current = atBottom;
+              if (atBottom) setHasUnseen(false);
+            }}
+            className="h-full overflow-y-auto overscroll-contain px-3 py-2"
+            aria-live="polite"
+            aria-relevant="additions"
+          >
+            {loading && messages.length === 0 ? (
+              <div className="flex h-full min-h-40 items-center justify-center gap-2 text-sm text-muted">
+                <LoaderCircle className="h-4 w-4 animate-spin text-berry" /> Opening your conversation…
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex h-full min-h-40 flex-col items-center justify-center px-4 text-center">
+                <p className="text-sm font-medium text-fg">A quiet little beginning</p>
+                <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">Say hello to {partnerName} when you're ready. There's no need to rush.</p>
+              </div>
+            ) : (
+              messages.map((message, index) => {
+                const mine = message.senderId === userId;
+                const sameSenderAsPrev = index > 0 && messages[index - 1].senderId === message.senderId;
+                const open = activeId === message.id;
+                const toggleActive = () => setActiveId((current) => (current === message.id ? null : message.id));
+                return (
+                  <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'} ${index === 0 ? '' : sameSenderAsPrev ? 'mt-0.5' : 'mt-2'}`}>
+                    <div className={`flex min-w-0 max-w-[82%] flex-col sm:max-w-[75%] ${mine ? 'items-end' : 'items-start'}`}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={open}
+                        aria-label={`${mine ? 'Your' : `${partnerName}'s`} message: ${message.text}. Show actions`}
+                        onClick={toggleActive}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleActive(); }
+                        }}
+                        className={`min-w-0 max-w-full cursor-pointer rounded-2xl px-3 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}
+                      >
+                        {message.replyTo && (
+                          <div className={`mb-1 rounded-md border-l-2 px-2 py-0.5 text-[11px] leading-snug ${mine ? 'border-ink/40 bg-ink/10 text-ink/80' : 'border-lavender bg-surface/70 text-muted'}`}>
+                            <p className="font-semibold">{message.replyTo.senderId === userId ? 'You' : partnerName}</p>
+                            <p className="line-clamp-1 break-words">{message.replyTo.text}</p>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap items-end justify-end gap-x-2">
+                          <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap break-words text-[15px] leading-snug">{message.text}</p>
+                          {message.createdAt && <span className={`ml-auto translate-y-px select-none text-[10px] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
+                        </div>
+                      </div>
+                      {((message.reactions || []).length > 0 || open) && (
+                        <div className={`mt-0.5 flex flex-wrap items-center gap-1 ${mine ? 'justify-end' : 'justify-start'}`}>
+                          {(message.reactions || []).map((reaction) => (
+                            <button key={reaction.emoji} type="button" onClick={() => void toggleReaction(message, reaction.emoji)} disabled={reactingId === message.id} aria-label={`${reaction.emoji} reaction, ${reaction.count} total`} className={`flex h-7 min-w-7 items-center justify-center rounded-full border px-1.5 text-xs transition ${reaction.userReacted ? 'border-berry/60 bg-plum/40' : 'border-line bg-raised/70'} disabled:opacity-50`}>
+                              {reaction.emoji}{reaction.count > 1 ? ` ${reaction.count}` : ''}
+                            </button>
+                          ))}
+                          {open && !ended && (
+                            <>
+                              <button type="button" onClick={() => { setReplyingTo(message); setActiveId(null); textareaRef.current?.focus(); }} aria-label="Reply to message" className="flex h-8 items-center gap-1 rounded-full px-2 text-[11px] text-muted transition hover:bg-raised hover:text-fg">
+                                <Reply className="h-3.5 w-3.5" /> Reply
+                              </button>
+                              {['💜', '🥹', '😂', '✨'].map((emoji) => (
+                                <button key={emoji} type="button" onClick={() => { void toggleReaction(message, emoji); setActiveId(null); }} disabled={reactingId === message.id} aria-label={`React with ${emoji}`} className="flex h-8 w-8 items-center justify-center rounded-full text-sm transition hover:bg-raised disabled:opacity-40">{emoji}</button>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          {hasUnseen && (
+            <button type="button" onClick={() => scrollToBottom(true)} className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-berry/40 bg-raised/95 px-3 py-1.5 text-xs font-semibold text-fg shadow-lg shadow-black/40">
+              <ArrowDown className="h-3.5 w-3.5 text-berry" /> New messages
+            </button>
+          )}
+        </div>
+
+        {error && (
+          <div role="alert" className="mx-3 mb-1 flex shrink-0 items-start gap-2 rounded-xl border border-berry/30 bg-plum/20 px-3 py-2 text-xs text-fg">
+            <span className="flex-1">{error}</span>
+            <button type="button" onClick={() => void loadMessages()} className="font-semibold text-berry underline underline-offset-4">Retry</button>
+          </div>
+        )}
+
+        {ended ? (
+          <div className="shrink-0 border-t border-line bg-raised/60 p-3 text-center text-sm text-muted">
+            This connection has ended. Messaging is now closed.
+            <button type="button" onClick={onBack} className="ml-2 font-semibold text-berry underline underline-offset-4">Back to Signals</button>
           </div>
         ) : (
-          messages.map((message) => {
-            const mine = message.senderId === userId;
-            return (
-              <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[88%] sm:max-w-[80%] ${mine ? 'text-right' : 'text-left'}`}>
-                  <div className={`rounded-2xl px-3.5 py-2.5 text-left ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}>
-                    {message.replyTo && (
-                      <div className={`mb-2 rounded-lg border-l-2 px-2 py-1 text-left text-[11px] ${mine ? 'border-ink/40 bg-ink/10 text-ink/80' : 'border-lavender bg-surface/70 text-muted'}`}>
-                        <p className="font-semibold">{message.replyTo.senderId === userId ? 'You replied to yourself' : message.replyTo.senderId === message.senderId ? 'Reply to your message' : 'Replying to a message'}</p>
-                        <p className="truncate">{message.replyTo.text}</p>
-                      </div>
-                    )}
-                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.text}</p>
-                    {message.createdAt && <p className={`mt-1 text-right text-[10px] ${mine ? 'text-ink/70' : 'text-subtle'}`}>{formatTime(message.createdAt)}</p>}
-                  </div>
-                  <div className={`mt-1 flex flex-wrap items-center gap-1.5 ${mine ? 'justify-end' : 'justify-start'}`}>
-                    {(message.reactions || []).map((reaction) => (
-                      <button key={reaction.emoji} type="button" onClick={() => void toggleReaction(message, reaction.emoji)} disabled={reactingId === message.id} aria-label={`${reaction.emoji} reaction, ${reaction.count} total`} className={`rounded-full border px-2 py-0.5 text-xs transition ${reaction.userReacted ? 'border-berry/60 bg-plum/40' : 'border-line bg-raised/70'} disabled:opacity-50`}>
-                        {reaction.emoji} {reaction.count}
-                      </button>
-                    ))}
-                    <button type="button" onClick={() => setReplyingTo(message)} aria-label="Reply to message" className="rounded-full px-2 py-1 text-[10px] text-muted transition hover:bg-raised hover:text-fg">
-                      <Reply className="inline h-3 w-3" /> Reply
-                    </button>
-                    {['💜', '🥹', '😂', '✨'].map((emoji) => (
-                      <button key={emoji} type="button" onClick={() => void toggleReaction(message, emoji)} disabled={reactingId === message.id} aria-label={`React with ${emoji}`} className="rounded-full px-1 py-0.5 text-xs opacity-70 transition hover:bg-raised hover:opacity-100 disabled:opacity-40">{emoji}</button>
-                    ))}
-                  </div>
+          <div className="shrink-0 border-t border-line bg-ink px-3 pb-2 pt-2">
+            {replyingTo && (
+              <div className="mb-1.5 flex items-center gap-2 rounded-xl border border-line bg-raised/70 px-3 py-1.5">
+                <Reply className="h-4 w-4 shrink-0 text-lavender" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-semibold text-muted">Replying to {replyingTo.senderId === userId ? 'yourself' : partnerName}</p>
+                  <p className="truncate text-xs text-fg">{replyingTo.text}</p>
                 </div>
+                <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancel reply" className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:text-fg"><X className="h-4 w-4" /></button>
               </div>
-            );
-          })
-        )}
-        <div ref={endRef} />
-      </div>
-
-      {error && (
-        <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-berry/30 bg-plum/20 p-3 text-xs text-fg">
-          <span className="flex-1">{error}</span>
-          <button type="button" onClick={() => void loadMessages()} className="font-semibold text-berry underline underline-offset-4">Retry</button>
-        </div>
-      )}
-
-      {ended ? (
-        <div className="mt-3 rounded-xl border border-line bg-raised/60 p-3 text-center text-sm text-muted">
-          This connection has ended. Messaging is now closed.
-          <button type="button" onClick={onBack} className="ml-2 font-semibold text-berry underline underline-offset-4">Back to Signals</button>
-        </div>
-      ) : (
-        <>
-        {replyingTo && (
-          <div className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-raised/70 px-3 py-2">
-            <Reply className="h-4 w-4 shrink-0 text-lavender" />
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold text-muted">Replying to {replyingTo.senderId === userId ? 'your message' : 'their message'}</p>
-              <p className="truncate text-xs text-fg">{replyingTo.text}</p>
-            </div>
-            <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancel reply" className="rounded-full p-1 text-muted hover:text-fg"><X className="h-4 w-4" /></button>
+            )}
+            <form onSubmit={sendMessage} className="flex items-end gap-2">
+              <label className="sr-only" htmlFor="signals-message">Your message</label>
+              <textarea
+                ref={textareaRef}
+                id="signals-message"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value.slice(0, 1000))}
+                onFocus={() => setComposerFocused(true)}
+                onBlur={() => setComposerFocused(false)}
+                placeholder="Write a message…"
+                rows={1}
+                maxLength={1000}
+                disabled={sending}
+                className="max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-2xl border border-line bg-raised px-3.5 py-2 text-[15px] leading-snug text-fg outline-none placeholder:text-subtle focus:border-berry/60 disabled:opacity-60"
+              />
+              <button type="submit" disabled={!draft.trim() || sending} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-berry text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
+                {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </form>
           </div>
         )}
-        <form onSubmit={sendMessage} className="mt-3 flex items-end gap-2">
-          <label className="sr-only" htmlFor="signals-message">Your message</label>
-          <textarea
-            id="signals-message"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value.slice(0, 1000))}
-            placeholder="Write a message…"
-            rows={1}
-            maxLength={1000}
-            disabled={sending}
-            className="max-h-32 min-h-11 flex-1 resize-y rounded-2xl border border-line bg-raised px-4 py-3 text-sm text-fg outline-none placeholder:text-subtle focus:border-berry/60 disabled:opacity-60"
-          />
-          <button type="submit" disabled={!draft.trim() || sending} aria-label="Send message" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-berry text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
-            {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </button>
-        </form>
-        </>
-      )}
-      {!ended && <p className="mt-2 text-center text-[10px] text-subtle">Messages refresh automatically · Up to 1,000 characters</p>}
-    </section>
+      </section>
+    </>
   );
 };

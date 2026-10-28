@@ -1,8 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Inbox, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { auth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { ConfirmDialog } from './Sheet.tsx';
-import { SignalsConversation } from './SignalsConversation.tsx';
+import { SignalsConversation, SignalsPartner } from './SignalsConversation.tsx';
+import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { isValidAvatar } from '../utils/avatar.ts';
+import type { SignalsInboxState } from '../hooks/useSignalsInbox.ts';
 
 type SignalInvitation = {
   id: string;
@@ -23,6 +26,8 @@ type SignalPair = {
   createdAt: string | null;
   endedAt: string | null;
   endedBy: string | null;
+  /** The other member's pseudonym and avatar; null fields when they have none. */
+  partner?: { displayName: string | null; avatar: string | null };
 };
 
 const STARS = [
@@ -68,7 +73,7 @@ function formatDate(value: string | null): string {
     : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 }
 
-export const SignalsView: React.FC = () => {
+export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) => {
   const [pairs, setPairs] = useState<SignalPair[]>([]);
   const [invitations, setInvitations] = useState<SignalInvitation[]>([]);
   const [invitationActionId, setInvitationActionId] = useState<string | null>(null);
@@ -79,13 +84,13 @@ export const SignalsView: React.FC = () => {
   const [notice, setNotice] = useState<string | null>(null);
   const [openPairId, setOpenPairId] = useState<string | null>(null);
 
-  const loadPairs = useCallback(async () => {
+  const loadPairs = useCallback(async (quiet = false) => {
     if (!isFirebaseConfigured) {
       setError('Connect Firebase to use Signals. Your other QUEERSPACE features remain available.');
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!quiet) setLoading(true);
     setError(null);
     try {
       const [pairResult, invitationResult] = await Promise.all([
@@ -104,6 +109,18 @@ export const SignalsView: React.FC = () => {
   useEffect(() => {
     void loadPairs();
   }, [loadPairs]);
+
+  // The server bumps this revision whenever a request is sent, accepted, declined, withdrawn or ended
+  // (for both people), so the lists refresh straight away without polling.
+  const lastRev = useRef(inbox?.rev);
+  useEffect(() => {
+    if (inbox === undefined || inbox.rev === lastRev.current) return;
+    lastRev.current = inbox.rev;
+    void loadPairs(true);
+  }, [inbox?.rev, loadPairs]);
+
+  const invitationsRef = useRef<HTMLDivElement>(null);
+  const scrolledToRequests = useRef(false);
 
   const endPair = async (pairId: string): Promise<boolean> => {
     setEndingId(pairId);
@@ -156,10 +173,17 @@ export const SignalsView: React.FC = () => {
   const activePairs = pairs.filter((pair) => pair.status === 'active');
   const endedPairs = pairs.filter((pair) => pair.status === 'ended');
 
+  // Arriving from the "Someone would like to connect" banner or tab badge: bring the new request into view once.
+  useEffect(() => {
+    if (loading || scrolledToRequests.current || pendingReceived.length === 0) return;
+    scrolledToRequests.current = true;
+    invitationsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [loading, pendingReceived.length]);
+
   if (openPairId) {
     const selectedPair = pairs.find((pair) => pair.id === openPairId);
     if (selectedPair?.status === 'active') {
-      return <SignalsConversation pairId={openPairId} onBack={() => setOpenPairId(null)} />;
+      return <SignalsConversation pairId={openPairId} partner={selectedPair.partner} onBack={() => setOpenPairId(null)} />;
     }
   }
 
@@ -205,6 +229,9 @@ export const SignalsView: React.FC = () => {
           <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notice" className="ml-auto text-muted hover:text-fg"><X className="h-4 w-4" /></button>
         </div>
       )}
+      {inbox?.error && !error && (
+        <p role="status" className="mb-4 rounded-xl border border-line px-3 py-2 text-xs text-muted">{inbox.error}</p>
+      )}
       {error && (
         <div role="alert" className="mb-4 flex items-start gap-3 rounded-xl border border-berry/30 bg-plum/20 p-4 text-sm text-fg">
           <span className="flex-1">{error}</span>
@@ -218,9 +245,9 @@ export const SignalsView: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="mb-5">
+          <div className="mb-5" ref={invitationsRef}>
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Inbox className="h-4 w-4 text-lavender" /> Invitations</h2>
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Inbox className="h-4 w-4 text-lavender" /> Invitations{pendingReceived.length > 0 && <span className="rounded-full bg-berry px-2 py-0.5 text-[10px] font-bold text-ink">{pendingReceived.length} new</span>}</h2>
               <span className="rounded-full border border-line px-2.5 py-1 text-xs tabular-nums text-muted">{pendingReceived.length + pendingSent.length}</span>
             </div>
             {pendingReceived.length === 0 && pendingSent.length === 0 ? (
@@ -276,9 +303,11 @@ export const SignalsView: React.FC = () => {
               {activePairs.map((pair) => (
                 <article key={pair.id} className="rounded-2xl border border-line bg-raised/70 p-4">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-lavender/20 bg-plum/30 text-lavender"><RadioTower className="h-4 w-4" /></div>
+                    {isValidAvatar(pair.partner?.avatar)
+                      ? <AnimalAvatar avatar={pair.partner?.avatar} seed={pair.id} className="h-10 w-10" />
+                      : <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-lavender/20 bg-plum/30 text-lavender"><RadioTower className="h-4 w-4" /></div>}
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-fg">A mutual connection</p>
+                      <p className="truncate text-sm font-semibold text-fg">{pair.partner?.displayName || 'Anonymous member'}</p>
                       <p className="mt-1 text-xs text-muted">Connected {formatDate(pair.createdAt)}</p>
                     </div>
                     <span className="rounded-full bg-lavender/10 px-2.5 py-1 text-[10px] font-semibold text-lavender">Active</span>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import handler from './signals.js';
+import handler, { partnerSummary } from './signals.js';
 
 function makeResponse() {
   return {
@@ -50,4 +50,12 @@ test('Signals API rejects malformed authorization headers', async () => {
 
   assert.equal(res.statusCode, 401);
   assert.deepEqual(res.body, { error: 'unauthenticated' });
+});
+
+
+test('partnerSummary exposes only a pseudonym and avatar, with null fallbacks', () => {
+  assert.deepEqual(partnerSummary({ displayName: '  Moon_Fox ', avatar: 'fox.1.2', birthDate: 'x', email: 'a@b.c' }), { displayName: 'Moon_Fox', avatar: 'fox.1.2' });
+  assert.deepEqual(partnerSummary(null), { displayName: null, avatar: null });
+  assert.deepEqual(partnerSummary({ displayName: '   ', avatar: 'x'.repeat(40) }), { displayName: null, avatar: null });
+  assert.equal(partnerSummary({ displayName: 'a'.repeat(80) }).displayName.length, 30);
 });
