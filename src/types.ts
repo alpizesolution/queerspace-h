@@ -2,16 +2,7 @@ export type ChatMode = 'quick' | 'custom' | 'public' | 'community';
 
 export type Intention = 'friendship' | 'dating' | 'casual' | 'deep_talk' | 'open';
 
-export type GenderExpressionOption =
-  | 'Femme'
-  | 'Soft Masc'
-  | 'Hard Masc'
-  | 'Andro'
-  | 'Hyperfemme'
-  | 'Butch'
-  | 'Stem'
-  | 'No label / Other'
-  | 'Prefer not to say';
+export type GenderExpressionOption = string;
 
 export interface UserPreferences {
   displayName: string;
@@ -30,6 +21,9 @@ export interface UserPreferences {
   genderExpression?: GenderExpressionOption[];
   // Privacy & visibility controls
   showGenderExpressionOnProfile?: boolean;
+  showSexualOrientationOnProfile?: boolean;
+  showGenderIdentityOnProfile?: boolean;
+  /** Legacy all-SOGIE visibility switch, retained for old saved profiles. */
   showSogieOnProfile?: boolean;
   showLocationOnProfile?: boolean;
   // Matching discovery preferences (optional)
@@ -37,6 +31,14 @@ export interface UserPreferences {
   preferredGenderExpressions?: string[];
   locationSelection?: string[];
   applyLocationFilter?: boolean;
+  /** ISO date (YYYY-MM-DD), stored only in private settings. */
+  birthDate?: string;
+  /** Short optional public introduction, limited to 160 characters. */
+  aboutMe?: string;
+  /** Self-selected public presentation label. */
+  myVibe?: string;
+  /** True only after the member explicitly saves their profile. */
+  profileComplete?: boolean;
   /** Self-declared age (18-99). Kept on this device and in the live queue, never on the public profile. */
   age?: number;
   /** Only match people whose age is within ageMin-ageMax (and who fit theirs). */
@@ -50,12 +52,15 @@ export type PartnerStatus = 'online' | 'typing' | 'idle' | 'away';
 export interface PartnerProfile {
   id: string;
   displayName: string;
+  age?: number;
   pronouns: string;
   intention: Intention;
   topics: string[];
   region: string;
   location?: string;
   bioSnippet?: string;
+  aboutMe?: string;
+  myVibe?: string;
   avatarColor: string;
   avatar?: string;
   status?: PartnerStatus;
@@ -64,6 +69,8 @@ export interface PartnerProfile {
   genderIdentity?: string;
   genderExpression?: GenderExpressionOption[];
   showGenderExpressionOnProfile?: boolean;
+  showSexualOrientationOnProfile?: boolean;
+  showGenderIdentityOnProfile?: boolean;
   showSogieOnProfile?: boolean;
   showLocationOnProfile?: boolean;
 }

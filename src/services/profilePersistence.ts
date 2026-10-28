@@ -1,10 +1,11 @@
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp, deleteField } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { UserPreferences } from '../types.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.ts';
 import { formatSyncFeedback, StorageOperationResult } from '../utils/sync-feedback.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
-import { INTENTION_LABELS, SEXUAL_ORIENTATIONS } from '../utils/matching-logic.ts';
+import { INTENTION_LABELS, SEXUAL_ORIENTATIONS, GENDER_IDENTITIES } from '../utils/matching-logic.ts';
+import { calculateAge } from '../utils/ageEligibility.ts';
 
 export interface ProfileLoadResult {
   prefs: UserPreferences;
@@ -24,9 +25,29 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
     intention: prefs.intention || 'open',
     region: prefs.region || 'Anywhere / Worldwide',
     topics: (prefs.topics || []).slice(0, 8),
+    ...(prefs.birthDate && calculateAge(prefs.birthDate) !== null ? { age: calculateAge(prefs.birthDate)! } : {}),
+    aboutMe: (prefs.aboutMe || '').trim().slice(0, 160),
+    myVibe: (prefs.myVibe || '').slice(0, 24),
+    // Public SOGIE values are included only when that exact field is opted into visibility.
+    sexualOrientation: prefs.showSexualOrientationOnProfile && prefs.sexualOrientation
+      ? (prefs.sexualOrientation === 'Self-described' ? prefs.sexualOrientationCustom : prefs.sexualOrientation || '').trim().slice(0, 40)
+      : deleteField(),
+    genderIdentity: prefs.showGenderIdentityOnProfile && prefs.genderIdentity
+      ? (prefs.genderIdentity === 'Self-described' ? prefs.genderIdentityCustom : prefs.genderIdentity || '').trim().slice(0, 40)
+      : deleteField(),
+    genderExpression: prefs.showGenderExpressionOnProfile && prefs.genderExpression?.length
+      ? prefs.genderExpression.slice(0, 8)
+      : deleteField(),
+    profileComplete: prefs.profileComplete === true,
     ...(isValidAvatar(prefs.avatar) ? { avatar: prefs.avatar } : {}),
     ...(typeof prefs.showGenderExpressionOnProfile === 'boolean'
       ? { showGenderExpressionOnProfile: prefs.showGenderExpressionOnProfile }
+      : {}),
+    ...(typeof prefs.showSexualOrientationOnProfile === 'boolean'
+      ? { showSexualOrientationOnProfile: prefs.showSexualOrientationOnProfile }
+      : {}),
+    ...(typeof prefs.showGenderIdentityOnProfile === 'boolean'
+      ? { showGenderIdentityOnProfile: prefs.showGenderIdentityOnProfile }
       : {}),
     ...(typeof prefs.showSogieOnProfile === 'boolean'
       ? { showSogieOnProfile: prefs.showSogieOnProfile }
@@ -48,7 +69,9 @@ export function buildPrivateSettingsPayload(prefs: UserPreferences, blockedPartn
     sexualOrientation:
       prefs.sexualOrientation === 'Self-described' ? prefs.sexualOrientationCustom?.trim() || '' : prefs.sexualOrientation || '',
     genderExpression: prefs.genderExpression || [],
+    genderIdentity: prefs.genderIdentity === 'Self-described' ? prefs.genderIdentityCustom?.trim() || '' : prefs.genderIdentity || '',
     preferredGenderExpressions: prefs.preferredGenderExpressions || [],
+    ...(prefs.birthDate ? { birthDate: Timestamp.fromDate(new Date(`${prefs.birthDate}T00:00:00.000Z`)) } : {}),
     blockedPartnerIds: blockedPartnerIds || [],
     updatedAt: serverTimestamp(),
   };
@@ -91,8 +114,17 @@ export function mergeCloudProfile(
   if (intention && intention in INTENTION_LABELS) merged.intention = intention as UserPreferences['intention'];
   set('region', text(publicData.region));
   set('topics', strings(publicData.topics));
+  set('aboutMe', typeof publicData.aboutMe === 'string' ? publicData.aboutMe.slice(0, 160) : undefined);
+  set('myVibe', text(publicData.myVibe));
+  set('profileComplete', flag(publicData.profileComplete));
   set('showGenderExpressionOnProfile', flag(publicData.showGenderExpressionOnProfile));
+  set('showSexualOrientationOnProfile', flag(publicData.showSexualOrientationOnProfile));
+  set('showGenderIdentityOnProfile', flag(publicData.showGenderIdentityOnProfile));
   set('showSogieOnProfile', flag(publicData.showSogieOnProfile));
+  // Public SOGIE fields are restored only when they were explicitly shared.
+  set('sexualOrientation', text(publicData.sexualOrientation));
+  set('genderIdentity', text(publicData.genderIdentity));
+  set('genderExpression', strings(publicData.genderExpression) as UserPreferences['genderExpression'] | undefined);
   set('showLocationOnProfile', flag(publicData.showLocationOnProfile));
 
   const orientation = text(privateData.sexualOrientation);
@@ -106,9 +138,21 @@ export function mergeCloudProfile(
     }
   }
   const expression = strings(privateData.genderExpression);
-  if (expression?.length) merged.genderExpression = expression as UserPreferences['genderExpression'];
+  if (expression) merged.genderExpression = expression as UserPreferences['genderExpression'];
+  const identity = text(privateData.genderIdentity);
+  if (identity) {
+    if (GENDER_IDENTITIES.includes(identity) && identity !== 'Self-described') {
+      merged.genderIdentity = identity;
+      merged.genderIdentityCustom = undefined;
+    } else {
+      merged.genderIdentity = 'Self-described';
+      merged.genderIdentityCustom = identity;
+    }
+  }
   const preferred = strings(privateData.preferredGenderExpressions);
-  if (preferred?.length) merged.preferredGenderExpressions = preferred;
+  if (preferred) merged.preferredGenderExpressions = preferred;
+  const birthDate = privateData.birthDate;
+  if (birthDate instanceof Timestamp) merged.birthDate = birthDate.toDate().toISOString().slice(0, 10);
   const area = text(privateData.exactLocation);
   if (area && !local.locationSelection?.length) merged.locationSelection = [area];
 

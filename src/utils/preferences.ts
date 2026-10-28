@@ -10,6 +10,8 @@ import { UserPreferences } from '../types.ts';
 export const PROFILE_KEYS = [
   'displayName',
   'avatar',
+  'aboutMe',
+  'myVibe',
   'pronouns',
   'customPronouns',
   'sexualOrientation',
@@ -18,6 +20,8 @@ export const PROFILE_KEYS = [
   'genderIdentityCustom',
   'genderExpression',
   'showGenderExpressionOnProfile',
+  'showSexualOrientationOnProfile',
+  'showGenderIdentityOnProfile',
   'showSogieOnProfile',
   'showLocationOnProfile',
 ] as const satisfies readonly (keyof UserPreferences)[];

@@ -57,6 +57,18 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/suspensions/$(request.auth.uid));
     }
 
+    // Self-reported birthday stays private; this is an access gate, not identity verification.
+    function isAgeEligible(userId) {
+      let p = /databases/$(database)/documents/users/$(userId)/private/settings;
+      return exists(p) && get(p).data.birthDate is timestamp
+        && get(p).data.birthDate <= request.time - duration.value(6575, 'd');
+    }
+    function isProfileComplete(userId) {
+      let p = /databases/$(database)/documents/users/$(userId)/public/profile;
+      return exists(p) && get(p).data.get('profileComplete', false) == true;
+    }
+    function isEligibleMember(userId) { return isAgeEligible(userId) && isProfileComplete(userId); }
+
     // An admin marking an inbox item (suggestion or report) as open or done.
     function isAdminStatusChange() {
       return isAdmin()
@@ -122,7 +134,7 @@ service cloud.firestore {
     
     // Allow querying all public profiles across all users
     match /{path=**}/profile/{profileId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && resource.data.get('profileComplete', false) == true;
     }
 
     // ====================================================
@@ -138,20 +150,24 @@ service cloud.firestore {
         && hasNoPrivilegedFields()
         && request.resource.data.keys().hasAll(['createdAt', 'updatedAt'])
         && request.resource.data.keys().hasOnly([
-             'exactLocation', 'sexualOrientation', 'genderExpression', 
-             'preferredGenderExpressions', 'blockedPartnerIds', 'createdAt', 'updatedAt'
+             'exactLocation', 'sexualOrientation', 'genderIdentity', 'genderExpression',
+             'preferredGenderExpressions', 'birthDate', 'blockedPartnerIds', 'createdAt', 'updatedAt'
            ])
         && request.resource.data.createdAt is timestamp
-        && request.resource.data.updatedAt is timestamp;
+        && request.resource.data.updatedAt is timestamp
+        && (!('birthDate' in request.resource.data)
+            || (request.resource.data.birthDate is timestamp && request.resource.data.birthDate <= request.time - duration.value(6575, 'd')));
 
       allow update: if isOwner(userId)
         && hasNoPrivilegedFields()
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.keys().hasOnly([
-             'exactLocation', 'sexualOrientation', 'genderExpression', 
-             'preferredGenderExpressions', 'blockedPartnerIds', 'createdAt', 'updatedAt'
+             'exactLocation', 'sexualOrientation', 'genderIdentity', 'genderExpression', 
+             'preferredGenderExpressions', 'birthDate', 'blockedPartnerIds', 'createdAt', 'updatedAt'
            ])
-        && request.resource.data.updatedAt is timestamp;
+        && request.resource.data.updatedAt is timestamp
+        && (!('birthDate' in request.resource.data)
+            || (request.resource.data.birthDate is timestamp && request.resource.data.birthDate <= request.time - duration.value(6575, 'd')));
 
       allow delete: if false;
     }
@@ -159,15 +175,15 @@ service cloud.firestore {
     // Public Profile (displayName, pronouns, intention, region, topics)
     // READABLE BY ALL AUTHENTICATED USERS. WRITABLE ONLY BY OWNER.
     match /users/{userId}/public/profile {
-      allow read: if isAuthenticated();
+      allow read: if isOwner(userId) || (isAuthenticated() && resource.data.get('profileComplete', false) == true);
 
       allow create, update: if isOwner(userId)
         && hasNoPrivilegedFields()
         && request.resource.data.keys().hasAll(['displayName', 'pronouns', 'intention', 'region', 'topics', 'updatedAt'])
         && request.resource.data.keys().hasOnly([
              'displayName', 'pronouns', 'intention', 'topics', 
-             'region', 'showGenderExpressionOnProfile', 'showSogieOnProfile', 
-             'showLocationOnProfile', 'avatar', 'createdAt', 'updatedAt'
+             'region', 'showGenderExpressionOnProfile', 'showSexualOrientationOnProfile', 'showGenderIdentityOnProfile', 'showSogieOnProfile',
+             'showLocationOnProfile', 'avatar', 'aboutMe', 'myVibe', 'sexualOrientation', 'genderIdentity', 'genderExpression', 'profileComplete', 'age', 'createdAt', 'updatedAt'
            ])
         // createdAt marks when someone joined: set once to "now", then never changed.
         && (resource != null && 'createdAt' in resource.data
@@ -185,6 +201,13 @@ service cloud.firestore {
         && request.resource.data.region is string
         && request.resource.data.topics is list
         && request.resource.data.topics.size() <= 8
+        && (!('aboutMe' in request.resource.data) || (request.resource.data.aboutMe is string && request.resource.data.aboutMe.size() <= 160))
+        && (!('myVibe' in request.resource.data) || (request.resource.data.myVibe is string && request.resource.data.myVibe.size() <= 24))
+        && (!('sexualOrientation' in request.resource.data) || (request.resource.data.sexualOrientation is string && request.resource.data.sexualOrientation.size() <= 40))
+        && (!('genderIdentity' in request.resource.data) || (request.resource.data.genderIdentity is string && request.resource.data.genderIdentity.size() <= 40))
+        && (!('genderExpression' in request.resource.data) || (request.resource.data.genderExpression is list && request.resource.data.genderExpression.size() <= 2))
+        && (!('profileComplete' in request.resource.data) || request.resource.data.profileComplete is bool)
+        && (!('age' in request.resource.data) || (request.resource.data.age is int && request.resource.data.age >= 18 && request.resource.data.age <= 99))
         && request.resource.data.updatedAt is timestamp;
 
       allow delete: if false;
@@ -240,6 +263,7 @@ service cloud.firestore {
 
       allow create: if isOwner(userId)
         && !isSuspended()
+        && isEligibleMember(userId)
         && queueKeysValid()
         && request.resource.data.status == 'waiting'
         && request.resource.data.createdAt is timestamp
@@ -247,6 +271,7 @@ service cloud.firestore {
 
       // Owner: heartbeat, reset to waiting, or mark self matched with a real conversation.
       allow update: if isOwner(userId)
+        && isEligibleMember(userId)
         && queueKeysValid()
         && (request.resource.data.status == 'waiting'
             || convHasParticipants(request.resource.data.convId, userId, request.resource.data.partnerId));
@@ -256,6 +281,8 @@ service cloud.firestore {
       allow update: if isAuthenticated()
         && request.auth.uid != userId
         && !isSuspended()
+        && isEligibleMember(request.auth.uid)
+        && isEligibleMember(userId)
         && resource.data.status == 'waiting'
         && request.resource.data.status == 'matched'
         && request.resource.data.partnerId == request.auth.uid
@@ -283,6 +310,9 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
 
       allow create: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
+        && isEligibleMember(request.resource.data.participants[0])
+        && isEligibleMember(request.resource.data.participants[1])
         && isValidNewConversation()
         && request.resource.data.keys().hasAll(['participants', 'createdAt', 'updatedAt', 'status'])
         && request.resource.data.keys().hasOnly(['participants', 'createdAt', 'updatedAt', 'status'])
@@ -318,6 +348,7 @@ service cloud.firestore {
         allow read: if isConversationParticipant(convId);
 
         allow create: if isConversationParticipant(convId)
+          && isEligibleMember(request.auth.uid)
           && !isSuspended()
           && request.resource.data.keys().hasAll(['senderId', 'text', 'timestamp'])
           && request.resource.data.keys().hasOnly(['senderId', 'text', 'timestamp', 'replyTo'])
@@ -364,6 +395,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp'])
         && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'text', 'timestamp'])
         && request.resource.data.authorId == request.auth.uid
@@ -403,11 +435,13 @@ service cloud.firestore {
       // reactions/{uid} marker of that type (one reaction per person), or -1 when removing it.
       // Counters start missing (counted as 0). Keep the types in sync with ROOM_REACTIONS.
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && !isSuspended()
         && (bumpsOnly('heart') || bumpsOnly('laugh') || bumpsOnly('hug') || bumpsOnly('fire') || bumpsOnly('cry'))
         && !exists(roomReactionPath(messageId))
         && getAfter(roomReactionPath(messageId)).data.type in request.resource.data.diff(resource.data).affectedKeys();
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && (dropsOnly('heart') || dropsOnly('laugh') || dropsOnly('hug') || dropsOnly('fire') || dropsOnly('cry'))
         && get(roomReactionPath(messageId)).data.type in request.resource.data.diff(resource.data).affectedKeys()
         && !existsAfter(roomReactionPath(messageId));
@@ -415,12 +449,14 @@ service cloud.firestore {
       match /reactions/{userId} {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
           && request.resource.data.keys().hasOnly(['type', 'createdAt'])
           && request.resource.data.type in ['heart', 'laugh', 'hug', 'fire', 'cry']
           && request.resource.data.createdAt == request.time
           && getAfter(roomMessagePath(messageId)).data[request.resource.data.type]
                == get(roomMessagePath(messageId)).data.get(request.resource.data.type, 0) + 1;
         allow delete: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
           && getAfter(roomMessagePath(messageId)).data.get(resource.data.type, 0)
                == get(roomMessagePath(messageId)).data.get(resource.data.type, 0) - 1;
         allow update: if false;
@@ -459,6 +495,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'title', 'content', 'category', 'tags', 'likes', 'replyCount', 'timestamp'])
         && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'content', 'category', 'tags', 'likes', 'replyCount', 'timestamp'])
         && validAuthorFields(request.resource.data)
@@ -479,15 +516,17 @@ service cloud.firestore {
 
       // Like: +1 with a new likes/{uid} doc. Unlike: -1 while removing it.
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && counterMoves('likes', 1)
         && !exists(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid))
         && existsAfter(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid));
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && counterMoves('likes', -1)
         && exists(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid))
         && !existsAfter(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid));
       // Reply: +1, written in the same batch as the reply (checked on the reply doc).
-      allow update: if isAuthenticated() && counterMoves('replyCount', 1) && slowMode('communityReply', 5);
+      allow update: if isAuthenticated() && isEligibleMember(request.auth.uid) && counterMoves('replyCount', 1) && slowMode('communityReply', 5);
       // Admin removing a reply: -1.
       allow update: if isAdmin() && counterMoves('replyCount', -1);
 
@@ -498,10 +537,12 @@ service cloud.firestore {
         allow read: if isOwner(userId) || isAdmin();
         allow delete: if isAdmin() && !exists(postPath(postId));
         allow create: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
           && request.resource.data.keys().hasOnly(['createdAt'])
           && request.resource.data.createdAt == request.time
           && getAfter(postPath(postId)).data.likes == get(postPath(postId)).data.likes + 1;
         allow delete: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
           && getAfter(postPath(postId)).data.likes == get(postPath(postId)).data.likes - 1;
         allow update: if false;
       }
@@ -509,6 +550,7 @@ service cloud.firestore {
       match /replies/{replyId} {
         allow read: if isAuthenticated();
         allow create: if isAuthenticated()
+          && isEligibleMember(request.auth.uid)
           && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'content', 'timestamp'])
           && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'content', 'timestamp'])
           && validAuthorFields(request.resource.data)
@@ -571,6 +613,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && request.resource.data.keys().hasAll(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
         && request.resource.data.keys().hasOnly(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
         && request.resource.data.kind in ['vent', 'confession']
@@ -591,6 +634,7 @@ service cloud.firestore {
       // A reaction: +1 on one reaction counter alongside a new reactions/{uid} doc of that type.
       // Counters added after launch (felt, strong, proud, cry) start missing and count from 0.
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && (bumpsOnly('hugs') || bumpsOnly('same') || bumpsOnly('felt') || bumpsOnly('strong') || bumpsOnly('proud')
             || bumpsOnly('cry'))
         && !exists(/databases/$(database)/documents/unsaid/$(postId)/reactions/$(request.auth.uid))
@@ -599,6 +643,7 @@ service cloud.firestore {
 
       // A flag: +1 on 'flags' alongside a new flags/{uid} doc.
       allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
         && bumpsOnly('flags')
         && !exists(/databases/$(database)/documents/unsaid/$(postId)/flags/$(request.auth.uid))
         && existsAfter(/databases/$(database)/documents/unsaid/$(postId)/flags/$(request.auth.uid));
@@ -614,6 +659,7 @@ service cloud.firestore {
       match /reactions/{userId} {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
           && request.resource.data.keys().hasOnly(['type', 'createdAt'])
           && request.resource.data.type in ['hugs', 'same', 'felt', 'strong', 'proud', 'cry']
           && request.resource.data.createdAt == request.time

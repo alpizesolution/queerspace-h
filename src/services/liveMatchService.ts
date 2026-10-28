@@ -114,8 +114,6 @@ export function agesCompatible(a: QueueAgePrefs, b: QueueAgePrefs): boolean {
 export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boolean {
   const fitsArea = (want?: string[], theirs?: string[]) =>
     !want?.length || !theirs?.length || theirs.some((area) => want.some((w) => locationsOverlap(w, area)));
-  const fitsExpr = (want?: string[], theirs?: string[]) =>
-    !want?.length || !theirs?.length || theirs.some((e) => want.includes(e));
   const sharesTopic = () =>
     (!a.topics?.length && !b.topics?.length) || (a.topics ?? []).some((t) => b.topics?.includes(t));
   return (
@@ -123,9 +121,7 @@ export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boole
     (a.intent ?? 'open') === (b.intent ?? 'open') &&
     sharesTopic() &&
     fitsArea(a.wantAreas, b.areas) &&
-    fitsArea(b.wantAreas, a.areas) &&
-    fitsExpr(a.wantExpr, b.expr) &&
-    fitsExpr(b.wantExpr, a.expr)
+    fitsArea(b.wantAreas, a.areas)
   );
 }
 
@@ -143,10 +139,9 @@ export function queueMatchFields(prefs: Partial<UserPreferences>): QueueMatchPre
   if (areas.length && prefs.showLocationOnProfile !== false) fields.areas = areas;
   if (areas.length && prefs.applyLocationFilter) fields.wantAreas = areas;
 
-  const expr = prefs.genderExpression ?? [];
-  if (expr.length && !expr.includes('Prefer not to say') && prefs.showGenderExpressionOnProfile !== false) {
-    fields.expr = expr.slice(0, MAX_QUEUE_LIST);
-  }
+  // My Type compares against the member's explicitly chosen public My Vibe label.
+  // SOGIE identity fields are never used as matching criteria.
+  if (prefs.myVibe?.trim()) fields.expr = [prefs.myVibe.trim().slice(0, 24)];
   const wantExpr = prefs.preferredGenderExpressions ?? [];
   if (prefs.applyGenderExpressionFilter && wantExpr.length && !wantExpr.includes('Any / No preference')) {
     fields.wantExpr = wantExpr.slice(0, MAX_QUEUE_LIST);
@@ -169,7 +164,14 @@ export function pickQueueCandidates(
   return entries
     .filter((e) => e.data.status === 'waiting' && !excluded.has(e.id) && isFreshQueueEntry(e.data, now))
     .filter((e) => filtersCompatible(mine, e.data))
-    .sort((a, b) => toMillis(a.data.createdAt) - toMillis(b.data.createdAt))
+    // My Type is a soft preference, not an exclusion: people outside a preference can still connect.
+    .sort((a, b) => {
+      const typeScore = (candidate: QueueMatchPrefs) =>
+        Number(Boolean(mine.wantExpr?.length && candidate.expr?.some((v) => mine.wantExpr?.includes(v)))) +
+        Number(Boolean(candidate.wantExpr?.length && mine.expr?.some((v) => candidate.wantExpr?.includes(v))));
+      return typeScore(b.data) - typeScore(a.data) ||
+        toMillis(a.data.createdAt) - toMillis(b.data.createdAt);
+    })
     .map((e) => e.id);
 }
 
@@ -198,11 +200,19 @@ async function loadPartnerProfile(partnerId: string): Promise<PartnerProfile> {
       displayName: data.displayName ? String(data.displayName).slice(0, 30) : fallback.displayName,
       avatar: isValidAvatar(data.avatar) ? data.avatar : undefined,
       pronouns: data.pronouns ? String(data.pronouns).slice(0, 20) : fallback.pronouns,
+      age: typeof data.age === 'number' && data.age >= 18 && data.age <= 99 ? Math.floor(data.age) : undefined,
+      aboutMe: typeof data.aboutMe === 'string' ? data.aboutMe.slice(0, 160) : undefined,
+      myVibe: typeof data.myVibe === 'string' ? data.myVibe.slice(0, 24) : undefined,
       intention: (data.intention as Intention) || 'open',
       topics: Array.isArray(data.topics) ? data.topics.slice(0, 8) : [],
       region: showLocation && data.region ? String(data.region) : '',
       location: showLocation && data.region ? String(data.region) : undefined,
       showLocationOnProfile: showLocation,
+      sexualOrientation: data.showSexualOrientationOnProfile && typeof data.sexualOrientation === 'string' ? data.sexualOrientation.slice(0, 40) : undefined,
+      genderIdentity: data.showGenderIdentityOnProfile && typeof data.genderIdentity === 'string' ? data.genderIdentity.slice(0, 40) : undefined,
+      genderExpression: data.showGenderExpressionOnProfile && Array.isArray(data.genderExpression) ? data.genderExpression.filter((v): v is string => typeof v === 'string').slice(0, 8) as PartnerProfile['genderExpression'] : undefined,
+      showSexualOrientationOnProfile: Boolean(data.showSexualOrientationOnProfile),
+      showGenderIdentityOnProfile: Boolean(data.showGenderIdentityOnProfile),
       showGenderExpressionOnProfile: Boolean(data.showGenderExpressionOnProfile),
     };
   } catch {
