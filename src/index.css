@@ -38,6 +38,7 @@
 }
 
 html { --fs: 1; }
+html[data-fontsize='tiny'] { --fs: 0.88; }
 html[data-fontsize='medium'] { --fs: 1.1; }
 html[data-fontsize='large'] { --fs: 1.2; }
 
