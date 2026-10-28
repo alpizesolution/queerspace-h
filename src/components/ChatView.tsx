@@ -507,7 +507,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   {isCloudActive && !partnerLeft && (
                     <MenuItem
                       icon={<RadioTower className="w-4 h-4" />}
-                      label="Send a Signal"
+                      label="Send a Signal to stay in touch"
                       onClick={() => {
                         closeMenu();
                         setSignalError(null);
@@ -879,7 +879,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       {showSignalSheet && (
         <Sheet
-          title="Send a Signal"
+          title="Stay in touch"
           icon={<RadioTower className="w-5 h-5 text-berry" />}
           onClose={() => {
             if (!signalSending) setShowSignalSheet(false);
@@ -906,6 +906,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       body: JSON.stringify({
                         action: 'create',
                         recipientId: partner.id,
+                        convId: cloudConvId,
                         message: signalMessage.trim(),
                         idempotencyKey: globalThis.crypto?.randomUUID?.() || `signal-${Date.now()}-${Math.random().toString(36).slice(2)}`,
                       }),
@@ -914,6 +915,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     if (!response.ok) {
                       const errors: Record<string, string> = {
                         invalid_recipient: 'This chat partner cannot receive a Signal right now.',
+                        not_matched: 'You can send a Signal only to someone you are chatting with right now.',
                         not_allowed: 'A Signal cannot be sent between these accounts.',
                         rate_limited: 'Please wait a little before sending another Signal.',
                         account_unavailable: 'A Signal cannot be sent between these accounts.',
@@ -936,7 +938,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
           }
         >
-          <p className="mb-3 text-sm leading-relaxed text-muted">Let them know you’d like to stay connected. They’ll decide whether to accept; this won’t create a connection or send another chat message.</p>
+          <p className="mb-3 text-sm leading-relaxed text-muted">You’re chatting right now. Send a Signal if you’d like to keep in touch. They choose whether to accept, and nothing else is sent.</p>
           <label htmlFor="signal-message" className="mb-1.5 block text-xs font-semibold text-muted">Optional note · up to 240 characters</label>
           <textarea
             id="signal-message"
