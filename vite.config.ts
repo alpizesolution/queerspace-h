@@ -17,7 +17,7 @@ export default defineConfig(() => {
         workbox: {
           // Firebase sign-in pages (/__/auth/*) and API routes must reach the network.
           // Serving the cached homepage for them breaks Google sign-in.
-          navigateFallbackDenylist: [/^\/__\//, /^\/api\//, /^\/(anonymous-wlw-chat|sapphic-community-philippines|wlw-dating-philippines|wlw-sapphic-guide|robots\.txt|sitemap\.xml|404)\/?(\.html)?$/],
+          navigateFallbackDenylist: [/^\/__\//, /^\/api\//, /^\/(anonymous-wlw-chat|sapphic-community-philippines|wlw-dating-philippines|wlw-sapphic-guide|robots\.txt|sitemap\.xml|404|google[0-9a-f]+)\/?(\.html)?$/],
         },
         manifest: {
           id: '/',
