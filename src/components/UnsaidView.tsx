@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Flag, HeartHandshake, Info, Phone, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, Flag, Info, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
+import { CrisisSupportCard } from './CrisisSupportCard.tsx';
 import {
   deleteUnsaid,
   flagUnsaid,
@@ -61,20 +62,6 @@ function saveReacted(map: Record<string, UnsaidReaction>) {
     // Per-device convenience only; the server still allows one reaction per person.
   }
 }
-
-const CrisisCard: React.FC = () => (
-  <div className="flex gap-3 rounded-2xl border border-berry/40 bg-plum/20 p-4 anim-fade" role="note">
-    <HeartHandshake className="w-5 h-5 text-berry shrink-0 mt-0.5" />
-    <div className="text-[length:calc(13px_*_var(--fs,1))] leading-relaxed">
-      <p className="font-semibold text-fg">You're not alone, and you matter.</p>
-      <p className="text-muted mt-0.5">
-        Talk to someone right now, free and 24/7: NCMH Crisis Hotline{' '}
-        <a href="tel:1553" className="text-berry font-semibold">1553</a> or{' '}
-        <a href="tel:09178998727" className="text-berry font-semibold">0917 899 8727</a>.
-      </p>
-    </div>
-  </div>
-);
 
 export const UnsaidView: React.FC = () => {
   const [posts, setPosts] = useState<UnsaidPost[]>([]);
@@ -330,11 +317,7 @@ export const UnsaidView: React.FC = () => {
             </ul>
           )}
 
-          <p className="mt-6 flex items-center justify-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle text-center">
-            <Phone className="w-3.5 h-3.5 shrink-0" />
-            Need to talk now? NCMH Crisis Hotline{' '}
-            <a href="tel:1553" className="text-berry font-medium">1553</a>
-          </p>
+          <CrisisSupportCard className="mt-6" />
 
           <FloatingAddButton onClick={() => setComposeOpen(true)} label="Write an Echo" />
         </>
@@ -378,7 +361,7 @@ export const UnsaidView: React.FC = () => {
               aria-label="Write something unsaid"
               className="input text-base sm:text-[length:calc(15px_*_var(--fs,1))] resize-none"
             />
-            {showCrisis && <CrisisCard />}
+            {showCrisis && <CrisisSupportCard message="You're not alone, and you matter." />}
             <div>
               <div className="flex items-center gap-1.5">
                 <p className={`text-[length:calc(12px_*_var(--fs,1))] flex-1 ${composeError ? 'text-danger' : 'text-subtle'}`} aria-live="polite">
