@@ -40,6 +40,32 @@
   --tabbar-h: calc(3.5rem + env(safe-area-inset-bottom));
 }
 
+html[data-theme='light'] {
+  color-scheme: light;
+  --color-ink: #fbf9fc;
+  --color-surface: #ffffff;
+  --color-raised: #f2edf6;
+  --color-line: #e5dce9;
+  --color-line-strong: #cbbbd5;
+  --color-fg: #2b2030;
+  --color-muted: #6f6276;
+  --color-subtle: #897b91;
+  --color-berry: #a83279;
+  --color-berry-hover: #8f2867;
+  --color-plum: #e9d8e8;
+  --color-lavender: #77528e;
+  --color-danger: #bd334f;
+}
+
+html[data-theme='light'] .btn-primary,
+html[data-theme='light'] .btn-danger {
+  color: #ffffff;
+}
+
+html[data-theme='light'] .btn-secondary:hover {
+  background-color: #e9e0ee;
+}
+
 @media (min-width: 1024px) and (pointer: fine), (min-width: 1440px) {
   :root {
     --header-h: 4rem;

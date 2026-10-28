@@ -31,11 +31,17 @@ import { CheckCircle2 } from 'lucide-react';
 import { AgeEligibilityGate } from './components/AgeEligibilityGate.tsx';
 import { calculateAge, isAdultBirthDate } from './utils/ageEligibility.ts';
 import { submitAgeEligibilityReview } from './services/ageReviewService.ts';
+
+import { AppearanceSettingsModal } from './components/AppearanceSettingsModal.tsx';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community' | 'signals'>('home');
   const [setupModalOpen, setSetupModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() =>
+    getStorageItem('queerspace_theme') === 'light' ? 'light' : 'dark'
+  );
   const [donationModalOpen, setDonationModalOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [hasSupportReply, setHasSupportReply] = useState(false);
@@ -84,6 +90,14 @@ export default function App() {
   const [ageGateOpen, setAgeGateOpen] = useState(() => !isAdultBirthDate(userPrefs.birthDate));
   const [ageRestricted, setAgeRestricted] = useState(() => getStorageItem('queerspace_age_restricted') === 'true');
   const [ageReviewSubmitted, setAgeReviewSubmitted] = useState(() => getStorageItem('queerspace_age_review_requested') === 'true');
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute(
+      'content', theme === 'light' ? '#fbf9fc' : '#120b17'
+    );
+    setStorageItem('queerspace_theme', theme);
+  }, [theme]);
 
   // Initialize anonymous auth session on startup and restore cloud profile if available
   useEffect(() => {
@@ -309,6 +323,7 @@ export default function App() {
           onToggleSound={handleToggleSound}
           onOpenSafetyModal={() => setActiveInfoModal('guidelines')}
           onOpenProfile={() => setProfileOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
           onOpenInfo={(modal) => setActiveInfoModal(modal)}
           onOpenSupport={openSupport}
           hasSupportReply={hasSupportReply}
@@ -411,6 +426,14 @@ export default function App() {
       )}
 
       <DonationModal isOpen={donationModalOpen} onClose={() => setDonationModalOpen(false)} />
+
+      {settingsOpen && (
+        <AppearanceSettingsModal
+          theme={theme}
+          onChangeTheme={setTheme}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
 
       <InfoModals activeModal={activeInfoModal} onClose={() => setActiveInfoModal(null)} onOpenSupport={openSupport} />
 
