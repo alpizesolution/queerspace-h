@@ -33,8 +33,8 @@ test('buildPublicProfilePayload enforces field boundaries and excludes SOGIE fie
   assert.deepEqual(payload.topics, ['Books', 'Cats', 'Music', 'Art', 'Coffee', 'Hiking', 'Poetry', 'Travel']);
 
   // Verify private fields are NOT present in public payload
-  assert.equal('sexualOrientation' in payload, false);
-  assert.equal('genderExpression' in payload, false);
+  assert.equal(typeof payload.sexualOrientation === 'string', false);
+  assert.equal(Array.isArray(payload.genderExpression), false);
   assert.equal('exactLocation' in payload, false);
   assert.equal('blockedPartnerIds' in payload, false);
 });

@@ -16,6 +16,7 @@ import {
   Reply,
   RadioTower,
   X,
+  UserRound,
 } from 'lucide-react';
 import { SwipeToReply } from './SwipeToReply.tsx';
 import { MatchCelebration } from './MatchCelebration.tsx';
@@ -79,6 +80,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [signalSending, setSignalSending] = useState(false);
   const [signalNotice, setSignalNotice] = useState<string | null>(null);
   const [signalError, setSignalError] = useState<string | null>(null);
+  const [showPartnerProfile, setShowPartnerProfile] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [reportReason, setReportReason] = useState('Harassment or disrespectful behavior');
@@ -444,11 +446,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <h1 className="text-[15px] font-semibold text-fg truncate">{partner.displayName}</h1>
             <p className="text-[12px] text-muted truncate" aria-live="polite">
               <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${partnerLeft ? 'bg-subtle' : 'bg-emerald-400'}`} />
-              {partner.pronouns} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}
+              {partner.pronouns}{partner.age ? ` · ${partner.age}` : ''} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}
               {visibleLocation && <> · {visibleLocation}</>}
             </p>
           </div>
 
+          <button
+            onClick={() => setShowPartnerProfile(true)}
+            className="icon-btn"
+            aria-label="View member profile"
+            title="View profile"
+          >
+            <UserRound className="w-5 h-5" />
+          </button>
           <button
             onClick={() => setShowSkipConfirm(true)}
             className="icon-btn"
@@ -543,16 +553,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
             Looking for <span className="text-muted font-medium">{INTENTION_LABELS[partner.intention] ?? partner.intention}</span>
             {partner.topics.length > 0 && <> · {partner.topics.slice(0, 2).join(', ')}</>}
           </p>
-          {(visibleExpressions.length > 0 || visibleOrientation) && (
+          {(partner.myVibe || visibleExpressions.length > 0 || visibleOrientation) && (
             <div className="flex flex-wrap justify-center gap-1.5">
-              {visibleExpressions.map((expr) => (
-                <span key={expr} className="tag">
-                  {expr}
-                </span>
-              ))}
+              {partner.myVibe && <span className="tag">{partner.myVibe}</span>}
+              {visibleExpressions.map((expr) => <span key={expr} className="tag">{expr}</span>)}
               {visibleOrientation && <span className="tag">{visibleOrientation}</span>}
             </div>
           )}
+          {partner.aboutMe && <p className="mx-auto max-w-md text-sm text-muted leading-relaxed px-4">{partner.aboutMe}</p>}
         </div>
 
         <div className="space-y-1.5">
@@ -800,6 +808,28 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {showPartnerProfile && (
+        <Sheet title="Their profile" onClose={() => setShowPartnerProfile(false)} size="lg">
+          <div className="space-y-5 text-fg">
+            <section className="flex items-center gap-3">
+              <AnimalAvatar avatar={partner.avatar} seed={partner.id} className="w-14 h-14" />
+              <div className="min-w-0"><h2 className="text-lg font-semibold truncate">{partner.displayName}</h2><p className="text-sm text-muted">{[partner.age ? String(partner.age) : '', partner.pronouns].filter(Boolean).join(' · ')}</p></div>
+            </section>
+            {partner.aboutMe && <section><p className="label">About Me</p><p className="text-sm leading-6 whitespace-pre-wrap break-words">{partner.aboutMe}</p></section>}
+            {partner.myVibe && <section><p className="label">My Vibe</p><span className="chip">{partner.myVibe}</span></section>}
+            {partner.personalStyle && <section><p className="label">Personal Style</p><span className="chip">{partner.personalStyle}</span></section>}
+            <section><p className="label">Looking for</p><p className="text-sm">{INTENTION_LABELS[partner.intention] || 'Open to Anything'}</p></section>
+            {partner.topics.length > 0 && <section><p className="label">Interests</p><div className="flex flex-wrap gap-2">{partner.topics.map((topic) => <span key={topic} className="chip">{topic}</span>)}</div></section>}
+            {(partner.showSexualOrientationOnProfile && partner.sexualOrientation || partner.showGenderIdentityOnProfile && partner.genderIdentity || partner.showGenderExpressionOnProfile && partner.genderExpression?.length) && <section className="space-y-3"><p className="label">SOGIE · shared fields</p>
+              {partner.showSexualOrientationOnProfile && partner.sexualOrientation && <p className="text-sm"><span className="text-muted">Sexual orientation</span><span className="block">{partner.sexualOrientation}</span></p>}
+              {partner.showGenderIdentityOnProfile && partner.genderIdentity && <p className="text-sm"><span className="text-muted">Gender identity</span><span className="block">{partner.genderIdentity}</span></p>}
+              {partner.showGenderExpressionOnProfile && partner.genderExpression?.length && <p className="text-sm"><span className="text-muted">Gender expression</span><span className="block">{partner.genderExpression.join(', ')}</span></p>}
+            </section>}
+            <p className="text-xs text-subtle">Only details this member chose to share are shown.</p>
+          </div>
+        </Sheet>
       )}
 
       {celebrating && (

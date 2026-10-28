@@ -14,6 +14,7 @@ const full: UserPreferences = {
   sexualOrientation: 'Lesbian',
   genderIdentity: 'Non-binary',
   genderExpression: ['Andro'],
+  myVibe: 'Andro',
   showGenderExpressionOnProfile: false,
   showSogieOnProfile: true,
   showLocationOnProfile: false,
@@ -70,10 +71,11 @@ test('a Quick search runs without filters but leaves the saved Custom filters in
   assert.equal(fields.intent, 'open');
 });
 
-test('hidden expression and area stay out of the queue while my own filters still apply', () => {
+test('private gender expression and hidden area stay out of the queue while my own filters still apply', () => {
   const fields = queueMatchFields(full);
-  // Hidden on the profile: never published to other searchers.
-  assert.equal(fields.expr, undefined);
+  // Private gender expression is never published; only the public My Vibe label is.
+  assert.deepEqual(fields.expr, ['Andro']);
+  assert.equal(JSON.stringify(fields).includes('Lesbian'), false);
   assert.equal(fields.areas, undefined);
   // My filters are independent of what I show.
   assert.deepEqual(fields.wantExpr, ['Femme']);

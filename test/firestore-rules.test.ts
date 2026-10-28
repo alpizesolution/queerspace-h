@@ -20,8 +20,8 @@ before(async () => {
       projectId: 'demo-queerspace-test',
       firestore: {
         rules: rulesContent,
-        host: '127.0.0.1',
-        port: 8080,
+        host: (process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080').split(':')[0],
+        port: Number((process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080').split(':')[1]),
       },
     });
   } catch (err: any) {
@@ -36,9 +36,22 @@ after(async () => {
   }
 });
 
+/** Adult (self-reported 30y) members with a complete public profile: the minimum to pass isEligibleMember. */
+const ELIGIBLE_UIDS = ['alice', 'bob', 'carol', 'cha', 'charlie', 'dana', 'dave', 'eve', 'ivy', 'uid', 'erin', 'fay', 'gail', 'hana', 'jo'];
+async function seedEligibleMember(uid: string, birthDate: Date = new Date(Date.now() - 30 * 365 * 86400000)) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc(`users/${uid}/private/settings`).set({ birthDate, createdAt: new Date(), updatedAt: new Date() });
+    await db.doc(`users/${uid}/public/profile`).set({
+      displayName: uid, pronouns: 'she/her', intention: 'open', region: 'Anywhere', topics: [], profileComplete: true, updatedAt: new Date(),
+    });
+  });
+}
+
 beforeEach(async () => {
   if (testEnv) {
     await testEnv.clearFirestore();
+    for (const uid of ELIGIBLE_UIDS) await seedEligibleMember(uid);
   }
 });
 
@@ -46,6 +59,7 @@ beforeEach(async () => {
 // 1. Private Settings & Profile Privacy Tests
 // ------------------------------------------------------------------
 test('T-01: Profile Owner CAN write valid private settings', async () => {
+  await testEnv.withSecurityRulesDisabled((ctx) => ctx.firestore().doc('users/alice/private/settings').delete());
   const alice = testEnv.authenticatedContext('alice');
   await assertSucceeds(
     alice.firestore().doc('users/alice/private/settings').set({
@@ -1194,4 +1208,30 @@ test('SIG-03: Clients CANNOT access Signals idempotency or rate-limit records', 
   await assertFails(alice.doc('signalsIdempotency/request1234').set({ action: 'create' }));
   await assertFails(alice.doc('signalsRateLimits/alice').get());
   await assertFails(alice.doc('signalsRateLimits/alice').set({ lastCreatedAt: new Date() }));
+});
+
+// ------------------------------------------------------------------
+// Age eligibility and profile privacy
+// ------------------------------------------------------------------
+test('A-01: Underage or incomplete accounts CANNOT join the queue, chat, or post', async () => {
+  await testEnv.clearFirestore();
+  await seedEligibleMember('kid', new Date(Date.now() - 15 * 365 * 86400000));
+  await assertFails(testEnv.authenticatedContext('kid').firestore().doc('match_queue/kid').set(waitingEntry()));
+  await assertFails(testEnv.authenticatedContext('nobody').firestore().doc('match_queue/nobody').set(waitingEntry()));
+});
+
+test('A-02: Birthday CANNOT be set to an underage date, and others CANNOT read it', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const base = { createdAt: new Date(), updatedAt: new Date() };
+  await assertFails(alice.doc('users/newbie/private/settings').set({ ...base, birthDate: new Date() }));
+  await assertSucceeds(testEnv.authenticatedContext('newbie').firestore().doc('users/newbie/private/settings').set({ ...base, birthDate: new Date(Date.now() - 25 * 365 * 86400000) }));
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('users/newbie/private/settings').get());
+});
+
+test('A-03: Incomplete public profiles are hidden from other members but not from their owner', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('users/draft/public/profile').set({ displayName: 'draft', profileComplete: false });
+  });
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('users/draft/public/profile').get());
+  await assertSucceeds(testEnv.authenticatedContext('draft').firestore().doc('users/draft/public/profile').get());
 });

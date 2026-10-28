@@ -23,15 +23,25 @@ import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature } from './services/profilePersistence.ts';
 import { applyFilters, applyProfile, FilterFields, matchPrefsForMode, ProfileFields } from './utils/preferences.ts';
 import { ProfileEditorSheet } from './components/ProfileEditorSheet.tsx';
+import { ProfilePageSheet } from './components/ProfilePageSheet.tsx';
 import { hasUnreadSupportReply } from './services/supportService.ts';
 import { getMySuspension } from './services/suspensionService.ts';
 import { SuspendedNotice } from './components/SuspendedNotice.tsx';
 import { CheckCircle2 } from 'lucide-react';
+import { AgeEligibilityGate } from './components/AgeEligibilityGate.tsx';
+import { calculateAge, isAdultBirthDate } from './utils/ageEligibility.ts';
+import { submitAgeEligibilityReview } from './services/ageReviewService.ts';
+
+import { AppearanceSettingsModal } from './components/AppearanceSettingsModal.tsx';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community' | 'signals'>('home');
   const [setupModalOpen, setSetupModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() =>
+    getStorageItem('queerspace_theme') === 'light' ? 'light' : 'dark'
+  );
   const [donationModalOpen, setDonationModalOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [hasSupportReply, setHasSupportReply] = useState(false);
@@ -45,6 +55,7 @@ export default function App() {
   });
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileEditOpen, setProfileEditOpen] = useState(false);
   // What the cloud last held, so saves that change nothing there skip Firestore entirely.
   const cloudSignatureRef = useRef<string | null>(null);
   const [activeInfoModal, setActiveInfoModal] = useState<
@@ -76,6 +87,18 @@ export default function App() {
     };
   });
 
+  const [ageGateOpen, setAgeGateOpen] = useState(() => !isAdultBirthDate(userPrefs.birthDate));
+  const [ageRestricted, setAgeRestricted] = useState(() => getStorageItem('queerspace_age_restricted') === 'true');
+  const [ageReviewSubmitted, setAgeReviewSubmitted] = useState(() => getStorageItem('queerspace_age_review_requested') === 'true');
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute(
+      'content', theme === 'light' ? '#fbf9fc' : '#120b17'
+    );
+    setStorageItem('queerspace_theme', theme);
+  }, [theme]);
+
   // Initialize anonymous auth session on startup and restore cloud profile if available
   useEffect(() => {
     if (isFirebaseConfigured) {
@@ -85,6 +108,8 @@ export default function App() {
             loadAnonymousProfile().then((res) => {
               if (!res.fromCloudSuccess) return;
               setUserPrefs(res.prefs);
+              setAgeGateOpen(!isAdultBirthDate(res.prefs.birthDate));
+              setAgeRestricted(false);
               cloudSignatureRef.current = cloudProfileSignature(res.prefs, res.blockedPartnerIds ?? []);
               // Never shrink the blocklist: keep this device's blocks and add any saved in the cloud.
               const cloudBlocked = res.blockedPartnerIds ?? [];
@@ -141,14 +166,17 @@ export default function App() {
 
   // Profile and filters are saved separately: each only replaces its own fields.
   const handleSaveProfile = async (profile: ProfileFields) => {
-    const next = applyProfile(userPrefs, profile);
+    const next = { ...applyProfile(userPrefs, profile), profileComplete: true };
     setUserPrefs(next);
-    setProfileOpen(false);
+    setProfileEditOpen(false);
+    setProfileOpen(true);
     const { feedback, cloudChanged } = await persistPrefs(next);
     showToast(feedback.savedToCloud || !cloudChanged ? 'Profile updated.' : feedback.userMessage);
   };
 
   const handleOpenSetup = (mode: 'quick' | 'custom' = 'quick') => {
+    if (!isAdultBirthDate(userPrefs.birthDate)) { setAgeGateOpen(true); return; }
+    if (userPrefs.profileComplete !== true) { setProfileEditOpen(true); showToast('Save your anonymous profile before matching.'); return; }
     if (suspended) {
       showToast('Matching is paused on this account while the team reviews a report.');
       return;
@@ -168,6 +196,11 @@ export default function App() {
   };
 
   const handleStartMatching = async (mode: 'quick' | 'custom', filters: FilterFields) => {
+    if (!isAdultBirthDate(userPrefs.birthDate) || userPrefs.profileComplete !== true) {
+      setSetupModalOpen(false);
+      if (!isAdultBirthDate(userPrefs.birthDate)) setAgeGateOpen(true); else setProfileEditOpen(true);
+      return;
+    }
     // Quick only changes how this search runs; the saved Custom filters are kept as chosen.
     const next = applyFilters(userPrefs, filters);
     setUserPrefs(next);
@@ -252,6 +285,25 @@ export default function App() {
     >
       <FloatingCatsBackground />
 
+      {(ageGateOpen || (ageRestricted && !supportOpen)) && (
+        <AgeEligibilityGate initialBirthDate={userPrefs.birthDate} restricted={ageRestricted} reviewSubmitted={ageReviewSubmitted}
+          onSubmit={async (birthDate) => {
+            const age = calculateAge(birthDate);
+            if (age === null || age < 18) {
+              const submitted = await submitAgeEligibilityReview();
+              setAgeReviewSubmitted(submitted || ageReviewSubmitted);
+              if (submitted) setStorageItem('queerspace_age_review_requested', 'true');
+              setAgeRestricted(true); setAgeGateOpen(true); setStorageItem('queerspace_age_restricted', 'true'); return;
+            }
+            const next = { ...userPrefs, birthDate, age, profileComplete: userPrefs.profileComplete === true };
+            setUserPrefs(next); setAgeRestricted(false); setAgeReviewSubmitted(false); setStorageItem('queerspace_age_restricted', 'false');
+            const { feedback } = await persistPrefs(next);
+            if (!feedback.savedToCloud && isFirebaseConfigured) showToast('Birthday saved on this device. Cloud sync needs attention.');
+            setAgeGateOpen(false);
+          }}
+          onContactSupport={() => { setAgeGateOpen(false); openSupport(); }} />
+      )}
+
       {toastMessage && (
         <div
           role="status"
@@ -271,6 +323,7 @@ export default function App() {
           onToggleSound={handleToggleSound}
           onOpenSafetyModal={() => setActiveInfoModal('guidelines')}
           onOpenProfile={() => setProfileOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
           onOpenInfo={(modal) => setActiveInfoModal(modal)}
           onOpenSupport={openSupport}
           hasSupportReply={hasSupportReply}
@@ -357,16 +410,30 @@ export default function App() {
           onStartMatching={handleStartMatching}
           onEditProfile={() => {
             setSetupModalOpen(false);
-            setProfileOpen(true);
+            setProfileEditOpen(true);
           }}
         />
       )}
 
-      {profileOpen && (
-        <ProfileEditorSheet currentPrefs={userPrefs} onClose={() => setProfileOpen(false)} onSave={handleSaveProfile} />
+      {profileOpen && !ageGateOpen && !ageRestricted && (
+        <ProfilePageSheet currentPrefs={userPrefs} onClose={() => setProfileOpen(false)}
+          onEditProfile={() => { setProfileOpen(false); setProfileEditOpen(true); }}
+          onEditPreferences={() => { setProfileOpen(false); setSetupInitialMode('custom'); setSetupModalOpen(true); }} />
+      )}
+
+      {profileEditOpen && !ageGateOpen && !ageRestricted && (
+        <ProfileEditorSheet currentPrefs={userPrefs} onClose={() => setProfileEditOpen(false)} onSave={handleSaveProfile} />
       )}
 
       <DonationModal isOpen={donationModalOpen} onClose={() => setDonationModalOpen(false)} />
+
+      {settingsOpen && (
+        <AppearanceSettingsModal
+          theme={theme}
+          onChangeTheme={setTheme}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
 
       <InfoModals activeModal={activeInfoModal} onClose={() => setActiveInfoModal(null)} onOpenSupport={openSupport} />
 

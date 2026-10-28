@@ -37,15 +37,85 @@ export const REGIONS: string[] = [
   'CALABARZON',
 ];
 
+/** Personality and interests, intentionally distinct from SOGIE identity labels. */
+export const MY_VIBE_OPTIONS = [
+  'Soft & Sweet',
+  'Introvert',
+  'Adventurous',
+  'Book Lover',
+  'Gamer',
+  'Creative',
+  'Cozy Homebody',
+  'Night Owl',
+] as const;
+
+/** Public aesthetic label for how someone likes to dress; not SOGIE and never a matching criterion. */
+export const PERSONAL_STYLE_OPTIONS = [
+  'Soft & Feminine',
+  'Androgynous',
+  'Tomboy',
+  'Sporty',
+  'Streetwear',
+  'Vintage',
+  'Alt & Edgy',
+  'Cozy Casual',
+  'Minimalist',
+  'Always Changing',
+] as const;
+
+/**
+ * Inclusive predefined gender-expression and presentation labels.
+ * This is a profile self-description list, not a matching or eligibility rule.
+ */
 export const GENDER_EXPRESSIONS: GenderExpressionOption[] = [
+  // Feminine
   'Femme',
-  'Soft Masc',
-  'Hard Masc',
-  'Andro',
+  'High Femme',
   'Hyperfemme',
+  'Soft Femme',
+  'Feminine',
+  'Ultra-Feminine',
+  'Girly',
+  'Chapstick Femme',
+  'Lipstick Lesbian',
+  // Masculine
+  'Masc',
+  'Soft Masc',
+  'Softmasc',
+  'Hard Masc',
   'Butch',
+  'Stone Butch',
+  'Stud',
   'Stem',
+  'Tomboy',
+  'Masculine',
+  'Ultra-Masculine',
+  'Chapstick',
+  'Gentle Masc',
+  // Androgynous and mixed
+  'Androgynous',
+  'Andro',
+  'Futch',
+  'Femme-Masc Mix',
+  'Soft Androgynous',
+  'Masc-Femme',
+  'Gender-Neutral Presentation',
+  'Balanced Expression',
+  'Mixed Expression',
+  // Fluid and gender-diverse expression
+  'Gender-Fluid Expression',
+  'Gender-Nonconforming',
+  'Gender-Expansive',
+  'Gender-Ambiguous',
+  'Fluid Presentation',
+  'Nonbinary Expression',
+  'Neutral Expression',
+  'Unisex Style',
+  'Changing Expression',
+  // Self-description
+  'No Label',
   'No label / Other',
+  'Still Exploring',
   'Prefer not to say',
 ];
 
@@ -83,13 +153,9 @@ export const PRONOUN_OPTIONS: string[] = [
 
 export const DISCOVERY_FILTER_OPTIONS: string[] = [
   'Any / No preference',
-  'Femme',
+  ...MY_VIBE_OPTIONS,
   'Soft Masc',
   'Hard Masc',
-  'Andro',
-  'Hyperfemme',
-  'Butch',
-  'Stem',
   'No label / Other',
 ];
 
@@ -218,10 +284,7 @@ export function generateSapphicPseudonym(): { name: string; pronouns: string } {
 
 /**
  * Calculates a match score between 0 and 100 based on shared intention and topics.
- * When applyGenderExpressionFilter is enabled, matches preferred expressions.
- * IMPORTANT: Never automatically ranks, excludes, or penalizes users based on SOGIE
- * or gender expression when filters are not explicitly activated by the user.
- * "Prefer not to say" is never penalized.
+ * My Type is based on a member's optional public My Vibe label, never SOGIE fields.
  */
 export function calculateCompatibilityScore(
   userPrefs: UserPreferences,
@@ -257,28 +320,16 @@ export function calculateCompatibilityScore(
     score += 10;
   }
 
-  // Optional Gender Expression Filter (used ONLY when explicitly enabled by user)
+  // My Type compares only with the person's optional public My Vibe label.
+  // SOGIE identity fields never rank, exclude, or penalize anyone.
   if (
     userPrefs.applyGenderExpressionFilter &&
-    userPrefs.preferredGenderExpressions &&
-    userPrefs.preferredGenderExpressions.length > 0 &&
-    !userPrefs.preferredGenderExpressions.includes('Any / No preference')
+    userPrefs.preferredGenderExpressions?.length &&
+    !userPrefs.preferredGenderExpressions.includes('Any / No preference') &&
+    partner.myVibe
   ) {
-    const preferredSet = new Set(userPrefs.preferredGenderExpressions);
-    const partnerExpressions = partner.genderExpression || [];
-
-    // "Prefer not to say" or unset does not exclude or penalize (inclusive privacy protection)
-    const hasPreferNotToSay =
-      partnerExpressions.length === 0 || partnerExpressions.includes('Prefer not to say');
-
-    if (!hasPreferNotToSay) {
-      const hasMatch = partnerExpressions.some((expr) => preferredSet.has(expr));
-      if (hasMatch) {
-        score += 25; // boost partner matching chosen filter
-      } else {
-        score -= 20; // lower priority relative to matched partners
-      }
-    }
+    if (userPrefs.preferredGenderExpressions.includes(partner.myVibe)) score += 25;
+    else score -= 20;
   }
 
   return Math.min(Math.max(score, 10), 100);

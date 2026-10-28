@@ -78,9 +78,9 @@ test('filtersCompatible: location filters match containing areas, both ways', ()
 
 test('filtersCompatible: gender expression filters, both ways, never excluding the unshared', () => {
   assert.equal(filtersCompatible({ wantExpr: ['Butch'] }, { expr: ['Butch', 'Stem'] }), true);
-  assert.equal(filtersCompatible({ wantExpr: ['Butch'] }, { expr: ['Femme'] }), false);
+  assert.equal(filtersCompatible({ wantExpr: ['Butch'] }, { expr: ['Femme'] }), true, 'My Type is a soft preference');
   assert.equal(filtersCompatible({ wantExpr: ['Butch'] }, {}), true);
-  assert.equal(filtersCompatible({ expr: ['Femme'] }, { wantExpr: ['Andro'] }), false);
+  assert.equal(filtersCompatible({ expr: ['Femme'] }, { wantExpr: ['Andro'] }), true, 'their preference is soft too');
   assert.equal(filtersCompatible({ expr: ['Femme'], age: 30 }, { wantExpr: ['Femme'], age: 31, ageMin: 18, ageMax: 25 }), false, 'age still applies');
 });
 
@@ -90,10 +90,11 @@ test('queueMatchFields shares location and expression only when shown, and filte
       locationSelection: ['Cebu City'],
       applyLocationFilter: true,
       genderExpression: ['Femme'],
+      myVibe: 'Cozy',
       applyGenderExpressionFilter: true,
       preferredGenderExpressions: ['Butch'],
     }),
-    { areas: ['Cebu City'], wantAreas: ['Cebu City'], expr: ['Femme'], wantExpr: ['Butch'] }
+    { areas: ['Cebu City'], wantAreas: ['Cebu City'], expr: ['Cozy'], wantExpr: ['Butch'] }
   );
   assert.deepEqual(
     queueMatchFields({
