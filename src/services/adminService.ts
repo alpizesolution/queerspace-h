@@ -26,6 +26,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.ts';
 import { isFreshQueueEntry } from './liveMatchService.ts';
+import { UNSAID_PERSISTENT_SINCE_MS } from './unsaidService.ts';
 
 /**
  * Admin page data. Every read and write here is also guarded by firestore.rules:
@@ -57,7 +58,7 @@ export interface AdminUnsaidPost {
   kind: string;
   text: string;
   flags: number;
-  expiresAt: number;
+  expiresAt: number | null;
 }
 
 export interface DayCount {
@@ -208,7 +209,8 @@ async function fetchStats(): Promise<AdminStats> {
     count(members),
     count(chats),
     count(between(collection(firestore, 'public_room_messages'), 'timestamp', today)),
-    count(query(collection(firestore, 'unsaid'), where('expiresAt', '>', Timestamp.now()))),
+    // Echoes are permanent now; count the ones written since they became permanent.
+    count(query(collection(firestore, 'unsaid'), where('createdAt', '>=', Timestamp.fromMillis(UNSAID_PERSISTENT_SINCE_MS)))),
     getDocs(query(collection(firestore, 'match_queue'), where('status', '==', 'waiting'))),
     Promise.all(days.map((d) => memberCount(between(members, 'createdAt', d, d + DAY_MS)))),
     Promise.all(days.map((d) => count(between(chats, 'createdAt', d, d + DAY_MS)))),
@@ -301,7 +303,7 @@ export async function deleteRoomMessage(id: string): Promise<void> {
   await deleteDoc(doc(db, 'public_room_messages', id));
 }
 
-/** Live Unsaid posts that someone has flagged, most flagged first. */
+/** Unsaid posts (permanent, or old-style ones that have not expired) that someone has flagged, most flagged first. */
 export async function loadFlaggedUnsaid(): Promise<AdminUnsaidPost[]> {
   if (!db) return [];
   const snap = await getDocs(query(collection(db, 'unsaid'), where('flags', '>', 0), orderBy('flags', 'desc'), limit(100)));
@@ -314,10 +316,10 @@ export async function loadFlaggedUnsaid(): Promise<AdminUnsaidPost[]> {
         kind: String(data.kind ?? 'vent'),
         text: String(data.text ?? ''),
         flags: Number(data.flags) || 0,
-        expiresAt: toMillis(data.expiresAt),
+        expiresAt: data.expiresAt ? toMillis(data.expiresAt) : null,
       };
     })
-    .filter((p) => p.expiresAt > now);
+    .filter((p) => p.expiresAt === null || p.expiresAt > now);
 }
 
 export async function restoreUnsaid(id: string): Promise<void> {

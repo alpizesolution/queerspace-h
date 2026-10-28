@@ -437,7 +437,7 @@ async function postUnsaidAs(uid: string, id: string, overrides: Record<string, u
     kind: 'confession',
     text: 'I never told anyone I like her',
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    expiresAt: new Date(Date.now() + 48 * HOUR),
+    // Echoes are permanent: no expiresAt unless a test adds one.
     hugs: 0,
     same: 0,
     flags: 0,
@@ -475,7 +475,7 @@ function reactAs(uid: string, id: string, type: string, bump = 1) {
   return batch.commit();
 }
 
-test('U-01: User CAN post anonymously with a 48h expiry and an owner record', async () => {
+test('U-01: User CAN post anonymously, with no expiry, and an owner record', async () => {
   await assertSucceeds(postUnsaidAs('alice', 'p1'));
   const bob = testEnv.authenticatedContext('bob').firestore();
   const snap = await assertSucceeds(bob.doc('unsaid/p1').get());
@@ -1321,4 +1321,64 @@ test('SG-01: Clients CANNOT write Signals or conversations directly, so a Signal
   await assertFails(alice.doc('signalsInbox/bob').set({ rev: 99, pending: { x: new Date() } }));
   await assertFails(alice.doc('conversations/fake-match').set({ participants: ['alice', 'bob'], status: 'active', createdAt: new Date(), updatedAt: new Date() }));
   await assertFails(alice.collection('signalsInvitations').get());
+});
+
+// ------------------------------------------------------------------
+// Echoes are permanent
+// ------------------------------------------------------------------
+async function seedOldEcho(id: string, author: string, ageHours: number, extra: Record<string, unknown> = {}) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`unsaid/${id}`).set({
+      kind: 'confession', text: `echo ${id}`, createdAt: new Date(Date.now() - ageHours * HOUR), hugs: 0, same: 0, flags: 0, ...extra,
+    });
+    await ctx.firestore().doc(`unsaid_owners/${id}`).set({ authorId: author });
+  });
+}
+
+test('EP-01: An Echo older than 48 hours (no expiry) stays readable, listed newest first, with no author exposed', async () => {
+  await seedOldEcho('old-10d', 'alice', 24 * 10);
+  await seedOldEcho('old-3d', 'bob', 24 * 3);
+  await seedOldEcho('fresh', 'carol', 1);
+  const dana = testEnv.authenticatedContext('dana').firestore();
+  const snap = await assertSucceeds(dana.collection('unsaid').orderBy('createdAt', 'desc').limit(10).get());
+  assert.deepEqual(snap.docs.map((d) => d.id), ['fresh', 'old-3d', 'old-10d']);
+  for (const d of snap.docs) assert.equal('authorId' in d.data(), false, 'no author on a public Echo');
+  // A range query (what the app's feed uses) works too.
+  await assertSucceeds(
+    dana.collection('unsaid').where('createdAt', '>=', new Date(Date.now() - 30 * 24 * HOUR)).orderBy('createdAt', 'desc').limit(5).get()
+  );
+  await assertFails(dana.doc('unsaid_owners/old-10d').get());
+});
+
+test('EP-02: The author CAN delete an old Echo; others CANNOT; an admin CAN (moderation)', async () => {
+  await seedAdmin();
+  await seedOldEcho('mine', 'alice', 24 * 20);
+  await seedOldEcho('theirs', 'alice', 24 * 20);
+  await seedOldEcho('flagged', 'bob', 24 * 40, { flags: 4 });
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(bob.doc('unsaid/mine').delete());
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const batch = alice.batch();
+  batch.delete(alice.doc('unsaid/mine'));
+  batch.delete(alice.doc('unsaid_owners/mine'));
+  await assertSucceeds(batch.commit());
+  assert.equal((await adminDb().doc('unsaid/mine').get()).exists, false, 'removed Echoes stay removed');
+  // Moderation: an admin removes someone else's old Echo; a plain member cannot.
+  await assertFails(testEnv.authenticatedContext('eve').firestore().doc('unsaid/theirs').delete());
+  await assertSucceeds(adminDb().doc('unsaid/flagged').delete());
+  assert.equal((await adminDb().doc('unsaid/flagged').get()).exists, false);
+  // Existing Echoes are untouched by all of this.
+  assert.equal((await adminDb().doc('unsaid/theirs').get()).exists, true);
+});
+
+test('EP-03: A new Echo with an expiry outside the legacy 47-49 hour window is still refused', async () => {
+  await assertFails(postUnsaidAs('alice', 'x1', { expiresAt: new Date(Date.now() + 5 * HOUR) }));
+  await assertFails(postUnsaidAs('alice', 'x2', { expiresAt: new Date(Date.now() + 365 * 24 * HOUR) }));
+  await assertSucceeds(postUnsaidAs('alice', 'x3'));
+});
+
+test('EP-04: Older app versions can still post with the legacy 48-hour expiry, and it is still honoured', async () => {
+  await assertSucceeds(postUnsaidAs('alice', 'legacy1', { expiresAt: new Date(Date.now() + 48 * HOUR) }));
+  const snap = await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('unsaid/legacy1').get());
+  assert.ok(snap.data()?.expiresAt, 'the expiry the writer chose is kept on the post');
 });

@@ -17,7 +17,8 @@ import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/fire
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
 
 /**
- * Unsaid wall: anonymous posts that fade after 48 hours.
+ * Echoes (the Unsaid wall): anonymous posts that stay visible until the author deletes them or moderation removes them.
+ * Posts made before persistence launched carry an `expiresAt` and still fade at that time, as they were promised.
  *
  * `unsaid/{id}` holds only text, timestamps and counters. Authorship lives in
  * `unsaid_owners/{id}`, which only the author can read, so posts can't be traced
@@ -25,7 +26,14 @@ import { sanitizeMessageText } from '../utils/matching-logic.ts';
  */
 
 export const UNSAID_MAX_LENGTH = 500;
-export const UNSAID_LIFETIME_MS = 48 * 60 * 60 * 1000;
+/** Echoes written before they became permanent lived 48 hours; their `expiresAt` is still honoured. */
+export const UNSAID_LEGACY_LIFETIME_MS = 48 * 60 * 60 * 1000;
+/** When Echoes became permanent. Nothing older than this minus the legacy lifetime can still be visible, so feeds start there. */
+export const UNSAID_PERSISTENT_SINCE_MS = Date.UTC(2026, 9, 29);
+export const UNSAID_FEED_START_MS = UNSAID_PERSISTENT_SINCE_MS - UNSAID_LEGACY_LIFETIME_MS;
+/** Echoes in the live first page, and in each "older" page. */
+export const UNSAID_FIRST_PAGE = 60;
+export const UNSAID_PAGE_SIZE = 30;
 /** Posts with this many flags are hidden for everyone until reviewed. */
 export const UNSAID_HIDE_AT_FLAGS = 3;
 
@@ -49,7 +57,8 @@ export interface UnsaidPost {
   kind: UnsaidKind;
   text: string;
   createdAt: number;
-  expiresAt: number;
+  /** Only on Echoes posted before they became permanent; null means the Echo stays until deleted or removed. */
+  expiresAt: number | null;
   hugs: number;
   same: number;
   felt: number;
@@ -96,22 +105,59 @@ export function needsCrisisSupport(text: string): boolean {
   return CRISIS_PATTERNS.some((p) => p.test(text));
 }
 
+/** Visible unless heavily flagged, or an old-style Echo that has passed its own `expiresAt`. */
 export function isUnsaidVisible(post: UnsaidPost, now: number = Date.now()): boolean {
-  return post.expiresAt > now && post.flags < UNSAID_HIDE_AT_FLAGS;
+  return (post.expiresAt === null || post.expiresAt > now) && post.flags < UNSAID_HIDE_AT_FLAGS;
 }
 
-/** "Fades in 31h" / "Fades in 12m". */
-export function formatFadesIn(expiresAt: number, now: number = Date.now()): string {
-  const ms = Math.max(0, expiresAt - now);
-  const hours = Math.floor(ms / 3_600_000);
-  if (hours >= 1) return `Fades in ${hours}h`;
-  return `Fades in ${Math.max(1, Math.ceil(ms / 60_000))}m`;
+/** Newest first, without duplicates (a post can arrive from both the live feed and an older page). */
+export function mergeUnsaidPages(...pages: UnsaidPost[][]): UnsaidPost[] {
+  const byId = new Map<string, UnsaidPost>();
+  for (const post of pages.flat()) if (!byId.has(post.id)) byId.set(post.id, post);
+  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/** "just now", "12m ago", "2h ago", "5 days ago", "3 months ago". */
+export function formatPostedAgo(createdAt: number, now: number = Date.now()): string {
+  const mins = Math.floor(Math.max(0, now - createdAt) / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  const months = Math.floor(days / 30);
+  return `${months} ${months === 1 ? 'month' : 'months'} ago`;
 }
 
 function toMillis(value: unknown): number {
   if (value instanceof Timestamp) return value.toMillis();
   if (value && typeof (value as Timestamp).toMillis === 'function') return (value as Timestamp).toMillis();
   return Date.now();
+}
+
+function toMillisOrNull(value: unknown): number | null {
+  if (value instanceof Timestamp) return value.toMillis();
+  if (value && typeof (value as Timestamp).toMillis === 'function') return (value as Timestamp).toMillis();
+  return null;
+}
+
+/** Public shape of an Echo: text, kind, timestamps and counters only. No author, no owner id. */
+export function toUnsaidPost(id: string, data: Record<string, unknown>): UnsaidPost {
+  return {
+    id,
+    kind: toUnsaidKind(data.kind),
+    text: String(data.text ?? ''),
+    createdAt: toMillis(data.createdAt),
+    expiresAt: toMillisOrNull(data.expiresAt),
+    hugs: Number(data.hugs) || 0,
+    same: Number(data.same) || 0,
+    felt: Number(data.felt) || 0,
+    strong: Number(data.strong) || 0,
+    proud: Number(data.proud) || 0,
+    cry: Number(data.cry) || 0,
+    flags: Number(data.flags) || 0,
+  };
 }
 
 export const isUnsaidAvailable = () => isFirebaseConfigured && Boolean(db);
@@ -121,8 +167,16 @@ async function currentUid(): Promise<string | null> {
   return user?.uid ?? null;
 }
 
-/** Live feed of posts that haven't faded or been hidden, newest first. */
-export function subscribeToUnsaid(onPosts: (posts: UnsaidPost[]) => void, onError: () => void): () => void {
+/** Where the next, older page starts; null when the live page already reached the end. */
+export interface UnsaidFeedMeta {
+  nextBefore: number | null;
+}
+
+/** Live first page of Echoes (newest first). Older pages come from loadOlderUnsaid. */
+export function subscribeToUnsaid(
+  onPosts: (posts: UnsaidPost[], meta: UnsaidFeedMeta) => void,
+  onError: () => void
+): () => void {
   if (!db) {
     onError();
     return () => {};
@@ -140,32 +194,16 @@ export function subscribeToUnsaid(onPosts: (posts: UnsaidPost[]) => void, onErro
     unsubscribe = onSnapshot(
       query(
         collection(firestore, 'unsaid'),
-        where('expiresAt', '>', Timestamp.now()),
-        orderBy('expiresAt', 'desc'),
-        limit(60)
+        where('createdAt', '>=', Timestamp.fromMillis(UNSAID_FEED_START_MS)),
+        orderBy('createdAt', 'desc'),
+        limit(UNSAID_FIRST_PAGE)
       ),
       (snap) => {
         const now = Date.now();
+        const all = snap.docs.map((d) => toUnsaidPost(d.id, d.data()));
         onPosts(
-          snap.docs
-            .map((d) => {
-              const data = d.data();
-              return {
-                id: d.id,
-                kind: toUnsaidKind(data.kind),
-                text: String(data.text ?? ''),
-                createdAt: toMillis(data.createdAt),
-                expiresAt: toMillis(data.expiresAt),
-                hugs: Number(data.hugs) || 0,
-                same: Number(data.same) || 0,
-                felt: Number(data.felt) || 0,
-                strong: Number(data.strong) || 0,
-                proud: Number(data.proud) || 0,
-                cry: Number(data.cry) || 0,
-                flags: Number(data.flags) || 0,
-              };
-            })
-            .filter((p) => isUnsaidVisible(p, now))
+          all.filter((p) => isUnsaidVisible(p, now)),
+          { nextBefore: snap.size >= UNSAID_FIRST_PAGE ? all[all.length - 1].createdAt : null }
         );
       },
       (err) => {
@@ -179,6 +217,33 @@ export function subscribeToUnsaid(onPosts: (posts: UnsaidPost[]) => void, onErro
     cancelled = true;
     unsubscribe?.();
   };
+}
+
+/** The next page of older Echoes, newest first, starting just before `before` (a createdAt in ms). */
+export async function loadOlderUnsaid(before: number): Promise<{ posts: UnsaidPost[]; nextBefore: number | null } | null> {
+  if (!db) return null;
+  try {
+    const uid = await currentUid();
+    if (!uid) return null;
+    const snap = await getDocs(
+      query(
+        collection(db, 'unsaid'),
+        where('createdAt', '>=', Timestamp.fromMillis(UNSAID_FEED_START_MS)),
+        where('createdAt', '<', Timestamp.fromMillis(before)),
+        orderBy('createdAt', 'desc'),
+        limit(UNSAID_PAGE_SIZE)
+      )
+    );
+    const all = snap.docs.map((d) => toUnsaidPost(d.id, d.data()));
+    const now = Date.now();
+    return {
+      posts: all.filter((p) => isUnsaidVisible(p, now)),
+      nextBefore: snap.size >= UNSAID_PAGE_SIZE ? all[all.length - 1].createdAt : null,
+    };
+  } catch (err) {
+    console.warn('[Unsaid] Could not load older Echoes:', err);
+    return null;
+  }
 }
 
 /** Seconds between Unsaid posts; must match slowMode('unsaid', …) in firestore.rules. */
@@ -196,7 +261,6 @@ export async function postUnsaid(kind: UnsaidKind, text: string): Promise<'poste
       kind,
       text: checked.text,
       createdAt: serverTimestamp(),
-      expiresAt: Timestamp.fromMillis(Date.now() + UNSAID_LIFETIME_MS),
       hugs: 0,
       same: 0,
       flags: 0,

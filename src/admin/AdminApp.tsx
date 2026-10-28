@@ -459,7 +459,7 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
             <Stat label="Chats today" value={stats.chatsToday} />
             <Stat label="Searching now" value={stats.searchingNow} />
             <Stat label="Public Room today" value={stats.roomToday} note="messages" />
-            <Stat label="Unsaid live" value={stats.unsaidLive} note="posts" />
+            <Stat label="Echoes" value={stats.unsaidLive} note="since they became permanent" />
             <Stat label="To review" value={openSuggestions + openReports} note={`${openSuggestions} ${openSuggestions === 1 ? 'idea' : 'ideas'} · ${openReports} ${openReports === 1 ? 'report' : 'reports'}`} />
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
