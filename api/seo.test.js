@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { HOME, PAGES, SITE } from '../scripts/seo/pages.mjs';
 
-const read = (f) => fs.readFileSync(f, 'utf8');
+const read = (f) => fs.readFileSync(f, 'utf8').replace(/
+/g, '
+'); // line endings differ between Windows checkouts and the generator
 const pageFile = (p) => `public/${p.path.slice(1)}.html`;
 const meta = (html, re) => (re.exec(html) || [])[1];
 const index = read('index.html');
