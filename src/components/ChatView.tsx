@@ -423,6 +423,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const visibleOrientation = partner.showSogieOnProfile ? partner.sexualOrientation : undefined;
   const visibleLocation = partner.showLocationOnProfile !== false ? partner.location || partner.region : undefined;
   const hasExchange = messages.filter((m) => m.sender !== 'system').length > 3;
+  // The "Stay in touch" link appears only once both people have really talked, never in the first seconds.
+  const talked = messages.filter((m) => m.sender !== 'system');
+  const bothSpoke = talked.length >= 4 && talked.some((m) => m.sender === 'user') && talked.some((m) => m.sender !== 'user');
+  const showStayInTouch = bothSpoke && isCloudActive && !partnerLeft;
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -541,6 +545,30 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       </header>
 
+      {/* Sticky context strip: who they are looking for, and (once you have talked) a quiet way to keep in touch. */}
+      {!shortViewport && (
+        <div className="flex min-h-9 shrink-0 items-center gap-2 border-b border-line/60 bg-ink px-3 sm:px-5">
+          <p className="min-w-0 flex-1 truncate text-[length:calc(12px_*_var(--fs,1))] text-subtle">
+            Looking for <span className="font-medium text-muted">{INTENTION_LABELS[partner.intention] ?? partner.intention}</span>
+            {partner.topics.length > 0 && <> · {partner.topics.slice(0, 2).join(', ')}</>}
+          </p>
+          {showStayInTouch && (
+            <button
+              type="button"
+              onClick={() => {
+                setSignalError(null);
+                setSignalNotice(null);
+                setShowSignalSheet(true);
+              }}
+              className="-mr-2 inline-flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full px-2 text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry transition-colors hover:text-fg"
+            >
+              <RadioTower className="h-3.5 w-3.5" />
+              Stay in touch
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Messages */}
       <div
         ref={scrollRef}
@@ -552,10 +580,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
       >
         {/* Match context */}
         <div className="text-center mb-5 space-y-2">
-          <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">
-            Looking for <span className="text-muted font-medium">{INTENTION_LABELS[partner.intention] ?? partner.intention}</span>
-            {partner.topics.length > 0 && <> · {partner.topics.slice(0, 2).join(', ')}</>}
-          </p>
           {(partner.myVibe || visibleExpressions.length > 0 || visibleOrientation) && (
             <div className="flex flex-wrap justify-center gap-1.5">
               {partner.myVibe && <span className="tag">{partner.myVibe}</span>}
