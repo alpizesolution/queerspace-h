@@ -9,7 +9,7 @@ test('font size defaults to Small when nothing valid is stored', () => {
 });
 
 test('valid sizes are kept', () => {
-  for (const size of ['small', 'medium', 'large'] as const) assert.equal(parseFontSize(size), size);
+  for (const size of ['tiny', 'small', 'medium', 'large'] as const) assert.equal(parseFontSize(size), size);
 });
 
 test('the chosen size survives a save and reload through app storage', () => {
