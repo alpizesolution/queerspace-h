@@ -1235,3 +1235,17 @@ test('A-03: Incomplete public profiles are hidden from other members but not fro
   await assertFails(testEnv.authenticatedContext('bob').firestore().doc('users/draft/public/profile').get());
   await assertSucceeds(testEnv.authenticatedContext('draft').firestore().doc('users/draft/public/profile').get());
 });
+
+test('N-01: Only the owner can read their Signals inbox, and nobody can write it from the client', async () => {
+  await testEnv.withSecurityRulesDisabled((ctx) => ctx.firestore().doc('signalsInbox/alice').set({ rev: 1, pending: {} }));
+  await assertSucceeds(testEnv.authenticatedContext('alice').firestore().doc('signalsInbox/alice').get());
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('signalsInbox/alice').get());
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('signalsInbox/alice').get());
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('signalsInbox/alice').set({ rev: 99, pending: {} }));
+  await assertFails(alice.doc('signalsInbox/bob').set({ rev: 1 }));
+  await assertFails(alice.doc('signalsInbox/alice').delete());
+  // The invitations themselves stay server-only; a recipient cannot read or forge them directly.
+  await assertFails(alice.doc('signalsInvitations/x').get());
+  await assertFails(alice.doc('signalsInvitations/x').set({ senderId: 'bob', recipientId: 'alice', status: 'pending' }));
+});

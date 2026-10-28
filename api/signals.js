@@ -28,6 +28,29 @@ function safeId(value) {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(value);
 }
 
+/**
+ * Public-safe view of the other person in a connection: their pseudonym and avatar only.
+ * Anything missing or malformed becomes null so the client shows a deliberate fallback.
+ */
+export function partnerSummary(profile) {
+  const name = typeof profile?.displayName === 'string' ? profile.displayName.trim().slice(0, 30) : '';
+  const avatar = typeof profile?.avatar === 'string' && profile.avatar.length <= 24 ? profile.avatar : null;
+  return { displayName: name || null, avatar };
+}
+
+/**
+ * Bumps signalsInbox/{uid}, a server-written doc the owner can listen to for live updates.
+ * It holds no sender identity: only a revision counter and the ids/expiry of pending
+ * invitations. Keyed by invitation id, so repeated writes can never double-count.
+ */
+export function touchInbox(tx, db, uid, pending) {
+  tx.set(db.doc(`signalsInbox/${uid}`), {
+    rev: FieldValue.increment(1),
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(pending ? { pending } : {}),
+  }, { merge: true });
+}
+
 function idempotencyDocId(uid, key) {
   return createHash('sha256').update(uid + ':' + key).digest('hex');
 }
@@ -111,6 +134,7 @@ export default async function handler(req, res) {
             return bTime - aTime;
           })
           .map(pair => ({
+            partnerId: pair.participants.find(participant => participant !== uid),
             id: pair.id,
             invitationId: pair.invitationId || pair.id,
             participants: pair.participants,
@@ -119,7 +143,17 @@ export default async function handler(req, res) {
             endedAt: pair.endedAt?.toDate?.().toISOString?.() || null,
             endedBy: pair.endedBy || null,
           }));
-        return send(res, 200, { pairs });
+        const partnerIds = [...new Set(pairs.map(pair => pair.partnerId).filter(Boolean))];
+        const profiles = new Map(await Promise.all(partnerIds.map(async id => {
+          const snap = await db.doc(`users/${id}/public/profile`).get();
+          return [id, partnerSummary(snap.exists ? snap.data() : null)];
+        })));
+        return send(res, 200, {
+          pairs: pairs.map(({ partnerId, ...pair }) => ({
+            ...pair,
+            partner: profiles.get(partnerId) || partnerSummary(null),
+          })),
+        });
       }
       const [received, sent] = await Promise.all([
         db.collection('signalsInvitations').where('recipientId', '==', uid).limit(50).get(),
@@ -199,6 +233,8 @@ export default async function handler(req, res) {
           updatedAt: FieldValue.serverTimestamp(),
         });
         tx.set(rateRef, { lastCreatedAt: now }, { merge: true });
+        touchInbox(tx, db, recipientId, { [invitationRef.id]: expiresAt });
+        touchInbox(tx, db, uid);
         tx.create(idemRef, {
           action: 'create',
           recipientId,
@@ -324,6 +360,7 @@ export default async function handler(req, res) {
           endedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
+        for (const participant of pair.participants) touchInbox(tx, db, participant);
         return { status: 'ended', alreadyEnded: false };
       });
       return send(res, 200, result);
@@ -346,8 +383,14 @@ export default async function handler(req, res) {
       if (invite.status !== 'pending') {
         throw Object.assign(new Error('invitation_not_pending'), { statusCode: 409 });
       }
+      // Resolving removes it from the recipient's pending list and wakes both people's live listeners.
+      const resolved = () => {
+        touchInbox(tx, db, invite.recipientId, { [invitationId]: FieldValue.delete() });
+        touchInbox(tx, db, invite.senderId);
+      };
       if (!(invite.expiresAt instanceof Timestamp) || invite.expiresAt.toMillis() <= Date.now()) {
         tx.update(inviteRef, { status: 'expired', updatedAt: FieldValue.serverTimestamp() });
+        resolved();
         return { status: 'expired' };
       }
       if (action === 'accept') {
@@ -367,6 +410,7 @@ export default async function handler(req, res) {
           || (Array.isArray(bBlocked) && bBlocked.includes(senderId))
           || senderSuspension.exists || recipientSuspension.exists) {
           tx.update(inviteRef, { status: 'declined', updatedAt: FieldValue.serverTimestamp() });
+          resolved();
           return { status: 'declined' };
         }
         if (pairSnap.exists) throw Object.assign(new Error('pair_already_exists'), { statusCode: 409 });
@@ -377,10 +421,12 @@ export default async function handler(req, res) {
           createdAt: FieldValue.serverTimestamp(),
         });
         tx.update(inviteRef, { status: 'accepted', updatedAt: FieldValue.serverTimestamp() });
+        resolved();
         return { status: 'accepted', pairId: invitationId };
       }
       const nextStatus = action === 'decline' ? 'declined' : 'revoked';
       tx.update(inviteRef, { status: nextStatus, updatedAt: FieldValue.serverTimestamp() });
+      resolved();
       return { status: nextStatus };
     });
     return send(res, 200, result);

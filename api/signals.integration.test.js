@@ -100,6 +100,14 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     const invitationBeforeAccept = await invitationRef.get();
     assert.equal(invitationBeforeAccept.data()?.status, 'pending');
 
+    // Live inbox: the recipient sees exactly one pending id (the idempotent retry added nothing) and no sender identity.
+    const recipientInbox = await db.doc(`signalsInbox/${recipient.uid}`).get();
+    assert.deepEqual(Object.keys(recipientInbox.data()?.pending || {}), [created.body.invitationId]);
+    assert.equal(JSON.stringify(recipientInbox.data()).includes(sender.uid), false);
+    const revBefore = recipientInbox.data()?.rev;
+    assert.equal(typeof revBefore, 'number');
+    assert.equal((await db.doc(`signalsInbox/${outsider.uid}`).get()).exists, false);
+
     const forbiddenAccept = await callApi(outsider, 'POST', {
       action: 'accept',
       invitationId: created.body.invitationId,
@@ -114,6 +122,12 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     assert.equal(accepted.statusCode, 200);
     assert.equal(accepted.body.status, 'accepted');
 
+    const inboxAfter = await db.doc(`signalsInbox/${recipient.uid}`).get();
+    assert.deepEqual(inboxAfter.data()?.pending || {}, {}, 'accepting clears the pending entry');
+    assert.ok(inboxAfter.data()?.rev > revBefore, 'accepting wakes the recipient listener');
+    assert.ok((await db.doc(`signalsInbox/${sender.uid}`).get()).data()?.rev >= 2, 'and the sender listener');
+
+    await db.doc(`users/${sender.uid}/public/profile`).set({ displayName: 'Moon_Fox', avatar: 'fox.1.2', birthDate: 'never exposed' });
     const pair = await db.doc(`signalsPairs/${created.body.invitationId}`).get();
     assert.equal(pair.exists, true);
     assert.deepEqual(pair.data()?.participants, [sender.uid, recipient.uid].sort());
@@ -124,9 +138,14 @@ test('Signals API emulator lifecycle: create, idempotent retry, accept, block, a
     assert.equal(senderPairs.body.pairs, undefined, 'default GET remains the invitation inbox');
     const senderActivePairs = await handlerGetPairs(sender);
     assert.equal(senderActivePairs.statusCode, 200);
-    assert.equal(senderActivePairs.body.pairs.length, 1);
+    assert.equal(senderActivePairs.body.pairs.length, 1, JSON.stringify(senderActivePairs.body));
     assert.equal(senderActivePairs.body.pairs[0].id, created.body.invitationId);
     assert.equal(senderActivePairs.body.pairs[0].status, 'active');
+    // Each person sees the OTHER participant's pseudonym; a missing profile falls back to null.
+    const recipientActivePairs = await handlerGetPairs(recipient);
+    assert.deepEqual(recipientActivePairs.body.pairs[0].partner, { displayName: 'Moon_Fox', avatar: 'fox.1.2' });
+    assert.deepEqual(senderActivePairs.body.pairs[0].partner, { displayName: null, avatar: null });
+    assert.equal(JSON.stringify(recipientActivePairs.body).includes('never exposed'), false);
 
     const outsiderPairs = await handlerGetPairs(outsider);
     assert.equal(outsiderPairs.statusCode, 200);

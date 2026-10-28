@@ -11,6 +11,7 @@ import { isAdminDevice } from '../utils/adminDevice.ts';
 const SHOW_ADMIN_LINK = isAdminDevice();
 
 interface HeaderProps {
+  badges?: Partial<Record<NavTarget, number>>;
   onNavigate: (view: NavTarget) => void;
   currentView: string;
   isSoundMuted: boolean;
@@ -26,6 +27,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   onNavigate,
+  badges = {},
   currentView,
   isSoundMuted,
   onToggleSound,
@@ -67,6 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               {label}
+              {(badges[id] ?? 0) > 0 && <span aria-label={`${badges[id]} pending`} className="ml-1.5 inline-block min-w-[16px] rounded-full bg-berry px-1 text-center text-[10px] font-bold leading-4 text-ink">{badges[id]! > 9 ? '9+' : badges[id]}</span>}
             </button>
           );
         })}

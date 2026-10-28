@@ -836,6 +836,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Live-update feed for the owner only: a revision counter and pending invitation ids/expiry,
+    // never sender identity. Written exclusively by the Signals API (Admin SDK).
+    match /signalsInbox/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false;
+    }
+
     match /signalsRateLimits/{userId} {
       allow read, write: if false;
     }
