@@ -273,8 +273,8 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           <Users className="w-5 h-5" />
         </div>
         <div className="min-w-0">
-          <h1 className="text-[15px] font-semibold text-fg">Galaxy</h1>
-          <p className="text-[12px] text-subtle truncate">Everyone here can see what you write. Be kind.</p>
+          <h1 className="text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg">Galaxy</h1>
+          <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle truncate">Everyone here can see what you write. Be kind.</p>
         </div>
       </div>
 
@@ -289,15 +289,15 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
       >
         {status === 'error' && (
           <div className="h-full flex flex-col items-center justify-center text-center px-6">
-            <p className="text-[15px] font-medium text-fg">Can't reach the room</p>
-            <p className="text-[13px] text-muted mt-1">Check your connection and try again.</p>
+            <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">Can't reach the room</p>
+            <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1">Check your connection and try again.</p>
           </div>
         )}
 
         {status === 'ready' && messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center px-6">
-            <p className="text-[15px] font-medium text-fg">It's quiet in here</p>
-            <p className="text-[13px] text-muted mt-1">Say hi, or share what you're reading or listening to.</p>
+            <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">It's quiet in here</p>
+            <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1">Say hi, or share what you're reading or listening to.</p>
           </div>
         )}
 
@@ -307,7 +307,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
               (msg.team ? (
                 <span
                   aria-hidden="true"
-                  className="w-8 h-8 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center text-[15px] font-bold"
+                  className="w-8 h-8 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center text-[length:calc(15px_*_var(--fs,1))] font-bold"
                 >
                   Q
                 </span>
@@ -316,10 +316,10 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
               ))}
 
             <div className={`max-w-[80%] flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}>
-              <div className="flex items-baseline gap-1.5 mb-1 px-1 text-[12px]">
+              <div className="flex items-baseline gap-1.5 mb-1 px-1 text-[length:calc(12px_*_var(--fs,1))]">
                 {!msg.isSelf && <span className="font-semibold text-fg">{msg.author}</span>}
                 {msg.team && (
-                  <span className="inline-flex items-center gap-1 self-center px-1.5 py-px rounded-full bg-berry/15 text-berry text-[10.5px] font-semibold uppercase tracking-wide">
+                  <span className="inline-flex items-center gap-1 self-center px-1.5 py-px rounded-full bg-berry/15 text-berry text-[length:calc(10.5px_*_var(--fs,1))] font-semibold uppercase tracking-wide">
                     <BadgeCheck className="w-3 h-3" aria-hidden="true" />
                     Team
                   </span>
@@ -330,7 +330,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
               <SwipeToReply onReply={() => startReply(msg)} disabled={!teamAvailable} className="max-w-full">
                 <div
                   id={`room-${msg.id}`}
-                  className={`px-3.5 py-2 text-[15px] leading-snug rounded-[20px] break-words transition-shadow ${
+                  className={`px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug rounded-[20px] break-words transition-shadow ${
                     msg.isSelf
                       ? 'bg-plum text-fg rounded-br-md'
                       : msg.team
@@ -347,8 +347,8 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                       className="block w-full text-left mb-1.5 -mx-1 px-2.5 py-1.5 rounded-xl bg-black/20 border-l-2 border-berry cursor-pointer"
                       aria-label={`Replying to ${msg.replyTo.author}: ${msg.replyTo.text}`}
                     >
-                      <span className="block text-[12px] font-semibold text-berry">{msg.replyTo.author}</span>
-                      <span className="block text-[13px] text-fg/75 line-clamp-2 break-words">{msg.replyTo.text}</span>
+                      <span className="block text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry">{msg.replyTo.author}</span>
+                      <span className="block text-[length:calc(13px_*_var(--fs,1))] text-fg/75 line-clamp-2 break-words">{msg.replyTo.text}</span>
                     </button>
                   )}
                   <p className="whitespace-pre-wrap">{msg.text}</p>
@@ -365,7 +365,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                       onClick={() => react(msg.id, r.id)}
                       aria-pressed={mine}
                       aria-label={`${r.label} reaction, ${msg.reactions?.[r.id] ?? 0}${mine ? ', yours' : ''}`}
-                      className={`inline-flex items-center gap-1 h-7 px-2 rounded-full text-[12px] border transition-colors cursor-pointer ${
+                      className={`inline-flex items-center gap-1 h-7 px-2 rounded-full text-[length:calc(12px_*_var(--fs,1))] border transition-colors cursor-pointer ${
                         mine ? 'bg-plum/40 border-berry/60 text-fg' : 'bg-surface border-line text-muted hover:text-fg'
                       }`}
                     >
@@ -391,7 +391,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                         type="button"
                         onClick={() => react(msg.id, r.id)}
                         aria-label={r.label}
-                        className="w-8 h-8 rounded-full text-[17px] hover:bg-surface cursor-pointer"
+                        className="w-8 h-8 rounded-full text-[length:calc(17px_*_var(--fs,1))] hover:bg-surface cursor-pointer"
                       >
                         {r.emoji}
                       </button>
@@ -436,13 +436,13 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
       </div>
 
       {sendError && (
-        <p className="px-4 pt-2 text-[12px] text-danger border-t border-line" role="alert">
+        <p className="px-4 pt-2 text-[length:calc(12px_*_var(--fs,1))] text-danger border-t border-line" role="alert">
           {sendError}
         </p>
       )}
       {teamAvailable && (
         <div className="flex items-center gap-2 px-3 sm:px-4 pt-2.5 border-t border-line" role="group" aria-label="Post as">
-          <span className="text-[12px] text-subtle whitespace-nowrap shrink-0">Post as</span>
+          <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle whitespace-nowrap shrink-0">Post as</span>
           {[
             { team: false, label: userPrefs.displayName || 'You' },
             { team: true, label: TEAM_NAME },
@@ -457,7 +457,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                 if (!opt.team) setReplyingTo(null);
               }}
               aria-pressed={asTeam === opt.team}
-              className={`chip h-7 px-2.5 text-[12px] max-w-[45%] truncate ${
+              className={`chip h-7 px-2.5 text-[length:calc(12px_*_var(--fs,1))] max-w-[45%] truncate ${
                 asTeam === opt.team ? (opt.team ? '!bg-berry !text-ink !border-berry' : '!bg-fg !text-ink !border-fg') : ''
               }`}
             >
@@ -470,10 +470,10 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
       {replyingTo && (
         <div className="flex items-center gap-2 mx-3 sm:mx-4 mt-2 pl-3 pr-1 py-1.5 rounded-xl bg-raised border-l-2 border-berry">
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-semibold text-berry">
+            <p className="text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry">
               Replying to {replyingTo.isSelf ? 'your message' : replyingTo.author} as {TEAM_NAME}
             </p>
-            <p className="text-[13px] text-muted truncate">{replyingTo.text}</p>
+            <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted truncate">{replyingTo.text}</p>
           </div>
           <button
             type="button"
@@ -516,7 +516,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           aria-label="Message the public room"
           enterKeyHint={coarsePointer ? 'enter' : 'send'}
           autoComplete="off"
-          className="flex-1 min-w-0 min-h-11 max-h-[7.5rem] px-4 py-[10px] leading-6 resize-none overflow-y-auto rounded-[22px] bg-surface border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+          className="flex-1 min-w-0 min-h-11 max-h-[7.5rem] px-4 py-[10px] leading-6 resize-none overflow-y-auto rounded-[22px] bg-surface border border-line text-base sm:text-[length:calc(15px_*_var(--fs,1))] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
         />
         <button
           type="submit"

@@ -135,8 +135,8 @@ export const InstallPrompt: React.FC = () => {
       <div className="flex items-start gap-3">
         <img src="/icon-192.png" alt="" className="w-9 h-9 desk:w-11 desk:h-11 rounded-xl border border-line shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm desk:text-[15px] font-semibold text-fg">Get the QUEERSPACE PH app</p>
-          <p className="text-[12px] desk:text-[13px] text-muted mt-0.5 leading-snug">
+          <p className="text-sm desk:text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg">Get the QUEERSPACE PH app</p>
+          <p className="text-[length:calc(12px_*_var(--fs,1))] desk:text-[length:calc(13px_*_var(--fs,1))] text-muted mt-0.5 leading-snug">
             <Steps platform={platform} />
           </p>
         </div>

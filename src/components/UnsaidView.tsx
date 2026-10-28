@@ -64,7 +64,7 @@ function saveReacted(map: Record<string, UnsaidReaction>) {
 const CrisisCard: React.FC = () => (
   <div className="flex gap-3 rounded-2xl border border-berry/40 bg-plum/20 p-4 anim-fade" role="note">
     <HeartHandshake className="w-5 h-5 text-berry shrink-0 mt-0.5" />
-    <div className="text-[13px] leading-relaxed">
+    <div className="text-[length:calc(13px_*_var(--fs,1))] leading-relaxed">
       <p className="font-semibold text-fg">You're not alone, and you matter.</p>
       <p className="text-muted mt-0.5">
         Talk to someone right now, free and 24/7: NCMH Crisis Hotline{' '}
@@ -197,8 +197,8 @@ export const UnsaidView: React.FC = () => {
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-10 md:pb-16">
-      <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-fg">Echoes</h1>
-      <p className="text-[13px] text-muted mt-1 mb-5">Vent or confess anonymously. Gone in 48 hours.</p>
+      <h1 className="text-2xl sm:text-[length:calc(28px_*_var(--fs,1))] font-semibold tracking-tight text-fg">Echoes</h1>
+      <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1 mb-5">Vent or confess anonymously. Gone in 48 hours.</p>
 
       {!available ? (
         <p className="card p-5 text-sm text-muted">Echoes isn't available right now. Please try again later.</p>
@@ -228,11 +228,11 @@ export const UnsaidView: React.FC = () => {
               }}
               placeholder={PLACEHOLDERS[kind]}
               aria-label="Write something unsaid"
-              className="input text-base sm:text-[15px]"
+              className="input text-base sm:text-[length:calc(15px_*_var(--fs,1))]"
             />
             {showCrisis && <CrisisCard />}
             <div className="flex items-center justify-between gap-3">
-              <p className={`text-[12px] ${composeError ? 'text-danger' : 'text-subtle'}`} aria-live="polite">
+              <p className={`text-[length:calc(12px_*_var(--fs,1))] ${composeError ? 'text-danger' : 'text-subtle'}`} aria-live="polite">
                 {composeError ?? 'No names, no replies.'}
               </p>
               <button type="submit" disabled={!draft.trim() || posting} className="btn btn-primary btn-sm shrink-0">
@@ -265,10 +265,10 @@ export const UnsaidView: React.FC = () => {
             <p className="text-center text-sm text-muted py-12">Couldn't load the wall. Please try again soon.</p>
           ) : visible.length === 0 ? (
             <div className="text-center py-14 px-6">
-              <p className="text-[15px] font-medium text-fg">
+              <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">
                 {filter === 'confession' ? 'No confessions yet' : filter === 'vent' ? 'No vents yet' : "It's quiet here"}
               </p>
-              <p className="text-[13px] text-muted mt-1">Be the first to let something out.</p>
+              <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1">Be the first to let something out.</p>
             </div>
           ) : (
             <ul className="space-y-3">
@@ -284,16 +284,16 @@ export const UnsaidView: React.FC = () => {
                         : 'border-berry/20 bg-gradient-to-br from-berry/[0.09] via-surface to-surface'
                     }`}
                   >
-                    <span aria-hidden="true" className="absolute -top-1 right-3 text-[40px] opacity-[0.08] select-none">
+                    <span aria-hidden="true" className="absolute -top-1 right-3 text-[length:calc(40px_*_var(--fs,1))] opacity-[0.08] select-none">
                       {post.kind === 'confession' ? '🌙' : '☁️'}
                     </span>
                     <span className={`tag mb-2 ${post.kind === 'confession' ? '!text-lavender' : '!text-berry'}`}>
                       {post.kind === 'confession' ? '🌙 Confession' : '☁️ Vent'}
                     </span>
-                    <p className="text-[14.5px] sm:text-[16px] text-fg/90 leading-relaxed whitespace-pre-wrap break-words">
+                    <p className="text-[length:calc(14.5px_*_var(--fs,1))] sm:text-[length:calc(16px_*_var(--fs,1))] text-fg/90 leading-relaxed whitespace-pre-wrap break-words">
                       {post.text}
                     </p>
-                    <div className="flex flex-wrap items-center gap-y-1 mt-3 -ml-2 text-[13px] text-muted">
+                    <div className="flex flex-wrap items-center gap-y-1 mt-3 -ml-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
                       <div className="flex flex-wrap items-center gap-0.5">
                         {REACTIONS.map(({ type, emoji, label, img }) => {
                           const active = myReaction === type;
@@ -312,7 +312,7 @@ export const UnsaidView: React.FC = () => {
                               {img ? (
                                 <img src={img} alt="" aria-hidden="true" width={20} height={20} className="w-5 h-5" />
                               ) : (
-                                <span aria-hidden="true" className="text-[17px] leading-none">{emoji}</span>
+                                <span aria-hidden="true" className="text-[length:calc(17px_*_var(--fs,1))] leading-none">{emoji}</span>
                               )}
                               {post[type] > 0 && <span className="text-subtle">{post[type]}</span>}
                             </button>
@@ -320,7 +320,7 @@ export const UnsaidView: React.FC = () => {
                         })}
                       </div>
                       <div className="ml-auto flex items-center">
-                        <span className="text-[12px] text-subtle whitespace-nowrap">
+                        <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle whitespace-nowrap">
                           {formatFadesIn(post.expiresAt, now)}
                         </span>
                         {mine || isAdmin ? (
@@ -345,7 +345,7 @@ export const UnsaidView: React.FC = () => {
             </ul>
           )}
 
-          <p className="mt-8 flex items-center justify-center gap-1.5 text-[12px] text-subtle text-center">
+          <p className="mt-8 flex items-center justify-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle text-center">
             <Phone className="w-3.5 h-3.5 shrink-0" />
             Need to talk now? NCMH Crisis Hotline{' '}
             <a href="tel:1553" className="text-berry font-medium">1553</a>

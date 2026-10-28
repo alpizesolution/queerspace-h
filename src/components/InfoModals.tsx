@@ -143,16 +143,16 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose, on
           <div className="space-y-2">
             {FAQS.map(({ q, a }, i) => (
               <details key={q} open={i === 0} className="group card bg-raised/40 px-4 py-3 [&_summary::-webkit-details-marker]:hidden">
-                <summary className="flex items-center justify-between gap-3 cursor-pointer list-none text-[14px] font-semibold text-fg">
+                <summary className="flex items-center justify-between gap-3 cursor-pointer list-none text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg">
                   {q}
                   <span aria-hidden="true" className="text-berry text-lg leading-none transition-transform group-open:rotate-45">
                     +
                   </span>
                 </summary>
-                <p className="mt-2 text-[13.5px] leading-relaxed">{a}</p>
+                <p className="mt-2 text-[length:calc(13.5px_*_var(--fs,1))] leading-relaxed">{a}</p>
               </details>
             ))}
-            <p className="pt-2 text-[13px]">
+            <p className="pt-2 text-[length:calc(13px_*_var(--fs,1))]">
               Still stuck?{' '}
               <button onClick={onOpenSupport} className="text-berry font-medium hover:text-berry-hover cursor-pointer">
                 Chat with us
@@ -180,7 +180,7 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose, on
                 </li>
               ))}
             </ul>
-            <p className="text-[13px]">
+            <p className="text-[length:calc(13px_*_var(--fs,1))]">
               In a chat, tap the shield icon to report and block. It ends the conversation immediately.
             </p>
           </>
@@ -235,7 +235,7 @@ export const InfoModals: React.FC<InfoModalsProps> = ({ activeModal, onClose, on
               </button>
               , or email us for anything longer.
             </p>
-            <dl className="card divide-y divide-line text-[13px]">
+            <dl className="card divide-y divide-line text-[length:calc(13px_*_var(--fs,1))]">
               <div className="flex justify-between gap-4 px-4 py-3">
                 <dt>Email</dt>
                 <dd className="text-right min-w-0">

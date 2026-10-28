@@ -54,22 +54,22 @@ export const RoomTab: React.FC<RoomTabProps> = ({ onConfirm }) => {
   return (
     <div>
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Public Room</h1>
-      <p className="text-[13px] text-muted mb-4">Live. Your posts here show as {TEAM_NAME} with a Team badge.</p>
+      <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mb-4">Live. Your posts here show as {TEAM_NAME} with a Team badge.</p>
       {error && <p className="card p-4 mb-4 text-sm text-danger">The room couldn’t load. Try again.</p>}
 
       <section className="card flex flex-col h-[calc(100dvh-var(--header-h)-var(--tabbar-h)-11rem)] sm:h-[65dvh] min-h-[320px]">
         <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 space-y-3">
           {!messages ? (
-            <p className="text-[13px] text-subtle">Loading…</p>
+            <p className="text-[length:calc(13px_*_var(--fs,1))] text-subtle">Loading…</p>
           ) : messages.length === 0 ? (
-            <p className="text-[13px] text-subtle">No messages yet.</p>
+            <p className="text-[length:calc(13px_*_var(--fs,1))] text-subtle">No messages yet.</p>
           ) : (
             messages.map((m) => (
               <div key={m.id} className="group flex items-start gap-2.5">
                 {m.team ? (
                   <span
                     aria-hidden="true"
-                    className="w-8 h-8 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center text-[15px] font-bold"
+                    className="w-8 h-8 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center text-[length:calc(15px_*_var(--fs,1))] font-bold"
                   >
                     Q
                   </span>
@@ -77,17 +77,17 @@ export const RoomTab: React.FC<RoomTabProps> = ({ onConfirm }) => {
                   <AnimalAvatar avatar={m.authorAvatar} seed={m.authorId || m.author} className="w-8 h-8 shrink-0" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 text-[12px]">
+                  <p className="flex items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))]">
                     <span className={`font-semibold truncate ${m.team ? 'text-berry' : 'text-fg'}`}>{m.author}</span>
                     {m.team && <BadgeCheck className="w-3.5 h-3.5 text-berry shrink-0" aria-label="Team" />}
                     <span className="text-subtle shrink-0">{formatChatTime(m.timestamp)}</span>
                   </p>
                   {m.replyTo && (
-                    <p className="mt-0.5 mb-1 pl-2 border-l-2 border-berry/60 text-[12px] text-subtle truncate">
+                    <p className="mt-0.5 mb-1 pl-2 border-l-2 border-berry/60 text-[length:calc(12px_*_var(--fs,1))] text-subtle truncate">
                       ↪ {m.replyTo.author}: {m.replyTo.text}
                     </p>
                   )}
-                  <p className="text-[14px] text-fg break-words whitespace-pre-wrap">{m.text}</p>
+                  <p className="text-[length:calc(14px_*_var(--fs,1))] text-fg break-words whitespace-pre-wrap">{m.text}</p>
                 </div>
                 <button
                   onClick={() => {
@@ -120,15 +120,15 @@ export const RoomTab: React.FC<RoomTabProps> = ({ onConfirm }) => {
         </div>
 
         {failed && (
-          <p className="px-4 pb-1 text-[12px] text-danger" role="alert">
+          <p className="px-4 pb-1 text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">
             Couldn’t post. Try again.
           </p>
         )}
         {replyingTo && (
           <div className="flex items-center gap-2 mx-3 mt-2 pl-3 pr-1 py-1.5 rounded-xl bg-raised border-l-2 border-berry">
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-semibold text-berry">Replying to {replyingTo.author}</p>
-              <p className="text-[13px] text-muted truncate">{replyingTo.text}</p>
+              <p className="text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry">Replying to {replyingTo.author}</p>
+              <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted truncate">{replyingTo.text}</p>
             </div>
             <button onClick={() => setReplyingTo(null)} className="icon-btn w-8 h-8" aria-label="Cancel reply">
               <X className="w-4 h-4" />
@@ -146,7 +146,7 @@ export const RoomTab: React.FC<RoomTabProps> = ({ onConfirm }) => {
             aria-label={`Post to the Public Room as ${TEAM_NAME}`}
             enterKeyHint="send"
             autoComplete="off"
-            className="flex-1 min-w-0 h-11 px-4 rounded-full bg-ink border border-line text-base sm:text-[14px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+            className="flex-1 min-w-0 h-11 px-4 rounded-full bg-ink border border-line text-base sm:text-[length:calc(14px_*_var(--fs,1))] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
           />
           <button
             type="submit"

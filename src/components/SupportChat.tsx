@@ -84,7 +84,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
       footer={
         <>
           {notice && (
-            <p className="pb-2 text-[12px] text-danger" role="alert">
+            <p className="pb-2 text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">
               {notice}
             </p>
           )}
@@ -99,7 +99,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
               aria-label="Message the QUEERSPACE team"
               enterKeyHint="send"
               autoComplete="off"
-              className="flex-1 min-w-0 h-11 px-4 rounded-full bg-ink border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+              className="flex-1 min-w-0 h-11 px-4 rounded-full bg-ink border border-line text-base sm:text-[length:calc(15px_*_var(--fs,1))] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
             />
             <button
               type="submit"
@@ -113,7 +113,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
           </form>
           <button
             onClick={onOpenSuggestions}
-            className="mt-2 w-full text-center text-[12px] text-subtle hover:text-fg transition-colors cursor-pointer"
+            className="mt-2 w-full text-center text-[length:calc(12px_*_var(--fs,1))] text-subtle hover:text-fg transition-colors cursor-pointer"
           >
             Have an idea instead? Send a suggestion
           </button>
@@ -124,8 +124,8 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
         <div className="flex items-end gap-2">
           <TeamAvatar />
           <div className="max-w-[85%]">
-            <p className="mb-1 px-1 text-[12px] font-semibold text-fg">{TEAM_NAME}</p>
-            <div className="px-3.5 py-2 text-[14.5px] leading-snug rounded-[20px] rounded-bl-md bg-raised text-fg">
+            <p className="mb-1 px-1 text-[length:calc(12px_*_var(--fs,1))] font-semibold text-fg">{TEAM_NAME}</p>
+            <div className="px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-bl-md bg-raised text-fg">
               Hi {userPrefs.displayName || 'there'} 💜 Questions, a bug, or something that feels unsafe? Message us
               here. Only you and the team can see this chat, and we usually reply within a day.
             </div>
@@ -133,7 +133,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
         </div>
 
         {status === 'error' && (
-          <p className="text-center text-[13px] text-muted py-4">
+          <p className="text-center text-[length:calc(13px_*_var(--fs,1))] text-muted py-4">
             Can't reach support right now. You can still email us from Suggestions.
           </p>
         )}
@@ -143,19 +143,19 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
             <div key={msg.id} className="flex items-end gap-2">
               <TeamAvatar />
               <div className="max-w-[85%]">
-                <p className="mb-1 px-1 text-[12px]">
+                <p className="mb-1 px-1 text-[length:calc(12px_*_var(--fs,1))]">
                   <span className="font-semibold text-fg">{TEAM_NAME}</span>
                   <span className="text-subtle"> · {formatChatTime(msg.timestamp)}</span>
                 </p>
-                <div className="px-3.5 py-2 text-[14.5px] leading-snug rounded-[20px] rounded-bl-md bg-raised text-fg break-words whitespace-pre-wrap">
+                <div className="px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-bl-md bg-raised text-fg break-words whitespace-pre-wrap">
                   {msg.text}
                 </div>
               </div>
             </div>
           ) : (
             <div key={msg.id} className="flex flex-col items-end">
-              <p className="mb-1 px-1 text-[12px] text-subtle">{formatChatTime(msg.timestamp)}</p>
-              <div className="max-w-[85%] px-3.5 py-2 text-[14.5px] leading-snug rounded-[20px] rounded-br-md bg-plum text-fg break-words whitespace-pre-wrap">
+              <p className="mb-1 px-1 text-[length:calc(12px_*_var(--fs,1))] text-subtle">{formatChatTime(msg.timestamp)}</p>
+              <div className="max-w-[85%] px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-br-md bg-plum text-fg break-words whitespace-pre-wrap">
                 {msg.text}
               </div>
             </div>
@@ -170,7 +170,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
 const TeamAvatar = () => (
   <span
     aria-hidden="true"
-    className="w-8 h-8 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center text-[15px] font-bold"
+    className="w-8 h-8 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center text-[length:calc(15px_*_var(--fs,1))] font-bold"
   >
     Q
   </span>

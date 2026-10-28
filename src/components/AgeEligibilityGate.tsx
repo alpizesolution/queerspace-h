@@ -29,7 +29,7 @@ export const AgeEligibilityGate: React.FC<AgeEligibilityGateProps> = ({ initialB
           <div className="rounded-2xl bg-raised/70 border border-line p-3 flex gap-3"><ShieldCheck className="w-5 h-5 text-lavender shrink-0 mt-0.5" /><div><p className="text-sm font-medium text-fg">Your birthday stays private</p><p className="text-xs text-muted mt-1">It won’t appear on your public profile.</p></div></div>
           <button type="submit" className="btn btn-primary w-full h-12">Continue <ArrowRight className="w-4 h-4" /></button>
         </form>
-        <p className="mt-4 text-[11px] leading-5 text-subtle flex gap-2"><LockKeyhole className="w-3.5 h-3.5 shrink-0 mt-0.5" />Your age is calculated from your birthday. This self-reported check is not identity verification.</p>
+        <p className="mt-4 text-[length:calc(11px_*_var(--fs,1))] leading-5 text-subtle flex gap-2"><LockKeyhole className="w-3.5 h-3.5 shrink-0 mt-0.5" />Your age is calculated from your birthday. This self-reported check is not identity verification.</p>
       </>}
     </section>
   </div>;

@@ -86,10 +86,10 @@ const Replies: React.FC<{
         <div className="h-10 rounded-xl bg-raised animate-pulse" aria-hidden="true" />
       ) : (
         replies.map((reply) => (
-          <div key={reply.id} className="flex gap-2.5 text-[14px]">
+          <div key={reply.id} className="flex gap-2.5 text-[length:calc(14px_*_var(--fs,1))]">
             <AnimalAvatar avatar={reply.authorAvatar} seed={reply.authorId || reply.author} className="w-7 h-7 mt-0.5" />
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] text-subtle">
+              <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">
                 <span className="font-semibold text-fg">{reply.author}</span> {reply.authorPronouns} ·{' '}
                 {formatChatTime(reply.timestamp)}
               </p>
@@ -134,7 +134,7 @@ const Replies: React.FC<{
         </button>
       </form>
       {error && (
-        <p className="text-[12px] text-danger" role="alert">
+        <p className="text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">
           {error}
         </p>
       )}
@@ -310,7 +310,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-[calc(var(--tabbar-h)+6rem)] desk:pb-16">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-fg">Cosmos</h1>
+        <h1 className="text-2xl sm:text-[length:calc(28px_*_var(--fs,1))] font-semibold tracking-tight text-fg">Cosmos</h1>
         <button onClick={openComposer} className="btn btn-primary btn-sm hidden sm:inline-flex">
           <Plus className="w-4 h-4" />
           New post
@@ -347,8 +347,8 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
         <p className="text-center text-sm text-muted py-12">Couldn't load posts. Please try again soon.</p>
       ) : filteredPosts.length === 0 ? (
         <div className="text-center py-16 px-6">
-          <p className="text-[15px] font-medium text-fg">Nothing here yet</p>
-          <p className="text-[13px] text-muted mt-1 mb-5">Start the conversation.</p>
+          <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">Nothing here yet</p>
+          <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1 mb-5">Start the conversation.</p>
           <button onClick={openComposer} className="btn btn-secondary btn-sm">
             Write a post
           </button>
@@ -364,10 +364,10 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                 <header className="flex items-center gap-2.5 mb-3">
                   <AnimalAvatar avatar={post.authorAvatar} seed={post.authorId || post.author} className="w-9 h-9" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold text-fg truncate">
+                    <p className="text-[length:calc(13px_*_var(--fs,1))] font-semibold text-fg truncate">
                       {post.author} <span className="font-normal text-subtle">{post.authorPronouns}</span>
                     </p>
-                    <p className="text-[12px] text-subtle">
+                    <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">
                       {CATEGORY_EMOJI[post.category] ?? '🌸'} {CATEGORY_LABELS[post.category] ?? post.category} · {formatChatTime(post.timestamp)}
                     </p>
                   </div>
@@ -383,22 +383,22 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                   )}
                 </header>
 
-                <h2 className="text-[15px] sm:text-[17px] font-semibold text-fg leading-snug">{post.title}</h2>
-                <p className="mt-1 text-[14px] sm:text-[15px] text-muted leading-relaxed whitespace-pre-wrap break-words">
+                <h2 className="text-[length:calc(15px_*_var(--fs,1))] sm:text-[length:calc(17px_*_var(--fs,1))] font-semibold text-fg leading-snug">{post.title}</h2>
+                <p className="mt-1 text-[length:calc(14px_*_var(--fs,1))] sm:text-[length:calc(15px_*_var(--fs,1))] text-muted leading-relaxed whitespace-pre-wrap break-words">
                   {post.content}
                 </p>
 
                 {post.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-3">
                     {post.tags.map((tag) => (
-                      <span key={tag} className="h-6 px-2.5 inline-flex items-center rounded-full bg-lavender/10 text-lavender text-[12px]">
+                      <span key={tag} className="h-6 px-2.5 inline-flex items-center rounded-full bg-lavender/10 text-lavender text-[length:calc(12px_*_var(--fs,1))]">
                         #{tag}
                       </span>
                     ))}
                   </div>
                 )}
 
-                <div className="flex items-center gap-1 mt-3 -ml-2 text-[13px] text-muted">
+                <div className="flex items-center gap-1 mt-3 -ml-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
                   <button
                     onClick={() => handleLikePost(post.id)}
                     aria-pressed={!!userLiked}
@@ -518,7 +518,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
             <div>
               <div className="flex flex-wrap items-center gap-1.5">
                 {tagsList.map((tag) => (
-                  <span key={tag} className="inline-flex items-center gap-0.5 h-8 pl-3 pr-1 rounded-full bg-raised border border-line text-[13px] text-lavender">
+                  <span key={tag} className="inline-flex items-center gap-0.5 h-8 pl-3 pr-1 rounded-full bg-raised border border-line text-[length:calc(13px_*_var(--fs,1))] text-lavender">
                     #{tag}
                     <button
                       type="button"
@@ -542,14 +542,14 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                     placeholder="Add tag"
                     aria-label="Add a tag"
                     maxLength={15}
-                    className="h-8 w-28 px-2 bg-transparent text-base sm:text-[13px] text-fg placeholder:text-subtle focus:outline-none"
+                    className="h-8 w-28 px-2 bg-transparent text-base sm:text-[length:calc(13px_*_var(--fs,1))] text-fg placeholder:text-subtle focus:outline-none"
                   />
                 )}
               </div>
-              <p className="text-[12px] text-subtle mt-1.5">Up to 4 tags.</p>
+              <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-1.5">Up to 4 tags.</p>
             </div>
             {postError && (
-              <p className="text-[13px] text-danger" role="alert">
+              <p className="text-[length:calc(13px_*_var(--fs,1))] text-danger" role="alert">
                 {postError}
               </p>
             )}

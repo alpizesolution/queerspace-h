@@ -46,7 +46,7 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
   return (
     <div>
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Support</h1>
-      <p className="text-[13px] text-muted mb-5">
+      <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mb-5">
         Private chats from “Chat with us”. Replies show as {TEAM_NAME}, and the member sees them next time they open
         the app.
       </p>
@@ -55,9 +55,9 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
       <div className="grid gap-4 desk:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
         <ul className={`card divide-y divide-line self-start ${open ? 'hidden desk:block' : ''}`}>
           {!threads ? (
-            <li className="p-4 text-[13px] text-subtle">Loading…</li>
+            <li className="p-4 text-[length:calc(13px_*_var(--fs,1))] text-subtle">Loading…</li>
           ) : threads.length === 0 ? (
-            <li className="p-4 text-[13px] text-subtle">No support chats yet.</li>
+            <li className="p-4 text-[length:calc(13px_*_var(--fs,1))] text-subtle">No support chats yet.</li>
           ) : (
             threads.map((t) => (
               <li key={t.id}>
@@ -70,13 +70,13 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
                   <AnimalAvatar avatar={t.avatar} seed={t.id} className="w-9 h-9 shrink-0" />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
-                      <span className={`truncate text-[14px] ${t.unreadForTeam ? 'font-semibold text-fg' : 'text-muted'}`}>
+                      <span className={`truncate text-[length:calc(14px_*_var(--fs,1))] ${t.unreadForTeam ? 'font-semibold text-fg' : 'text-muted'}`}>
                         {t.displayName}
                       </span>
-                      <span className="ml-auto shrink-0 text-[11px] text-subtle">{formatAgo(t.updatedAt)}</span>
+                      <span className="ml-auto shrink-0 text-[length:calc(11px_*_var(--fs,1))] text-subtle">{formatAgo(t.updatedAt)}</span>
                     </span>
                     <span className="flex items-center gap-2">
-                      <span className="truncate text-[12.5px] text-subtle">
+                      <span className="truncate text-[length:calc(12.5px_*_var(--fs,1))] text-subtle">
                         {t.lastFrom === 'team' ? 'You: ' : ''}
                         {t.lastMessage}
                       </span>
@@ -96,7 +96,7 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
         {open ? (
           <SupportConversation key={open.id} thread={open} onBack={() => setOpenId(null)} />
         ) : (
-          <div className="hidden desk:flex card p-8 items-center justify-center text-[13px] text-subtle">
+          <div className="hidden desk:flex card p-8 items-center justify-center text-[length:calc(13px_*_var(--fs,1))] text-subtle">
             Pick a chat to read and reply.
           </div>
         )}
@@ -144,20 +144,20 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
           <ArrowLeft className="w-4 h-4" />
         </button>
         <AnimalAvatar avatar={thread.avatar} seed={thread.id} className="w-8 h-8" />
-        <p className="text-[14px] font-semibold text-fg truncate">{thread.displayName}</p>
+        <p className="text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg truncate">{thread.displayName}</p>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {!messages ? (
-          <p className="text-[13px] text-subtle">Loading…</p>
+          <p className="text-[length:calc(13px_*_var(--fs,1))] text-subtle">Loading…</p>
         ) : (
           messages.map((m) => (
             <div key={m.id} className={`flex flex-col ${m.from === 'team' ? 'items-end' : 'items-start'}`}>
-              <p className="mb-1 px-1 text-[11px] text-subtle">
+              <p className="mb-1 px-1 text-[length:calc(11px_*_var(--fs,1))] text-subtle">
                 {m.from === 'team' ? TEAM_NAME : thread.displayName} · {formatChatTime(m.timestamp)}
               </p>
               <div
-                className={`max-w-[85%] px-3.5 py-2 text-[14px] leading-snug rounded-[18px] break-words whitespace-pre-wrap ${
+                className={`max-w-[85%] px-3.5 py-2 text-[length:calc(14px_*_var(--fs,1))] leading-snug rounded-[18px] break-words whitespace-pre-wrap ${
                   m.from === 'team' ? 'bg-plum text-fg rounded-br-md' : 'bg-raised text-fg rounded-bl-md'
                 }`}
               >
@@ -170,7 +170,7 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
       </div>
 
       {failed && (
-        <p className="px-4 pb-1 text-[12px] text-danger" role="alert">
+        <p className="px-4 pb-1 text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">
           Couldn’t send the reply. Try again.
         </p>
       )}
@@ -185,7 +185,7 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
           maxLength={SUPPORT_MAX_LENGTH}
           placeholder={`Reply as ${TEAM_NAME}`}
           aria-label={`Reply to ${thread.displayName}`}
-          className="flex-1 min-w-0 resize-none px-3.5 py-2.5 rounded-2xl bg-ink border border-line text-[14px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+          className="flex-1 min-w-0 resize-none px-3.5 py-2.5 rounded-2xl bg-ink border border-line text-[length:calc(14px_*_var(--fs,1))] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
         />
         <button
           type="submit"

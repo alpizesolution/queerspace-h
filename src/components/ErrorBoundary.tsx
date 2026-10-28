@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <Sparkles className="w-6 h-6" />
             </div>
             <h1 className="text-xl font-semibold mb-2">Something went off track</h1>
-            <p className="text-[15px] text-muted mb-6">Your preferences are safe. Reloading usually fixes it.</p>
+            <p className="text-[length:calc(15px_*_var(--fs,1))] text-muted mb-6">Your preferences are safe. Reloading usually fixes it.</p>
             <button
               onClick={() => {
                 this.setState({ hasError: false });

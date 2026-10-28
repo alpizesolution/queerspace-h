@@ -28,13 +28,13 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, hasS
   <footer className={`border-t border-line text-subtle ${className}`}>
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-6 flex flex-col items-center text-center gap-4 sm:flex-row sm:text-left sm:gap-6">
       <div className="sm:mr-auto">
-        <p className="text-[13px] font-semibold tracking-[0.18em] text-fg/90">QUEERSPACE PH</p>
-        <p className="text-[12px] mt-0.5">
+        <p className="text-[length:calc(13px_*_var(--fs,1))] font-semibold tracking-[0.18em] text-fg/90">QUEERSPACE PH</p>
+        <p className="text-[length:calc(12px_*_var(--fs,1))] mt-0.5">
           <span className="hidden sm:inline">© {new Date().getFullYear()} · </span>For women who love women
         </p>
       </div>
 
-      <nav aria-label="Footer" className="flex flex-wrap items-center justify-center text-[13px]">
+      <nav aria-label="Footer" className="flex flex-wrap items-center justify-center text-[length:calc(13px_*_var(--fs,1))]">
         {LINKS.map(({ id, label }, i) => (
           <React.Fragment key={id}>
             {i > 0 && <span aria-hidden="true" className="w-0.5 h-0.5 rounded-full bg-subtle/60" />}
@@ -49,7 +49,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, hasS
       </nav>
 
       <div className="flex items-center gap-2">
-        <button onClick={onOpenSupport} className="chip relative h-8 px-3 text-[12px]">
+        <button onClick={onOpenSupport} className="chip relative h-8 px-3 text-[length:calc(12px_*_var(--fs,1))]">
           <MessageCircleHeart className="w-3.5 h-3.5" />
           Chat with us
           {hasSupportReply && (
@@ -62,21 +62,21 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, hasS
           href={BMC_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#FFDD00] text-black border border-black font-[Cookie,cursive] text-[19px] leading-none whitespace-nowrap hover:brightness-95 transition"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#FFDD00] text-black border border-black font-[Cookie,cursive] text-[length:calc(19px_*_var(--fs,1))] leading-none whitespace-nowrap hover:brightness-95 transition"
         >
-          <span aria-hidden="true" className="text-[14px]">☕</span>
+          <span aria-hidden="true" className="text-[length:calc(14px_*_var(--fs,1))]">☕</span>
           Buy me a coffee
         </a>
       </div>
 
       {SHOW_ADMIN_LINK && (
-        <a href="/admin" className="chip h-8 px-3 text-[12px] text-berry sm:hidden">
+        <a href="/admin" className="chip h-8 px-3 text-[length:calc(12px_*_var(--fs,1))] text-berry sm:hidden">
           <LayoutDashboard className="w-3.5 h-3.5" />
           Admin
         </a>
       )}
 
-      <p className="text-[11px] text-subtle/80 sm:hidden">© {new Date().getFullYear()} QUEERSPACE PH</p>
+      <p className="text-[length:calc(11px_*_var(--fs,1))] text-subtle/80 sm:hidden">© {new Date().getFullYear()} QUEERSPACE PH</p>
     </div>
   </footer>
 );
