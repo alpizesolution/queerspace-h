@@ -75,7 +75,7 @@ export const SuggestionForm: React.FC = () => {
       />
 
       <div className="flex items-center justify-between gap-3">
-        <p className={`text-[12px] ${status === 'error' ? 'text-danger' : 'text-subtle'}`} aria-live="polite">
+        <p className={`text-[length:calc(12px_*_var(--fs,1))] ${status === 'error' ? 'text-danger' : 'text-subtle'}`} aria-live="polite">
           {status === 'error' ? "Couldn't send. Try again or email us." : 'Anonymous. Only our team sees it.'}
         </p>
         <button type="submit" disabled={!canSend} className="btn btn-primary btn-sm shrink-0">

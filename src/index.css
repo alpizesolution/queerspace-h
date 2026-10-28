@@ -15,6 +15,32 @@
   }
 }
 
+/*
+ * Reading-size preference (Settings > Appearance). `--fs` is a multiplier set on <html> by data-fontsize and
+ * applied to text sizes only; spacing, icons and control heights never change. Small matches the original sizes.
+ * `inline` makes each utility resolve --fs where it is used, so any element can opt out with `[--fs:1]`.
+ */
+@theme inline {
+  --text-xs: calc(0.75rem * var(--fs, 1));
+  --text-xs--line-height: calc(1 / 0.75);
+  --text-sm: calc(0.875rem * var(--fs, 1));
+  --text-sm--line-height: calc(1.25 / 0.875);
+  --text-base: calc(1rem * var(--fs, 1));
+  --text-base--line-height: calc(1.5 / 1);
+  --text-lg: calc(1.125rem * var(--fs, 1));
+  --text-lg--line-height: calc(1.75 / 1.125);
+  --text-xl: calc(1.25rem * var(--fs, 1));
+  --text-xl--line-height: calc(1.75 / 1.25);
+  --text-2xl: calc(1.5rem * var(--fs, 1));
+  --text-2xl--line-height: calc(2 / 1.5);
+  --text-3xl: calc(1.875rem * var(--fs, 1));
+  --text-3xl--line-height: calc(2.25 / 1.875);
+}
+
+html { --fs: 1; }
+html[data-fontsize='medium'] { --fs: 1.1; }
+html[data-fontsize='large'] { --fs: 1.2; }
+
 @theme {
   --color-ink: #120b17;
   --color-surface: #1a111f;
@@ -102,6 +128,10 @@ body {
 
 /* ---------- Components ---------- */
 @layer components {
+  /* Buttons, chips and tags keep their size so touch targets and labels never grow or clip. */
+  .btn, .btn-sm, .chip, .tag, .icon-btn {
+    --fs: 1;
+  }
   .btn {
     @apply inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full text-sm font-semibold
       transition-colors duration-150 cursor-pointer select-none

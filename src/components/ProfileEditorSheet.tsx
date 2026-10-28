@@ -53,14 +53,14 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
   };
   const errorList = Object.values(errors).filter(Boolean);
   return <Sheet title="Your profile" onClose={onClose} size="lg" footer={<>
-    {errorList.length > 0 && <p role="alert" className="mb-2 text-[13px] text-danger">{errorList[0]}</p>}
-    <button type="button" onClick={handleSubmit} className="btn btn-primary w-full h-12 text-[15px]">Save profile</button>
+    {errorList.length > 0 && <p role="alert" className="mb-2 text-[length:calc(13px_*_var(--fs,1))] text-danger">{errorList[0]}</p>}
+    <button type="button" onClick={handleSubmit} className="btn btn-primary w-full h-12 text-[length:calc(15px_*_var(--fs,1))]">Save profile</button>
   </>}>
     <div className="space-y-4 text-fg">
       <section>
         <button type="button" onClick={() => setAvatar((current) => randomAvatar(current))} className="group flex items-center gap-3 mb-4 -ml-1 p-1 pr-3 rounded-full hover:bg-raised transition-colors" aria-label="Shuffle your anonymous avatar">
           <span className="relative"><AnimalAvatar key={avatar} avatar={avatar} seed={displayName} className="w-12 h-12 anim-pop" /><span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-raised border border-line flex items-center justify-center text-muted"><Shuffle className="w-3 h-3" /></span></span>
-          <span className="text-left"><span className="block text-[13px] font-semibold text-fg">Anonymous avatar</span><span className="block text-[12px] text-subtle">Tap to change · no photos</span></span>
+          <span className="text-left"><span className="block text-[length:calc(13px_*_var(--fs,1))] font-semibold text-fg">Anonymous avatar</span><span className="block text-[length:calc(12px_*_var(--fs,1))] text-subtle">Tap to change · no photos</span></span>
         </button>
         <label htmlFor="qs-name" className="label">Display name</label>
         <div className="flex gap-2"><div className="relative flex-1 min-w-0">
@@ -69,9 +69,9 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
         </div><select value={pronouns} onChange={(e) => setPronouns(e.target.value)} aria-label="Pronouns" className="input w-[8.25rem] sm:w-40 shrink-0">
           {[...PRONOUN_OPTIONS, ...(PRONOUN_OPTIONS.includes(pronouns) ? [] : [pronouns])].map((p) => <option key={p} value={p}>{p}</option>)}
         </select></div>
-        {errors.displayName && <p className="mt-1.5 text-[13px] text-danger">{errors.displayName}</p>}
+        {errors.displayName && <p className="mt-1.5 text-[length:calc(13px_*_var(--fs,1))] text-danger">{errors.displayName}</p>}
         {pronouns === 'Self-described' && <input type="text" value={customPronouns} onChange={(e) => setCustomPronouns(e.target.value)} placeholder="Your pronouns" aria-label="Custom pronouns" maxLength={20} className="input mt-2" />}
-        {errors.pronouns && <p className="mt-1.5 text-[13px] text-danger">{errors.pronouns}</p>}
+        {errors.pronouns && <p className="mt-1.5 text-[length:calc(13px_*_var(--fs,1))] text-danger">{errors.pronouns}</p>}
       </section>
       <section>
         <div className="flex items-baseline justify-between mb-2"><label htmlFor="qs-about-me" className="label !mb-0">About Me <span className="font-normal text-subtle">· optional</span></label><span className={`text-xs tabular-nums ${aboutMe.length >= 150 ? 'text-berry' : 'text-subtle'}`}>{aboutMe.length}/160</span></div>

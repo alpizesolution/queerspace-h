@@ -34,6 +34,7 @@ import { submitAgeEligibilityReview } from './services/ageReviewService.ts';
 
 import { AppearanceSettingsModal } from './components/AppearanceSettingsModal.tsx';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
+import { FONT_SIZE_KEY, FontSize, parseFontSize } from './utils/fontSize.ts';
 import { useSignalsInbox } from './hooks/useSignalsInbox.ts';
 
 export default function App() {
@@ -43,6 +44,7 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     getStorageItem('queerspace_theme') === 'light' ? 'light' : 'dark'
   );
+  const [fontSize, setFontSize] = useState<FontSize>(() => parseFontSize(getStorageItem(FONT_SIZE_KEY)));
   const [donationModalOpen, setDonationModalOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [hasSupportReply, setHasSupportReply] = useState(false);
@@ -116,6 +118,12 @@ export default function App() {
     );
     setStorageItem('queerspace_theme', theme);
   }, [theme]);
+
+  // Reading size applies at once through a root attribute (see --fs in index.css) and is remembered on this device.
+  useEffect(() => {
+    document.documentElement.dataset.fontsize = fontSize;
+    setStorageItem(FONT_SIZE_KEY, fontSize);
+  }, [fontSize]);
 
   // Initialize anonymous auth session on startup and restore cloud profile if available
   useEffect(() => {
@@ -464,6 +472,8 @@ export default function App() {
         <AppearanceSettingsModal
           theme={theme}
           onChangeTheme={setTheme}
+          fontSize={fontSize}
+          onChangeFontSize={setFontSize}
           onClose={() => setSettingsOpen(false)}
         />
       )}

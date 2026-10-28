@@ -26,7 +26,7 @@ interface Props {
 export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate, badges = {} }) => (
   <nav
     aria-label="Main"
-    className="tabbar desk:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
+    className="tabbar [--fs:1] desk:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
   >
     <div className="grid grid-cols-6 h-14 max-w-2xl mx-auto">
       {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
@@ -43,10 +43,10 @@ export const BottomNavigation: React.FC<Props> = ({ currentView, onNavigate, bad
             <span className="relative">
               <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.25 : 1.75} />
               {(badges[id] ?? 0) > 0 && (
-                <span aria-label={`${badges[id]} pending`} className="absolute -right-2 -top-1.5 min-w-[16px] rounded-full bg-berry px-1 text-center text-[10px] font-bold leading-4 text-ink">{badges[id]! > 9 ? '9+' : badges[id]}</span>
+                <span aria-label={`${badges[id]} pending`} className="absolute -right-2 -top-1.5 min-w-[16px] rounded-full bg-berry px-1 text-center text-[length:calc(10px_*_var(--fs,1))] font-bold leading-4 text-ink">{badges[id]! > 9 ? '9+' : badges[id]}</span>
               )}
             </span>
-            <span className="max-w-full truncate px-0.5 text-[11px] font-medium leading-none">{label}</span>
+            <span className="max-w-full truncate px-0.5 text-[length:calc(11px_*_var(--fs,1))] font-medium leading-none">{label}</span>
           </button>
         );
       })}

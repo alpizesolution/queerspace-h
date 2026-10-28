@@ -140,11 +140,11 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
       footer={
         <>
           {errorList.length > 0 && (
-            <p role="alert" className="mb-2 text-[13px] text-danger">
+            <p role="alert" className="mb-2 text-[length:calc(13px_*_var(--fs,1))] text-danger">
               {errorList[0]}
             </p>
           )}
-          <button type="button" onClick={handleSubmit} className="btn btn-primary w-full h-12 text-[15px]">
+          <button type="button" onClick={handleSubmit} className="btn btn-primary w-full h-12 text-[length:calc(15px_*_var(--fs,1))]">
             {isCustom ? 'Find my match' : 'Start chatting'}
             <ArrowRight className="w-4 h-4" />
           </button>
@@ -174,7 +174,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[13px] text-muted">
+          <p className="mt-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
             {isCustom
               ? 'Match on intention, topics, age, location and My Type.'
               : 'Meet anyone available right now. Your Custom filters are kept for next time.'}
@@ -185,7 +185,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
         <section className="flex items-center gap-3 p-3 rounded-2xl bg-ink border border-line">
           <AnimalAvatar avatar={currentPrefs.avatar} seed={currentPrefs.displayName || 'guest'} className="w-10 h-10" />
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] text-subtle">Chatting as</p>
+            <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">Chatting as</p>
             <p className="text-sm font-semibold text-fg truncate">
               {currentPrefs.displayName} <span className="font-normal text-subtle">{currentPrefs.pronouns}</span>
             </p>
@@ -222,7 +222,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
             <section>
               <div className="flex items-baseline justify-between">
                 <p className="label">Topics</p>
-                <span className="text-[12px] text-subtle">{selectedTopics.length}/8</span>
+                <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">{selectedTopics.length}/8</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {[...AVAILABLE_TOPICS, ...selectedTopics.filter((t) => !AVAILABLE_TOPICS.includes(t))].map((topic) => {
@@ -260,7 +260,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
                   <Plus className="w-5 h-5" />
                 </button>
               </form>
-              <p className="mt-2 text-[12px] text-subtle">
+              <p className="mt-2 text-[length:calc(12px_*_var(--fs,1))] text-subtle">
                 {selectedTopics.length
                   ? "You'll only match people who picked at least one of these."
                   : 'No topics: you can match anyone who also picked none.'}
@@ -283,7 +283,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
                     <span className="text-subtle text-sm">to</span>
                     <AgeInput label="Oldest age" value={ageMax} onChange={setAgeMax} invalid={!!errors.ageRange} />
                   </div>
-                  <p className="text-[12px] text-subtle leading-snug">
+                  <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle leading-snug">
                     You'll only match people in this range who added their age, and whose own filter fits you.
                   </p>
                 </div>
@@ -353,14 +353,14 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
                               onClick={() =>
                                 setLocationSelection(toggleLocationPreference(locationSelection, group.region))
                               }
-                              className={`text-left text-[13px] font-semibold cursor-pointer py-1 ${
+                              className={`text-left text-[length:calc(13px_*_var(--fs,1))] font-semibold cursor-pointer py-1 ${
                                 isRegionSelected ? 'text-berry' : 'text-fg hover:text-berry'
                               }`}
                             >
                               {isRegionSelected && <Check className="inline w-3.5 h-3.5 mr-1 -mt-0.5" />}
                               {group.region}
                             </button>
-                            <span className="text-[11px] text-subtle shrink-0">{group.islandGroup}</span>
+                            <span className="text-[length:calc(11px_*_var(--fs,1))] text-subtle shrink-0">{group.islandGroup}</span>
                           </div>
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             {places.map((pc) => {
@@ -371,7 +371,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
                                   type="button"
                                   aria-pressed={isPcSelected}
                                   onClick={() => setLocationSelection(toggleLocationPreference(locationSelection, pc))}
-                                  className={`h-8 px-2.5 rounded-lg text-[12px] font-medium cursor-pointer transition-colors ${
+                                  className={`h-8 px-2.5 rounded-lg text-[length:calc(12px_*_var(--fs,1))] font-medium cursor-pointer transition-colors ${
                                     isPcSelected
                                       ? 'bg-berry text-ink'
                                       : 'bg-surface text-muted border border-line hover:text-fg'
@@ -428,7 +428,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
           <label className="flex items-center gap-3 text-sm text-fg">
             <span className="flex-1 min-w-0">
               <span className="block font-medium">Your age</span>
-              <span className="block text-[12px] text-subtle mt-0.5">
+              <span className="block text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-0.5">
                 Optional. Used only for age filters, never shown to anyone.
               </span>
             </span>
@@ -446,7 +446,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
               I'm <strong className="font-semibold">18 or older</strong> and identify as a woman or non-binary sapphic person.
             </span>
           </label>
-          <p className="flex gap-2 text-[13px] text-muted leading-relaxed">
+          <p className="flex gap-2 text-[length:calc(13px_*_var(--fs,1))] text-muted leading-relaxed">
             <Info className="w-4 h-4 text-subtle shrink-0 mt-0.5" />
             <span>
               Your match only sees your pseudonym, pronouns, intention, shared topics and anything you choose to show.

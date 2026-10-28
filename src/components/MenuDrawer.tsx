@@ -30,11 +30,11 @@ interface MenuDrawerProps {
 const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const rowClass =
-  'w-full flex items-center gap-3 h-12 px-3 rounded-xl text-[15px] text-fg/90 text-left transition-colors cursor-pointer hover:bg-raised hover:text-fg';
+  'w-full flex items-center gap-3 h-12 px-3 rounded-xl text-[length:calc(15px_*_var(--fs,1))] text-fg/90 text-left transition-colors cursor-pointer hover:bg-raised hover:text-fg';
 
 const Group: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <section className="py-3 border-t border-line first:border-t-0 first:pt-1">
-    <h3 className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-subtle">{title}</h3>
+    <h3 className="px-3 pb-1 text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-[0.18em] text-subtle">{title}</h3>
     <ul>{children}</ul>
   </section>
 );
@@ -120,7 +120,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
         className="qs-drawer absolute right-0 inset-y-0 w-[min(20rem,88vw)] flex flex-col bg-surface border-l border-line shadow-2xl shadow-black/50 pt-safe"
       >
         <div className="flex items-center gap-3 h-14 pl-5 pr-3 shrink-0">
-          <h2 id={titleId} className="flex-1 text-[15px] font-semibold text-fg">
+          <h2 id={titleId} className="flex-1 text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg">
             Menu
           </h2>
           <button ref={closeRef} onClick={onClose} className="icon-btn" aria-label="Close menu">

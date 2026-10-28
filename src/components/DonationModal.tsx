@@ -27,7 +27,7 @@ export const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose })
         </span>
         <span className="flex-1 min-w-0">
           <span className="block text-sm font-semibold text-fg">Buy us a coffee</span>
-          <span className="block text-[13px] text-subtle">buymeacoffee.com/donotdm</span>
+          <span className="block text-[length:calc(13px_*_var(--fs,1))] text-subtle">buymeacoffee.com/donotdm</span>
         </span>
         <ExternalLink className="w-4 h-4 text-subtle group-hover:text-fg" />
       </a>

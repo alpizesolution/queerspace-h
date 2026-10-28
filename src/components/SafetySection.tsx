@@ -18,7 +18,7 @@ export const SafetySection: React.FC<SafetySectionProps> = ({ onOpenGuidelinesMo
       <h2 className="text-lg font-semibold text-fg">Safety first</h2>
       <button
         onClick={onOpenGuidelinesModal}
-        className="inline-flex items-center gap-0.5 text-[13px] font-medium text-berry hover:text-berry-hover cursor-pointer py-2"
+        className="inline-flex items-center gap-0.5 text-[length:calc(13px_*_var(--fs,1))] font-medium text-berry hover:text-berry-hover cursor-pointer py-2"
       >
         Guidelines
         <ChevronRight className="w-4 h-4" />
@@ -30,7 +30,7 @@ export const SafetySection: React.FC<SafetySectionProps> = ({ onOpenGuidelinesMo
           <Icon className="w-5 h-5 text-lavender shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-fg">{title}</p>
-            <p className="text-[13px] text-muted mt-0.5 leading-snug">{text}</p>
+            <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-0.5 leading-snug">{text}</p>
           </div>
         </li>
       ))}

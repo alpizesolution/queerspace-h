@@ -85,7 +85,7 @@ function formatShortDate(value: string | null): string {
 const SectionHeader: React.FC<{ title: string; count: number; muted?: boolean }> = ({ title, count, muted }) => (
   <div className="mb-1.5 flex items-center gap-2 px-1">
     <h2 className={`text-xs font-semibold uppercase tracking-[0.14em] ${muted ? 'text-subtle' : 'text-muted'}`}>{title}</h2>
-    <span className={`rounded-full px-2 text-[11px] font-semibold leading-5 tabular-nums ${count > 0 && !muted ? 'bg-berry/15 text-berry' : 'bg-raised text-subtle'}`}>{count}</span>
+    <span className={`rounded-full px-2 text-[length:calc(11px_*_var(--fs,1))] font-semibold leading-5 tabular-nums ${count > 0 && !muted ? 'bg-berry/15 text-berry' : 'bg-raised text-subtle'}`}>{count}</span>
   </div>
 );
 
@@ -285,7 +285,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
                       <div className="flex items-center gap-3">
                         <PartnerAvatar avatar={invitation.partner?.avatar} seed={invitation.id} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[15px] font-semibold leading-tight text-fg">{name}</p>
+                          <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
                           <p className="mt-0.5 text-xs text-subtle">Wants to connect · {formatShortDate(invitation.createdAt)}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
@@ -323,7 +323,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
                     <li key={pair.id} className="flex items-center gap-3 py-2.5">
                       <PartnerAvatar avatar={pair.partner?.avatar} seed={pair.id} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[15px] font-semibold leading-tight text-fg">{name}</p>
+                        <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
                         <p className="mt-0.5 text-xs text-subtle">Since {formatShortDate(pair.createdAt)}</p>
                       </div>
                       <button

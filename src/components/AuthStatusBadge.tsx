@@ -39,7 +39,7 @@ export const AuthStatusBadge: React.FC<AuthStatusBadgeProps> = ({ className = ''
 
   return (
     <div
-      className={`inline-flex items-center justify-center gap-1.5 w-8 sm:w-auto h-7 sm:px-2.5 rounded-full sm:bg-surface sm:border sm:border-line text-[11px] font-medium text-muted shrink-0 ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 w-8 sm:w-auto h-7 sm:px-2.5 rounded-full sm:bg-surface sm:border sm:border-line text-[length:calc(11px_*_var(--fs,1))] font-medium text-muted shrink-0 ${className}`}
       title={title}
       role="status"
       aria-label={title}
