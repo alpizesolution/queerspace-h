@@ -1,18 +1,13 @@
 import {
-  collection,
   deleteDoc,
   doc,
   getDoc,
-  getDocs,
-  limit,
   onSnapshot,
-  query,
   runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
-  where,
 } from 'firebase/firestore';
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { Intention, PartnerProfile, UserPreferences } from '../types.ts';
@@ -23,10 +18,9 @@ import { isValidAvatar } from '../utils/avatar.ts';
 /**
  * Live 1-on-1 matchmaking backed by a Firestore waiting queue.
  *
- * Each searching user owns `match_queue/{uid}` with status 'waiting' and a heartbeat.
- * Any searcher may claim another fresh waiting entry inside a transaction that also
- * creates the conversation, so two people are only ever paired once and both clients
- * learn the same conversation ID (the claimed user via a listener on their own entry).
+ * Each searching user owns `match_queue/{uid}` with status 'waiting' and a heartbeat. Pairing is done by the
+ * trusted /api/match endpoint, which applies private ages, eligibility and age ranges and claims the other
+ * entry atomically; both clients learn the same conversation ID (the claimed user via a listener on their own entry).
  */
 
 const QUEUE = 'match_queue';
@@ -68,18 +62,17 @@ export function isFreshQueueEntry(data: { heartbeatAt?: unknown }, now: number =
   return beat === 0 || now - beat < STALE_AFTER_MS;
 }
 
-/** Age details a queue entry carries: the person's age and, with the age filter on, the range they want. */
-export interface QueueAgePrefs {
-  age?: number;
-  ageMin?: number;
-  ageMax?: number;
+/** The private age range a member wants. It goes only to the matching API, never to a readable document. */
+export interface AgeRange {
+  ageMin: number;
+  ageMax: number;
 }
 
 /**
  * Everything a queue entry carries for filtering. `areas` and `expr` describe the person (only
  * when they show them on their profile); `wantAreas` and `wantExpr` are their filters.
  */
-export interface QueueMatchPrefs extends QueueAgePrefs {
+export interface QueueMatchPrefs {
   areas?: string[];
   wantAreas?: string[];
   expr?: string[];
@@ -96,15 +89,6 @@ const INTENTIONS: Record<Intention, true> = { friendship: true, dating: true, ca
 /** Longest list a queue entry may carry (must match firestore.rules). */
 export const MAX_QUEUE_LIST = 20;
 
-/** Both people fit each other's age range (when either has one). A range needs a known age to match. */
-export function agesCompatible(a: QueueAgePrefs, b: QueueAgePrefs): boolean {
-  const fits = (range: QueueAgePrefs, age?: number) =>
-    range.ageMin === undefined || range.ageMax === undefined
-      ? true
-      : typeof age === 'number' && age >= range.ageMin && age <= range.ageMax;
-  return fits(a, b.age) && fits(b, a.age);
-}
-
 /**
  * Both people want the same thing (intention), pass each other's location and gender expression
  * filters, and share a topic when either picked any (so "open to anything" chatters don't land in
@@ -117,7 +101,6 @@ export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boole
   const sharesTopic = () =>
     (!a.topics?.length && !b.topics?.length) || (a.topics ?? []).some((t) => b.topics?.includes(t));
   return (
-    agesCompatible(a, b) &&
     (a.intent ?? 'open') === (b.intent ?? 'open') &&
     sharesTopic() &&
     fitsArea(a.wantAreas, b.areas) &&
@@ -127,13 +110,7 @@ export function filtersCompatible(a: QueueMatchPrefs, b: QueueMatchPrefs): boole
 
 /** Builds the queue entry's filter fields from setup preferences. */
 export function queueMatchFields(prefs: Partial<UserPreferences>): QueueMatchPrefs {
-  const valid = (n?: number) => typeof n === 'number' && Number.isInteger(n) && n >= MIN_AGE && n <= MAX_AGE;
   const fields: QueueMatchPrefs = {};
-  if (valid(prefs.age)) fields.age = prefs.age;
-  if (prefs.applyAgeFilter && valid(prefs.ageMin) && valid(prefs.ageMax) && prefs.ageMin! <= prefs.ageMax!) {
-    fields.ageMin = prefs.ageMin;
-    fields.ageMax = prefs.ageMax;
-  }
 
   const areas = (prefs.locationSelection ?? []).filter((a) => a && a !== NATIONWIDE_OPTION).slice(0, MAX_QUEUE_LIST);
   if (areas.length && prefs.showLocationOnProfile !== false) fields.areas = areas;
@@ -150,6 +127,17 @@ export function queueMatchFields(prefs: Partial<UserPreferences>): QueueMatchPre
   const topics = [...new Set((prefs.topics ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean))];
   if (topics.length) fields.topics = topics.slice(0, MAX_QUEUE_LIST);
   return fields;
+}
+
+/**
+ * The age range to keep privately on the server, or null when the age filter is off or invalid.
+ * Age and range are never part of queueMatchFields, so they never reach a readable queue document.
+ */
+export function ageRangeFromPrefs(prefs: Partial<UserPreferences>): AgeRange | null {
+  const valid = (n?: number) => typeof n === 'number' && Number.isInteger(n) && n >= MIN_AGE && n <= MAX_AGE;
+  return prefs.applyAgeFilter && valid(prefs.ageMin) && valid(prefs.ageMax) && prefs.ageMin! <= prefs.ageMax!
+    ? { ageMin: prefs.ageMin!, ageMax: prefs.ageMax! }
+    : null;
 }
 
 /** Oldest-first candidate order, ignoring self, blocked users, stale entries and filter mismatches. */
@@ -200,7 +188,7 @@ async function loadPartnerProfile(partnerId: string): Promise<PartnerProfile> {
       displayName: data.displayName ? String(data.displayName).slice(0, 30) : fallback.displayName,
       avatar: isValidAvatar(data.avatar) ? data.avatar : undefined,
       pronouns: data.pronouns ? String(data.pronouns).slice(0, 20) : fallback.pronouns,
-      age: typeof data.age === 'number' && data.age >= 18 && data.age <= 99 ? Math.floor(data.age) : undefined,
+      showAgeOnProfile: data.showAgeOnProfile === true,
       aboutMe: typeof data.aboutMe === 'string' ? data.aboutMe.slice(0, 160) : undefined,
       myVibe: typeof data.myVibe === 'string' ? data.myVibe.slice(0, 24) : undefined,
       personalStyle: typeof data.personalStyle === 'string' ? data.personalStyle.slice(0, 24) : undefined,
@@ -225,10 +213,25 @@ async function loadPartnerProfile(partnerId: string): Promise<PartnerProfile> {
  * Joins the live queue and keeps trying to pair until matched or cancelled.
  * Returns a cancel function that leaves the queue.
  */
+/** Calls the trusted matching API with the member's ID token. */
+async function matchRequest<T>(body: Record<string, unknown>): Promise<T> {
+  const user = auth?.currentUser ?? (await ensureAnonymousAuth());
+  if (!user) throw new Error('not-signed-in');
+  const response = await fetch('/api/match', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`match-api-${response.status}`);
+  return (await response.json()) as T;
+}
+
 export function joinLiveMatchQueue(
   excludeIds: string[],
   handlers: LiveMatchHandlers,
-  matchPrefs: QueueMatchPrefs = {}
+  matchPrefs: QueueMatchPrefs = {},
+  /** Private age range; sent only to the matching API. */
+  ageRange: AgeRange | null = null
 ): () => void {
   let cancelled = false;
   let matched = false;
@@ -236,8 +239,6 @@ export function joinLiveMatchQueue(
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let claimTimer: ReturnType<typeof setTimeout> | null = null;
   let emptyScans = 0;
-  // Fresh-only scans need the (status, heartbeatAt) index; until it exists, fall back to the old scan.
-  let freshQueryFailed = false;
   let claiming = false;
   let uid: string | null = null;
 
@@ -284,60 +285,19 @@ export function joinLiveMatchQueue(
   const tryClaim = async () => {
     if (!db || !uid || claiming || matched || cancelled) return;
     claiming = true;
-    const firestore = db;
-    const me = uid;
     try {
-      const waiting = query(collection(firestore, QUEUE), where('status', '==', 'waiting'));
-      const cutoff = Timestamp.fromMillis(Date.now() - STALE_AFTER_MS);
-      let snap;
-      if (!freshQueryFailed) {
-        try {
-          // Only entries with a recent heartbeat, so abandoned ones never cost a read.
-          snap = await getDocs(query(waiting, where('heartbeatAt', '>', cutoff), limit(10)));
-        } catch (err) {
-          freshQueryFailed = true;
-          console.warn('[LiveMatch] Fresh queue scan unavailable (missing index?), falling back:', err);
-        }
-      }
-      snap = snap ?? (await getDocs(query(waiting, limit(25))));
-      const candidates = pickQueueCandidates(
-        snap.docs.map((d) => ({ id: d.id, data: d.data() })),
-        me,
-        excludeIds,
-        Date.now(),
-        matchPrefs
-      );
-      emptyScans = candidates.length ? 0 : emptyScans + 1;
-
-      for (const partnerId of candidates) {
-        if (matched || cancelled) return;
-        const convRef = doc(collection(firestore, 'conversations'));
-        try {
-          await runTransaction(firestore, async (tx) => {
-            const myRef = doc(firestore, QUEUE, me);
-            const theirRef = doc(firestore, QUEUE, partnerId);
-            const [mine, theirs] = await Promise.all([tx.get(myRef), tx.get(theirRef)]);
-            if (!mine.exists() || mine.data().status !== 'waiting') throw new Error('self-not-waiting');
-            if (!theirs.exists() || theirs.data().status !== 'waiting' || !isFreshQueueEntry(theirs.data()) || !filtersCompatible(matchPrefs, theirs.data())) {
-              throw new Error('partner-unavailable');
-            }
-            tx.set(convRef, {
-              participants: [me, partnerId].sort(),
-              status: 'active',
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-            tx.update(theirRef, { status: 'matched', partnerId: me, convId: convRef.id, updatedAt: serverTimestamp() });
-            tx.update(myRef, { status: 'matched', partnerId, convId: convRef.id, updatedAt: serverTimestamp() });
-          });
-          await finish(partnerId, convRef.id);
-          return;
-        } catch {
-          // Someone else claimed them (or us) first; try the next candidate.
-        }
+      // The server picks a compatible, eligible partner and claims them atomically.
+      const result = await matchRequest<{ matched: boolean; partnerId?: string; convId?: string }>({ action: 'claim', excludeIds });
+      if (result.matched && result.partnerId && result.convId) {
+        emptyScans = 0;
+        await finish(result.partnerId, result.convId);
+      } else {
+        emptyScans += 1;
       }
     } catch (err) {
-      console.warn('[LiveMatch] Queue scan notice:', err);
+      // Includes rate limits: back off like an empty scan.
+      emptyScans += 1;
+      console.warn('[LiveMatch] Match request notice:', err);
     } finally {
       claiming = false;
     }
@@ -358,6 +318,8 @@ export function joinLiveMatchQueue(
     const myRef = doc(db, QUEUE, uid);
 
     try {
+      // The age range is stored privately by the API (or cleared); it never goes into the readable queue entry.
+      await matchRequest({ action: 'prefs', ageMin: ageRange?.ageMin ?? null, ageMax: ageRange?.ageMax ?? null });
       await setDoc(myRef, {
         status: 'waiting',
         partnerId: null,

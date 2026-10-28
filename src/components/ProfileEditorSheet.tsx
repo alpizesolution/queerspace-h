@@ -25,6 +25,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
   const [showSexualOrientation, setShowSexualOrientation] = useState(currentPrefs.showSexualOrientationOnProfile ?? false);
   const [showGenderIdentity, setShowGenderIdentity] = useState(currentPrefs.showGenderIdentityOnProfile ?? false);
   const [showGenderExpression, setShowGenderExpression] = useState(currentPrefs.showGenderExpressionOnProfile ?? false);
+  const [showAge, setShowAge] = useState(currentPrefs.showAgeOnProfile ?? false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const handleSubmit = () => {
     const name = displayName.trim();
@@ -41,6 +42,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
       showSexualOrientationOnProfile: showSexualOrientation,
       showGenderIdentityOnProfile: showGenderIdentity,
       showGenderExpressionOnProfile: showGenderExpression,
+      showAgeOnProfile: showAge,
       showSogieOnProfile: showSexualOrientation || showGenderIdentity || showGenderExpression,
       showLocationOnProfile: currentPrefs.showLocationOnProfile ?? true,
     };
@@ -130,6 +132,10 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
           </div>
           <label className="flex items-center justify-between gap-3 text-sm"><span>Show gender expression on my profile</span><input type="checkbox" className="check" checked={showGenderExpression} onChange={(e) => setShowGenderExpression(e.target.checked && genderExpression.length > 0)} disabled={!genderExpression.length} /></label>
         </div>
+      </section>
+      <section className="rounded-2xl border border-line p-4">
+        <label className="flex items-center justify-between gap-3 text-sm"><span className="font-medium">Show my age</span><input type="checkbox" className="check" checked={showAge} onChange={(e) => setShowAge(e.target.checked)} /></label>
+        <p className="mt-1 text-xs text-subtle">Off by default. When on, people you chat with can see your age. Your birthday is never shown.</p>
       </section>
       <p className="text-xs text-subtle">Your birthday and My Type preferences stay private. You never need to share your real name or photo.</p>
     </div>

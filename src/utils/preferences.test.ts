@@ -22,7 +22,6 @@ const full: UserPreferences = {
   preferredGenderExpressions: ['Femme'],
   locationSelection: ['Cebu'],
   applyLocationFilter: true,
-  age: 27,
   applyAgeFilter: true,
   ageMin: 24,
   ageMax: 32,
@@ -67,7 +66,7 @@ test('a Quick search runs without filters but leaves the saved Custom filters in
   const fields = queueMatchFields(quick);
   assert.equal(fields.wantAreas, undefined);
   assert.equal(fields.wantExpr, undefined);
-  assert.equal(fields.ageMin, undefined);
+  assert.equal('ageMin' in fields, false);
   assert.equal(fields.intent, 'open');
 });
 
@@ -80,7 +79,7 @@ test('private gender expression and hidden area stay out of the queue while my o
   // My filters are independent of what I show.
   assert.deepEqual(fields.wantExpr, ['Femme']);
   assert.deepEqual(fields.wantAreas, ['Cebu']);
-  assert.equal(fields.ageMin, 24);
+  assert.equal('ageMin' in fields, false, 'the age range is private and never in the queue fields');
 
   const shown = queueMatchFields({ ...full, showGenderExpressionOnProfile: true, showLocationOnProfile: true });
   assert.deepEqual(shown.expr, ['Andro']);

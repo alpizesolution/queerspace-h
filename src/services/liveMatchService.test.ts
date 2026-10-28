@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Timestamp } from 'firebase/firestore';
-import { agesCompatible, filtersCompatible, isFreshQueueEntry, nextClaimDelay, pickQueueCandidates, queueMatchFields } from './liveMatchService.ts';
+import { ageRangeFromPrefs, filtersCompatible, isFreshQueueEntry, nextClaimDelay, pickQueueCandidates, queueMatchFields } from './liveMatchService.ts';
 
 const now = 1_800_000_000_000;
 const ts = (msAgo: number) => Timestamp.fromMillis(now - msAgo);
@@ -38,32 +38,18 @@ test('nextClaimDelay backs off while the queue is empty and stays capped', () =>
   assert.ok(nextClaimDelay(0, 0) >= 2500 && nextClaimDelay(0, 1) <= 3500);
 });
 
-test('agesCompatible: each side must fit the other one’s range; no range means any age', () => {
-  assert.equal(agesCompatible({}, {}), true);
-  assert.equal(agesCompatible({ age: 25 }, { age: 40 }), true);
-  assert.equal(agesCompatible({ age: 25, ageMin: 20, ageMax: 30 }, { age: 28 }), true);
-  assert.equal(agesCompatible({ age: 25, ageMin: 20, ageMax: 30 }, { age: 40 }), false);
-  assert.equal(agesCompatible({ age: 25, ageMin: 20, ageMax: 30 }, {}), false, 'a range needs a known age');
-  assert.equal(agesCompatible({ age: 25 }, { age: 28, ageMin: 30, ageMax: 40 }), false, 'their range must fit me too');
-  assert.equal(agesCompatible({}, { age: 28, ageMin: 18, ageMax: 40 }), false);
+test('the readable queue entry never carries an age or an age range', () => {
+  const fields = queueMatchFields({ applyAgeFilter: true, ageMin: 25, ageMax: 35, intention: 'dating' } as never);
+  assert.deepEqual(fields, { intent: 'dating' });
+  assert.equal(JSON.stringify(queueMatchFields({ ageMin: 20, ageMax: 30, applyAgeFilter: true } as never)).includes('age'), false);
 });
 
-test('pickQueueCandidates filters by age both ways', () => {
-  const entries = [
-    { id: 'fits', data: { status: 'waiting', heartbeatAt: ts(1_000), createdAt: ts(3_000), age: 27 } },
-    { id: 'too-old', data: { status: 'waiting', heartbeatAt: ts(1_000), createdAt: ts(4_000), age: 45 } },
-    { id: 'no-age', data: { status: 'waiting', heartbeatAt: ts(1_000), createdAt: ts(5_000) } },
-    { id: 'wants-older', data: { status: 'waiting', heartbeatAt: ts(1_000), createdAt: ts(6_000), age: 26, ageMin: 30, ageMax: 50 } },
-  ];
-  assert.deepEqual(pickQueueCandidates(entries, 'me', [], now, { age: 25, ageMin: 20, ageMax: 30 }), ['fits']);
-  assert.deepEqual(pickQueueCandidates(entries, 'me', [], now, { age: 25 }), ['no-age', 'too-old', 'fits']);
-});
-
-test('queueMatchFields keeps only valid ages and a range when the filter is on', () => {
-  assert.deepEqual(queueMatchFields({}), {});
-  assert.deepEqual(queueMatchFields({ age: 30, applyAgeFilter: false, ageMin: 20, ageMax: 30 }), { age: 30 });
-  assert.deepEqual(queueMatchFields({ age: 30, applyAgeFilter: true, ageMin: 25, ageMax: 35 }), { age: 30, ageMin: 25, ageMax: 35 });
-  assert.deepEqual(queueMatchFields({ age: 16, applyAgeFilter: true, ageMin: 35, ageMax: 25 }), {});
+test('ageRangeFromPrefs keeps a valid private range only when the filter is on', () => {
+  assert.equal(ageRangeFromPrefs({}), null);
+  assert.equal(ageRangeFromPrefs({ applyAgeFilter: false, ageMin: 20, ageMax: 30 }), null);
+  assert.deepEqual(ageRangeFromPrefs({ applyAgeFilter: true, ageMin: 25, ageMax: 35 }), { ageMin: 25, ageMax: 35 });
+  assert.equal(ageRangeFromPrefs({ applyAgeFilter: true, ageMin: 35, ageMax: 25 }), null);
+  assert.equal(ageRangeFromPrefs({ applyAgeFilter: true, ageMin: 16, ageMax: 30 }), null, 'below 18 is never a valid range');
 });
 
 test('filtersCompatible: location filters match containing areas, both ways', () => {
@@ -81,7 +67,7 @@ test('filtersCompatible: gender expression filters, both ways, never excluding t
   assert.equal(filtersCompatible({ wantExpr: ['Butch'] }, { expr: ['Femme'] }), true, 'My Type is a soft preference');
   assert.equal(filtersCompatible({ wantExpr: ['Butch'] }, {}), true);
   assert.equal(filtersCompatible({ expr: ['Femme'] }, { wantExpr: ['Andro'] }), true, 'their preference is soft too');
-  assert.equal(filtersCompatible({ expr: ['Femme'], age: 30 }, { wantExpr: ['Femme'], age: 31, ageMin: 18, ageMax: 25 }), false, 'age still applies');
+  assert.equal(filtersCompatible({ expr: ['Femme'] }, { wantExpr: ['Femme'] }), true);
 });
 
 test('queueMatchFields shares location and expression only when shown, and filters only when on', () => {

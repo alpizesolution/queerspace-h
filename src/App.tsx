@@ -137,6 +137,8 @@ export default function App() {
               setAgeGateOpen(!isAdultBirthDate(res.prefs.birthDate));
               setAgeRestricted(false);
               cloudSignatureRef.current = cloudProfileSignature(res.prefs, res.blockedPartnerIds ?? []);
+              // A birthday that only lives on this device (an earlier sync failed) is sent once; after that it is immutable.
+              if (!res.cloudHasBirthDate && isAdultBirthDate(res.prefs.birthDate)) void persistPrefs(res.prefs, { withBirthDate: true });
               // Never shrink the blocklist: keep this device's blocks and add any saved in the cloud.
               const cloudBlocked = res.blockedPartnerIds ?? [];
               setBlockedPartnerIds((current) => {
@@ -182,10 +184,10 @@ export default function App() {
   };
 
   /** Saves on this device, and to the cloud only when something the cloud stores has changed. */
-  const persistPrefs = async (prefs: UserPreferences) => {
+  const persistPrefs = async (prefs: UserPreferences, options: { withBirthDate?: boolean } = {}) => {
     const signature = cloudProfileSignature(prefs, blockedPartnerIds);
-    const cloudChanged = signature !== cloudSignatureRef.current;
-    const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds, cloudChanged);
+    const cloudChanged = options.withBirthDate || signature !== cloudSignatureRef.current;
+    const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds, cloudChanged, options);
     if (feedback.savedToCloud) cloudSignatureRef.current = signature;
     return { feedback, cloudChanged };
   };
@@ -322,9 +324,9 @@ export default function App() {
               if (submitted) setStorageItem('queerspace_age_review_requested', 'true');
               setAgeRestricted(true); setAgeGateOpen(true); setStorageItem('queerspace_age_restricted', 'true'); return;
             }
-            const next = { ...userPrefs, birthDate, age, profileComplete: userPrefs.profileComplete === true };
+            const next = { ...userPrefs, birthDate, profileComplete: userPrefs.profileComplete === true };
             setUserPrefs(next); setAgeRestricted(false); setAgeReviewSubmitted(false); setStorageItem('queerspace_age_restricted', 'false');
-            const { feedback } = await persistPrefs(next);
+            const { feedback } = await persistPrefs(next, { withBirthDate: true });
             if (!feedback.savedToCloud && isFirebaseConfigured) showToast('Birthday saved on this device. Cloud sync needs attention.');
             setAgeGateOpen(false);
           }}
