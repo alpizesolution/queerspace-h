@@ -211,7 +211,7 @@ test('calculateCompatibilityScore respects discovery filters and never penalizes
     topics: ['WLW Books & Poetry'],
     region: 'Anywhere / Worldwide',
     avatarColor: '#8D426B',
-    genderExpression: ['Femme'],
+    myVibe: 'Femme',
   };
 
   const mascPartner: PartnerProfile = {
@@ -222,7 +222,7 @@ test('calculateCompatibilityScore respects discovery filters and never penalizes
     topics: ['WLW Books & Poetry'],
     region: 'Anywhere / Worldwide',
     avatarColor: '#7a3159',
-    genderExpression: ['Hard Masc'],
+    myVibe: 'Hard Masc',
   };
 
   const neutralPartner: PartnerProfile = {
@@ -233,7 +233,6 @@ test('calculateCompatibilityScore respects discovery filters and never penalizes
     topics: ['WLW Books & Poetry'],
     region: 'Anywhere / Worldwide',
     avatarColor: '#5a2548',
-    genderExpression: ['Prefer not to say'],
   };
 
   // 1. When filter is NOT enabled: SOGIE / expression does NOT alter scores

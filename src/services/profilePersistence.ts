@@ -30,10 +30,10 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
     myVibe: (prefs.myVibe || '').slice(0, 24),
     // Public SOGIE values are included only when that exact field is opted into visibility.
     sexualOrientation: prefs.showSexualOrientationOnProfile && prefs.sexualOrientation
-      ? (prefs.sexualOrientation === 'Self-described' ? prefs.sexualOrientationCustom : prefs.sexualOrientation || '').trim().slice(0, 40)
+      ? (prefs.sexualOrientation === 'Self-described' ? (prefs.sexualOrientationCustom ?? '') : prefs.sexualOrientation || '').trim().slice(0, 40)
       : deleteField(),
     genderIdentity: prefs.showGenderIdentityOnProfile && prefs.genderIdentity
-      ? (prefs.genderIdentity === 'Self-described' ? prefs.genderIdentityCustom : prefs.genderIdentity || '').trim().slice(0, 40)
+      ? (prefs.genderIdentity === 'Self-described' ? (prefs.genderIdentityCustom ?? '') : prefs.genderIdentity || '').trim().slice(0, 40)
       : deleteField(),
     genderExpression: prefs.showGenderExpressionOnProfile && prefs.genderExpression?.length
       ? prefs.genderExpression.slice(0, 8)
