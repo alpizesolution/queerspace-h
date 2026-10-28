@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Inbox, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { Check, Inbox, Info, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { auth, isFirebaseConfigured } from '../lib/firebase.ts';
-import { ConfirmDialog } from './Sheet.tsx';
-import { SignalsConversation, SignalsPartner } from './SignalsConversation.tsx';
+import { ConfirmDialog, Sheet } from './Sheet.tsx';
+import { SignalsConversation } from './SignalsConversation.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import type { SignalsInboxState } from '../hooks/useSignalsInbox.ts';
+
+/** The other person's public pseudonym and avatar, resolved by the API; null fields when they have none. */
+type SignalPartner = { displayName: string | null; avatar: string | null };
 
 type SignalInvitation = {
   id: string;
@@ -16,6 +19,8 @@ type SignalInvitation = {
   createdAt: string | null;
   expiresAt: string | null;
   direction: 'sent' | 'received';
+  /** The other person (the sender, for received invitations). */
+  partner?: SignalPartner;
 };
 
 type SignalPair = {
@@ -26,18 +31,8 @@ type SignalPair = {
   createdAt: string | null;
   endedAt: string | null;
   endedBy: string | null;
-  /** The other member's pseudonym and avatar; null fields when they have none. */
-  partner?: { displayName: string | null; avatar: string | null };
+  partner?: SignalPartner;
 };
-
-const STARS = [
-  { top: 8, left: 14, size: 2 },
-  { top: 22, left: 84, size: 3 },
-  { top: 64, left: 6, size: 2 },
-  { top: 78, left: 90, size: 2 },
-  { top: 40, left: 96, size: 1.5 },
-  { top: 92, left: 30, size: 1.5 },
-];
 
 async function signalsRequest<T>(path: string, body?: Record<string, unknown>): Promise<T> {
   const user = auth?.currentUser;
@@ -65,13 +60,43 @@ async function signalsRequest<T>(path: string, body?: Record<string, unknown>): 
   return data as T;
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return 'Date unavailable';
+/**
+ * Pseudonym of whoever sent the newest pending invitation to this member, for the in-app banner.
+ * Resolved by the API, so only a public pseudonym is returned; null if there is no pending invitation.
+ */
+export async function fetchNewestPendingSenderName(): Promise<string | null> {
+  try {
+    const { invitations } = await signalsRequest<{ invitations: SignalInvitation[] }>('/api/signals');
+    const newest = (invitations || []).find((item) => item.direction === 'received' && item.status === 'pending');
+    return newest ? newest.partner?.displayName?.trim() || 'Anonymous member' : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatShortDate(value: string | null): string {
+  if (!value) return '';
   const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? 'Date unavailable'
-    : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+    ? ''
+    : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
 }
+
+const SectionHeader: React.FC<{ title: string; count: number; muted?: boolean }> = ({ title, count, muted }) => (
+  <div className="mb-1.5 flex items-center gap-2 px-1">
+    <h2 className={`text-xs font-semibold uppercase tracking-[0.14em] ${muted ? 'text-subtle' : 'text-muted'}`}>{title}</h2>
+    <span className={`rounded-full px-2 text-[length:calc(11px_*_var(--fs,1))] font-semibold leading-5 tabular-nums ${count > 0 && !muted ? 'bg-berry/15 text-berry' : 'bg-raised text-subtle'}`}>{count}</span>
+  </div>
+);
+
+const PartnerAvatar: React.FC<{ avatar?: string | null; seed: string; small?: boolean }> = ({ avatar, seed, small }) => {
+  const size = small ? 'h-7 w-7' : 'h-10 w-10';
+  return isValidAvatar(avatar)
+    ? <AnimalAvatar avatar={avatar} seed={seed} className={size} />
+    : <div className={`flex ${size} shrink-0 items-center justify-center rounded-full bg-plum/30 text-lavender`}><RadioTower className={small ? 'h-3.5 w-3.5' : 'h-4 w-4'} /></div>;
+};
+
+const nameOf = (partner?: SignalPartner) => partner?.displayName?.trim() || 'Anonymous member';
 
 export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) => {
   const [pairs, setPairs] = useState<SignalPair[]>([]);
@@ -83,6 +108,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [openPairId, setOpenPairId] = useState<string | null>(null);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   const loadPairs = useCallback(async (quiet = false) => {
     if (!isFirebaseConfigured) {
@@ -134,7 +160,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
       setPairs((current) => current.map((pair) =>
         pair.id === pairId ? { ...pair, status: 'ended', endedAt: new Date().toISOString() } : pair
       ));
-      setNotice('Connection ended. You can leave it here; no message was sent.');
+      setNotice('Connection ended. No message was sent.');
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not end this connection.');
@@ -152,7 +178,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
       const result = await signalsRequest<{ status: string }>('/api/signals', { action, invitationId: invitation.id });
       setInvitations((current) => current.map((item) => item.id === invitation.id ? { ...item, status: result.status as SignalInvitation['status'] } : item));
       if (action === 'accept' && result.status === 'accepted') {
-        setNotice('Invitation accepted. Your mutual connection is now active.');
+        setNotice(`Connected with ${nameOf(invitation.partner)}.`);
         await loadPairs();
       } else if (action === 'decline') {
         setNotice('Invitation declined. No message was sent.');
@@ -173,7 +199,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
   const activePairs = pairs.filter((pair) => pair.status === 'active');
   const endedPairs = pairs.filter((pair) => pair.status === 'ended');
 
-  // Arriving from the "Someone would like to connect" banner or tab badge: bring the new request into view once.
+  // Arriving from the new-request banner or tab badge: bring the invitations into view once.
   useEffect(() => {
     if (loading || scrolledToRequests.current || pendingReceived.length === 0) return;
     scrolledToRequests.current = true;
@@ -187,174 +213,164 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
     }
   }
 
+  const hasInvitations = pendingReceived.length + pendingSent.length > 0;
+
   return (
-    <section
-      aria-labelledby="signals-title"
-      className="relative mx-auto flex min-h-[min(620px,calc(100dvh-9rem))] w-full max-w-xl flex-col px-5 py-4 anim-rise sm:px-6 sm:py-6"
-    >
-      <div className="mb-4 flex items-center gap-3">
-        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-berry/20 bg-raised text-berry">
+    <section aria-labelledby="signals-title" className="relative mx-auto flex w-full max-w-xl flex-col px-4 pb-6 pt-4 anim-rise sm:px-6 sm:pt-6">
+      <header className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-raised text-berry">
           <RadioTower className="h-5 w-5" strokeWidth={1.6} />
-          <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-ink bg-lavender" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[length:calc(10px_*_var(--fs,1))] font-semibold uppercase tracking-[0.22em] text-lavender">A private frequency</p>
-          <h1 id="signals-title" className="mt-0.5 font-serif text-2xl font-semibold leading-tight tracking-tight text-fg sm:text-3xl">
-            Signals
-          </h1>
-          <p className="mt-1 text-xs leading-snug text-muted">Connections that began with a mutual yes.</p>
+          <h1 id="signals-title" className="font-serif text-2xl font-semibold leading-none tracking-tight text-fg">Signals</h1>
+          <p className="mt-1 text-xs leading-none text-muted">Connections, on your terms.</p>
         </div>
         <button
           type="button"
           onClick={() => void loadPairs()}
           disabled={loading}
           aria-label="Refresh connections"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line text-muted transition hover:border-berry/50 hover:text-fg disabled:opacity-50"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-fg disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
-      </div>
+      </header>
 
-      <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-line bg-raised/60 px-3 py-2.5">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-lavender" />
-        <p className="text-[length:calc(11px_*_var(--fs,1))] leading-snug text-muted">
-          Only you can view your connections. Ending one closes it here; no message is sent.
-        </p>
+      <div className="mb-3 mt-2 flex items-center gap-1 text-xs text-subtle">
+        <ShieldCheck className="h-3.5 w-3.5" />
+        <span>Private connections</span>
+        <button
+          type="button"
+          onClick={() => setPrivacyOpen(true)}
+          aria-label="About private connections"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-subtle transition hover:text-fg"
+        >
+          <Info className="h-4 w-4" />
+        </button>
       </div>
 
       {notice && (
-        <div role="status" className="mb-4 flex items-start gap-2 rounded-xl border border-berry/20 bg-plum/20 p-3 text-sm text-fg">
-          <Check className="mt-0.5 h-4 w-4 shrink-0 text-berry" />
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notice" className="ml-auto text-muted hover:text-fg"><X className="h-4 w-4" /></button>
+        <div role="status" className="mb-3 flex items-center gap-2 rounded-xl bg-plum/20 px-3 py-2 text-sm text-fg">
+          <Check className="h-4 w-4 shrink-0 text-berry" />
+          <span className="min-w-0 flex-1">{notice}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notice" className="flex h-8 w-8 items-center justify-center text-muted hover:text-fg"><X className="h-4 w-4" /></button>
         </div>
       )}
       {inbox?.error && !error && (
-        <p role="status" className="mb-4 rounded-xl border border-line px-3 py-2 text-xs text-muted">{inbox.error}</p>
+        <p role="status" className="mb-3 rounded-xl border border-line px-3 py-2 text-xs text-muted">{inbox.error}</p>
       )}
       {error && (
-        <div role="alert" className="mb-4 flex items-start gap-3 rounded-xl border border-berry/30 bg-plum/20 p-4 text-sm text-fg">
+        <div role="alert" className="mb-3 flex items-center gap-3 rounded-xl border border-berry/30 bg-plum/20 px-3 py-2 text-sm text-fg">
           <span className="flex-1">{error}</span>
           <button type="button" onClick={() => void loadPairs()} className="shrink-0 font-semibold text-berry underline underline-offset-4">Retry</button>
         </div>
       )}
 
       {loading ? (
-        <div className="flex min-h-40 items-center justify-center gap-3 text-sm text-muted">
-          <LoaderCircle className="h-5 w-5 animate-spin text-berry" /> Finding your connections…
+        <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted">
+          <LoaderCircle className="h-4 w-4 animate-spin text-berry" /> Finding your connections…
         </div>
       ) : (
         <>
-          <div className="mb-5" ref={invitationsRef}>
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Inbox className="h-4 w-4 text-lavender" /> Invitations{pendingReceived.length > 0 && <span className="rounded-full bg-berry px-2 py-0.5 text-[length:calc(10px_*_var(--fs,1))] font-bold text-ink">{pendingReceived.length} new</span>}</h2>
-              <span className="rounded-full border border-line px-2.5 py-1 text-xs tabular-nums text-muted">{pendingReceived.length + pendingSent.length}</span>
-            </div>
-            {pendingReceived.length === 0 && pendingSent.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-line px-3 py-3 text-center">
-                <p className="text-sm text-muted">No pending invitations.</p>
-                <p className="mt-1 text-[length:calc(11px_*_var(--fs,1))] leading-snug text-subtle">When someone sends a Signal, you decide whether to accept.</p>
-              </div>
+          <div ref={invitationsRef} className="scroll-mt-20">
+            <SectionHeader title="Invitations" count={pendingReceived.length + pendingSent.length} />
+            {!hasInvitations ? (
+              <p className="flex items-center gap-2 px-1 py-2 text-sm text-muted"><Inbox className="h-4 w-4 text-subtle" /> Inbox is quiet.</p>
             ) : (
-              <div className="space-y-3">
-                {pendingReceived.map((invitation) => (
-                  <article key={invitation.id} className="rounded-2xl border border-lavender/20 bg-raised/70 p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-plum/30 text-lavender"><RadioTower className="h-4 w-4" /></div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-fg">Someone would like to connect</p>
-                        <p className="mt-1 text-xs text-muted">Received {formatDate(invitation.createdAt)}</p>
-                        {invitation.message && <p className="mt-3 whitespace-pre-wrap break-words rounded-xl bg-surface/70 p-3 text-sm leading-relaxed text-fg">{invitation.message}</p>}
-                        <p className="mt-2 text-[length:calc(11px_*_var(--fs,1))] leading-relaxed text-subtle">Accept only if you feel comfortable. You can end a connection later.</p>
+              <ul className="space-y-2">
+                {pendingReceived.map((invitation) => {
+                  const name = nameOf(invitation.partner);
+                  return (
+                    <li key={invitation.id} className="rounded-2xl border border-lavender/25 bg-raised/70 p-3">
+                      <div className="flex items-center gap-3">
+                        <PartnerAvatar avatar={invitation.partner?.avatar} seed={invitation.id} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
+                          <p className="mt-0.5 text-xs text-subtle">Wants to connect · {formatShortDate(invitation.createdAt)}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-line pt-3">
-                      <button type="button" onClick={() => void respondToInvitation(invitation, 'decline')} disabled={invitationActionId !== null} className="rounded-full border border-line px-3.5 py-2 text-xs font-semibold text-muted transition hover:text-fg disabled:opacity-50">Decline</button>
-                      <button type="button" onClick={() => void respondToInvitation(invitation, 'accept')} disabled={invitationActionId !== null} className="rounded-full bg-berry px-4 py-2 text-xs font-semibold text-ink transition hover:brightness-110 disabled:opacity-50">{invitationActionId === invitation.id ? 'Saving…' : 'Accept'}</button>
-                    </div>
-                  </article>
-                ))}
+                      {invitation.message && <p className="mt-2 whitespace-pre-wrap break-words rounded-xl bg-surface/70 px-3 py-2 text-sm leading-snug text-fg">{invitation.message}</p>}
+                      <div className="mt-1.5 flex justify-end gap-1">
+                        <button type="button" onClick={() => void respondToInvitation(invitation, 'decline')} disabled={invitationActionId !== null} aria-label={`Decline ${name}`} className="h-9 rounded-full px-3 text-xs font-semibold text-muted transition hover:text-fg disabled:opacity-50">Decline</button>
+                        <button type="button" onClick={() => void respondToInvitation(invitation, 'accept')} disabled={invitationActionId !== null} aria-label={`Accept ${name}`} className="h-9 rounded-full bg-berry px-4 text-xs font-semibold text-ink transition hover:brightness-110 disabled:opacity-50">{invitationActionId === invitation.id ? 'Saving…' : 'Accept'}</button>
+                      </div>
+                    </li>
+                  );
+                })}
                 {pendingSent.map((invitation) => (
-                  <article key={invitation.id} className="flex items-center gap-3 rounded-xl border border-line/70 bg-raised/40 p-3">
-                    <RadioTower className="h-4 w-4 shrink-0 text-muted" />
+                  <li key={invitation.id} className="flex items-center gap-3 px-1 py-1.5">
+                    <PartnerAvatar avatar={invitation.partner?.avatar} seed={invitation.id} small />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-fg">Invitation sent</p>
-                      <p className="mt-0.5 text-xs text-subtle">Sent {formatDate(invitation.createdAt)} · Expires {formatDate(invitation.expiresAt)}</p>
+                      <p className="truncate text-sm text-fg">Waiting for {nameOf(invitation.partner)}</p>
+                      <p className="text-xs text-subtle">Sent {formatShortDate(invitation.createdAt)}</p>
                     </div>
-                    <button type="button" onClick={() => void respondToInvitation(invitation, 'revoke')} disabled={invitationActionId !== null} className="shrink-0 rounded-full border border-line px-3 py-2 text-xs font-semibold text-muted hover:border-berry/50 hover:text-fg disabled:opacity-50">{invitationActionId === invitation.id ? 'Withdrawing…' : 'Withdraw'}</button>
-                  </article>
+                    <button type="button" onClick={() => void respondToInvitation(invitation, 'revoke')} disabled={invitationActionId !== null} className="h-9 shrink-0 rounded-full px-3 text-xs font-semibold text-muted hover:text-fg disabled:opacity-50">{invitationActionId === invitation.id ? 'Withdrawing…' : 'Withdraw'}</button>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
           </div>
 
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-fg">Active connections</h2>
-            <span className="rounded-full border border-line px-2.5 py-1 text-xs tabular-nums text-muted">{activePairs.length}</span>
+          <div className="mt-5">
+            <SectionHeader title="Active" count={activePairs.length} />
+            {activePairs.length === 0 ? (
+              <p className="px-1 py-2 text-sm text-muted">No active connections yet.</p>
+            ) : (
+              <ul className="divide-y divide-line/60">
+                {activePairs.map((pair) => {
+                  const name = nameOf(pair.partner);
+                  return (
+                    <li key={pair.id} className="flex items-center gap-3 py-2.5">
+                      <PartnerAvatar avatar={pair.partner?.avatar} seed={pair.id} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
+                        <p className="mt-0.5 text-xs text-subtle">Since {formatShortDate(pair.createdAt)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPairToEnd(pair.id)}
+                        disabled={endingId !== null}
+                        aria-label={`End connection with ${name}`}
+                        className="h-9 shrink-0 rounded-full px-3 text-xs font-semibold text-muted transition hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {endingId === pair.id ? 'Ending…' : 'End'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOpenPairId(pair.id)}
+                        aria-label={`Open chat with ${name}`}
+                        className="h-9 shrink-0 rounded-full bg-berry px-4 text-xs font-semibold text-ink transition hover:brightness-110"
+                      >
+                        Open
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
-          {activePairs.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-line px-4 py-4 text-center">
-              <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-raised text-lavender"><RadioTower className="h-5 w-5" /></div>
-              <p className="text-sm font-medium text-fg">Nothing lingering just yet.</p>
-              <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted">When an invitation is accepted, the connection will appear here.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {activePairs.map((pair) => (
-                <article key={pair.id} className="rounded-2xl border border-line bg-raised/70 p-4">
-                  <div className="flex items-start gap-3">
-                    {isValidAvatar(pair.partner?.avatar)
-                      ? <AnimalAvatar avatar={pair.partner?.avatar} seed={pair.id} className="h-10 w-10" />
-                      : <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-lavender/20 bg-plum/30 text-lavender"><RadioTower className="h-4 w-4" /></div>}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-fg">{pair.partner?.displayName || 'Anonymous member'}</p>
-                      <p className="mt-1 text-xs text-muted">Connected {formatDate(pair.createdAt)}</p>
-                    </div>
-                    <span className="rounded-full bg-lavender/10 px-2.5 py-1 text-[length:calc(10px_*_var(--fs,1))] font-semibold text-lavender">Active</span>
-                  </div>
-                  <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-line pt-3">
-                    <button
-                      type="button"
-                      onClick={() => setOpenPairId(pair.id)}
-                      className="rounded-full bg-berry px-4 py-2 text-xs font-semibold text-ink transition hover:brightness-110"
-                    >
-                      Open chat
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPairToEnd(pair.id)}
-                      disabled={endingId !== null}
-                      className="rounded-full border border-line px-3.5 py-2 text-xs font-semibold text-muted transition hover:border-berry/50 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {endingId === pair.id ? 'Ending…' : 'End connection'}
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
 
           {endedPairs.length > 0 && (
             <div className="mt-5">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-fg">Past connections</h2>
-                <span className="rounded-full border border-line px-2.5 py-1 text-xs tabular-nums text-muted">{endedPairs.length}</span>
-              </div>
-              <div className="space-y-2">
+              <SectionHeader title="Past" count={endedPairs.length} muted />
+              <ul className="divide-y divide-line/40">
                 {endedPairs.map((pair) => (
-                  <div key={pair.id} className="flex items-center gap-3 rounded-xl border border-line/70 bg-raised/40 p-3">
-                    <Check className="h-4 w-4 shrink-0 text-muted" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-muted">Connection ended</p>
-                      <p className="mt-0.5 text-xs text-subtle">{formatDate(pair.endedAt || pair.createdAt)}</p>
-                    </div>
-                    <span className="text-[length:calc(10px_*_var(--fs,1))] uppercase tracking-wider text-subtle">Closed</span>
-                  </div>
+                  <li key={pair.id} className="flex items-center gap-3 py-2 opacity-70">
+                    <PartnerAvatar avatar={pair.partner?.avatar} seed={pair.id} small />
+                    <p className="min-w-0 flex-1 truncate text-sm text-muted">{nameOf(pair.partner)}</p>
+                    <span className="shrink-0 text-xs text-subtle">Closed · {formatShortDate(pair.endedAt || pair.createdAt)}</span>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
         </>
+      )}
+
+      {privacyOpen && (
+        <Sheet title="Private connections" size="sm" icon={<ShieldCheck className="h-5 w-5" />} onClose={() => setPrivacyOpen(false)}>
+          <p className="text-sm leading-relaxed text-muted">Only you can view your connections. Ending a connection closes it here; no message is sent.</p>
+        </Sheet>
       )}
       {pairToEnd && (
         <ConfirmDialog

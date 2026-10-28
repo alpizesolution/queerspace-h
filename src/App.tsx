@@ -9,7 +9,7 @@ import { ChatView } from './components/ChatView.tsx';
 import { PublicRoomView } from './components/PublicRoomView.tsx';
 import { CommunityFeedView } from './components/CommunityFeedView.tsx';
 import { UnsaidView } from './components/UnsaidView.tsx';
-import { SignalsView } from './components/SignalsView.tsx';
+import { SignalsView, fetchNewestPendingSenderName } from './components/SignalsView.tsx';
 import { InfoModals } from './components/InfoModals.tsx';
 import { DonationModal } from './components/DonationModal.tsx';
 import { SupportChat } from './components/SupportChat.tsx';
@@ -72,10 +72,15 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   // Live Signals: a one-time banner for each new incoming request while the app is open.
   const [signalAlert, setSignalAlert] = useState(false);
+  const [signalSender, setSignalSender] = useState<string | null>(null);
   const currentViewRef = useRef(currentView);
   currentViewRef.current = currentView;
   const signalsInbox = useSignalsInbox(() => {
-    if (currentViewRef.current !== 'signals') setSignalAlert(true);
+    if (currentViewRef.current === 'signals') return;
+    setSignalSender(null);
+    setSignalAlert(true);
+    // The API resolves the sender's public pseudonym; until then the banner stays generic.
+    void fetchNewestPendingSenderName().then(setSignalSender);
   });
   useEffect(() => {
     if (!signalAlert) return;
@@ -333,7 +338,7 @@ export default function App() {
           className="fixed z-[60] left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] w-[calc(100%-2rem)] max-w-sm flex items-center gap-2.5 bg-raised/95 backdrop-blur-xl text-fg pl-4 pr-2 py-2.5 rounded-2xl shadow-2xl shadow-black/50 border border-lavender/30 text-sm anim-pop"
         >
           <RadioTower className="w-[18px] h-[18px] text-lavender shrink-0" />
-          <span className="flex-1">Someone would like to connect.</span>
+          <span className="min-w-0 flex-1 truncate">{signalSender ? <><strong className="font-semibold">{signalSender}</strong> wants to connect.</> : 'Someone would like to connect.'}</span>
           <button type="button" onClick={() => handleNavigate('signals')} className="rounded-full bg-berry px-3.5 py-1.5 text-xs font-semibold text-ink hover:brightness-110">View</button>
           <button type="button" onClick={() => setSignalAlert(false)} aria-label="Dismiss" className="rounded-full px-2 py-1 text-muted hover:text-fg">✕</button>
         </div>

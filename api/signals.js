@@ -174,7 +174,16 @@ export default async function handler(req, res) {
           direction: data.senderId === uid ? 'sent' : 'received',
         });
       }
-      const invitations = [...byId.values()].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      const sorted = [...byId.values()].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      // Each invitation carries the OTHER person's pseudonym and avatar only (the sender for received
+      // invitations, the recipient for sent ones), resolved here so clients never read profiles directly.
+      const otherId = invite => (invite.direction === 'sent' ? invite.recipientId : invite.senderId);
+      const otherIds = [...new Set(sorted.map(otherId).filter(Boolean))];
+      const profiles = new Map(await Promise.all(otherIds.map(async id => {
+        const snap = await db.doc(`users/${id}/public/profile`).get();
+        return [id, partnerSummary(snap.exists ? snap.data() : null)];
+      })));
+      const invitations = sorted.map(invite => ({ ...invite, partner: profiles.get(otherId(invite)) || partnerSummary(null) }));
       return send(res, 200, { invitations });
     }
     const { action, recipientId, invitationId, message, idempotencyKey } = req.body || {};
