@@ -203,6 +203,7 @@ async function loadPartnerProfile(partnerId: string): Promise<PartnerProfile> {
       age: typeof data.age === 'number' && data.age >= 18 && data.age <= 99 ? Math.floor(data.age) : undefined,
       aboutMe: typeof data.aboutMe === 'string' ? data.aboutMe.slice(0, 160) : undefined,
       myVibe: typeof data.myVibe === 'string' ? data.myVibe.slice(0, 24) : undefined,
+      personalStyle: typeof data.personalStyle === 'string' ? data.personalStyle.slice(0, 24) : undefined,
       intention: (data.intention as Intention) || 'open',
       topics: Array.isArray(data.topics) ? data.topics.slice(0, 8) : [],
       region: showLocation && data.region ? String(data.region) : '',

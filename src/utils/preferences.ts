@@ -12,6 +12,7 @@ export const PROFILE_KEYS = [
   'avatar',
   'aboutMe',
   'myVibe',
+  'personalStyle',
   'pronouns',
   'customPronouns',
   'sexualOrientation',

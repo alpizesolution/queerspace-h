@@ -49,6 +49,20 @@ export const MY_VIBE_OPTIONS = [
   'Night Owl',
 ] as const;
 
+/** Public aesthetic label for how someone likes to dress; not SOGIE and never a matching criterion. */
+export const PERSONAL_STYLE_OPTIONS = [
+  'Soft & Feminine',
+  'Androgynous',
+  'Tomboy',
+  'Sporty',
+  'Streetwear',
+  'Vintage',
+  'Alt & Edgy',
+  'Cozy Casual',
+  'Minimalist',
+  'Always Changing',
+] as const;
+
 /**
  * Inclusive predefined gender-expression and presentation labels.
  * This is a profile self-description list, not a matching or eligibility rule.

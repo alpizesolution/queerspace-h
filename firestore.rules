@@ -183,7 +183,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
              'displayName', 'pronouns', 'intention', 'topics', 
              'region', 'showGenderExpressionOnProfile', 'showSexualOrientationOnProfile', 'showGenderIdentityOnProfile', 'showSogieOnProfile',
-             'showLocationOnProfile', 'avatar', 'aboutMe', 'myVibe', 'sexualOrientation', 'genderIdentity', 'genderExpression', 'profileComplete', 'age', 'createdAt', 'updatedAt'
+             'showLocationOnProfile', 'avatar', 'aboutMe', 'myVibe', 'personalStyle', 'sexualOrientation', 'genderIdentity', 'genderExpression', 'profileComplete', 'age', 'createdAt', 'updatedAt'
            ])
         // createdAt marks when someone joined: set once to "now", then never changed.
         && (resource != null && 'createdAt' in resource.data
@@ -203,6 +203,7 @@ service cloud.firestore {
         && request.resource.data.topics.size() <= 8
         && (!('aboutMe' in request.resource.data) || (request.resource.data.aboutMe is string && request.resource.data.aboutMe.size() <= 160))
         && (!('myVibe' in request.resource.data) || (request.resource.data.myVibe is string && request.resource.data.myVibe.size() <= 24))
+        && (!('personalStyle' in request.resource.data) || (request.resource.data.personalStyle is string && request.resource.data.personalStyle.size() <= 24))
         && (!('sexualOrientation' in request.resource.data) || (request.resource.data.sexualOrientation is string && request.resource.data.sexualOrientation.size() <= 40))
         && (!('genderIdentity' in request.resource.data) || (request.resource.data.genderIdentity is string && request.resource.data.genderIdentity.size() <= 40))
         && (!('genderExpression' in request.resource.data) || (request.resource.data.genderExpression is list && request.resource.data.genderExpression.size() <= 2))

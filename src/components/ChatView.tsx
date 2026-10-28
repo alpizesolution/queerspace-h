@@ -819,6 +819,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </section>
             {partner.aboutMe && <section><p className="label">About Me</p><p className="text-sm leading-6 whitespace-pre-wrap break-words">{partner.aboutMe}</p></section>}
             {partner.myVibe && <section><p className="label">My Vibe</p><span className="chip">{partner.myVibe}</span></section>}
+            {partner.personalStyle && <section><p className="label">Personal Style</p><span className="chip">{partner.personalStyle}</span></section>}
             <section><p className="label">Looking for</p><p className="text-sm">{INTENTION_LABELS[partner.intention] || 'Open to Anything'}</p></section>
             {partner.topics.length > 0 && <section><p className="label">Interests</p><div className="flex flex-wrap gap-2">{partner.topics.map((topic) => <span key={topic} className="chip">{topic}</span>)}</div></section>}
             {(partner.showSexualOrientationOnProfile && partner.sexualOrientation || partner.showGenderIdentityOnProfile && partner.genderIdentity || partner.showGenderExpressionOnProfile && partner.genderExpression?.length) && <section className="space-y-3"><p className="label">SOGIE · shared fields</p>

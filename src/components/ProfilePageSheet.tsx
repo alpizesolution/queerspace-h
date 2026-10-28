@@ -44,6 +44,10 @@ export const ProfilePageSheet: React.FC<ProfilePageSheetProps> = ({ currentPrefs
         <p className="text-[11px] uppercase tracking-[0.14em] font-semibold text-subtle">My Vibe</p>
         {currentPrefs.myVibe ? <span className="inline-flex items-center rounded-full border border-berry/30 bg-berry/10 px-3 py-1.5 text-sm font-medium text-fg">{currentPrefs.myVibe}</span> : <p className="text-sm text-subtle">Optional · not set</p>}
       </section>
+      <section className="space-y-2">
+        <p className="text-[11px] uppercase tracking-[0.14em] font-semibold text-subtle">Personal Style</p>
+        {currentPrefs.personalStyle ? <span className="inline-flex items-center rounded-full border border-berry/30 bg-berry/10 px-3 py-1.5 text-sm font-medium text-fg">{currentPrefs.personalStyle}</span> : <p className="text-sm text-subtle">Optional · not set</p>}
+      </section>
       {(currentPrefs.showSexualOrientationOnProfile || currentPrefs.showGenderIdentityOnProfile || currentPrefs.showGenderExpressionOnProfile) && <section className="space-y-3">
         <p className="text-[11px] uppercase tracking-[0.14em] font-semibold text-subtle">SOGIE · shared fields</p>
         {currentPrefs.showSexualOrientationOnProfile && currentPrefs.sexualOrientation && <p className="text-sm"><span className="text-muted">Sexual orientation</span><span className="block">{currentPrefs.sexualOrientation === 'Self-described' ? currentPrefs.sexualOrientationCustom : currentPrefs.sexualOrientation}</span></p>}

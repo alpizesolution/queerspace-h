@@ -4,7 +4,7 @@ import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { Sheet } from './Sheet.tsx';
 import { isValidAvatar, randomAvatar } from '../utils/avatar.ts';
 import { UserPreferences } from '../types.ts';
-import { MY_VIBE_OPTIONS, PRONOUN_OPTIONS, SEXUAL_ORIENTATIONS, GENDER_IDENTITIES, GENDER_EXPRESSIONS, generateSapphicPseudonym } from '../utils/matching-logic.ts';
+import { MY_VIBE_OPTIONS, PERSONAL_STYLE_OPTIONS, PRONOUN_OPTIONS, SEXUAL_ORIENTATIONS, GENDER_IDENTITIES, GENDER_EXPRESSIONS, generateSapphicPseudonym } from '../utils/matching-logic.ts';
 import { ProfileFields } from '../utils/preferences.ts';
 interface ProfileEditorSheetProps { currentPrefs: UserPreferences; onClose: () => void; onSave: (profile: ProfileFields) => void; }
 /** Anonymous profile: a pseudonym and illustrated avatar, never a required photo or real name. */
@@ -14,6 +14,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
   const [pronouns, setPronouns] = useState(currentPrefs.customPronouns ? 'Self-described' : currentPrefs.pronouns || 'she/her');
   const [customPronouns, setCustomPronouns] = useState(currentPrefs.customPronouns || '');
   const [aboutMe, setAboutMe] = useState((currentPrefs.aboutMe || '').slice(0, 160));
+  const [personalStyle, setPersonalStyle] = useState(currentPrefs.personalStyle && (PERSONAL_STYLE_OPTIONS as readonly string[]).includes(currentPrefs.personalStyle) ? currentPrefs.personalStyle : '');
   const [myVibe, setMyVibe] = useState(currentPrefs.myVibe && (MY_VIBE_OPTIONS as readonly string[]).includes(currentPrefs.myVibe) ? currentPrefs.myVibe : '');
   const [sexualOrientation, setSexualOrientation] = useState(currentPrefs.sexualOrientation || '');
   const [sexualOrientationCustom, setSexualOrientationCustom] = useState(currentPrefs.sexualOrientationCustom || '');
@@ -31,7 +32,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
     const next: ProfileFields = {
       displayName: name || 'Sapphic Guest', avatar, pronouns: pronounValue || 'she/her',
       customPronouns: pronouns === 'Self-described' ? customPronouns.trim() || undefined : undefined,
-      aboutMe: aboutMe.trim().slice(0, 160), myVibe: myVibe || undefined,
+      aboutMe: aboutMe.trim().slice(0, 160), myVibe: myVibe || undefined, personalStyle: personalStyle || undefined,
       sexualOrientation: sexualOrientation || undefined,
       sexualOrientationCustom: sexualOrientation === 'Self-described' ? sexualOrientationCustom.trim() || undefined : undefined,
       genderIdentity: genderIdentity || undefined,
@@ -80,6 +81,9 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
       <section><p className="label">My Vibe <span className="font-normal text-subtle">· optional</span></p><p className="mb-2 text-xs text-subtle">Pick a personality or interest, not a gender label.</p><div className="flex flex-wrap gap-2">
         {MY_VIBE_OPTIONS.map((vibe) => { const selected = myVibe === vibe; return <button key={vibe} type="button" aria-pressed={selected} onClick={() => setMyVibe((current) => current === vibe ? '' : vibe)} className="chip">{selected && <Check className="w-3.5 h-3.5 text-berry" />}{vibe}</button>; })}
       </div><p className="mt-2 text-xs text-subtle">Choose the label that feels right to you, or leave it blank.</p></section>
+      <section><p className="label">Personal Style <span className="font-normal text-subtle">· optional</span></p><p className="mb-2 text-xs text-subtle">How you like to dress or present. Not part of SOGIE or matching.</p><div className="flex flex-wrap gap-2">
+        {PERSONAL_STYLE_OPTIONS.map((style) => { const selected = personalStyle === style; return <button key={style} type="button" aria-pressed={selected} onClick={() => setPersonalStyle((current) => current === style ? '' : style)} className="chip">{selected && <Check className="w-3.5 h-3.5 text-berry" />}{style}</button>; })}
+      </div></section>
       <section className="space-y-4 rounded-2xl border border-line p-4">
         <div><p className="label !mb-1">SOGIE <span className="font-normal text-subtle">· optional</span></p><p className="text-xs text-subtle">Share only what feels comfortable. Each field has its own visibility switch and is hidden by default.</p></div>
         <div className="space-y-2">

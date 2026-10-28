@@ -28,6 +28,7 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
     ...(prefs.birthDate && calculateAge(prefs.birthDate) !== null ? { age: calculateAge(prefs.birthDate)! } : {}),
     aboutMe: (prefs.aboutMe || '').trim().slice(0, 160),
     myVibe: (prefs.myVibe || '').slice(0, 24),
+    personalStyle: (prefs.personalStyle || '').slice(0, 24),
     // Public SOGIE values are included only when that exact field is opted into visibility.
     sexualOrientation: prefs.showSexualOrientationOnProfile && prefs.sexualOrientation
       ? (prefs.sexualOrientation === 'Self-described' ? (prefs.sexualOrientationCustom ?? '') : prefs.sexualOrientation || '').trim().slice(0, 40)
@@ -116,6 +117,7 @@ export function mergeCloudProfile(
   set('topics', strings(publicData.topics));
   set('aboutMe', typeof publicData.aboutMe === 'string' ? publicData.aboutMe.slice(0, 160) : undefined);
   set('myVibe', text(publicData.myVibe));
+  set('personalStyle', text(publicData.personalStyle));
   set('profileComplete', flag(publicData.profileComplete));
   set('showGenderExpressionOnProfile', flag(publicData.showGenderExpressionOnProfile));
   set('showSexualOrientationOnProfile', flag(publicData.showSexualOrientationOnProfile));

@@ -37,6 +37,8 @@ export interface UserPreferences {
   aboutMe?: string;
   /** Self-selected public presentation label. */
   myVibe?: string;
+  /** Optional public aesthetic label (e.g. Vintage); not SOGIE. */
+  personalStyle?: string;
   /** True only after the member explicitly saves their profile. */
   profileComplete?: boolean;
   /** Self-declared age (18-99). Kept on this device and in the live queue, never on the public profile. */
@@ -61,6 +63,7 @@ export interface PartnerProfile {
   bioSnippet?: string;
   aboutMe?: string;
   myVibe?: string;
+  personalStyle?: string;
   avatarColor: string;
   avatar?: string;
   status?: PartnerStatus;
