@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
   SkipForward,
   Reply,
+  RadioTower,
   X,
 } from 'lucide-react';
 import { SwipeToReply } from './SwipeToReply.tsx';
@@ -73,6 +74,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
     partner.status || chatEventManager.getStatus(partner.id)
   );
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showSignalSheet, setShowSignalSheet] = useState(false);
+  const [signalMessage, setSignalMessage] = useState('I enjoyed talking with you. Would you like to stay connected?');
+  const [signalSending, setSignalSending] = useState(false);
+  const [signalNotice, setSignalNotice] = useState<string | null>(null);
+  const [signalError, setSignalError] = useState<string | null>(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [reportReason, setReportReason] = useState('Harassment or disrespectful behavior');
@@ -485,6 +491,18 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       }}
                     />
                   )}
+                  {isCloudActive && !partnerLeft && (
+                    <MenuItem
+                      icon={<RadioTower className="w-4 h-4" />}
+                      label="Send a Signal"
+                      onClick={() => {
+                        closeMenu();
+                        setSignalError(null);
+                        setSignalNotice(null);
+                        setShowSignalSheet(true);
+                      }}
+                    />
+                  )}
                   <MenuItem
                     icon={isSoundMuted ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                     label={isSoundMuted ? 'Unmute sounds' : 'Mute sounds'}
@@ -824,6 +842,87 @@ export const ChatView: React.FC<ChatViewProps> = ({
             onLeaveChat();
           }}
         />
+      )}
+
+      {showSignalSheet && (
+        <Sheet
+          title="Send a Signal"
+          icon={<RadioTower className="w-5 h-5 text-berry" />}
+          onClose={() => {
+            if (!signalSending) setShowSignalSheet(false);
+          }}
+          footer={
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button onClick={() => setShowSignalSheet(false)} disabled={signalSending} className="btn btn-ghost w-full sm:w-auto">Not now</button>
+              <button
+                disabled={signalSending || signalMessage.trim().length > 240}
+                onClick={async () => {
+                  const currentUser = auth?.currentUser;
+                  if (!currentUser || !isCloudActive || partnerLeft) {
+                    setSignalError('Signals are available only during an active, connected chat.');
+                    return;
+                  }
+                  setSignalSending(true);
+                  setSignalError(null);
+                  setSignalNotice(null);
+                  try {
+                    const token = await currentUser.getIdToken();
+                    const response = await fetch('/api/signals', {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        action: 'create',
+                        recipientId: partner.id,
+                        message: signalMessage.trim(),
+                        idempotencyKey: globalThis.crypto?.randomUUID?.() || `signal-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                      }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                      const errors: Record<string, string> = {
+                        invalid_recipient: 'This chat partner cannot receive a Signal right now.',
+                        not_allowed: 'A Signal cannot be sent between these accounts.',
+                        rate_limited: 'Please wait a little before sending another Signal.',
+                        account_unavailable: 'A Signal cannot be sent between these accounts.',
+                        internal_error: 'Signals is temporarily unavailable. Please try again.',
+                      };
+                      throw new Error(errors[data.error] || 'Could not send your Signal. Please try again.');
+                    }
+                    setShowSignalSheet(false);
+                    setSignalNotice('Signal sent. They can accept or decline privately from their Invitations.');
+                  } catch (err) {
+                    setSignalError(err instanceof Error ? err.message : 'Could not send your Signal. Please try again.');
+                  } finally {
+                    setSignalSending(false);
+                  }
+                }}
+                className="btn btn-primary w-full sm:w-auto"
+              >
+                {signalSending ? 'Sending…' : 'Send Signal'}
+              </button>
+            </div>
+          }
+        >
+          <p className="mb-3 text-sm leading-relaxed text-muted">Let them know you’d like to stay connected. They’ll decide whether to accept; this won’t create a connection or send another chat message.</p>
+          <label htmlFor="signal-message" className="mb-1.5 block text-xs font-semibold text-muted">Optional note · up to 240 characters</label>
+          <textarea
+            id="signal-message"
+            value={signalMessage}
+            onChange={(event) => setSignalMessage(event.target.value)}
+            maxLength={240}
+            rows={3}
+            className="w-full resize-none rounded-xl border border-line bg-surface p-3 text-sm text-fg outline-none focus:border-berry"
+            placeholder="I enjoyed talking with you…"
+          />
+          <div className="mt-1 flex justify-between text-[11px] text-subtle"><span>Only the recipient can see your note.</span><span>{signalMessage.length}/240</span></div>
+          {signalError && <p role="alert" className="mt-3 rounded-xl border border-berry/30 bg-plum/20 p-3 text-sm text-fg">{signalError}</p>}
+        </Sheet>
+      )}
+
+      {signalNotice && (
+        <div role="status" className="fixed bottom-24 left-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border border-berry/30 bg-raised px-4 py-3 text-sm text-fg shadow-xl">
+          <div className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-berry" /><span className="flex-1">{signalNotice}</span><button type="button" onClick={() => setSignalNotice(null)} aria-label="Dismiss Signal notice"><X className="h-4 w-4" /></button></div>
+        </div>
       )}
 
       {showReportModal && (

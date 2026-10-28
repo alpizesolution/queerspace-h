@@ -1160,3 +1160,38 @@ test('Q-07: Queue entries CAN carry short location, gender expression and topic 
   await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), city: 'Cebu City' }));
   await assertFails(alice.doc('match_queue/alice').set({ ...waitingEntry(), intent: 'anything' }));
 });
+
+
+// ------------------------------------------------------------------
+// Signals: server-managed consent records must never be client-accessible.
+// ------------------------------------------------------------------
+test('SIG-01: Clients CANNOT read or create Signals invitations', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('signalsInvitations/invite1234').get());
+  await assertFails(alice.doc('signalsInvitations/invite1234').set({
+    senderId: 'alice',
+    recipientId: 'bob',
+    status: 'pending',
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 60_000),
+  }));
+});
+
+test('SIG-02: Clients CANNOT read or create Signals pairs', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('signalsPairs/invite1234').get());
+  await assertFails(alice.doc('signalsPairs/invite1234').set({
+    invitationId: 'invite1234',
+    participants: ['alice', 'bob'],
+    status: 'active',
+    createdAt: new Date(),
+  }));
+});
+
+test('SIG-03: Clients CANNOT access Signals idempotency or rate-limit records', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('signalsIdempotency/request1234').get());
+  await assertFails(alice.doc('signalsIdempotency/request1234').set({ action: 'create' }));
+  await assertFails(alice.doc('signalsRateLimits/alice').get());
+  await assertFails(alice.doc('signalsRateLimits/alice').set({ lastCreatedAt: new Date() }));
+});
