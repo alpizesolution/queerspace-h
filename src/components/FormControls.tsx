@@ -34,7 +34,7 @@ export const ToggleRow: React.FC<{
     {icon}
     <span className="flex-1 min-w-0">
       <span className="block text-sm font-medium text-fg">{title}</span>
-      {hint && <span className="block text-[12px] text-subtle mt-0.5 truncate">{hint}</span>}
+      {hint && <span className="block text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-0.5 truncate">{hint}</span>}
     </span>
     <input
       type="checkbox"

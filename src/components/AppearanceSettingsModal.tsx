@@ -1,14 +1,17 @@
 import React from 'react';
 import { MoonStar, Sun, X } from 'lucide-react';
+import { FONT_SIZE_OPTIONS, FontSize } from '../utils/fontSize.ts';
 
 interface AppearanceSettingsModalProps {
   theme: 'dark' | 'light';
   onChangeTheme: (theme: 'dark' | 'light') => void;
+  fontSize: FontSize;
+  onChangeFontSize: (size: FontSize) => void;
   onClose: () => void;
 }
 
 export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = ({
-  theme, onChangeTheme, onClose,
+  theme, onChangeTheme, fontSize, onChangeFontSize, onClose,
 }) => (
   <div
     className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 anim-fade"
@@ -56,7 +59,27 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
           <span className="block text-xs text-muted mt-1">Soft lavender</span>
         </button>
       </div>
-      <p className="text-xs text-subtle mt-4">Your choice is saved on this device and applies across the app.</p>
+      <div className="mt-5">
+        <p id="font-size-label" className="text-sm font-semibold text-fg mb-2">Text size</p>
+        <div role="radiogroup" aria-labelledby="font-size-label" className="grid grid-cols-3 gap-1 rounded-full border border-line bg-ink p-1">
+          {FONT_SIZE_OPTIONS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={fontSize === id}
+              onClick={() => onChangeFontSize(id)}
+              className={`h-9 rounded-full text-[13px] font-semibold transition-colors cursor-pointer ${fontSize === id ? 'bg-berry text-ink' : 'text-muted hover:text-fg'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 rounded-xl bg-raised px-3 py-2 text-sm leading-snug text-fg" aria-live="polite">
+          This is how messages and posts will read. <span className="text-xs text-subtle">12:30</span>
+        </p>
+      </div>
+      <p className="text-xs text-subtle mt-4">Your choices are saved on this device and apply across the app.</p>
     </section>
   </div>
 );

@@ -36,27 +36,27 @@ export const ProfilePageSheet: React.FC<ProfilePageSheetProps> = ({ currentPrefs
         <div><p className="text-sm font-medium">Finish your profile</p><p className="text-xs text-muted mt-1">Save your anonymous details before joining discovery.</p></div>
       </div>}
       <section className="rounded-2xl border border-line bg-raised/60 p-4 space-y-2">
-        <p className="text-[11px] uppercase tracking-[0.14em] font-semibold text-subtle">About Me</p>
+        <p className="text-[length:calc(11px_*_var(--fs,1))] uppercase tracking-[0.14em] font-semibold text-subtle">About Me</p>
         {currentPrefs.aboutMe?.trim() ? <p className="text-sm leading-6 whitespace-pre-wrap break-words">{currentPrefs.aboutMe}</p> : <p className="text-sm text-subtle">Nothing here yet.</p>}
-        <p className="text-[11px] text-subtle">{(currentPrefs.aboutMe || '').length}/160 characters</p>
+        <p className="text-[length:calc(11px_*_var(--fs,1))] text-subtle">{(currentPrefs.aboutMe || '').length}/160 characters</p>
       </section>
       <section className="space-y-2">
-        <p className="text-[11px] uppercase tracking-[0.14em] font-semibold text-subtle">My Vibe</p>
+        <p className="text-[length:calc(11px_*_var(--fs,1))] uppercase tracking-[0.14em] font-semibold text-subtle">My Vibe</p>
         {currentPrefs.myVibe ? <span className="inline-flex items-center rounded-full border border-berry/30 bg-berry/10 px-3 py-1.5 text-sm font-medium text-fg">{currentPrefs.myVibe}</span> : <p className="text-sm text-subtle">Optional · not set</p>}
       </section>
       <section className="space-y-2">
-        <p className="text-[11px] uppercase tracking-[0.14em] font-semibold text-subtle">Personal Style</p>
+        <p className="text-[length:calc(11px_*_var(--fs,1))] uppercase tracking-[0.14em] font-semibold text-subtle">Personal Style</p>
         {currentPrefs.personalStyle ? <span className="inline-flex items-center rounded-full border border-berry/30 bg-berry/10 px-3 py-1.5 text-sm font-medium text-fg">{currentPrefs.personalStyle}</span> : <p className="text-sm text-subtle">Optional · not set</p>}
       </section>
       {(currentPrefs.showSexualOrientationOnProfile || currentPrefs.showGenderIdentityOnProfile || currentPrefs.showGenderExpressionOnProfile) && <section className="space-y-3">
-        <p className="text-[11px] uppercase tracking-[0.14em] font-semibold text-subtle">SOGIE · shared fields</p>
+        <p className="text-[length:calc(11px_*_var(--fs,1))] uppercase tracking-[0.14em] font-semibold text-subtle">SOGIE · shared fields</p>
         {currentPrefs.showSexualOrientationOnProfile && currentPrefs.sexualOrientation && <p className="text-sm"><span className="text-muted">Sexual orientation</span><span className="block">{currentPrefs.sexualOrientation === 'Self-described' ? currentPrefs.sexualOrientationCustom : currentPrefs.sexualOrientation}</span></p>}
         {currentPrefs.showGenderIdentityOnProfile && currentPrefs.genderIdentity && <p className="text-sm"><span className="text-muted">Gender identity</span><span className="block">{currentPrefs.genderIdentity === 'Self-described' ? currentPrefs.genderIdentityCustom : currentPrefs.genderIdentity}</span></p>}
         {currentPrefs.showGenderExpressionOnProfile && currentPrefs.genderExpression?.length && <p className="text-sm"><span className="text-muted">Gender expression</span><span className="block">{currentPrefs.genderExpression.join(', ')}</span></p>}
         <p className="text-xs text-subtle">Only the fields you chose to show are shared.</p>
       </section>}
       <section className="space-y-2">
-        <p className="text-[11px] uppercase tracking-[0.14em] font-semibold text-subtle">Looking for</p>
+        <p className="text-[length:calc(11px_*_var(--fs,1))] uppercase tracking-[0.14em] font-semibold text-subtle">Looking for</p>
         <p className="text-sm">{INTENTION_LABELS[currentPrefs.intention] || 'Open to Anything'}</p>
       </section>
       <section className="rounded-2xl border border-line p-4 space-y-3">

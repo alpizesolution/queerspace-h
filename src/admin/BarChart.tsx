@@ -13,8 +13,8 @@ export const BarChart: React.FC<{ title: string; data: DayCount[] }> = ({ title,
   return (
     <figure className="card p-4">
       <figcaption className="flex items-baseline justify-between gap-2">
-        <span className="text-[13px] font-medium text-fg">{title}</span>
-        <span className="text-[12px] text-muted tabular-nums">
+        <span className="text-[length:calc(13px_*_var(--fs,1))] font-medium text-fg">{title}</span>
+        <span className="text-[length:calc(12px_*_var(--fs,1))] text-muted tabular-nums">
           {shown ? `${dayLabel(shown.day)} · ${shown.count}` : `${total} in ${data.length} days`}
         </span>
       </figcaption>
@@ -35,7 +35,7 @@ export const BarChart: React.FC<{ title: string; data: DayCount[] }> = ({ title,
           </button>
         ))}
       </div>
-      <div className="flex justify-between mt-1.5 text-[11px] text-subtle" aria-hidden="true">
+      <div className="flex justify-between mt-1.5 text-[length:calc(11px_*_var(--fs,1))] text-subtle" aria-hidden="true">
         <span>{data.length ? dayLabel(data[0].day) : ''}</span>
         <span>Today</span>
       </div>

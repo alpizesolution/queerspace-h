@@ -443,8 +443,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <AnimalAvatar avatar={partner.avatar} seed={partner.id} className="w-10 h-10" />
 
           <div className="min-w-0 flex-1 pl-2">
-            <h1 className="text-[15px] font-semibold text-fg truncate">{partner.displayName}</h1>
-            <p className="text-[12px] text-muted truncate" aria-live="polite">
+            <h1 className="text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg truncate">{partner.displayName}</h1>
+            <p className="text-[length:calc(12px_*_var(--fs,1))] text-muted truncate" aria-live="polite">
               <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${partnerLeft ? 'bg-subtle' : 'bg-emerald-400'}`} />
               {partner.pronouns}{partner.age ? ` · ${partner.age}` : ''} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}
               {visibleLocation && <> · {visibleLocation}</>}
@@ -549,7 +549,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       >
         {/* Match context */}
         <div className="text-center mb-5 space-y-2">
-          <p className="text-[12px] text-subtle">
+          <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">
             Looking for <span className="text-muted font-medium">{INTENTION_LABELS[partner.intention] ?? partner.intention}</span>
             {partner.topics.length > 0 && <> · {partner.topics.slice(0, 2).join(', ')}</>}
           </p>
@@ -567,7 +567,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           {messages.map((msg, i) => {
             if (msg.sender === 'system') {
               return (
-                <p key={msg.id} className="text-center text-[12px] text-subtle px-6 py-2">
+                <p key={msg.id} className="text-center text-[length:calc(12px_*_var(--fs,1))] text-subtle px-6 py-2">
                   {msg.text}
                 </p>
               );
@@ -591,7 +591,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 >
                   <div
                     id={`msg-${msg.id}`}
-                    className={`px-3.5 py-2 text-[15px] leading-snug rounded-[20px] ${
+                    className={`px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug rounded-[20px] ${
                       isUser
                         ? `bg-plum text-fg ${lastInGroup ? 'rounded-br-md' : ''}`
                         : `bg-raised text-fg ${lastInGroup ? 'rounded-bl-md' : ''}`
@@ -606,10 +606,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         className="block w-full text-left mb-1.5 -mx-1 px-2.5 py-1.5 rounded-xl bg-black/20 border-l-2 border-berry cursor-pointer"
                         aria-label={`Replying to: ${msg.replyTo.text}`}
                       >
-                        <span className="block text-[12px] font-semibold text-berry">
+                        <span className="block text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry">
                           {msg.replyTo.sender === 'user' ? 'You' : partner.displayName}
                         </span>
-                        <span className="block text-[13px] text-fg/75 line-clamp-2 break-words">{msg.replyTo.text}</span>
+                        <span className="block text-[length:calc(13px_*_var(--fs,1))] text-fg/75 line-clamp-2 break-words">{msg.replyTo.text}</span>
                       </button>
                     )}
                     <p className="whitespace-pre-wrap break-words">{msg.text}</p>
@@ -624,7 +624,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         onClick={() => handleToggleReaction(msg.id, r.emoji)}
                         aria-pressed={!!r.userReacted}
                         aria-label={`${r.emoji} reaction, ${r.count}`}
-                        className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[12px] border cursor-pointer ${
+                        className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[length:calc(12px_*_var(--fs,1))] border cursor-pointer ${
                           r.userReacted ? 'bg-plum/60 border-berry/60 text-fg' : 'bg-surface border-line text-muted'
                         }`}
                       >
@@ -637,7 +637,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
                 <div className={`flex items-center gap-1 mt-0.5 px-1 ${isUser ? 'flex-row-reverse' : ''}`}>
                   {lastInGroup && (
-                    <span className="text-[11px] text-subtle flex items-center gap-1">
+                    <span className="text-[length:calc(11px_*_var(--fs,1))] text-subtle flex items-center gap-1">
                       {formatChatTime(msg.timestamp)}
                       {isUser && <Check className="w-3 h-3" aria-label="Sent" />}
                     </span>
@@ -656,7 +656,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           handleToggleReaction(msg.id, emoji);
                           setActiveMessageId(null);
                         }}
-                        className={`${showActions ? 'w-9 h-9 text-[19px]' : 'w-7 h-7 text-[14px]'} rounded-full hover:bg-surface cursor-pointer transition-transform active:scale-125`}
+                        className={`${showActions ? 'w-9 h-9 text-[length:calc(19px_*_var(--fs,1))]' : 'w-7 h-7 text-[length:calc(14px_*_var(--fs,1))]'} rounded-full hover:bg-surface cursor-pointer transition-transform active:scale-125`}
                         aria-label={`React with ${emoji}`}
                       >
                         {emoji}
@@ -685,7 +685,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce" />
                 <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:0.15s]" />
                 <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:0.3s]" />
-                <span className="ml-1.5 text-[12px] text-lavender">Stranger is typing…</span>
+                <span className="ml-1.5 text-[length:calc(12px_*_var(--fs,1))] text-lavender">Stranger is typing…</span>
               </div>
             </div>
           )}
@@ -697,7 +697,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       {/* Composer, or next steps once the partner has left */}
       {partnerLeft ? (
         <div className="border-t border-line bg-ink px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-center anim-fade">
-          <p className="text-[14px] text-muted mb-3">{partner.displayName} left the chat.</p>
+          <p className="text-[length:calc(14px_*_var(--fs,1))] text-muted mb-3">{partner.displayName} left the chat.</p>
           <div className="flex flex-col sm:flex-row gap-2 sm:justify-center">
             <button onClick={onNextMatch} className="btn btn-primary">
               Find someone new
@@ -715,7 +715,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <button
                   key={prompt}
                   onClick={() => handleSendMessage(prompt)}
-                  className="chip h-8 text-[12px] shrink-0"
+                  className="chip h-8 text-[length:calc(12px_*_var(--fs,1))] shrink-0"
                 >
                   {prompt}
                 </button>
@@ -724,7 +724,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           )}
 
           {inputError && (
-            <p role="alert" className="mx-3 mt-2 px-3 py-2 rounded-xl bg-danger/10 text-danger text-[13px] flex items-center gap-1.5">
+            <p role="alert" className="mx-3 mt-2 px-3 py-2 rounded-xl bg-danger/10 text-danger text-[length:calc(13px_*_var(--fs,1))] flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
               {inputError}
             </p>
@@ -734,10 +734,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <div className="mx-3 mt-2 flex items-center gap-2.5 pl-3 pr-1 py-1.5 rounded-xl bg-surface border-l-2 border-berry anim-fade">
               <Reply className="w-4 h-4 text-berry shrink-0" />
               <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-semibold text-berry">
+                <p className="text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry">
                   Replying to {replyingTo.sender === 'user' ? 'yourself' : partner.displayName}
                 </p>
-                <p className="text-[13px] text-muted truncate">{replyingTo.text}</p>
+                <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted truncate">{replyingTo.text}</p>
               </div>
               <button
                 type="button"
@@ -792,7 +792,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               aria-label={`Message ${partner.displayName}`}
               enterKeyHint={coarsePointer ? 'enter' : 'send'}
               autoComplete="off"
-              className="flex-1 min-w-0 min-h-11 max-h-[7.5rem] px-4 py-[10px] leading-6 resize-none overflow-y-auto rounded-[22px] bg-surface border border-line text-base sm:text-[15px] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
+              className="flex-1 min-w-0 min-h-11 max-h-[7.5rem] px-4 py-[10px] leading-6 resize-none overflow-y-auto rounded-[22px] bg-surface border border-line text-base sm:text-[length:calc(15px_*_var(--fs,1))] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
             />
 
             <button
@@ -944,7 +944,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             className="w-full resize-none rounded-xl border border-line bg-surface p-3 text-sm text-fg outline-none focus:border-berry"
             placeholder="I enjoyed talking with you…"
           />
-          <div className="mt-1 flex justify-between text-[11px] text-subtle"><span>Only the recipient can see your note.</span><span>{signalMessage.length}/240</span></div>
+          <div className="mt-1 flex justify-between text-[length:calc(11px_*_var(--fs,1))] text-subtle"><span>Only the recipient can see your note.</span><span>{signalMessage.length}/240</span></div>
           {signalError && <p role="alert" className="mt-3 rounded-xl border border-berry/30 bg-plum/20 p-3 text-sm text-fg">{signalError}</p>}
         </Sheet>
       )}

@@ -210,8 +210,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
             ? <AnimalAvatar avatar={partner?.avatar} seed={pairId} className="h-9 w-9" />
             : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-lavender/20 bg-plum/30 text-lavender"><MessageCircle className="h-4 w-4" /></div>}
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[15px] font-semibold leading-tight text-fg" title={partnerName}>{partnerName}</h1>
-            <p className="truncate text-[11px] leading-tight text-subtle">{ended ? 'Connection ended' : 'Private conversation · just the two of you'}</p>
+            <h1 className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg" title={partnerName}>{partnerName}</h1>
+            <p className="truncate text-[length:calc(11px_*_var(--fs,1))] leading-tight text-subtle">{ended ? 'Connection ended' : 'Private conversation · just the two of you'}</p>
           </div>
           <button type="button" onClick={() => void loadMessages()} disabled={loading} aria-label="Refresh messages" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-fg disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -261,14 +261,14 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                         className={`min-w-0 max-w-full cursor-pointer rounded-2xl px-3 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}
                       >
                         {message.replyTo && (
-                          <div className={`mb-1 rounded-md border-l-2 px-2 py-0.5 text-[11px] leading-snug ${mine ? 'border-ink/40 bg-ink/10 text-ink/80' : 'border-lavender bg-surface/70 text-muted'}`}>
+                          <div className={`mb-1 rounded-md border-l-2 px-2 py-0.5 text-[length:calc(11px_*_var(--fs,1))] leading-snug ${mine ? 'border-ink/40 bg-ink/10 text-ink/80' : 'border-lavender bg-surface/70 text-muted'}`}>
                             <p className="font-semibold">{message.replyTo.senderId === userId ? 'You' : partnerName}</p>
                             <p className="line-clamp-1 break-words">{message.replyTo.text}</p>
                           </div>
                         )}
                         <div className="flex flex-wrap items-end justify-end gap-x-2">
-                          <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap break-words text-[15px] leading-snug">{message.text}</p>
-                          {message.createdAt && <span className={`ml-auto translate-y-px select-none text-[10px] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
+                          <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap break-words text-[length:calc(15px_*_var(--fs,1))] leading-snug">{message.text}</p>
+                          {message.createdAt && <span className={`ml-auto translate-y-px select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
                         </div>
                       </div>
                       {((message.reactions || []).length > 0 || open) && (
@@ -280,7 +280,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           ))}
                           {open && !ended && (
                             <>
-                              <button type="button" onClick={() => { setReplyingTo(message); setActiveId(null); textareaRef.current?.focus(); }} aria-label="Reply to message" className="flex h-8 items-center gap-1 rounded-full px-2 text-[11px] text-muted transition hover:bg-raised hover:text-fg">
+                              <button type="button" onClick={() => { setReplyingTo(message); setActiveId(null); textareaRef.current?.focus(); }} aria-label="Reply to message" className="flex h-8 items-center gap-1 rounded-full px-2 text-[length:calc(11px_*_var(--fs,1))] text-muted transition hover:bg-raised hover:text-fg">
                                 <Reply className="h-3.5 w-3.5" /> Reply
                               </button>
                               {['💜', '🥹', '😂', '✨'].map((emoji) => (
@@ -321,7 +321,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
               <div className="mb-1.5 flex items-center gap-2 rounded-xl border border-line bg-raised/70 px-3 py-1.5">
                 <Reply className="h-4 w-4 shrink-0 text-lavender" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-semibold text-muted">Replying to {replyingTo.senderId === userId ? 'yourself' : partnerName}</p>
+                  <p className="text-[length:calc(10px_*_var(--fs,1))] font-semibold text-muted">Replying to {replyingTo.senderId === userId ? 'yourself' : partnerName}</p>
                   <p className="truncate text-xs text-fg">{replyingTo.text}</p>
                 </div>
                 <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancel reply" className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:text-fg"><X className="h-4 w-4" /></button>
@@ -340,7 +340,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 rows={1}
                 maxLength={1000}
                 disabled={sending}
-                className="max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-2xl border border-line bg-raised px-3.5 py-2 text-[15px] leading-snug text-fg outline-none placeholder:text-subtle focus:border-berry/60 disabled:opacity-60"
+                className="max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-2xl border border-line bg-raised px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug text-fg outline-none placeholder:text-subtle focus:border-berry/60 disabled:opacity-60"
               />
               <button type="submit" disabled={!draft.trim() || sending} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-berry text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
                 {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

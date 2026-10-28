@@ -71,7 +71,7 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
               ? 'Finding someone…'
               : 'Finding your match…'}
         </h1>
-        <p className="mt-2 text-[15px] text-muted">
+        <p className="mt-2 text-[length:calc(15px_*_var(--fs,1))] text-muted">
           {error
             ? error
             : searchTimedOut
@@ -108,7 +108,7 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
           </button>
         </div>
 
-        <p className="mt-6 flex items-center justify-center gap-1.5 text-[13px] text-subtle">
+        <p className="mt-6 flex items-center justify-center gap-1.5 text-[length:calc(13px_*_var(--fs,1))] text-subtle">
           <Shield className="w-3.5 h-3.5" />
           Anonymous and protected
         </p>

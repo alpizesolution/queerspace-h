@@ -53,10 +53,10 @@ export const Header: React.FC<HeaderProps> = ({
           alt=""
           className="w-8 h-8 rounded-[10px] object-cover border border-line shrink-0"
         />
-        <AnimatedBrandTitle sizeClass="text-[15px] min-[380px]:text-[17px] sm:text-lg" />
+        <AnimatedBrandTitle sizeClass="text-[length:calc(15px_*_var(--fs,1))] min-[380px]:text-[length:calc(17px_*_var(--fs,1))] sm:text-lg" />
       </button>
 
-      <nav className="hidden desk:flex items-center gap-1 mx-auto" aria-label="Main">
+      <nav className="hidden desk:flex items-center gap-1 mx-auto [--fs:1]" aria-label="Main">
         {NAV_ITEMS.map(({ id, label }) => {
           const active = isNavActive(id, currentView);
           return (
@@ -69,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               {label}
-              {(badges[id] ?? 0) > 0 && <span aria-label={`${badges[id]} pending`} className="ml-1.5 inline-block min-w-[16px] rounded-full bg-berry px-1 text-center text-[10px] font-bold leading-4 text-ink">{badges[id]! > 9 ? '9+' : badges[id]}</span>}
+              {(badges[id] ?? 0) > 0 && <span aria-label={`${badges[id]} pending`} className="ml-1.5 inline-block min-w-[16px] rounded-full bg-berry px-1 text-center text-[length:calc(10px_*_var(--fs,1))] font-bold leading-4 text-ink">{badges[id]! > 9 ? '9+' : badges[id]}</span>}
             </button>
           );
         })}

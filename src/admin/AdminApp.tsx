@@ -76,12 +76,12 @@ const Shell: React.FC<{ children: React.ReactNode; user?: User | null }> = ({ ch
           <ArrowLeft className="w-[18px] h-[18px]" />
         </a>
         <img src="/icon-192.png" alt="" className="w-7 h-7 rounded-[9px] border border-line" />
-        <p className="font-serif font-semibold text-[17px] tracking-tight">
+        <p className="font-serif font-semibold text-[length:calc(17px_*_var(--fs,1))] tracking-tight">
           Admin
         </p>
         {user && isGoogleUser(user) && (
           <div className="ml-auto flex items-center gap-1 min-w-0">
-            <span className="text-[12px] text-subtle truncate hidden sm:block">{user.email}</span>
+            <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle truncate hidden sm:block">{user.email}</span>
             <button onClick={() => signOutAdmin()} className="icon-btn" aria-label="Sign out" title="Sign out">
               <LogOut className="w-[18px] h-[18px]" />
             </button>
@@ -184,12 +184,12 @@ export default function AdminApp() {
       <Shell user={user}>
         <Centered>
           <h1 className="text-xl font-semibold tracking-tight">Admin sign-in</h1>
-          <p className="text-[13px] text-muted mt-1.5 mb-6">For the QUEERSPACE PH team only.</p>
+          <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1.5 mb-6">For the QUEERSPACE PH team only.</p>
           <button onClick={handleSignIn} className="btn btn-primary w-full">
             Sign in with Google
           </button>
           {signInError && (
-            <p className="text-[13px] text-danger mt-3" role="alert">
+            <p className="text-[length:calc(13px_*_var(--fs,1))] text-danger mt-3" role="alert">
               {signInError}
             </p>
           )}
@@ -204,7 +204,7 @@ export default function AdminApp() {
       <Shell user={user}>
         <Centered>
           <h1 className="text-xl font-semibold tracking-tight">Not an admin yet</h1>
-          <p className="text-[13px] text-muted mt-1.5">
+          <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1.5">
             Signed in as {user!.email}. To give this account access, open Firebase → Firestore Database and add a
             document to a collection named <b className="text-fg">admins</b> with this ID:
           </p>
@@ -215,13 +215,13 @@ export default function AdminApp() {
                 setTimeout(() => setCopied(false), 1500);
               });
             }}
-            className="mt-4 w-full flex items-center justify-between gap-2 rounded-xl border border-line bg-raised px-3 py-2.5 text-left font-mono text-[12px] text-fg cursor-pointer"
+            className="mt-4 w-full flex items-center justify-between gap-2 rounded-xl border border-line bg-raised px-3 py-2.5 text-left font-mono text-[length:calc(12px_*_var(--fs,1))] text-fg cursor-pointer"
           >
             <span className="truncate">{uid}</span>
             {copied ? <Check className="w-4 h-4 text-berry shrink-0" /> : <Copy className="w-4 h-4 text-muted shrink-0" />}
           </button>
-          <p className="text-[12px] text-subtle mt-3">Give it any field, for example role: owner.</p>
-          <p className="text-[12px] mt-3 text-danger" role="status">
+          <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-3">Give it any field, for example role: owner.</p>
+          <p className="text-[length:calc(12px_*_var(--fs,1))] mt-3 text-danger" role="status">
             {adminCheck === 'blocked'
               ? 'Firestore blocked the check. Publish the latest rules, wait a minute, then check again.'
               : adminCheck === 'error'
@@ -302,7 +302,7 @@ const Dashboard: React.FC = () => {
           >
             {label}
             {badge ? (
-              <span className={`ml-1.5 text-[11px] font-semibold ${tab === id ? 'text-plum' : 'text-berry'}`}>{badge}</span>
+              <span className={`ml-1.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold ${tab === id ? 'text-plum' : 'text-berry'}`}>{badge}</span>
             ) : null}
           </button>
         ))}
@@ -324,10 +324,10 @@ const Dashboard: React.FC = () => {
                 key={id}
                 onClick={() => setInboxView(id)}
                 aria-pressed={inboxView === id}
-                className={`chip h-8 px-3 text-[13px] ${inboxView === id ? '!bg-raised !text-fg !border-line-strong' : ''}`}
+                className={`chip h-8 px-3 text-[length:calc(13px_*_var(--fs,1))] ${inboxView === id ? '!bg-raised !text-fg !border-line-strong' : ''}`}
               >
                 {label}
-                {count ? <span className="ml-1 text-[11px] font-semibold text-berry">{count}</span> : null}
+                {count ? <span className="ml-1 text-[length:calc(11px_*_var(--fs,1))] font-semibold text-berry">{count}</span> : null}
               </button>
             ))}
           </div>
@@ -357,9 +357,9 @@ const Dashboard: React.FC = () => {
                 }`}
               >
                 <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.25 : 1.75} />
-                <span className="text-[11px] font-medium leading-none">{short}</span>
+                <span className="text-[length:calc(11px_*_var(--fs,1))] font-medium leading-none">{short}</span>
                 {badge ? (
-                  <span className="absolute top-1.5 left-1/2 ml-2 min-w-4 h-4 px-1 rounded-full bg-berry text-ink text-[10px] font-bold flex items-center justify-center">
+                  <span className="absolute top-1.5 left-1/2 ml-2 min-w-4 h-4 px-1 rounded-full bg-berry text-ink text-[length:calc(10px_*_var(--fs,1))] font-bold flex items-center justify-center">
                     {badge > 9 ? '9+' : badge}
                   </span>
                 ) : null}
@@ -391,9 +391,9 @@ const Dashboard: React.FC = () => {
 
 const Stat: React.FC<{ label: string; value: number | string; note?: string }> = ({ label, value, note }) => (
   <div className="card p-4">
-    <p className="text-[12px] text-muted">{label}</p>
+    <p className="text-[length:calc(12px_*_var(--fs,1))] text-muted">{label}</p>
     <p className="text-2xl font-semibold tracking-tight mt-1 tabular-nums">{value}</p>
-    {note && <p className="text-[12px] text-subtle mt-0.5">{note}</p>}
+    {note && <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-0.5">{note}</p>}
   </div>
 );
 
@@ -428,7 +428,7 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
       {error && <p className="card p-4 text-sm text-danger">Couldn’t load stats. Try refreshing.</p>}
 
       {stats?.indexLink && (
-        <div className="card p-4 text-[13px] text-muted">
+        <div className="card p-4 text-[length:calc(13px_*_var(--fs,1))] text-muted">
           <p className="text-fg font-medium">One-time setup for member growth</p>
           <p className="mt-1">
             Firestore needs an index to count new members by day.{' '}
@@ -462,7 +462,7 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
             <BarChart title="New members" data={stats.memberDays} />
             <BarChart title="Chats started" data={stats.chatDays} />
           </div>
-          <p className="text-[12px] text-subtle">
+          <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">
             Members are people who finished setting up a profile. Join dates are tracked from this update on, so older
             members show up in the total but not in the daily chart.
           </p>
@@ -548,9 +548,9 @@ const SuggestionsTab: React.FC<InboxProps<AdminSuggestion>> = ({ items, setItems
             <li key={s.id} className="card p-4">
               <div className="flex items-center gap-2 mb-2">
                 <span className="tag capitalize">{s.category}</span>
-                <span className="text-[12px] text-subtle">{formatAgo(s.createdAt)}</span>
+                <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">{formatAgo(s.createdAt)}</span>
               </div>
-              <p className="text-[15px] text-fg leading-relaxed whitespace-pre-wrap break-words">{s.text}</p>
+              <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg leading-relaxed whitespace-pre-wrap break-words">{s.text}</p>
               <div className="flex gap-2 mt-3">
                 <StatusButton status={s.status} onToggle={() => toggle(s)} />
                 <button
@@ -651,7 +651,7 @@ const ReportsTab: React.FC<InboxProps<AdminReport>> = ({ items, setItems, onConf
   return (
     <div>
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Reports</h1>
-      <p className="text-[13px] text-muted mb-4">Flagged Unsaid posts can be restored or removed under Moderation.</p>
+      <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mb-4">Flagged Unsaid posts can be restored or removed under Moderation.</p>
       {chips}
       {!items ? (
         <Skeleton />
@@ -669,12 +669,12 @@ const ReportsTab: React.FC<InboxProps<AdminReport>> = ({ items, setItems, onConf
                   </span>
                 )}
                 {(reportCounts[r.targetId] ?? 0) > 1 && (
-                  <span className="text-[12px] font-medium text-danger">{reportCounts[r.targetId]} reports</span>
+                  <span className="text-[length:calc(12px_*_var(--fs,1))] font-medium text-danger">{reportCounts[r.targetId]} reports</span>
                 )}
-                <span className="text-[12px] text-subtle">{formatAgo(r.createdAt)}</span>
+                <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">{formatAgo(r.createdAt)}</span>
               </div>
-              <p className="text-[15px] text-fg">{r.reason.replace(/^Unsaid:\s*/, '')}</p>
-              <p className="text-[12px] text-subtle mt-1 font-mono break-all">
+              <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg">{r.reason.replace(/^Unsaid:\s*/, '')}</p>
+              <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-1 font-mono break-all">
                 {r.targetType === 'user' ? 'user' : 'id'}: {r.targetId}
               </p>
               <div className="flex gap-2 mt-3">
@@ -751,8 +751,8 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
       {error && <p className="card p-4 text-sm text-danger">Some items couldn’t load. Try again.</p>}
 
       <section>
-        <h2 className="text-[15px] font-semibold mb-1">Flagged on Unsaid</h2>
-        <p className="text-[13px] text-muted mb-3">Posts with 3 or more flags are hidden from everyone.</p>
+        <h2 className="text-[length:calc(15px_*_var(--fs,1))] font-semibold mb-1">Flagged on Unsaid</h2>
+        <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mb-3">Posts with 3 or more flags are hidden from everyone.</p>
         {!unsaid ? (
           <Skeleton />
         ) : unsaid.length === 0 ? (
@@ -765,12 +765,12 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
                   <span className={`tag ${p.kind === 'confession' ? '!text-lavender' : '!text-berry'}`}>
                     {p.kind === 'confession' ? 'Confession' : 'Vent'}
                   </span>
-                  <span className={`text-[12px] ${p.flags >= 3 ? 'text-danger' : 'text-subtle'}`}>
+                  <span className={`text-[length:calc(12px_*_var(--fs,1))] ${p.flags >= 3 ? 'text-danger' : 'text-subtle'}`}>
                     {p.flags} {p.flags === 1 ? 'flag' : 'flags'}
                     {p.flags >= 3 ? ' · hidden' : ''}
                   </span>
                 </div>
-                <p className="font-serif text-[17px] text-fg leading-relaxed whitespace-pre-wrap break-words">{p.text}</p>
+                <p className="font-serif text-[length:calc(17px_*_var(--fs,1))] text-fg leading-relaxed whitespace-pre-wrap break-words">{p.text}</p>
                 <div className="flex gap-2 mt-3">
                   <button
                     onClick={async () => {
@@ -805,8 +805,8 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
       </section>
 
       <section>
-        <h2 className="text-[15px] font-semibold mb-1">Community</h2>
-        <p className="text-[13px] text-muted mb-3">Latest posts. Deleting one removes it for everyone.</p>
+        <h2 className="text-[length:calc(15px_*_var(--fs,1))] font-semibold mb-1">Community</h2>
+        <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mb-3">Latest posts. Deleting one removes it for everyone.</p>
         {!community ? (
           <Skeleton />
         ) : community.length === 0 ? (
@@ -816,11 +816,11 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
             {community.map((p) => (
               <li key={p.id} className="flex items-start gap-3 p-3 sm:p-4">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[12px] text-subtle">
+                  <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">
                     <span className="text-muted font-medium">{p.author}</span> · {formatAgo(p.timestamp, now)}
                   </p>
-                  <p className="text-[14px] text-fg font-medium break-words">{p.title}</p>
-                  <p className="text-[13px] text-muted break-words line-clamp-2">{p.content}</p>
+                  <p className="text-[length:calc(14px_*_var(--fs,1))] text-fg font-medium break-words">{p.title}</p>
+                  <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted break-words line-clamp-2">{p.content}</p>
                 </div>
                 <button
                   onClick={() =>

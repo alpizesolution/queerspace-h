@@ -70,7 +70,7 @@ export const Sheet: React.FC<SheetProps> = ({
         <div className="sm:hidden mx-auto mt-2.5 h-1 w-10 rounded-full bg-line-strong" aria-hidden="true" />
         <div className="flex items-center gap-3 px-5 sm:px-6 pt-4 pb-3">
           {icon}
-          <h2 id={titleId} className="flex-1 min-w-0 text-[17px] font-semibold text-fg truncate">
+          <h2 id={titleId} className="flex-1 min-w-0 text-[length:calc(17px_*_var(--fs,1))] font-semibold text-fg truncate">
             {title}
           </h2>
           {!hideClose && (

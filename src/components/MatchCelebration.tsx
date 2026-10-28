@@ -48,8 +48,8 @@ export const MatchCelebration: React.FC<MatchCelebrationProps> = ({ me, partner,
           ♥
         </span>
       </div>
-      <p className="match-title mt-6 font-serif text-[30px] font-semibold text-fg">You matched!</p>
-      <p className="match-subtitle mt-1 text-[14px] text-muted">
+      <p className="match-title mt-6 font-serif text-[length:calc(30px_*_var(--fs,1))] font-semibold text-fg">You matched!</p>
+      <p className="match-subtitle mt-1 text-[length:calc(14px_*_var(--fs,1))] text-muted">
         Say hi to <span className="text-berry font-medium">{partner.name}</span>
       </p>
     </div>

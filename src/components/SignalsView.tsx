@@ -198,7 +198,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
           <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-ink bg-lavender" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-lavender">A private frequency</p>
+          <p className="text-[length:calc(10px_*_var(--fs,1))] font-semibold uppercase tracking-[0.22em] text-lavender">A private frequency</p>
           <h1 id="signals-title" className="mt-0.5 font-serif text-2xl font-semibold leading-tight tracking-tight text-fg sm:text-3xl">
             Signals
           </h1>
@@ -217,7 +217,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
 
       <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-line bg-raised/60 px-3 py-2.5">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-lavender" />
-        <p className="text-[11px] leading-snug text-muted">
+        <p className="text-[length:calc(11px_*_var(--fs,1))] leading-snug text-muted">
           Only you can view your connections. Ending one closes it here; no message is sent.
         </p>
       </div>
@@ -247,13 +247,13 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
         <>
           <div className="mb-5" ref={invitationsRef}>
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Inbox className="h-4 w-4 text-lavender" /> Invitations{pendingReceived.length > 0 && <span className="rounded-full bg-berry px-2 py-0.5 text-[10px] font-bold text-ink">{pendingReceived.length} new</span>}</h2>
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Inbox className="h-4 w-4 text-lavender" /> Invitations{pendingReceived.length > 0 && <span className="rounded-full bg-berry px-2 py-0.5 text-[length:calc(10px_*_var(--fs,1))] font-bold text-ink">{pendingReceived.length} new</span>}</h2>
               <span className="rounded-full border border-line px-2.5 py-1 text-xs tabular-nums text-muted">{pendingReceived.length + pendingSent.length}</span>
             </div>
             {pendingReceived.length === 0 && pendingSent.length === 0 ? (
               <div className="rounded-xl border border-dashed border-line px-3 py-3 text-center">
                 <p className="text-sm text-muted">No pending invitations.</p>
-                <p className="mt-1 text-[11px] leading-snug text-subtle">When someone sends a Signal, you decide whether to accept.</p>
+                <p className="mt-1 text-[length:calc(11px_*_var(--fs,1))] leading-snug text-subtle">When someone sends a Signal, you decide whether to accept.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -265,7 +265,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
                         <p className="text-sm font-semibold text-fg">Someone would like to connect</p>
                         <p className="mt-1 text-xs text-muted">Received {formatDate(invitation.createdAt)}</p>
                         {invitation.message && <p className="mt-3 whitespace-pre-wrap break-words rounded-xl bg-surface/70 p-3 text-sm leading-relaxed text-fg">{invitation.message}</p>}
-                        <p className="mt-2 text-[11px] leading-relaxed text-subtle">Accept only if you feel comfortable. You can end a connection later.</p>
+                        <p className="mt-2 text-[length:calc(11px_*_var(--fs,1))] leading-relaxed text-subtle">Accept only if you feel comfortable. You can end a connection later.</p>
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-line pt-3">
@@ -310,7 +310,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
                       <p className="truncate text-sm font-semibold text-fg">{pair.partner?.displayName || 'Anonymous member'}</p>
                       <p className="mt-1 text-xs text-muted">Connected {formatDate(pair.createdAt)}</p>
                     </div>
-                    <span className="rounded-full bg-lavender/10 px-2.5 py-1 text-[10px] font-semibold text-lavender">Active</span>
+                    <span className="rounded-full bg-lavender/10 px-2.5 py-1 text-[length:calc(10px_*_var(--fs,1))] font-semibold text-lavender">Active</span>
                   </div>
                   <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-line pt-3">
                     <button
@@ -348,7 +348,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
                       <p className="text-sm text-muted">Connection ended</p>
                       <p className="mt-0.5 text-xs text-subtle">{formatDate(pair.endedAt || pair.createdAt)}</p>
                     </div>
-                    <span className="text-[10px] uppercase tracking-wider text-subtle">Closed</span>
+                    <span className="text-[length:calc(10px_*_var(--fs,1))] uppercase tracking-wider text-subtle">Closed</span>
                   </div>
                 ))}
               </div>

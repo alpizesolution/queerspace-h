@@ -16,6 +16,8 @@
     <script>
       try {
         document.documentElement.dataset.theme = localStorage.getItem('queerspace_theme') === 'light' ? 'light' : 'dark';
+        var fs = localStorage.getItem('queerspace_font_size');
+        document.documentElement.dataset.fontsize = fs === 'medium' || fs === 'large' ? fs : 'small';
       } catch (_) {
         document.documentElement.dataset.theme = 'dark';
       }
