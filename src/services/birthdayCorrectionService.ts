@@ -47,6 +47,18 @@ export async function listPendingCorrections(): Promise<PendingCorrection[]> {
   return ok ? data.requests ?? [] : [];
 }
 
+export interface CleanupResult {
+  dryRun: boolean;
+  profiles: { scanned: number; changed: number };
+  queue: { scanned: number; changed: number };
+}
+
+/** Admin only: removes legacy age fields. A dry run only counts what it would change. */
+export async function runAgePrivacyCleanup(dryRun: boolean): Promise<CleanupResult | null> {
+  const { ok, data } = await ageRequest<CleanupResult>('/api/age', { action: 'migrate-age-privacy', dryRun });
+  return ok ? data : null;
+}
+
 export async function decideCorrection(requestId: string, decision: 'approve' | 'reject'): Promise<boolean> {
   const { ok } = await ageRequest('/api/age', { action: 'decide-correction', requestId, decision });
   return ok;

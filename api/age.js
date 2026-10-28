@@ -4,6 +4,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import {
   MINIMUM_AGE, HttpError, ageFromDate, ageFromTimestamp, authenticate, parseBirthDate, rateLimit, requireAdmin, safeId, send, sendError,
 } from './_lib.js';
+import { migrateAgePrivacy } from '../scripts/migrate-age-privacy.mjs';
 
 const REASON_MAX = 200;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -102,6 +103,14 @@ export default async function handler(req, res) {
         return 'pending';
       });
       return send(res, status === 'pending' ? 201 : 200, { status });
+    }
+
+    // Admin-only, idempotent cleanup of legacy age fields (age on profiles; age and range on queue entries).
+    // It runs with the server's own credentials, so no secret ever leaves Vercel. Counts only are returned.
+    if (action === 'migrate-age-privacy') {
+      await requireAdmin(db, decoded);
+      const result = await migrateAgePrivacy(db, { dryRun: req.body.dryRun !== false });
+      return send(res, 200, result);
     }
 
     if (action === 'decide-correction') {

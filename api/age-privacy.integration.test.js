@@ -256,3 +256,22 @@ test('migration: removes only age fields, never documents, and is idempotent', {
   assert.equal(second.profiles.changed, 0);
   assert.equal(second.queue.changed, 0);
 });
+
+test('migration endpoint: admin only, dry run by default, idempotent', { skip }, async () => {
+  const { age, db } = await load();
+  const admin = await newGoogleAdmin(db);
+  const member = await newUser();
+  await db.doc('users/endpointa/public/profile').set({ displayName: 'A', age: 29, aboutMe: 'keep' });
+  await db.doc('match_queue/endpointq').set({ status: 'waiting', age: 30, ageMin: 20, ageMax: 40, intent: 'open' });
+  assert.equal((await call(age, { token: member.token, body: { action: 'migrate-age-privacy', dryRun: false } })).statusCode, 403);
+  assert.equal((await call(age, { body: { action: 'migrate-age-privacy' } })).statusCode, 401);
+  const dry = await call(age, { token: admin.token, body: { action: 'migrate-age-privacy' } });
+  assert.equal(dry.body.dryRun, true);
+  assert.equal((await db.doc('users/endpointa/public/profile').get()).data().age, 29);
+  const real = await call(age, { token: admin.token, body: { action: 'migrate-age-privacy', dryRun: false } });
+  assert.equal(real.body.profiles.changed, 1);
+  assert.deepEqual((await db.doc('users/endpointa/public/profile').get()).data(), { displayName: 'A', aboutMe: 'keep' });
+  assert.deepEqual((await db.doc('match_queue/endpointq').get()).data(), { status: 'waiting', intent: 'open' });
+  const again = await call(age, { token: admin.token, body: { action: 'migrate-age-privacy', dryRun: false } });
+  assert.equal(again.body.profiles.changed + again.body.queue.changed, 0);
+});
