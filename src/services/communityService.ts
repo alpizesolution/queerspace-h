@@ -55,7 +55,6 @@ export function toCommunityPost(id: string, data: Record<string, unknown>): Comm
     content: String(data.content ?? ''),
     timestamp: toMillis(data.timestamp),
     likes: Math.max(0, Number(data.likes) || 0),
-    views: Math.max(0, Number(data.views) || 0),
     replyCount: Math.max(0, Number(data.replyCount) || 0),
     replies: [],
     tags: Array.isArray(data.tags) ? data.tags.map(String).slice(0, 4) : [],

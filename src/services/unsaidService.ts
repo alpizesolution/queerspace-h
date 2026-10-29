@@ -65,8 +65,6 @@ export interface UnsaidPost {
   strong: number;
   proud: number;
   cry: number;
-  /** Members who have seen this Echo; missing on older ones, so it counts from 0. */
-  views: number;
   flags: number;
 }
 
@@ -158,7 +156,6 @@ export function toUnsaidPost(id: string, data: Record<string, unknown>): UnsaidP
     strong: Number(data.strong) || 0,
     proud: Number(data.proud) || 0,
     cry: Number(data.cry) || 0,
-    views: Math.max(0, Number(data.views) || 0),
     flags: Number(data.flags) || 0,
   };
 }
