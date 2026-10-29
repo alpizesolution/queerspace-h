@@ -18,7 +18,7 @@ import { sanitizeMessageText } from '../utils/matching-logic.ts';
 
 /**
  * Echoes (the Unsaid wall): anonymous posts that stay visible until the author deletes them or moderation removes them.
- * Posts made before persistence launched carry an `expiresAt` and still fade at that time, as they were promised.
+ * Older posts still carry the `expiresAt` they were written with (a 48-hour lifetime), but it is ignored: nothing expires.
  *
  * `unsaid/{id}` holds only text, timestamps and counters. Authorship lives in
  * `unsaid_owners/{id}`, which only the author can read, so posts can't be traced
@@ -26,11 +26,6 @@ import { sanitizeMessageText } from '../utils/matching-logic.ts';
  */
 
 export const UNSAID_MAX_LENGTH = 500;
-/** Echoes written before they became permanent lived 48 hours; their `expiresAt` is still honoured. */
-export const UNSAID_LEGACY_LIFETIME_MS = 48 * 60 * 60 * 1000;
-/** When Echoes became permanent. Nothing older than this minus the legacy lifetime can still be visible, so feeds start there. */
-export const UNSAID_PERSISTENT_SINCE_MS = Date.UTC(2026, 9, 29);
-export const UNSAID_FEED_START_MS = UNSAID_PERSISTENT_SINCE_MS - UNSAID_LEGACY_LIFETIME_MS;
 /** Echoes in the live first page, and in each "older" page. */
 export const UNSAID_FIRST_PAGE = 60;
 export const UNSAID_PAGE_SIZE = 30;
@@ -105,9 +100,9 @@ export function needsCrisisSupport(text: string): boolean {
   return CRISIS_PATTERNS.some((p) => p.test(text));
 }
 
-/** Visible unless heavily flagged, or an old-style Echo that has passed its own `expiresAt`. */
-export function isUnsaidVisible(post: UnsaidPost, now: number = Date.now()): boolean {
-  return (post.expiresAt === null || post.expiresAt > now) && post.flags < UNSAID_HIDE_AT_FLAGS;
+/** Visible unless heavily flagged. An old post's `expiresAt` is ignored: Echoes no longer expire. */
+export function isUnsaidVisible(post: UnsaidPost, _now: number = Date.now()): boolean {
+  return post.flags < UNSAID_HIDE_AT_FLAGS;
 }
 
 /** Newest first, without duplicates (a post can arrive from both the live feed and an older page). */
@@ -194,7 +189,6 @@ export function subscribeToUnsaid(
     unsubscribe = onSnapshot(
       query(
         collection(firestore, 'unsaid'),
-        where('createdAt', '>=', Timestamp.fromMillis(UNSAID_FEED_START_MS)),
         orderBy('createdAt', 'desc'),
         limit(UNSAID_FIRST_PAGE)
       ),
@@ -228,7 +222,6 @@ export async function loadOlderUnsaid(before: number): Promise<{ posts: UnsaidPo
     const snap = await getDocs(
       query(
         collection(db, 'unsaid'),
-        where('createdAt', '>=', Timestamp.fromMillis(UNSAID_FEED_START_MS)),
         where('createdAt', '<', Timestamp.fromMillis(before)),
         orderBy('createdAt', 'desc'),
         limit(UNSAID_PAGE_SIZE)

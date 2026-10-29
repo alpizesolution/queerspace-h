@@ -43,10 +43,10 @@ test('an Echo older than 48 hours is still visible when it has no expiry', () =>
   assert.equal(isUnsaidVisible(echo({ createdAt: now - 90 * 24 * HOUR }), now), true);
 });
 
-test('old-style Echoes still fade at their own expiry; heavily flagged ones are hidden', () => {
+test('old-style Echoes no longer fade at their own expiry; heavily flagged ones are hidden', () => {
   const now = 1_000_000;
   assert.equal(isUnsaidVisible(echo({ expiresAt: now + 1000 }), now), true);
-  assert.equal(isUnsaidVisible(echo({ expiresAt: now - 1 }), now), false);
+  assert.equal(isUnsaidVisible(echo({ expiresAt: now - 1 }), now), true, 'an old post past its expiresAt comes back');
   assert.equal(isUnsaidVisible(echo({ flags: 3 }), now), false);
   assert.equal(isUnsaidVisible(echo({ flags: 2 }), now), true);
 });
@@ -80,6 +80,7 @@ test('new Echoes are written without an expiry, and nothing deletes them on a sc
   const service = fs.readFileSync('src/services/unsaidService.ts', 'utf8');
   assert.equal(/expiresAt:\s*Timestamp\.fromMillis/.test(service), false, 'postUnsaid must not set an expiry');
   assert.equal(/where\('expiresAt'/.test(service), false, 'the feed must not filter on expiresAt');
+  assert.equal(/where\('createdAt', '>='/.test(service), false, 'the feed has no start date: every stored Echo can be shown');
   assert.equal(fs.existsSync('functions'), false, 'no scheduled cleanup functions');
   assert.equal(/cron/i.test(fs.readFileSync('vercel.json', 'utf8')), false, 'no cron jobs');
   const indexes = JSON.parse(fs.readFileSync('firestore.indexes.json', 'utf8'));

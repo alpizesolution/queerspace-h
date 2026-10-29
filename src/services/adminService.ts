@@ -26,7 +26,6 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.ts';
 import { isFreshQueueEntry } from './liveMatchService.ts';
-import { UNSAID_PERSISTENT_SINCE_MS } from './unsaidService.ts';
 
 /**
  * Admin page data. Every read and write here is also guarded by firestore.rules:
@@ -209,8 +208,8 @@ async function fetchStats(): Promise<AdminStats> {
     count(members),
     count(chats),
     count(between(collection(firestore, 'public_room_messages'), 'timestamp', today)),
-    // Echoes are permanent now; count the ones written since they became permanent.
-    count(query(collection(firestore, 'unsaid'), where('createdAt', '>=', Timestamp.fromMillis(UNSAID_PERSISTENT_SINCE_MS)))),
+    // Echoes are permanent, so this is every Echo ever written.
+    count(collection(firestore, 'unsaid')),
     getDocs(query(collection(firestore, 'match_queue'), where('status', '==', 'waiting'))),
     Promise.all(days.map((d) => memberCount(between(members, 'createdAt', d, d + DAY_MS)))),
     Promise.all(days.map((d) => count(between(chats, 'createdAt', d, d + DAY_MS)))),
@@ -303,23 +302,20 @@ export async function deleteRoomMessage(id: string): Promise<void> {
   await deleteDoc(doc(db, 'public_room_messages', id));
 }
 
-/** Unsaid posts (permanent, or old-style ones that have not expired) that someone has flagged, most flagged first. */
+/** Unsaid posts that someone has flagged, most flagged first. */
 export async function loadFlaggedUnsaid(): Promise<AdminUnsaidPost[]> {
   if (!db) return [];
   const snap = await getDocs(query(collection(db, 'unsaid'), where('flags', '>', 0), orderBy('flags', 'desc'), limit(100)));
-  const now = Date.now();
-  return snap.docs
-    .map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        kind: String(data.kind ?? 'vent'),
-        text: String(data.text ?? ''),
-        flags: Number(data.flags) || 0,
-        expiresAt: data.expiresAt ? toMillis(data.expiresAt) : null,
-      };
-    })
-    .filter((p) => p.expiresAt === null || p.expiresAt > now);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      kind: String(data.kind ?? 'vent'),
+      text: String(data.text ?? ''),
+      flags: Number(data.flags) || 0,
+      expiresAt: data.expiresAt ? toMillis(data.expiresAt) : null,
+    };
+  });
 }
 
 export async function restoreUnsaid(id: string): Promise<void> {
