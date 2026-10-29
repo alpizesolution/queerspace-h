@@ -98,7 +98,7 @@ const PartnerAvatar: React.FC<{ avatar?: string | null; seed: string; small?: bo
 
 const nameOf = (partner?: SignalPartner) => partner?.displayName?.trim() || 'Anonymous member';
 
-export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) => {
+export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: boolean }> = ({ inbox, isSoundMuted = false }) => {
   const [pairs, setPairs] = useState<SignalPair[]>([]);
   const [invitations, setInvitations] = useState<SignalInvitation[]>([]);
   const [invitationActionId, setInvitationActionId] = useState<string | null>(null);
@@ -209,7 +209,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState }> = ({ inbox }) 
   if (openPairId) {
     const selectedPair = pairs.find((pair) => pair.id === openPairId);
     if (selectedPair?.status === 'active') {
-      return <SignalsConversation pairId={openPairId} partner={selectedPair.partner} onBack={() => setOpenPairId(null)} />;
+      return <SignalsConversation pairId={openPairId} partner={selectedPair.partner} isSoundMuted={isSoundMuted} onBack={() => setOpenPairId(null)} />;
     }
   }
 
