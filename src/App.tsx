@@ -34,7 +34,7 @@ import { submitAgeEligibilityReview } from './services/ageReviewService.ts';
 
 import { AppearanceSettingsModal } from './components/AppearanceSettingsModal.tsx';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
-import { FONT_SIZE_KEY, FontSize, parseFontSize } from './utils/fontSize.ts';
+import { FONT_SIZE_CHOSEN_KEY, FONT_SIZE_KEY, FontSize, isPhoneDevice, resolveFontSize } from './utils/fontSize.ts';
 import { useSignalsInbox } from './hooks/useSignalsInbox.ts';
 import { useUnreadUpdates } from './hooks/useUnreadUpdates.ts';
 import { WhatsNewSheet } from './components/WhatsNewSheet.tsx';
@@ -50,7 +50,9 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     getStorageItem('queerspace_theme') === 'light' ? 'light' : 'dark'
   );
-  const [fontSize, setFontSize] = useState<FontSize>(() => parseFontSize(getStorageItem(FONT_SIZE_KEY)));
+  const [fontSize, setFontSize] = useState<FontSize>(() =>
+    resolveFontSize(getStorageItem(FONT_SIZE_KEY), getStorageItem(FONT_SIZE_CHOSEN_KEY) === '1', isPhoneDevice())
+  );
   const [donationModalOpen, setDonationModalOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [hasSupportReply, setHasSupportReply] = useState(false);
@@ -133,11 +135,17 @@ export default function App() {
     setStorageItem('queerspace_theme', theme);
   }, [theme]);
 
-  // Reading size applies at once through a root attribute (see --fs in index.css) and is remembered on this device.
+  // Reading size applies at once through a root attribute (see --fs in index.css).
   useEffect(() => {
     document.documentElement.dataset.fontsize = fontSize;
-    setStorageItem(FONT_SIZE_KEY, fontSize);
   }, [fontSize]);
+
+  // Only a size the person picks is remembered; until then it follows the device (Tiny on phones, Small elsewhere).
+  const chooseFontSize = (size: FontSize) => {
+    setFontSize(size);
+    setStorageItem(FONT_SIZE_KEY, size);
+    setStorageItem(FONT_SIZE_CHOSEN_KEY, '1');
+  };
 
   // Initialize anonymous auth session on startup and restore cloud profile if available
   useEffect(() => {
@@ -498,7 +506,7 @@ export default function App() {
           theme={theme}
           onChangeTheme={setTheme}
           fontSize={fontSize}
-          onChangeFontSize={setFontSize}
+          onChangeFontSize={chooseFontSize}
           hasUnreadUpdates={hasUnreadUpdates}
           onOpenWhatsNew={() => { setSettingsOpen(false); setWhatsNewOpen(true); }}
           onClose={() => setSettingsOpen(false)}
