@@ -24,6 +24,7 @@ interface MenuDrawerProps {
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   hasSupportReply?: boolean;
+  hasUnreadUpdates?: boolean;
   showAdmin: boolean;
 }
 
@@ -51,6 +52,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   onOpenProfile,
   onOpenSettings,
   hasSupportReply = false,
+  hasUnreadUpdates = false,
   showAdmin,
 }) => {
   const titleId = useId();
@@ -164,7 +166,12 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
             <li>
               <button className={rowClass} onClick={then(onOpenSettings)}>
                 <Settings2 className="w-[18px] h-[18px] text-lavender shrink-0" />
-                Settings & appearance
+                <span className="flex-1">Settings & appearance</span>
+                {hasUnreadUpdates && (
+                  <span className="w-2.5 h-2.5 rounded-full bg-berry">
+                    <span className="sr-only">New updates in What’s New</span>
+                  </span>
+                )}
               </button>
             </li>
           </Group>

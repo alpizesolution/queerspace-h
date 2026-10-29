@@ -22,6 +22,7 @@ interface HeaderProps {
   onOpenInfo: (modal: MenuInfoModal) => void;
   onOpenSupport: () => void;
   hasSupportReply?: boolean;
+  hasUnreadUpdates?: boolean;
   profile: { avatar?: string; displayName?: string };
 }
 
@@ -37,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenInfo,
   onOpenSupport,
   hasSupportReply = false,
+  hasUnreadUpdates = false,
   profile,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -93,11 +95,12 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
         <button
           onClick={onOpenSettings}
-          className="icon-btn hidden desk:inline-flex"
+          className="icon-btn relative hidden desk:inline-flex"
           title="Settings"
-          aria-label="Open settings"
+          aria-label={hasUnreadUpdates ? 'Open settings, new updates available' : 'Open settings'}
         >
           <Settings2 className="w-[18px] h-[18px]" />
+          {hasUnreadUpdates && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-berry" aria-hidden="true" />}
         </button>
         <button
           onClick={onOpenSafetyModal}
@@ -116,9 +119,9 @@ export const Header: React.FC<HeaderProps> = ({
           aria-expanded={menuOpen}
         >
           <Menu className="w-5 h-5" />
-          {hasSupportReply && (
+          {(hasSupportReply || hasUnreadUpdates) && (
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-berry ring-2 ring-ink">
-              <span className="sr-only">New reply from the team</span>
+              <span className="sr-only">{hasSupportReply ? 'New reply from the team' : 'New updates'}</span>
             </span>
           )}
         </button>
@@ -140,6 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
         onOpenProfile={onOpenProfile}
         onOpenSettings={onOpenSettings}
         hasSupportReply={hasSupportReply}
+        hasUnreadUpdates={hasUnreadUpdates}
         showAdmin={SHOW_ADMIN_LINK}
       />
     )}
