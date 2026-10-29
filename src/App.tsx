@@ -377,6 +377,7 @@ export default function App() {
           onOpenSafetyModal={() => setActiveInfoModal('guidelines')}
           onOpenProfile={() => setProfileOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenWhatsNew={() => setWhatsNewOpen(true)}
           onOpenInfo={(modal) => setActiveInfoModal(modal)}
           onOpenSupport={openSupport}
           hasSupportReply={hasSupportReply}
@@ -450,6 +451,8 @@ export default function App() {
         <Footer
           onOpenModal={(modal) => setActiveInfoModal(modal)}
           onOpenSupport={openSupport}
+          onOpenWhatsNew={() => setWhatsNewOpen(true)}
+          hasUnreadUpdates={hasUnreadUpdates}
           hasSupportReply={hasSupportReply}
           className="hidden desk:block"
         />

@@ -19,6 +19,7 @@ interface HeaderProps {
   onOpenSafetyModal: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
+  onOpenWhatsNew: () => void;
   onOpenInfo: (modal: MenuInfoModal) => void;
   onOpenSupport: () => void;
   hasSupportReply?: boolean;
@@ -35,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSafetyModal,
   onOpenProfile,
   onOpenSettings,
+  onOpenWhatsNew,
   onOpenInfo,
   onOpenSupport,
   hasSupportReply = false,
@@ -142,6 +144,7 @@ export const Header: React.FC<HeaderProps> = ({
         onOpenSupport={onOpenSupport}
         onOpenProfile={onOpenProfile}
         onOpenSettings={onOpenSettings}
+        onOpenWhatsNew={onOpenWhatsNew}
         hasSupportReply={hasSupportReply}
         hasUnreadUpdates={hasUnreadUpdates}
         showAdmin={SHOW_ADMIN_LINK}
