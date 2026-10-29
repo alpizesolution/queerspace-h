@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   LogOut,
+  Megaphone,
   RefreshCw,
   RotateCcw,
   ShieldCheck,
@@ -44,13 +45,14 @@ import { rememberAdminDevice } from '../utils/adminDevice.ts';
 import { SupportTab } from './SupportTab.tsx';
 import { BirthdayCorrectionsTab } from './BirthdayCorrectionsTab.tsx';
 import { RoomTab } from './RoomTab.tsx';
+import { AppUpdatesTab } from './AppUpdatesTab.tsx';
 import { countUnreadSupport } from '../services/supportService.ts';
 import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
 import type { CommunityPost } from '../types.ts';
 import { whileActive } from '../utils/whileActive.ts';
 import { liftSuspension, loadSuspensions, suspendUser, type Suspension } from '../services/suspensionService.ts';
 
-type Tab = 'overview' | 'support' | 'room' | 'inbox' | 'moderation';
+type Tab = 'overview' | 'support' | 'room' | 'inbox' | 'moderation' | 'updates';
 
 interface PendingConfirm {
   title: string;
@@ -283,6 +285,7 @@ const Dashboard: React.FC = () => {
     { id: 'room', label: 'Public Room', short: 'Room', icon: Users },
     { id: 'inbox', label: 'Inbox', short: 'Inbox', icon: Inbox, badge: openSuggestions + openReports },
     { id: 'moderation', label: 'Moderation', short: 'Moderate', icon: ShieldCheck },
+    { id: 'updates', label: 'App Updates', short: 'Updates', icon: Megaphone },
   ];
 
   const go = (id: Tab) => {
@@ -343,12 +346,13 @@ const Dashboard: React.FC = () => {
         </>
       )}
       {tab === 'moderation' && <ModerationTab onConfirm={setConfirm} />}
+      {tab === 'updates' && <AppUpdatesTab onConfirm={setConfirm} />}
 
       <nav
         aria-label="Admin sections"
         className="tabbar desk:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
       >
-        <div className="grid grid-cols-5 h-14 max-w-2xl mx-auto">
+        <div className="grid grid-cols-6 h-14 max-w-2xl mx-auto">
           {tabs.map(({ id, short, icon: Icon, badge }) => {
             const active = tab === id;
             return (

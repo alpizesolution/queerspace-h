@@ -1,5 +1,5 @@
 import React from 'react';
-import { MoonStar, Sun, X } from 'lucide-react';
+import { ChevronRight, MoonStar, Sparkles, Sun, X } from 'lucide-react';
 import { FONT_SIZE_OPTIONS, FontSize } from '../utils/fontSize.ts';
 
 interface AppearanceSettingsModalProps {
@@ -7,11 +7,13 @@ interface AppearanceSettingsModalProps {
   onChangeTheme: (theme: 'dark' | 'light') => void;
   fontSize: FontSize;
   onChangeFontSize: (size: FontSize) => void;
+  hasUnreadUpdates?: boolean;
+  onOpenWhatsNew: () => void;
   onClose: () => void;
 }
 
 export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = ({
-  theme, onChangeTheme, fontSize, onChangeFontSize, onClose,
+  theme, onChangeTheme, fontSize, onChangeFontSize, hasUnreadUpdates = false, onOpenWhatsNew, onClose,
 }) => (
   <div
     className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 anim-fade"
@@ -79,6 +81,20 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
           This is how messages and posts will read. <span className="text-xs text-subtle">12:30</span>
         </p>
       </div>
+      <button
+        type="button"
+        onClick={onOpenWhatsNew}
+        className="mt-5 w-full flex items-center gap-3 h-12 px-3 rounded-xl border border-line text-left text-sm font-semibold text-fg transition-colors cursor-pointer hover:bg-raised"
+      >
+        <Sparkles className="w-[18px] h-[18px] text-lavender shrink-0" aria-hidden="true" />
+        <span className="flex-1">What’s New</span>
+        {hasUnreadUpdates && (
+          <span className="w-2.5 h-2.5 rounded-full bg-berry">
+            <span className="sr-only">New updates</span>
+          </span>
+        )}
+        <ChevronRight className="w-4 h-4 text-subtle" aria-hidden="true" />
+      </button>
       <p className="text-xs text-subtle mt-4">Your choices are saved on this device and apply across the app.</p>
     </section>
   </div>

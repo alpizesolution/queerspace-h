@@ -793,6 +793,50 @@ service cloud.firestore {
     }
 
     // ====================================================
+    // APP UPDATES ("What's New")
+    // ====================================================
+    // app_updates/{id}: written only by admins. Members can read published ones, never drafts.
+    // app_update_reads/{uid}: which updates that member has opened, readable and writable only by them.
+
+    function appUpdateValid(d) {
+      return d.keys().hasAll(['title', 'body', 'category', 'status', 'createdAt', 'updatedAt', 'publishedAt'])
+        && d.keys().hasOnly(['title', 'body', 'category', 'status', 'link', 'createdAt', 'updatedAt', 'publishedAt'])
+        && d.title is string && d.title.size() >= 3 && d.title.size() <= 80
+        && d.body is string && d.body.size() >= 1 && d.body.size() <= 500
+        && d.category in ['feature', 'improvement', 'fix', 'announcement']
+        && d.status in ['draft', 'published']
+        && d.updatedAt == request.time
+        && (d.status == 'published'
+            ? (d.publishedAt is timestamp && d.publishedAt <= request.time)
+            : (d.publishedAt == null || d.publishedAt is timestamp))
+        && (!('link' in d)
+            || (d.link is map
+                && d.link.keys().hasAll(['url', 'label'])
+                && d.link.keys().hasOnly(['url', 'label'])
+                && d.link.url is string && d.link.url.size() <= 300 && d.link.url.matches('^https://[^ ]+$')
+                && d.link.label is string && d.link.label.size() >= 1 && d.link.label.size() <= 30));
+    }
+
+    match /app_updates/{updateId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.status == 'published');
+      allow create: if isAdmin() && appUpdateValid(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin() && appUpdateValid(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin() && resource.data.status == 'draft';
+    }
+
+    match /app_update_reads/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['reads', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['reads', 'updatedAt'])
+        && request.resource.data.reads is map
+        && request.resource.data.reads.size() <= 200
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // ====================================================
     // SIGNALS (SERVER-MANAGED CONSENT RECORDS)
     // ====================================================
     // Invitation acceptance, expiry, idempotency, and pair creation are handled

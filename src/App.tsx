@@ -36,11 +36,15 @@ import { AppearanceSettingsModal } from './components/AppearanceSettingsModal.ts
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 import { FONT_SIZE_KEY, FontSize, parseFontSize } from './utils/fontSize.ts';
 import { useSignalsInbox } from './hooks/useSignalsInbox.ts';
+import { useUnreadUpdates } from './hooks/useUnreadUpdates.ts';
+import { WhatsNewSheet } from './components/WhatsNewSheet.tsx';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community' | 'signals'>('home');
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const { hasUnread: hasUnreadUpdates, refresh: refreshUnreadUpdates } = useUnreadUpdates();
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     getStorageItem('queerspace_theme') === 'light' ? 'light' : 'dark'
   );
@@ -376,6 +380,7 @@ export default function App() {
           onOpenInfo={(modal) => setActiveInfoModal(modal)}
           onOpenSupport={openSupport}
           hasSupportReply={hasSupportReply}
+          hasUnreadUpdates={hasUnreadUpdates}
           profile={userPrefs}
           badges={{ signals: signalsInbox.pendingIds.length }}
         />
@@ -483,9 +488,13 @@ export default function App() {
           onChangeTheme={setTheme}
           fontSize={fontSize}
           onChangeFontSize={setFontSize}
+          hasUnreadUpdates={hasUnreadUpdates}
+          onOpenWhatsNew={() => { setSettingsOpen(false); setWhatsNewOpen(true); }}
           onClose={() => setSettingsOpen(false)}
         />
       )}
+
+      {whatsNewOpen && <WhatsNewSheet onClose={() => setWhatsNewOpen(false)} onChanged={refreshUnreadUpdates} />}
 
       <InfoModals activeModal={activeInfoModal} onClose={() => setActiveInfoModal(null)} onOpenSupport={openSupport} />
 
