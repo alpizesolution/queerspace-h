@@ -3,15 +3,19 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   increment,
   limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  startAfter,
   Timestamp,
   writeBatch,
   FirestoreError,
+  QueryDocumentSnapshot,
+  DocumentData,
 } from 'firebase/firestore';
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { PublicRoomMessage, RoomQuote, UserPreferences } from '../types.ts';
@@ -40,8 +44,8 @@ function toReactionCounts(data: Record<string, unknown>): Record<string, number>
   return Object.keys(counts).length ? counts : undefined;
 }
 
-/** How many recent messages the room shows. */
-export const PUBLIC_ROOM_HISTORY = 15;
+/** Messages per page: the live window at the bottom of the room, and each "Load older messages" page. */
+export const PUBLIC_ROOM_HISTORY = 30;
 
 export const isPublicRoomAvailable = () => isFirebaseConfigured && Boolean(db);
 
@@ -78,9 +82,22 @@ export function quoteOf(message: PublicRoomMessage): RoomQuote {
   return { id: message.id.slice(0, 64), author: message.author.slice(0, 30), text: message.text.slice(0, 140) };
 }
 
-/** Live feed of the latest room messages, oldest first. */
+/** Opaque position in the room's history, for loading the page before it. */
+export type RoomCursor = QueryDocumentSnapshot<DocumentData>;
+
+export interface RoomFeedMeta {
+  /** The live window holds a full page, so older messages may exist. */
+  windowFull: boolean;
+  /** Oldest message in the live window, where "load older" starts. */
+  oldest: RoomCursor | null;
+}
+
+/**
+ * Live feed of the latest room messages, oldest first. Only the newest page is listened to, so a new
+ * message costs one document read; older pages are fetched once, on request (loadOlderRoomMessages).
+ */
 export function subscribeToPublicRoom(
-  onMessages: (messages: PublicRoomMessage[]) => void,
+  onMessages: (messages: PublicRoomMessage[], meta: RoomFeedMeta) => void,
   onError: () => void
 ): () => void {
   if (!db) {
@@ -101,7 +118,11 @@ export function subscribeToPublicRoom(
     unsubscribe = onSnapshot(
       query(collection(firestore, 'public_room_messages'), orderBy('timestamp', 'desc'), limit(PUBLIC_ROOM_HISTORY)),
       (snap) => {
-        onMessages(snap.docs.map((d) => toPublicRoomMessage(d.id, d.data(), user.uid)).reverse());
+        const docs = snap.docs;
+        onMessages(docs.map((d) => toPublicRoomMessage(d.id, d.data(), user.uid)).reverse(), {
+          windowFull: docs.length >= PUBLIC_ROOM_HISTORY,
+          oldest: docs.length ? docs[docs.length - 1] : null,
+        });
       },
       (err) => {
         console.warn('[PublicRoom] Feed notice:', err);
@@ -114,6 +135,68 @@ export function subscribeToPublicRoom(
     cancelled = true;
     unsubscribe?.();
   };
+}
+
+export interface OlderRoomPage {
+  /** Oldest first. */
+  messages: PublicRoomMessage[];
+  /** Where the next page starts; null when nothing older remains. */
+  cursor: RoomCursor | null;
+  hasMore: boolean;
+}
+
+/**
+ * One page of messages older than `before`, using a cursor (not an offset). Asks for one extra document so it
+ * knows whether more remain, which saves an empty round trip at the end. Read-only.
+ */
+export async function loadOlderRoomMessages(before: RoomCursor): Promise<OlderRoomPage> {
+  if (!db) throw new Error('Firebase is not configured');
+  const user = auth?.currentUser ?? (await ensureAnonymousAuth());
+  if (!user) throw new Error('Not signed in');
+  const snap = await getDocs(
+    query(
+      collection(db, 'public_room_messages'),
+      orderBy('timestamp', 'desc'),
+      startAfter(before),
+      limit(PUBLIC_ROOM_HISTORY + 1)
+    )
+  );
+  const hasMore = snap.docs.length > PUBLIC_ROOM_HISTORY;
+  const docs = snap.docs.slice(0, PUBLIC_ROOM_HISTORY);
+  return {
+    messages: docs.map((d) => toPublicRoomMessage(d.id, d.data(), user.uid)).reverse(),
+    cursor: docs.length ? docs[docs.length - 1] : null,
+    hasMore,
+  };
+}
+
+/**
+ * Combines what is on screen with a fresh live window (both oldest first), without duplicates.
+ * - Messages that slid out of the window because newer ones arrived, and older pages already loaded, are kept.
+ * - A message inside the window's time range that the window no longer has was deleted, so it is dropped.
+ * - If everything on screen is older than the window, messages arrived in between that were never seen
+ *   (the listener was paused for a while); keep only the window and report a reset so paging restarts from it.
+ */
+export function mergeRoomMessages(
+  shown: PublicRoomMessage[],
+  live: PublicRoomMessage[],
+  windowFull: boolean
+): { messages: PublicRoomMessage[]; reset: boolean } {
+  if (!live.length) return { messages: [], reset: shown.length > 0 };
+  const oldestLive = live[0].timestamp;
+  const liveIds = new Set(live.map((m) => m.id));
+  const newestShown = shown[shown.length - 1];
+  if (windowFull && newestShown && !liveIds.has(newestShown.id) && newestShown.timestamp < oldestLive) {
+    return { messages: live, reset: true };
+  }
+  const kept = windowFull ? shown.filter((m) => !liveIds.has(m.id) && m.timestamp < oldestLive) : [];
+  return { messages: [...kept, ...live], reset: false };
+}
+
+/** Adds an older page above the messages on screen, skipping any already shown, oldest first. */
+export function prependRoomPage(shown: PublicRoomMessage[], older: PublicRoomMessage[]): PublicRoomMessage[] {
+  const have = new Set(shown.map((m) => m.id));
+  return [...older.filter((m) => !have.has(m.id)), ...shown];
 }
 
 export type SendResult = 'sent' | 'too-fast' | 'failed';
