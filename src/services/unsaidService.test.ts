@@ -70,7 +70,7 @@ test('formatPostedAgo gives relative times', () => {
 
 test('the public Echo shape carries no author or owner information', () => {
   const post = toUnsaidPost('x', { kind: 'confession', text: 'hi', createdAt: { toMillis: () => 5 }, authorId: 'secret', ownerId: 'secret', email: 'a@b.c', hugs: 2 });
-  assert.deepEqual(Object.keys(post).sort(), ['createdAt', 'cry', 'expiresAt', 'felt', 'flags', 'hugs', 'id', 'kind', 'proud', 'same', 'strong', 'text']);
+  assert.deepEqual(Object.keys(post).sort(), ['createdAt', 'cry', 'expiresAt', 'felt', 'flags', 'hugs', 'id', 'kind', 'proud', 'same', 'strong', 'text', 'views']);
   assert.equal(post.expiresAt, null);
   assert.equal(JSON.stringify(post).includes('secret'), false);
 });
