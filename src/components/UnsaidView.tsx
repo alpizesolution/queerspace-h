@@ -290,7 +290,7 @@ export const UnsaidView: React.FC = () => {
                     <span className={`tag mb-1.5 ${post.kind === 'confession' ? '!text-lavender' : '!text-berry'}`}>
                       {post.kind === 'confession' ? '🌙 Confession' : '☁️ Vent'}
                     </span>
-                    <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg/90 leading-relaxed whitespace-pre-wrap break-words">
+                    <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg/90 leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
                       {post.text}
                     </p>
                     <div className="flex flex-wrap items-center gap-y-0.5 mt-2 -ml-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">

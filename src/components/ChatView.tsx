@@ -618,7 +618,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 >
                   <div
                     id={`msg-${msg.id}`}
-                    className={`px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug rounded-[20px] ${
+                    className={`min-w-0 px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug rounded-[20px] ${
                       isUser
                         ? `bg-plum text-fg ${lastInGroup ? 'rounded-br-md' : ''}`
                         : `bg-raised text-fg ${lastInGroup ? 'rounded-bl-md' : ''}`
@@ -636,10 +636,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         <span className="block text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry">
                           {msg.replyTo.sender === 'user' ? 'You' : partner.displayName}
                         </span>
-                        <span className="block text-[length:calc(13px_*_var(--fs,1))] text-fg/75 line-clamp-2 break-words">{msg.replyTo.text}</span>
+                        <span className="block text-[length:calc(13px_*_var(--fs,1))] text-fg/75 line-clamp-2 [overflow-wrap:anywhere]">{msg.replyTo.text}</span>
                       </button>
                     )}
-                    <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                    <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{msg.text}</p>
                   </div>
                 </SwipeToReply>
 
@@ -844,7 +844,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <AnimalAvatar avatar={partner.avatar} seed={partner.id} className="w-14 h-14" />
               <div className="min-w-0"><h2 className="text-lg font-semibold truncate">{partner.displayName}</h2><p className="text-sm text-muted">{[partnerAge ? String(partnerAge) : '', partner.pronouns].filter(Boolean).join(' · ')}</p></div>
             </section>
-            {partner.aboutMe && <section><p className="label">About Me</p><p className="text-sm leading-6 whitespace-pre-wrap break-words">{partner.aboutMe}</p></section>}
+            {partner.aboutMe && <section><p className="label">About Me</p><p className="text-sm leading-6 whitespace-pre-wrap [overflow-wrap:anywhere]">{partner.aboutMe}</p></section>}
             {partner.myVibe && <section><p className="label">My Vibe</p><span className="chip">{partner.myVibe}</span></section>}
             {partner.personalStyle && <section><p className="label">Personal Style</p><span className="chip">{partner.personalStyle}</span></section>}
             <section><p className="label">Looking for</p><p className="text-sm">{INTENTION_LABELS[partner.intention] || 'Open to Anything'}</p></section>

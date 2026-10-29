@@ -289,7 +289,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
                           <p className="mt-0.5 text-xs text-subtle">Wants to connect · {formatShortDate(invitation.createdAt)}</p>
                         </div>
                       </div>
-                      {invitation.message && <p className="mt-2 whitespace-pre-wrap break-words rounded-xl bg-surface/70 px-3 py-2 text-sm leading-snug text-fg">{invitation.message}</p>}
+                      {invitation.message && <p className="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl bg-surface/70 px-3 py-2 text-sm leading-snug text-fg">{invitation.message}</p>}
                       <div className="mt-1.5 flex justify-end gap-1">
                         <button type="button" onClick={() => void respondToInvitation(invitation, 'decline')} disabled={invitationActionId !== null} aria-label={`Decline ${name}`} className="h-9 rounded-full px-3 text-xs font-semibold text-muted transition hover:text-fg disabled:opacity-50">Decline</button>
                         <button type="button" onClick={() => void respondToInvitation(invitation, 'accept')} disabled={invitationActionId !== null} aria-label={`Accept ${name}`} className="h-9 rounded-full bg-berry px-4 text-xs font-semibold text-ink transition hover:brightness-110 disabled:opacity-50">{invitationActionId === invitation.id ? 'Saving…' : 'Accept'}</button>

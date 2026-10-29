@@ -40,7 +40,7 @@ export const ProfilePageSheet: React.FC<ProfilePageSheetProps> = ({ currentPrefs
       </div>}
       <section className="rounded-2xl border border-line bg-raised/60 p-4 space-y-2">
         <p className="text-[length:calc(11px_*_var(--fs,1))] uppercase tracking-[0.14em] font-semibold text-subtle">About Me</p>
-        {currentPrefs.aboutMe?.trim() ? <p className="text-sm leading-6 whitespace-pre-wrap break-words">{currentPrefs.aboutMe}</p> : <p className="text-sm text-subtle">Nothing here yet.</p>}
+        {currentPrefs.aboutMe?.trim() ? <p className="text-sm leading-6 whitespace-pre-wrap [overflow-wrap:anywhere]">{currentPrefs.aboutMe}</p> : <p className="text-sm text-subtle">Nothing here yet.</p>}
         <p className="text-[length:calc(11px_*_var(--fs,1))] text-subtle">{(currentPrefs.aboutMe || '').length}/160 characters</p>
       </section>
       <section className="space-y-2">

@@ -94,7 +94,7 @@ const Replies: React.FC<{
                 <span className="font-semibold text-fg">{reply.author}</span> {reply.authorPronouns} ·{' '}
                 {formatChatTime(reply.timestamp)}
               </p>
-              <p className="text-muted leading-relaxed whitespace-pre-wrap break-words mt-0.5">{reply.content}</p>
+              <p className="text-muted leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] mt-0.5">{reply.content}</p>
             </div>
             {isAdmin && (
               <button
@@ -385,7 +385,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                 </header>
 
                 <h2 className="text-[length:calc(15px_*_var(--fs,1))] sm:text-[length:calc(17px_*_var(--fs,1))] font-semibold text-fg leading-snug">{post.title}</h2>
-                <p className="mt-1 text-[length:calc(14px_*_var(--fs,1))] sm:text-[length:calc(15px_*_var(--fs,1))] text-muted leading-relaxed whitespace-pre-wrap break-words">
+                <p className="mt-1 text-[length:calc(14px_*_var(--fs,1))] sm:text-[length:calc(15px_*_var(--fs,1))] text-muted leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
                   {post.content}
                 </p>
 
