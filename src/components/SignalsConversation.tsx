@@ -5,6 +5,7 @@ import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { soundEffects } from '../utils/sound.ts';
+import { SwipeToReply } from './SwipeToReply.tsx';
 import { hasNewIncomingMessage } from '../utils/incomingMessage.ts';
 
 type SignalMessage = {
@@ -271,6 +272,11 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 return (
                   <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'} ${index === 0 ? '' : sameSenderAsPrev ? 'mt-0.5' : 'mt-2'}`}>
                     <div className={`flex min-w-0 max-w-[82%] flex-col sm:max-w-[75%] ${mine ? 'items-end' : 'items-start'}`}>
+                      <SwipeToReply
+                        disabled={ended}
+                        className="max-w-full"
+                        onReply={() => { setReplyingTo(message); setActiveId(null); textareaRef.current?.focus(); }}
+                      >
                       <div
                         role="button"
                         tabIndex={0}
@@ -293,6 +299,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           {message.createdAt && <span className={`ml-auto translate-y-px select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
                         </div>
                       </div>
+                      </SwipeToReply>
                       {((message.reactions || []).length > 0 || open) && (
                         <div className={`mt-0.5 flex flex-wrap items-center gap-1 ${mine ? 'justify-end' : 'justify-start'}`}>
                           {(message.reactions || []).map((reaction) => (
