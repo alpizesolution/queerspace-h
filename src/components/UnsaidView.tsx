@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Flag, Info, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
@@ -6,8 +6,10 @@ import { CrisisSupportCard } from './CrisisSupportCard.tsx';
 import {
   deleteUnsaid,
   flagUnsaid,
-  formatFadesIn,
+  formatPostedAgo,
   isUnsaidAvailable,
+  loadOlderUnsaid,
+  mergeUnsaidPages,
   loadMyUnsaidIds,
   needsCrisisSupport,
   postUnsaid,
@@ -65,6 +67,12 @@ function saveReacted(map: Record<string, UnsaidReaction>) {
 
 export const UnsaidView: React.FC = () => {
   const [posts, setPosts] = useState<UnsaidPost[]>([]);
+  // Older pages (loaded on request) and where the next one starts. Echoes stay until deleted or removed.
+  const [older, setOlder] = useState<UnsaidPost[]>([]);
+  const [nextBefore, setNextBefore] = useState<number | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const olderLoaded = useRef(false);
   const [loading, setLoading] = useState(true);
   const [feedError, setFeedError] = useState(false);
   const [myIds, setMyIds] = useState<Set<string>>(new Set());
@@ -92,8 +100,10 @@ export const UnsaidView: React.FC = () => {
     if (!available) return;
     const unsubscribe = whileActive(() =>
       subscribeToUnsaid(
-        (next) => {
+        (next, meta) => {
           setPosts(next);
+          // The live page only owns the newest Echoes; keep the cursor of whatever older page we already loaded.
+          setNextBefore((current) => (olderLoaded.current ? current : meta.nextBefore));
           setLoading(false);
           setFeedError(false);
         },
@@ -178,6 +188,8 @@ export const UnsaidView: React.FC = () => {
     const ok = await deleteUnsaid(id);
     setDeleting(false);
     setDeletingId(null);
+    // Gone for good: also drop it from any older page already on screen.
+    if (ok) setRemovedIds((prev) => new Set(prev).add(id));
     // Quiet for members deleting their own post; moderators get an explicit result.
     if (isAdmin) {
       setToast(
@@ -188,14 +200,30 @@ export const UnsaidView: React.FC = () => {
     }
   };
 
-  const visible = posts.filter((p) => !reportedIds.has(p.id) && (filter === 'all' || p.kind === filter));
+  const showOlder = async () => {
+    if (nextBefore === null || loadingOlder) return;
+    setLoadingOlder(true);
+    const page = await loadOlderUnsaid(nextBefore);
+    setLoadingOlder(false);
+    if (!page) {
+      setToast({ text: "Couldn't load older Echoes. Please try again.", ok: false });
+      return;
+    }
+    olderLoaded.current = true;
+    setOlder((current) => mergeUnsaidPages(current, page.posts));
+    setNextBefore(page.nextBefore);
+  };
+
+  const visible = mergeUnsaidPages(posts, older).filter(
+    (p) => !reportedIds.has(p.id) && !removedIds.has(p.id) && (filter === 'all' || p.kind === filter)
+  );
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-[calc(var(--tabbar-h)+6rem)] desk:pb-16">
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-[length:calc(28px_*_var(--fs,1))] font-semibold tracking-tight text-fg">Echoes</h1>
-          <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-0.5">Vent or confess anonymously. Gone in 48 hours.</p>
+          <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-0.5">Vent or confess anonymously.</p>
         </div>
         {available && (
           <button onClick={() => setComposeOpen(true)} className="btn btn-primary btn-sm hidden sm:inline-flex shrink-0">
@@ -293,7 +321,7 @@ export const UnsaidView: React.FC = () => {
                       </div>
                       <div className="ml-auto flex items-center">
                         <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle whitespace-nowrap">
-                          {formatFadesIn(post.expiresAt, now)}
+                          {formatPostedAgo(post.createdAt, now)}
                         </span>
                         {mine || isAdmin ? (
                           <button
@@ -318,6 +346,14 @@ export const UnsaidView: React.FC = () => {
           )}
 
           <CrisisSupportCard className="mt-6" />
+
+          {!loading && !feedError && nextBefore !== null && (
+            <div className="mt-4 text-center">
+              <button onClick={showOlder} disabled={loadingOlder} className="btn btn-secondary btn-sm">
+                {loadingOlder ? 'Loading…' : 'Show older Echoes'}
+              </button>
+            </div>
+          )}
 
           <FloatingAddButton onClick={() => setComposeOpen(true)} label="Write an Echo" />
         </>
@@ -365,7 +401,7 @@ export const UnsaidView: React.FC = () => {
             <div>
               <div className="flex items-center gap-1.5">
                 <p className={`text-[length:calc(12px_*_var(--fs,1))] flex-1 ${composeError ? 'text-danger' : 'text-subtle'}`} aria-live="polite">
-                  {composeError ?? 'Anonymous · gone in 48 hours'}
+                  {composeError ?? 'Echoes stay visible until you delete them or they’re removed by moderation.'}
                 </p>
                 <span className="text-[length:calc(12px_*_var(--fs,1))] tabular-nums text-subtle">{draft.length}/{UNSAID_MAX_LENGTH}</span>
                 <button
@@ -380,7 +416,7 @@ export const UnsaidView: React.FC = () => {
               </div>
               {anonInfoOpen && (
                 <p className="mt-1 text-[length:calc(12px_*_var(--fs,1))] leading-relaxed text-muted">
-                  No names, no replies. Nobody can see who wrote an echo; only you can tell which ones are yours. It fades for everyone after 48 hours.
+                  No names, no replies. Nobody can see who wrote an echo; only you can tell which ones are yours, and you can delete yours any time.
                 </p>
               )}
             </div>

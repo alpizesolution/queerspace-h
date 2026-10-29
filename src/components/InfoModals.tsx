@@ -53,7 +53,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
       <>
         Echoes is for things you can't say out loud. Pick <Strong>Vent</Strong> or{' '}
         <Strong>Confession</Strong>, write it and tap <Strong>Let it out</Strong>. No name or avatar is
-        shown. Posts fade after 48 hours, and you can post once a minute.
+        shown. Echoes stay visible until you delete them or moderation removes them, and you can post once a minute.
         Links, @handles and phone numbers are blocked to keep everyone anonymous.
       </>
     ),
