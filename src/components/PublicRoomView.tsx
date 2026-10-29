@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { ReactableBubble } from './ReactionPicker.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ArrowUp, BadgeCheck, CheckCircle2, Reply, Trash2, Users, X } from 'lucide-react';
@@ -14,6 +14,10 @@ import {
   canPostAsTeam,
   fetchIsRoomModerator,
   isPublicRoomAvailable,
+  loadOlderRoomMessages,
+  mergeRoomMessages,
+  prependRoomPage,
+  RoomCursor,
   quoteOf,
   ROOM_REACTIONS,
   RoomReactionId,
@@ -65,6 +69,16 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastCountRef = useRef(0);
+  // History paging: what is on screen, where the next "older" page starts, and whether any remain.
+  const messagesRef = useRef<PublicRoomMessage[]>([]);
+  const cursorRef = useRef<RoomCursor | null>(null);
+  const feedStartedRef = useRef(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState(false);
+  // Set just before older messages are added above, so the reader keeps their place.
+  const restoreScrollRef = useRef<{ height: number; top: number } | null>(null);
+  const skipFollowRef = useRef(false);
   const lastIdRef = useRef<string | null>(null);
   // Admins signed in on this device can post as the team without leaving the room.
   const [teamAvailable, setTeamAvailable] = useState(false);
@@ -144,6 +158,11 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
     setDeleting(true);
     const ok = await adminDeleteRoomMessage(pendingDeleteId);
     setDeleting(false);
+    if (ok) {
+      // The live feed only covers the newest page, so take the message off screen here too (older pages are not listened to).
+      messagesRef.current = messagesRef.current.filter((m) => m.id !== pendingDeleteId);
+      setMessages(messagesRef.current);
+    }
     setToast(
       ok
         ? { text: 'Message deleted.', ok: true }
@@ -179,14 +198,55 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
     if (!isPublicRoomAvailable()) return;
     return whileActive(() =>
       subscribeToPublicRoom(
-        (next) => {
-          setMessages(next);
+        (next, meta) => {
+          const merged = mergeRoomMessages(messagesRef.current, next, meta.windowFull);
+          messagesRef.current = merged.messages;
+          setMessages(merged.messages);
+          // Paging starts from the live window on first load, and again if messages were missed while paused.
+          if (!feedStartedRef.current || merged.reset) {
+            feedStartedRef.current = true;
+            cursorRef.current = meta.oldest;
+            setHasMore(meta.windowFull);
+            setOlderError(false);
+          }
           setStatus('ready');
         },
         () => setStatus('error')
       )
     );
   }, []);
+
+  const loadOlder = async () => {
+    const cursor = cursorRef.current;
+    if (!cursor || loadingOlder) return;
+    setLoadingOlder(true);
+    setOlderError(false);
+    try {
+      const page = await loadOlderRoomMessages(cursor);
+      const el = scrollRef.current;
+      restoreScrollRef.current = el ? { height: el.scrollHeight, top: el.scrollTop } : null;
+      const merged = prependRoomPage(messagesRef.current, page.messages);
+      messagesRef.current = merged;
+      setMessages(merged);
+      cursorRef.current = page.cursor ?? cursor;
+      setHasMore(page.hasMore);
+    } catch (err) {
+      console.warn('[PublicRoom] Could not load older messages:', err);
+      setOlderError(true);
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+  // Older messages are added above: keep the reader on the message they were looking at.
+  useLayoutEffect(() => {
+    const saved = restoreScrollRef.current;
+    if (!saved) return;
+    restoreScrollRef.current = null;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = saved.top + (el.scrollHeight - saved.height);
+    skipFollowRef.current = true;
+  }, [messages]);
 
   const scrollToBottom = (smooth: boolean) => {
     const el = scrollRef.current;
@@ -209,7 +269,8 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   // Follow new messages only if the reader is at the bottom or just sent one; chime when someone else's arrives.
   useEffect(() => {
     const latest = messages[messages.length - 1];
-    if (stickToBottomRef.current || latest?.isSelf) scrollToBottom(true);
+    if (!skipFollowRef.current && (stickToBottomRef.current || latest?.isSelf)) scrollToBottom(true);
+    skipFollowRef.current = false;
     if (hasNewIncomingMessage(lastIdRef.current, messages) && !isSoundMuted) soundEffects.playMessageReceived();
     lastIdRef.current = latest ? latest.id : lastIdRef.current;
     lastCountRef.current = messages.length;
@@ -286,6 +347,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           const el = e.currentTarget;
           stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
         }}
+        style={{ overflowAnchor: 'none' }}
         className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 py-3 space-y-3"
         aria-live="polite"
       >
@@ -300,6 +362,23 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           <div className="h-full flex flex-col items-center justify-center text-center px-6">
             <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">It's quiet in here</p>
             <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1">Say hi, or share what you're reading or listening to.</p>
+          </div>
+        )}
+
+        {status === 'ready' && messages.length > 0 && (
+          <div className="flex justify-center pb-1">
+            {hasMore ? (
+              <button
+                type="button"
+                onClick={loadOlder}
+                disabled={loadingOlder}
+                className="h-9 px-4 rounded-full text-[length:calc(12px_*_var(--fs,1))] font-medium text-subtle hover:text-fg transition-colors cursor-pointer disabled:cursor-default"
+              >
+                {loadingOlder ? 'Loading…' : olderError ? "Couldn't load. Try again" : 'Load older messages'}
+              </button>
+            ) : (
+              <p className="py-2 text-[length:calc(12px_*_var(--fs,1))] text-subtle">You’re all caught up</p>
+            )}
           </div>
         )}
 
