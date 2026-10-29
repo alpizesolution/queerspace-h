@@ -45,6 +45,8 @@ import { rememberAdminDevice } from '../utils/adminDevice.ts';
 import { SupportTab } from './SupportTab.tsx';
 import { BirthdayCorrectionsTab } from './BirthdayCorrectionsTab.tsx';
 import { RoomTab } from './RoomTab.tsx';
+import { AgeReviewHelp, AgeReviewTag } from './AgeReviewMarks.tsx';
+import { isAgeReview } from '../utils/ageReview.ts';
 import { AppUpdatesTab } from './AppUpdatesTab.tsx';
 import { countUnreadSupport } from '../services/supportService.ts';
 import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
@@ -288,7 +290,11 @@ const Dashboard: React.FC = () => {
     { id: 'updates', label: 'App Updates', short: 'Updates', icon: Megaphone },
   ];
 
+  // A member whose support chat should open when the Support tab shows (from an age-review report).
+  const [supportFocus, setSupportFocus] = useState<string | null>(null);
+
   const go = (id: Tab) => {
+    setSupportFocus(null);
     setTab(id);
     window.scrollTo({ top: 0 });
   };
@@ -313,7 +319,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {tab === 'overview' && <Overview openSuggestions={openSuggestions} openReports={openReports} />}
-      {tab === 'support' && <SupportTab formatAgo={(ms) => formatAgo(ms)} onUnreadChange={setUnreadSupport} />}
+      {tab === 'support' && <SupportTab formatAgo={(ms) => formatAgo(ms)} onUnreadChange={setUnreadSupport} focusId={supportFocus} />}
       {tab === 'room' && <RoomTab onConfirm={setConfirm} />}
       {tab === 'inbox' && (
         <>
@@ -341,7 +347,15 @@ const Dashboard: React.FC = () => {
           ) : inboxView === 'suggestions' ? (
             <SuggestionsTab items={suggestions} setItems={setSuggestions} onConfirm={setConfirm} />
           ) : (
-            <ReportsTab items={reports} setItems={setReports} onConfirm={setConfirm} />
+            <ReportsTab
+              items={reports}
+              setItems={setReports}
+              onConfirm={setConfirm}
+              onOpenSupport={(uid) => {
+                go('support');
+                setSupportFocus(uid);
+              }}
+            />
           )}
         </>
       )}
@@ -594,7 +608,7 @@ function describeTarget(r: AdminReport, names: Record<string, string | null>): s
   return 'Post';
 }
 
-const ReportsTab: React.FC<InboxProps<AdminReport>> = ({ items, setItems, onConfirm }) => {
+const ReportsTab: React.FC<InboxProps<AdminReport> & { onOpenSupport: (uid: string) => void }> = ({ items, setItems, onConfirm, onOpenSupport }) => {
   const { filter, chips } = useStatusFilter();
   const [names, setNames] = useState<Record<string, string | null>>({});
   const [suspensions, setSuspensions] = useState<Record<string, Suspension>>({});
@@ -670,6 +684,7 @@ const ReportsTab: React.FC<InboxProps<AdminReport>> = ({ items, setItems, onConf
           {visible.map((r) => (
             <li key={r.id} className="card p-4">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
+                {r.targetType === 'user' && isAgeReview(r.reason) && <AgeReviewTag />}
                 <span className="tag !text-danger">{describeTarget(r, names)}</span>
                 {suspensions[r.targetId] && (
                   <span className="tag !text-danger !bg-danger/10">
@@ -685,6 +700,7 @@ const ReportsTab: React.FC<InboxProps<AdminReport>> = ({ items, setItems, onConf
               <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-1 font-mono break-all">
                 {r.targetType === 'user' ? 'user' : 'id'}: {r.targetId}
               </p>
+              {r.targetType === 'user' && isAgeReview(r.reason) && <AgeReviewHelp onOpenSupport={() => onOpenSupport(r.targetId)} />}
               <div className="flex gap-2 mt-3">
                 <StatusButton status={r.status} onToggle={() => toggle(r)} />
                 {r.targetType === 'user' &&
