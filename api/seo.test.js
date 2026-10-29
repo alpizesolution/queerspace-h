@@ -82,8 +82,9 @@ test('hosting config: no catch-all rewrite, clean URLs, noindex on admin and API
   const sources = vercel.rewrites.map((r) => r.source);
   assert.equal(sources.includes('/(.*)'), false, 'unknown URLs must 404 instead of returning the app');
   assert.ok(sources.includes('/admin'));
+  assert.ok(sources.includes('/signals'), '/signals opens the app on the Signals inbox');
   const noindex = vercel.headers.filter((h) => h.headers.some((x) => x.key === 'X-Robots-Tag' && /noindex/.test(x.value))).map((h) => h.source);
-  for (const s of ['/admin', '/api/:path*']) assert.ok(noindex.includes(s), `${s} sends noindex`);
+  for (const s of ['/admin', '/signals', '/api/:path*']) assert.ok(noindex.includes(s), `${s} sends noindex`);
   assert.match(read('public/404.html'), /noindex/);
 });
 

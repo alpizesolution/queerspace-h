@@ -16,7 +16,9 @@
     { "source": "/wlw-dating-philippines", "destination": "/wlw-dating-philippines.html" },
     { "source": "/wlw-sapphic-guide", "destination": "/wlw-sapphic-guide.html" },
     { "source": "/admin", "destination": "/" },
-    { "source": "/admin/", "destination": "/" }
+    { "source": "/admin/", "destination": "/" },
+    { "source": "/signals", "destination": "/" },
+    { "source": "/signals/", "destination": "/" }
   ],
   "headers": [
     {
@@ -48,6 +50,10 @@
     },
     {
       "source": "/admin",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+    },
+    {
+      "source": "/signals",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     },
     {
