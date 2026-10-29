@@ -11,6 +11,9 @@ export const BMC_URL = 'https://www.buymeacoffee.com/donotdm';
 interface FooterProps {
   onOpenModal: (modal: 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact') => void;
   onOpenSupport: () => void;
+  onOpenWhatsNew: () => void;
+  /** Published What's New updates the member has not opened. */
+  hasUnreadUpdates?: boolean;
   /** The team replied and the member hasn't read it yet. */
   hasSupportReply?: boolean;
   className?: string;
@@ -24,7 +27,7 @@ const LINKS = [
   { id: 'terms', label: 'Terms' },
 ] as const;
 
-export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, hasSupportReply = false, className = '' }) => (
+export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, onOpenWhatsNew, hasUnreadUpdates = false, hasSupportReply = false, className = '' }) => (
   <footer className={`border-t border-line text-subtle ${className}`}>
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-6 flex flex-col items-center text-center gap-4 sm:flex-row sm:text-left sm:gap-6">
       <div className="sm:mr-auto">
@@ -35,6 +38,18 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, hasS
       </div>
 
       <nav aria-label="Footer" className="flex flex-wrap items-center justify-center text-[length:calc(13px_*_var(--fs,1))]">
+        <button
+          onClick={onOpenWhatsNew}
+          className="relative px-2 sm:px-2.5 py-2 rounded-md hover:text-fg transition-colors cursor-pointer"
+        >
+          What’s New
+          {hasUnreadUpdates && (
+            <span className="absolute top-1.5 -right-0.5 w-2 h-2 rounded-full bg-berry">
+              <span className="sr-only">New updates</span>
+            </span>
+          )}
+        </button>
+        <span aria-hidden="true" className="w-0.5 h-0.5 rounded-full bg-subtle/60" />
         {LINKS.map(({ id, label }, i) => (
           <React.Fragment key={id}>
             {i > 0 && <span aria-hidden="true" className="w-0.5 h-0.5 rounded-full bg-subtle/60" />}

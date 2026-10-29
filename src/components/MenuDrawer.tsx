@@ -11,6 +11,7 @@ import {
   Coffee,
   UserRound,
   Settings2,
+  Sparkles,
   LayoutDashboard,
 } from 'lucide-react';
 import { BMC_URL } from './Footer.tsx';
@@ -23,6 +24,7 @@ interface MenuDrawerProps {
   onOpenSupport: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
+  onOpenWhatsNew: () => void;
   hasSupportReply?: boolean;
   hasUnreadUpdates?: boolean;
   showAdmin: boolean;
@@ -51,6 +53,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   onOpenSupport,
   onOpenProfile,
   onOpenSettings,
+  onOpenWhatsNew,
   hasSupportReply = false,
   hasUnreadUpdates = false,
   showAdmin,
@@ -132,6 +135,17 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           <Group title="Information">
+            <li>
+              <button className={rowClass} onClick={then(onOpenWhatsNew)}>
+                <Sparkles className="w-[18px] h-[18px] text-lavender shrink-0" />
+                <span className="flex-1">What’s New</span>
+                {hasUnreadUpdates && (
+                  <span className="w-2.5 h-2.5 rounded-full bg-berry">
+                    <span className="sr-only">New updates</span>
+                  </span>
+                )}
+              </button>
+            </li>
             {info('about', 'About', Info)}
             {info('faq', 'FAQ', CircleHelp)}
           </Group>
@@ -166,12 +180,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
             <li>
               <button className={rowClass} onClick={then(onOpenSettings)}>
                 <Settings2 className="w-[18px] h-[18px] text-lavender shrink-0" />
-                <span className="flex-1">Settings & appearance</span>
-                {hasUnreadUpdates && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-berry">
-                    <span className="sr-only">New updates in What’s New</span>
-                  </span>
-                )}
+                Settings & appearance
               </button>
             </li>
           </Group>
