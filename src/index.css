@@ -116,6 +116,19 @@ body {
   padding: 0;
 }
 
+/*
+ * iPhone Safari zooms the whole page in when a text field under 16px gets focus, and often stays zoomed,
+ * which leaves the page wider than the screen. Keep every field at 16px or larger on touch devices
+ * (the text-size setting can still make them bigger). Unlayered, so it wins over the utility classes.
+ */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']),
+  textarea,
+  select {
+    font-size: calc(16px * max(var(--fs, 1), 1));
+  }
+}
+
 @layer base {
   :focus-visible {
     outline: 2px solid var(--color-berry);
