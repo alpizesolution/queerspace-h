@@ -518,6 +518,12 @@ service cloud.firestore {
       allow update: if isAuthenticated() && isEligibleMember(request.auth.uid) && counterMoves('replyCount', 1) && slowMode('communityReply', 5);
       // Admin removing a reply: -1.
       allow update: if isAdmin() && counterMoves('replyCount', -1);
+      // A first view: +1 on 'views' with a new views/{uid} doc. Posts made before views existed count from 0.
+      allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
+        && bumpsOnly('views')
+        && !exists(/databases/$(database)/documents/community_posts/$(postId)/views/$(request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/community_posts/$(postId)/views/$(request.auth.uid));
 
       allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorId || isAdmin());
 
@@ -534,6 +540,16 @@ service cloud.firestore {
           && isEligibleMember(request.auth.uid)
           && getAfter(postPath(postId)).data.likes == get(postPath(postId)).data.likes - 1;
         allow update: if false;
+      }
+
+      match /views/{userId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
+          && request.resource.data.keys().hasOnly(['createdAt'])
+          && request.resource.data.createdAt == request.time
+          && getAfter(postPath(postId)).data.views == get(postPath(postId)).data.get('views', 0) + 1;
+        allow update, delete: if false;
       }
 
       match /replies/{replyId} {
@@ -639,6 +655,13 @@ service cloud.firestore {
         && !exists(/databases/$(database)/documents/unsaid/$(postId)/flags/$(request.auth.uid))
         && existsAfter(/databases/$(database)/documents/unsaid/$(postId)/flags/$(request.auth.uid));
 
+      // A first view: +1 on 'views' alongside a new views/{uid} doc.
+      allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
+        && bumpsOnly('views')
+        && !exists(/databases/$(database)/documents/unsaid/$(postId)/views/$(request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/unsaid/$(postId)/views/$(request.auth.uid));
+
       // Admin restore: clear the flags on a post that was wrongly hidden.
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flags'])
@@ -656,6 +679,16 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time
           && getAfter(unsaidPath(postId)).data[request.resource.data.type]
                == get(unsaidPath(postId)).data.get(request.resource.data.type, 0) + 1;
+        allow update, delete: if false;
+      }
+
+      match /views/{userId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isEligibleMember(request.auth.uid)
+          && request.resource.data.keys().hasOnly(['createdAt'])
+          && request.resource.data.createdAt == request.time
+          && getAfter(unsaidPath(postId)).data.views == get(unsaidPath(postId)).data.get('views', 0) + 1;
         allow update, delete: if false;
       }
 
