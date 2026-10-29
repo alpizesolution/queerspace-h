@@ -23,6 +23,7 @@ export const SwipeToReply: React.FC<SwipeToReplyProps> = ({ onReply, onTap, clas
   const start = useRef<{ x: number; y: number; id: number } | null>(null);
   const moved = useRef(false);
   const armed = useRef(false);
+  const pendingTouchReply = useRef(false);
 
   const reset = () => {
     start.current = null;
@@ -34,6 +35,7 @@ export const SwipeToReply: React.FC<SwipeToReplyProps> = ({ onReply, onTap, clas
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     start.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
     moved.current = false;
+    pendingTouchReply.current = false;
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -62,13 +64,23 @@ export const SwipeToReply: React.FC<SwipeToReplyProps> = ({ onReply, onTap, clas
     setOffset(next);
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
     if (!start.current && !moved.current) return;
     const fire = armed.current;
     const wasTap = !moved.current;
     reset();
-    if (fire) onReply();
-    else if (wasTap) onTap?.();
+    if (fire) {
+      // iOS only raises the keyboard for focus() called from a touch/click handler, not pointerup,
+      // so for touch the reply is handed over to onTouchEnd (which follows right after).
+      if (e.pointerType === 'touch') pendingTouchReply.current = true;
+      else onReply();
+    } else if (wasTap) onTap?.();
+  };
+
+  const onTouchEnd = () => {
+    if (!pendingTouchReply.current) return;
+    pendingTouchReply.current = false;
+    onReply();
   };
 
   const progress = Math.min(1, offset / TRIGGER_PX);
@@ -81,7 +93,11 @@ export const SwipeToReply: React.FC<SwipeToReplyProps> = ({ onReply, onTap, clas
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={reset}
+      onTouchEnd={onTouchEnd}
+      onPointerCancel={() => {
+        pendingTouchReply.current = false;
+        reset();
+      }}
     >
       <span
         aria-hidden="true"
