@@ -12,6 +12,8 @@ import {
   UserRound,
   Settings2,
   Sparkles,
+  Volume2,
+  VolumeX,
   LayoutDashboard,
 } from 'lucide-react';
 import { BMC_URL } from './Footer.tsx';
@@ -25,6 +27,8 @@ interface MenuDrawerProps {
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onOpenWhatsNew: () => void;
+  isSoundMuted: boolean;
+  onToggleSound: () => void;
   hasSupportReply?: boolean;
   hasUnreadUpdates?: boolean;
   showAdmin: boolean;
@@ -54,6 +58,8 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   onOpenProfile,
   onOpenSettings,
   onOpenWhatsNew,
+  isSoundMuted,
+  onToggleSound,
   hasSupportReply = false,
   hasUnreadUpdates = false,
   showAdmin,
@@ -177,6 +183,17 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
           </Group>
 
           <Group title="Preferences">
+            <li>
+              <button className={rowClass} onClick={onToggleSound} role="switch" aria-checked={!isSoundMuted}>
+                {isSoundMuted ? (
+                  <VolumeX className="w-[18px] h-[18px] text-lavender shrink-0" />
+                ) : (
+                  <Volume2 className="w-[18px] h-[18px] text-lavender shrink-0" />
+                )}
+                <span className="flex-1">Sound</span>
+                <span className="text-[length:calc(13px_*_var(--fs,1))] text-subtle">{isSoundMuted ? 'Off' : 'On'}</span>
+              </button>
+            </li>
             <li>
               <button className={rowClass} onClick={then(onOpenSettings)}>
                 <Settings2 className="w-[18px] h-[18px] text-lavender shrink-0" />
