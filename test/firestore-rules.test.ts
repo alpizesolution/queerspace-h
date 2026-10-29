@@ -1058,7 +1058,7 @@ test('S-04: Only admins CAN post verified team messages in the Public Room', asy
   await assertFails(stampedAdd('ivy', 'public_room_messages', teamMsg('ivy'), 'publicRoom'));
 });
 
-test('S-05: Team posts CAN quote a message; members cannot, and quotes must be well-formed', async () => {
+test('S-05: Team posts CAN quote a message, quotes must be well-formed, and a member cannot quote a message that does not exist', async () => {
   await seedAdmin();
   const quote = { id: 'm1', author: 'Ivy', text: 'How do I rename?' };
   const teamReply = (extra: object) => ({
@@ -1473,4 +1473,54 @@ test('WN-05: Read state is private: each member CAN write only their own, never 
   await assertFails(alice.doc('app_update_reads/alice').set({ reads: 'all', updatedAt: stamp() }));
   const many = Object.fromEntries(Array.from({ length: 201 }, (_, i) => [`u${i}`, true]));
   await assertFails(alice.doc('app_update_reads/alice').set({ reads: many, updatedAt: stamp() }));
+});
+
+// ---------------------------------------------------------------- Public room: member replies
+
+const seedRoomOriginal = (id: string, over: Record<string, unknown> = {}) =>
+  testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`public_room_messages/${id}`).set({ ...roomMessage('bob', { authorName: 'Bea', text: 'Anyone read anything good lately?' }), timestamp: new Date(), ...over });
+  });
+const memberReply = (uid: string, replyTo: unknown, over: Record<string, unknown> = {}) =>
+  roomMessage(uid, { text: 'Yes! I loved it.', replyTo, ...over });
+
+test('RR-01: A member CAN reply to an existing message, quoting it exactly', async () => {
+  await seedRoomOriginal('orig1');
+  await assertSucceeds(stampedAdd('alice', 'public_room_messages',
+    memberReply('alice', { id: 'orig1', author: 'Bea', text: 'Anyone read anything good lately?' }), 'publicRoom'));
+});
+
+test('RR-02: A member reply CANNOT forge the author or the text, quote a missing message, or add extra fields', async () => {
+  await seedRoomOriginal('orig1');
+  const ok = { id: 'orig1', author: 'Bea', text: 'Anyone read anything good lately?' };
+  const stamped = (reply: unknown, uid = 'alice') => stampedAdd(uid, 'public_room_messages', memberReply(uid, reply), 'publicRoom');
+  await assertFails(stamped({ ...ok, author: 'Someone Else' }));
+  await assertFails(stamped({ ...ok, text: 'I hate everyone here' }));
+  await assertFails(stamped({ ...ok, id: 'does-not-exist' }));
+  await assertFails(stamped({ ...ok, id: 'orig1/reactions/alice' }));
+  await assertFails(stamped({ ...ok, extra: 1 }));
+  await assertFails(stamped({ id: 'orig1', author: 'Bea' }));
+  await assertFails(stamped('orig1'));
+  await assertFails(stamped({ ...ok, text: 'x'.repeat(141) }));
+  // Nothing else about the message can be bent: still your own id, still no admin/team flags.
+  await assertFails(stampedAdd('alice', 'public_room_messages', memberReply('bob', ok), 'publicRoom'));
+  await assertFails(stampedAdd('alice', 'public_room_messages', memberReply('alice', ok, { team: true }), 'publicRoom'));
+});
+
+test('RR-03: Replying to a long message quotes its first 140 characters; any other length is refused', async () => {
+  await seedRoomOriginal('long1', { text: 'long '.repeat(60) });
+  const author = 'Bea';
+  await assertSucceeds(stampedAdd('alice', 'public_room_messages', memberReply('alice', { id: 'long1', author, text: ('long '.repeat(60)).slice(0, 140) }), 'publicRoom'));
+  await assertFails(stampedAdd('carol', 'public_room_messages', memberReply('carol', { id: 'long1', author, text: 'long' }), 'publicRoom'));
+});
+
+test('RR-04: A suspended member CANNOT reply, and the slow mode still applies to replies', async () => {
+  await seedRoomOriginal('orig1');
+  const quote = { id: 'orig1', author: 'Bea', text: 'Anyone read anything good lately?' };
+  await assertSucceeds(stampedAdd('dana', 'public_room_messages', memberReply('dana', quote), 'publicRoom'));
+  await assertFails(stampedAdd('dana', 'public_room_messages', memberReply('dana', quote), 'publicRoom'));
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('suspensions/erin').set({ source: 'admin', reason: 'test', createdAt: new Date() });
+  });
+  await assertFails(stampedAdd('erin', 'public_room_messages', memberReply('erin', quote), 'publicRoom'));
 });

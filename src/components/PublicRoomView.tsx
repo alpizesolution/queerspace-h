@@ -154,7 +154,8 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
 
   const startReply = (msg: PublicRoomMessage) => {
     setReplyingTo(msg);
-    setAsTeam(true);
+    // Admins on this device answer as the team; everyone else replies as themselves.
+    if (teamAvailable) setAsTeam(true);
     inputRef.current?.focus();
   };
 
@@ -231,13 +232,13 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
 
     setInputText('');
     setSendError(null);
-    const quoted = teamAvailable && asTeam && replyingTo ? quoteOf(replyingTo) : undefined;
+    const quoted = replyingTo ? quoteOf(replyingTo) : undefined;
     const result =
       teamAvailable && asTeam
         ? (await sendTeamRoomMessage(sanitized.cleanText, quoted))
           ? 'sent'
           : 'failed'
-        : await sendPublicRoomMessage(userPrefs, sanitized.cleanText);
+        : await sendPublicRoomMessage(userPrefs, sanitized.cleanText, quoted);
     if (result === 'sent') setReplyingTo(null);
     if (result !== 'sent') {
       setInputText(sanitized.cleanText);
@@ -329,7 +330,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                 {!msg.isSelf && !msg.team && <span className="text-subtle">{msg.authorPronouns}</span>}
                 <span className="text-subtle">{formatChatTime(msg.timestamp)}</span>
               </div>
-              <SwipeToReply onReply={() => startReply(msg)} disabled={!teamAvailable} className="max-w-full">
+              <SwipeToReply onReply={() => startReply(msg)} className="max-w-full">
                 <ReactableBubble
                   id={`room-${msg.id}`}
                   open={pickerFor === msg.id}
@@ -390,6 +391,19 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
               )}
             </div>
 
+            {/* On a computer there is no swipe, so members get a button; phones and tablets swipe. */}
+            {!teamAvailable && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => startReply(msg)}
+                className="icon-btn hidden desk:inline-flex w-8 h-8 shrink-0 self-center text-subtle"
+                aria-label={`Reply to ${msg.isSelf ? 'your message' : msg.author}`}
+                title="Reply"
+              >
+                <Reply className="w-4 h-4" />
+              </button>
+            )}
             {(teamAvailable || isModerator) && (
               <div className="flex shrink-0 self-center">
             {teamAvailable && (
@@ -460,7 +474,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
         <div className="flex items-center gap-2 mx-3 sm:mx-4 mt-2 pl-3 pr-1 py-1.5 rounded-xl bg-raised border-l-2 border-berry">
           <div className="min-w-0 flex-1">
             <p className="text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry">
-              Replying to {replyingTo.isSelf ? 'your message' : replyingTo.author} as {TEAM_NAME}
+              Replying to {replyingTo.isSelf ? 'your message' : replyingTo.author}{teamAvailable && asTeam ? ` as ${TEAM_NAME}` : ''}
             </p>
             <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted truncate">{replyingTo.text}</p>
           </div>
