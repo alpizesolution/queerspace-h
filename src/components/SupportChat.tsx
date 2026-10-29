@@ -125,7 +125,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
           <TeamAvatar />
           <div className="max-w-[85%]">
             <p className="mb-1 px-1 text-[length:calc(12px_*_var(--fs,1))] font-semibold text-fg">{TEAM_NAME}</p>
-            <div className="px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-bl-md bg-raised text-fg">
+            <div className="min-w-0 px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-bl-md bg-raised text-fg">
               Hi {userPrefs.displayName || 'there'} 💜 Questions, a bug, or something that feels unsafe? Message us
               here. Only you and the team can see this chat, and we usually reply within a day.
             </div>
@@ -147,7 +147,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
                   <span className="font-semibold text-fg">{TEAM_NAME}</span>
                   <span className="text-subtle"> · {formatChatTime(msg.timestamp)}</span>
                 </p>
-                <div className="px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-bl-md bg-raised text-fg break-words whitespace-pre-wrap">
+                <div className="px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-bl-md bg-raised text-fg [overflow-wrap:anywhere] whitespace-pre-wrap">
                   {msg.text}
                 </div>
               </div>
@@ -155,7 +155,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
           ) : (
             <div key={msg.id} className="flex flex-col items-end">
               <p className="mb-1 px-1 text-[length:calc(12px_*_var(--fs,1))] text-subtle">{formatChatTime(msg.timestamp)}</p>
-              <div className="max-w-[85%] px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-br-md bg-plum text-fg break-words whitespace-pre-wrap">
+              <div className="min-w-0 max-w-[85%] px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-br-md bg-plum text-fg [overflow-wrap:anywhere] whitespace-pre-wrap">
                 {msg.text}
               </div>
             </div>

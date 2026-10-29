@@ -341,7 +341,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                   onPick={(id) => react(msg.id, id as RoomReactionId)}
                   boundsRef={scrollRef}
                   alignRight={msg.isSelf}
-                  className={`px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug rounded-[20px] break-words transition-shadow ${
+                  className={`min-w-0 px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug rounded-[20px] [overflow-wrap:anywhere] transition-shadow ${
                     msg.isSelf
                       ? 'bg-plum text-fg rounded-br-md'
                       : msg.team
@@ -359,7 +359,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                       aria-label={`Replying to ${msg.replyTo.author}: ${msg.replyTo.text}`}
                     >
                       <span className="block text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry">{msg.replyTo.author}</span>
-                      <span className="block text-[length:calc(13px_*_var(--fs,1))] text-fg/75 line-clamp-2 break-words">{msg.replyTo.text}</span>
+                      <span className="block text-[length:calc(13px_*_var(--fs,1))] text-fg/75 line-clamp-2 [overflow-wrap:anywhere]">{msg.replyTo.text}</span>
                     </button>
                   )}
                   <p className="whitespace-pre-wrap">{msg.text}</p>

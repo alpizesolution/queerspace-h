@@ -285,11 +285,11 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                         {message.replyTo && (
                           <div className={`mb-1 rounded-md border-l-2 px-2 py-0.5 text-[length:calc(11px_*_var(--fs,1))] leading-snug ${mine ? 'border-ink/40 bg-ink/10 text-ink/80' : 'border-lavender bg-surface/70 text-muted'}`}>
                             <p className="font-semibold">{message.replyTo.senderId === userId ? 'You' : partnerName}</p>
-                            <p className="line-clamp-1 break-words">{message.replyTo.text}</p>
+                            <p className="line-clamp-1 [overflow-wrap:anywhere]">{message.replyTo.text}</p>
                           </div>
                         )}
                         <div className="flex flex-wrap items-end justify-end gap-x-2">
-                          <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap break-words text-[length:calc(15px_*_var(--fs,1))] leading-snug">{message.text}</p>
+                          <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-[length:calc(15px_*_var(--fs,1))] leading-snug">{message.text}</p>
                           {message.createdAt && <span className={`ml-auto translate-y-px select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
                         </div>
                       </div>
