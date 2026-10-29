@@ -27,8 +27,12 @@
     <script>
       try {
         document.documentElement.dataset.theme = localStorage.getItem('queerspace_theme') === 'light' ? 'light' : 'dark';
+        // Same rule as resolveFontSize() in src/utils/fontSize.ts: a pick wins; a saved Small that was never picked follows the device.
         var fs = localStorage.getItem('queerspace_font_size');
-        document.documentElement.dataset.fontsize = fs === 'tiny' || fs === 'medium' || fs === 'large' ? fs : 'small';
+        var chosen = localStorage.getItem('queerspace_font_size_chosen') === '1';
+        var phone = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600;
+        var valid = fs === 'tiny' || fs === 'small' || fs === 'medium' || fs === 'large';
+        document.documentElement.dataset.fontsize = valid && (chosen || fs !== 'small') ? fs : phone ? 'tiny' : 'small';
       } catch (_) {
         document.documentElement.dataset.theme = 'dark';
       }
