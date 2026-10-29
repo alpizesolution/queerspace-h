@@ -452,7 +452,7 @@ export default function App() {
 
         {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} />}
 
-        {currentView === 'signals' && <SignalsView inbox={signalsInbox} />}
+        {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} />}
       </main>
 
       {showChrome && currentView !== 'public' && (

@@ -4,6 +4,8 @@ import { auth } from '../lib/firebase.ts';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
+import { soundEffects } from '../utils/sound.ts';
+import { hasNewIncomingMessage } from '../utils/incomingMessage.ts';
 
 type SignalMessage = {
   id: string;
@@ -20,6 +22,7 @@ export type SignalsPartner = { displayName: string | null; avatar: string | null
 type SignalsConversationProps = {
   pairId: string;
   partner?: SignalsPartner;
+  isSoundMuted?: boolean;
   onBack: () => void;
 };
 
@@ -57,7 +60,7 @@ function formatTime(value: string | null): string {
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
-export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, onBack }) => {
+export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, isSoundMuted = false, onBack }) => {
   const [messages, setMessages] = useState<SignalMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -76,6 +79,11 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const stickToBottom = useRef(true);
   const lastCount = useRef(0);
   const lastOwnSend = useRef(false);
+  const lastMessageId = useRef<string | null>(null);
+  /** Set after the first successful load, so a failed first load cannot make history chime later. */
+  const loadedOnce = useRef(false);
+  const soundMutedRef = useRef(isSoundMuted);
+  soundMutedRef.current = isSoundMuted;
   const userId = auth?.currentUser?.uid;
   const partnerName = partner?.displayName?.trim() || 'Anonymous member';
   const { height: viewportHeight, offsetTop: viewportTop } = useVisualViewport();
@@ -90,7 +98,12 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
       const result = await request<{ messages: SignalMessage[] }>(
         `/api/signals?view=messages&pairId=${encodeURIComponent(pairId)}`
       );
-      setMessages(Array.isArray(result.messages) ? result.messages : []);
+      const next = Array.isArray(result.messages) ? result.messages : [];
+      if (!loadedOnce.current) {
+        loadedOnce.current = true;
+        lastMessageId.current = next.length ? next[next.length - 1].id : '';
+      }
+      setMessages(next);
       setError(null);
       setEnded(false);
     } catch (err) {
@@ -115,6 +128,14 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     stickToBottom.current = true;
     setHasUnseen(false);
   }, []);
+
+  // Chime when the other member's message arrives (the list is polled); existing history stays silent.
+  useEffect(() => {
+    if (!loadedOnce.current) return;
+    const mapped = messages.map((m) => ({ id: m.id, isSelf: m.senderId === userId }));
+    if (hasNewIncomingMessage(lastMessageId.current, mapped) && !soundMutedRef.current) soundEffects.playMessageReceived();
+    lastMessageId.current = mapped.length ? mapped[mapped.length - 1].id : '';
+  }, [messages, userId]);
 
   // Follow new messages only while the reader is at the bottom (or just sent one); otherwise flag them.
   useLayoutEffect(() => {
@@ -161,6 +182,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
         } : {}),
       });
       lastOwnSend.current = true;
+      if (!soundMutedRef.current) soundEffects.playMessageSent();
       setMessages((current) => current.some((item) => item.id === result.id) ? current : [...current, result]);
       setDraft('');
       setReplyingTo(null);

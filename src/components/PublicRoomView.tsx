@@ -8,6 +8,7 @@ import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
+import { hasNewIncomingMessage } from '../utils/incomingMessage.ts';
 import {
   adminDeleteRoomMessage,
   canPostAsTeam,
@@ -64,6 +65,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastCountRef = useRef(0);
+  const lastIdRef = useRef<string | null>(null);
   // Admins signed in on this device can post as the team without leaving the room.
   const [teamAvailable, setTeamAvailable] = useState(false);
   const [asTeam, setAsTeam] = useState(false);
@@ -208,9 +210,8 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
   useEffect(() => {
     const latest = messages[messages.length - 1];
     if (stickToBottomRef.current || latest?.isSelf) scrollToBottom(true);
-    if (lastCountRef.current > 0 && messages.length > lastCountRef.current && latest && !latest.isSelf && !isSoundMuted) {
-      soundEffects.playMessageReceived();
-    }
+    if (hasNewIncomingMessage(lastIdRef.current, messages) && !isSoundMuted) soundEffects.playMessageReceived();
+    lastIdRef.current = latest ? latest.id : lastIdRef.current;
     lastCountRef.current = messages.length;
   }, [messages, isSoundMuted]);
 
