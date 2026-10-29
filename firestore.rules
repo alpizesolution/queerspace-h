@@ -351,6 +351,19 @@ service cloud.firestore {
         && q.text is string && q.text.size() <= 140;
     }
 
+    // A member's reply must quote a message that really exists, under its real author, so nobody can
+    // put words in another member's mouth. Originals up to 140 characters must match exactly; for longer
+    // ones the quote is the first 140 characters (the client cuts it; its content cannot be checked here).
+    function isGenuineRoomQuote(q) {
+      return isValidRoomQuote(q)
+        && !q.id.matches('.*/.*')
+        && exists(roomMessagePath(q.id))
+        && get(roomMessagePath(q.id)).data.authorName == q.author
+        && (get(roomMessagePath(q.id)).data.text.size() > 140
+            ? q.text.size() == 140
+            : get(roomMessagePath(q.id)).data.text == q.text);
+    }
+
     function roomMessagePath(messageId) {
       return /databases/$(database)/documents/public_room_messages/$(messageId);
     }
@@ -372,7 +385,8 @@ service cloud.firestore {
       allow create: if isAuthenticated()
         && isEligibleMember(request.auth.uid)
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'text', 'timestamp'])
-        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'text', 'timestamp'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'text', 'timestamp', 'replyTo'])
+        && (!('replyTo' in request.resource.data) || isGenuineRoomQuote(request.resource.data.replyTo))
         && request.resource.data.authorId == request.auth.uid
         && (!('authorAvatar' in request.resource.data)
             || (request.resource.data.authorAvatar is string && request.resource.data.authorAvatar.size() <= 24))

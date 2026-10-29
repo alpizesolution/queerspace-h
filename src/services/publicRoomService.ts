@@ -204,7 +204,7 @@ export type SendResult = 'sent' | 'too-fast' | 'failed';
 /** Seconds between room messages; must match slowMode('publicRoom', …) in firestore.rules. */
 export const PUBLIC_ROOM_SLOW_MODE_SECONDS = 2;
 
-export async function sendPublicRoomMessage(prefs: UserPreferences, text: string): Promise<SendResult> {
+export async function sendPublicRoomMessage(prefs: UserPreferences, text: string, replyTo?: RoomQuote): Promise<SendResult> {
   if (!db) return 'failed';
   try {
     const user = auth?.currentUser ?? (await ensureAnonymousAuth());
@@ -217,6 +217,7 @@ export async function sendPublicRoomMessage(prefs: UserPreferences, text: string
       ...(isValidAvatar(prefs.avatar) ? { authorAvatar: prefs.avatar } : {}),
       text: text.slice(0, 1000),
       timestamp: serverTimestamp(),
+      ...(replyTo ? { replyTo } : {}),
     });
     batch.set(doc(db, 'rate_limits', user.uid), { publicRoom: serverTimestamp() }, { merge: true });
     await batch.commit();
