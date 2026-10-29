@@ -40,7 +40,9 @@ import { useUnreadUpdates } from './hooks/useUnreadUpdates.ts';
 import { WhatsNewSheet } from './components/WhatsNewSheet.tsx';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community' | 'signals'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community' | 'signals'>(() =>
+    /^\/signals\/?$/.test(window.location.pathname) ? 'signals' : 'home'
+  );
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
@@ -81,6 +83,12 @@ export default function App() {
   const [signalSender, setSignalSender] = useState<string | null>(null);
   const currentViewRef = useRef(currentView);
   currentViewRef.current = currentView;
+  // Keep /signals in the address bar while the Signals inbox is open, and drop it when leaving.
+  useEffect(() => {
+    const onSignalsPath = /^\/signals\/?$/.test(window.location.pathname);
+    if (currentView === 'signals' && !onSignalsPath) window.history.replaceState(null, '', '/signals');
+    else if (currentView !== 'signals' && onSignalsPath) window.history.replaceState(null, '', '/');
+  }, [currentView]);
   const signalsInbox = useSignalsInbox(() => {
     if (currentViewRef.current === 'signals') return;
     setSignalSender(null);
