@@ -1,5 +1,6 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
+import { AGE_REVIEW_REASON } from '../utils/ageReview.ts';
 
 /** Adds a minimal age-eligibility review item to the existing admin Reports inbox.
  * The birthday itself is deliberately not included in this request.
@@ -13,7 +14,7 @@ export async function submitAgeEligibilityReview(): Promise<boolean> {
       reporterId: user.uid,
       targetId: user.uid,
       targetType: 'user',
-      reason: 'Age eligibility review requested by member after birthday entry. Please review the member’s access eligibility.',
+      reason: AGE_REVIEW_REASON,
       timestamp: serverTimestamp(),
     });
     return true;

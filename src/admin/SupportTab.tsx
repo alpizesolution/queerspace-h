@@ -16,10 +16,12 @@ import { whileActive } from '../utils/whileActive.ts';
 import { useVisualViewportHeight } from '../hooks/useVisualViewportHeight.ts';
 
 /** Admin inbox for member support chats. Listeners run only while this tab is open. */
-export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadChange: (n: number) => void }> = ({
-  formatAgo,
-  onUnreadChange,
-}) => {
+export const SupportTab: React.FC<{
+  formatAgo: (ms: number) => string;
+  onUnreadChange: (n: number) => void;
+  /** Open this member's chat as soon as the list has loaded (from an age-review report). */
+  focusId?: string | null;
+}> = ({ formatAgo, onUnreadChange, focusId = null }) => {
   const [threads, setThreads] = useState<SupportThread[] | null>(null);
   const [error, setError] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -53,6 +55,12 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
     []
   );
 
+  // Coming from a report: open that member's chat, or say plainly that they haven't written to us.
+  const focused = focusId && threads ? threads.some((t) => t.id === focusId) : null;
+  useEffect(() => {
+    if (focusId && focused) setOpenId(focusId);
+  }, [focusId, focused]);
+
   const open = threads?.find((t) => t.id === openId) ?? null;
 
   return (
@@ -66,6 +74,11 @@ export const SupportTab: React.FC<{ formatAgo: (ms: number) => string; onUnreadC
         </span>
       </p>
       {error && <p className="card p-4 mb-4 text-sm text-danger">Support chats couldn’t load. Try again.</p>}
+      {focusId && focused === false && (
+        <p className="card p-4 mb-4 text-sm text-muted" role="status">
+          This member hasn’t written to us yet, so there’s no chat to open. Their account stays locked until they do.
+        </p>
+      )}
 
       {/* Single column on phones; inbox + conversation side by side from tablet width up. */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] desk:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
