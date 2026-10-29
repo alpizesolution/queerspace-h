@@ -1524,3 +1524,43 @@ test('RR-04: A suspended member CANNOT reply, and the slow mode still applies to
   });
   await assertFails(stampedAdd('erin', 'public_room_messages', memberReply('erin', quote), 'publicRoom'));
 });
+
+// ---------------------------------------------------------------- Post views (Echoes and Cosmos)
+
+function viewAs(uid: string, path: string, bump = 1) {
+  const fs = testEnv.authenticatedContext(uid).firestore();
+  const batch = fs.batch();
+  batch.update(fs.doc(path), { views: firebase.firestore.FieldValue.increment(bump) });
+  batch.set(fs.doc(`${path}/views/${uid}`), { createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  return batch.commit();
+}
+
+test('PV-01: A member CAN count one view on a Cosmos post, but only once, and only by one', async () => {
+  await seedCommunityPost('v1', 'alice');
+  await assertSucceeds(viewAs('bob', 'community_posts/v1'));
+  await assertFails(viewAs('bob', 'community_posts/v1'));
+  await assertFails(viewAs('carol', 'community_posts/v1', 5));
+  await assertSucceeds(viewAs('carol', 'community_posts/v1'));
+  const snap = await testEnv.authenticatedContext('dave').firestore().doc('community_posts/v1').get();
+  assert.equal(snap.data()!.views, 2);
+});
+
+test('PV-02: A view CANNOT be added without its marker, nor with someone else\'s marker', async () => {
+  await seedCommunityPost('v2', 'alice');
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(bob.doc('community_posts/v2').update({ views: firebase.firestore.FieldValue.increment(1) }));
+  const batch = bob.batch();
+  batch.update(bob.doc('community_posts/v2'), { views: firebase.firestore.FieldValue.increment(1) });
+  batch.set(bob.doc('community_posts/v2/views/carol'), { createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  await assertFails(batch.commit());
+});
+
+test('PV-03: A member CAN count one view on an Echo, only once, and never edit or delete the marker', async () => {
+  await seedUnsaid('v3', 'alice');
+  await assertSucceeds(viewAs('bob', 'unsaid/v3'));
+  await assertFails(viewAs('bob', 'unsaid/v3'));
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(bob.doc('unsaid/v3/views/bob').delete());
+  await assertFails(bob.doc('unsaid/v3/views/bob').update({ createdAt: new Date() }));
+  await assertFails(testEnv.authenticatedContext('carol').firestore().doc('unsaid/v3/views/bob').get());
+});

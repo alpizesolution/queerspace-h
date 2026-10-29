@@ -18,6 +18,7 @@ import {
   subscribeToCommunity,
   subscribeToReplies,
 } from '../services/communityService.ts';
+import { PostViews } from './PostViews.tsx';
 import { whileActive } from '../utils/whileActive.ts';
 
 /** What the confirmation dialog is about to remove. */
@@ -422,9 +423,10 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                     <MessageCircle className="w-[18px] h-[18px]" />
                     {replyCount}
                   </button>
+                  <PostViews collection="community_posts" postId={post.id} count={post.views ?? 0} own={Boolean(uid) && post.authorId === uid} className="ml-auto mr-1 text-[length:calc(12px_*_var(--fs,1))]" />
                   <button
                     onClick={() => handleShare(post)}
-                    className="ml-auto inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full hover:bg-raised hover:text-fg transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full hover:bg-raised hover:text-fg transition-colors cursor-pointer"
                     aria-label="Share post"
                   >
                     {copiedPostId === post.id ? (

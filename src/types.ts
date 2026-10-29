@@ -126,6 +126,7 @@ export interface CommunityPost {
   content: string;
   timestamp: number;
   likes: number;
+  views?: number;
   userLiked?: boolean;
   replyCount?: number;
   replies: CommunityReply[];

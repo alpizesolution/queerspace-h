@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Flag, Info, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
+import { PostViews } from './PostViews.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { CrisisSupportCard } from './CrisisSupportCard.tsx';
 import {
@@ -320,6 +321,7 @@ export const UnsaidView: React.FC = () => {
                         })}
                       </div>
                       <div className="ml-auto flex items-center">
+                        <PostViews collection="unsaid" postId={post.id} count={post.views} own={mine} className="mr-2 text-[length:calc(12px_*_var(--fs,1))]" />
                         <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle whitespace-nowrap">
                           {formatPostedAgo(post.createdAt, now)}
                         </span>
