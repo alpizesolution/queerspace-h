@@ -1382,3 +1382,95 @@ test('EP-04: Older app versions can still post with the legacy 48-hour expiry, a
   const snap = await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('unsaid/legacy1').get());
   assert.ok(snap.data()?.expiresAt, 'the expiry the writer chose is kept on the post');
 });
+
+// ---------------------------------------------------------------- What's New (app_updates)
+
+const stamp = () => firebase.firestore.FieldValue.serverTimestamp();
+const appUpdate = (over: Record<string, unknown> = {}) => ({
+  title: 'Dark mode', body: 'Now in Settings.', category: 'feature', status: 'draft',
+  createdAt: stamp(), updatedAt: stamp(), publishedAt: null, ...over,
+});
+const seedUpdates = () => testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const fs = ctx.firestore();
+  const base = { title: 'Title', body: 'Body', category: 'fix', createdAt: new Date(), updatedAt: new Date() };
+  await fs.doc('app_updates/pub').set({ ...base, status: 'published', publishedAt: new Date() });
+  await fs.doc('app_updates/draft').set({ ...base, status: 'draft', publishedAt: null });
+});
+
+test('WN-01: Only an admin CAN create, publish, edit, unpublish and delete a draft', async () => {
+  await seedAdmin();
+  const admin = adminDb();
+  await assertSucceeds(admin.doc('app_updates/n1').set(appUpdate()));
+  await assertSucceeds(admin.doc('app_updates/n2').set(appUpdate({ status: 'published', publishedAt: stamp() })));
+  await assertSucceeds(admin.doc('app_updates/n1').update({ status: 'published', publishedAt: stamp(), updatedAt: stamp() }));
+  await assertSucceeds(admin.doc('app_updates/n1').update({ title: 'Dark mode is here', updatedAt: stamp() }));
+  await assertSucceeds(admin.doc('app_updates/n1').update({ status: 'draft', updatedAt: stamp() }));
+  await assertSucceeds(admin.doc('app_updates/n1').delete());
+  // Published updates are unpublished first; they cannot be deleted outright.
+  await assertFails(admin.doc('app_updates/n2').delete());
+});
+
+test('WN-02: Members and anonymous users CANNOT create, edit, publish or delete updates', async () => {
+  await seedAdmin();
+  await seedUpdates();
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('app_updates/x').set(appUpdate()));
+  await assertFails(alice.doc('app_updates/x').set(appUpdate({ status: 'published', publishedAt: stamp() })));
+  await assertFails(alice.doc('app_updates/draft').update({ status: 'published', publishedAt: stamp(), updatedAt: stamp() }));
+  await assertFails(alice.doc('app_updates/pub').update({ title: 'Hacked', updatedAt: stamp() }));
+  await assertFails(alice.doc('app_updates/pub').delete());
+  await assertFails(alice.doc('app_updates/draft').delete());
+  // A non-Google account is never an admin, even if its uid has an admins doc.
+  const notGoogle = testEnv.authenticatedContext('cha').firestore();
+  await assertFails(notGoogle.doc('app_updates/x').set(appUpdate()));
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('app_updates/x').set(appUpdate()));
+});
+
+test('WN-03: Members CAN read published updates but NOT drafts, and queries must ask for published only', async () => {
+  await seedAdmin();
+  await seedUpdates();
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc('app_updates/pub').get());
+  await assertFails(alice.doc('app_updates/draft').get());
+  await assertSucceeds(alice.collection('app_updates').where('status', '==', 'published').get());
+  await assertFails(alice.collection('app_updates').get());
+  await assertFails(alice.collection('app_updates').where('status', '==', 'draft').get());
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('app_updates/pub').get());
+  const admin = adminDb();
+  await assertSucceeds(admin.doc('app_updates/draft').get());
+  await assertSucceeds(admin.collection('app_updates').get());
+});
+
+test('WN-04: Update content is validated (title, body, category, link, extra fields)', async () => {
+  await seedAdmin();
+  const admin = adminDb();
+  await assertFails(admin.doc('app_updates/b1').set(appUpdate({ title: 'hi' })));
+  await assertFails(admin.doc('app_updates/b2').set(appUpdate({ title: 'x'.repeat(81) })));
+  await assertFails(admin.doc('app_updates/b3').set(appUpdate({ body: '' })));
+  await assertFails(admin.doc('app_updates/b4').set(appUpdate({ body: 'x'.repeat(501) })));
+  await assertFails(admin.doc('app_updates/b5').set(appUpdate({ category: 'spam' })));
+  await assertFails(admin.doc('app_updates/b6').set(appUpdate({ status: 'archived' })));
+  await assertFails(admin.doc('app_updates/b7').set(appUpdate({ extra: 'nope' })));
+  await assertFails(admin.doc('app_updates/b8').set(appUpdate({ status: 'published', publishedAt: null })));
+  await assertFails(admin.doc('app_updates/b9').set(appUpdate({ link: { url: 'http://x.com', label: 'Go' } })));
+  await assertFails(admin.doc('app_updates/b10').set(appUpdate({ link: { url: 'javascript:alert(1)', label: 'Go' } })));
+  await assertFails(admin.doc('app_updates/b11').set(appUpdate({ link: { url: 'https://x.com', label: '' } })));
+  await assertFails(admin.doc('app_updates/b12').set(appUpdate({ link: { url: 'https://x.com', label: 'Go', extra: 1 } })));
+  await assertSucceeds(admin.doc('app_updates/ok').set(appUpdate({ link: { url: 'https://example.com/a', label: 'Read more' } })));
+});
+
+test('WN-05: Read state is private: each member CAN write only their own, never another member', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertSucceeds(alice.doc('app_update_reads/alice').set({ reads: { pub: true }, updatedAt: stamp() }, { merge: true }));
+  await assertSucceeds(alice.doc('app_update_reads/alice').set({ reads: { other: true }, updatedAt: stamp() }, { merge: true }));
+  const mine = await alice.doc('app_update_reads/alice').get();
+  assert.deepEqual(Object.keys(mine.data()!.reads).sort(), ['other', 'pub']);
+  await assertFails(bob.doc('app_update_reads/alice').get());
+  await assertFails(bob.doc('app_update_reads/alice').set({ reads: { pub: true }, updatedAt: stamp() }));
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('app_update_reads/alice').get());
+  await assertFails(alice.doc('app_update_reads/alice').set({ reads: { pub: true }, updatedAt: stamp(), extra: 1 }));
+  await assertFails(alice.doc('app_update_reads/alice').set({ reads: 'all', updatedAt: stamp() }));
+  const many = Object.fromEntries(Array.from({ length: 201 }, (_, i) => [`u${i}`, true]));
+  await assertFails(alice.doc('app_update_reads/alice').set({ reads: many, updatedAt: stamp() }));
+});
