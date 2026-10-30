@@ -42,7 +42,7 @@ The token is verified server-side, including revocation checks. User identity is
 
 ## Security test coverage added
 
-- `api/signals.test.js` covers unsupported methods and missing/malformed bearer headers. These are lightweight Node tests and do not require Firebase credentials.
+- `test/api/signals.test.js` covers unsupported methods and missing/malformed bearer headers. These are lightweight Node tests and do not require Firebase credentials.
 - `test/firestore-rules.test.ts` now includes SIG-01 through SIG-03 to verify that client SDK users cannot read or write invitation, pair, idempotency, or rate-limit documents.
 - The Firestore rules tests require the Firestore emulator configured in `firebase.json`. Run them from the repository root with:
 
@@ -50,7 +50,7 @@ The token is verified server-side, including revocation checks. User identity is
 firebase emulators:exec --only firestore "npx tsx --test test/firestore-rules.test.ts"
 ```
 
-- The API tests are included by the existing `npm test` script through `api/*.test.js`; they have not yet been executed in this change session.
+- The API tests are included by the existing `npm test` script through `test/api/*.test.js`; they have not yet been executed in this change session.
 - These tests verify the client-deny boundary, not server-side transaction behavior. Acceptance, expiry, block/suspension rechecks, idempotency races, and cooldown concurrency still need integration tests against an isolated Firebase project/emulator setup.
 - The planned server-side lifecycle scenarios are documented in [Signals Phase A — Server Integration Test Plan](./signals-phase-a-integration-test-plan.md). This is a test plan, not evidence that the cases have run or passed.
 

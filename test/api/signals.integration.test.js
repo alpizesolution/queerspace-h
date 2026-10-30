@@ -4,8 +4,8 @@ import { initializeApp as initializeClientApp, deleteApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth';
 import { getApps as getAdminApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import handler from './signals.js';
-import { getAdminApp } from './_lib.js';
+import handler from '../../api/signals.js';
+import { getAdminApp } from '../../api/_lib.js';
 
 const enabled = process.env.SIGNALS_INTEGRATION_TESTS === 'true';
 process.env.FIREBASE_AUTH_EMULATOR_HOST ||= '127.0.0.1:9099';

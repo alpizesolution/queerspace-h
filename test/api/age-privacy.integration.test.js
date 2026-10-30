@@ -19,11 +19,11 @@ async function clearFirestore() {
 
 async function load() {
   await clearFirestore();
-  const { default: match } = await import('./match.js');
-  const { default: age } = await import('./age.js');
-  const { getAdminApp, ageFromDate, parseBirthDate } = await import('./_lib.js');
+  const { default: match } = await import('../../api/match.js');
+  const { default: age } = await import('../../api/age.js');
+  const { getAdminApp, ageFromDate, parseBirthDate } = await import('../../api/_lib.js');
   const { getFirestore } = await import('firebase-admin/firestore');
-  const { migrateAgePrivacy } = await import('../scripts/migrate-age-privacy.mjs');
+  const { migrateAgePrivacy } = await import('../../scripts/migrate-age-privacy.mjs');
   return { match, age, db: getFirestore(getAdminApp()), ageFromDate, parseBirthDate, migrateAgePrivacy };
 }
 

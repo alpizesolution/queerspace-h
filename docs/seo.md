@@ -2,7 +2,7 @@
 
 Public, indexable pages live in `scripts/seo/pages.mjs`. `npm run seo` (also run by `npm run build`) writes the HTML pages,
 `sitemap.xml`, `robots.txt`, `404.html` and `seo-pages.css` into `public/`. The generated files are committed so changes are reviewable;
-`api/seo.test.js` fails if they drift from the source.
+`test/api/seo.test.js` fails if they drift from the source.
 
 - The app (`index.html`) is the homepage. Its static HTML carries the metadata, structured data and a crawlable summary; React replaces the summary on start.
 - Unknown URLs return a real 404 (no catch-all rewrite). `/admin` serves the app and sends `X-Robots-Tag: noindex`; `/api/*` also sends noindex.

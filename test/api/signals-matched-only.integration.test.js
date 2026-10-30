@@ -21,8 +21,8 @@ async function newUser() {
 
 async function load() {
   await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${process.env.GCLOUD_PROJECT}/databases/(default)/documents`, { method: 'DELETE' });
-  const { default: handler, isActiveMatch } = await import('./signals.js');
-  const { getAdminApp } = await import('./_lib.js');
+  const { default: handler, isActiveMatch } = await import('../../api/signals.js');
+  const { getAdminApp } = await import('../../api/_lib.js');
   const { getFirestore } = await import('firebase-admin/firestore');
   return { handler, isActiveMatch, db: getFirestore(getAdminApp()) };
 }
@@ -47,7 +47,7 @@ const create = (handler, user, recipientId, convId) =>
   });
 
 test('isActiveMatch accepts only an active two-person conversation containing both members', async () => {
-  const { isActiveMatch } = await import('./signals.js');
+  const { isActiveMatch } = await import('../../api/signals.js');
   assert.equal(isActiveMatch({ status: 'active', participants: ['a', 'b'] }, 'a', 'b'), true);
   assert.equal(isActiveMatch({ status: 'ended', participants: ['a', 'b'] }, 'a', 'b'), false);
   assert.equal(isActiveMatch({ status: 'blocked', participants: ['a', 'b'] }, 'a', 'b'), false);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { upstreamUrl } from './firebase-auth.js';
+import { upstreamUrl } from '../../api/firebase-auth.js';
 
 test('maps the helper paths to the project firebaseapp.com host, keeping the query', () => {
   assert.equal(

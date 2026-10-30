@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/utils/*.test.ts src/services/*.test.ts src/admin/*.test.ts api/*.test.js"
+    "test": "tsx --test src/utils/*.test.ts src/services/*.test.ts src/admin/*.test.ts test/api/*.test.js"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
