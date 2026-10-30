@@ -25,32 +25,13 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.ts';
+import type { ReportStatus, SuggestionStatus } from './adminInboxService.ts';
 import { isFreshQueueEntry } from './liveMatchService.ts';
 
 /**
  * Admin page data. Every read and write here is also guarded by firestore.rules:
  * only a Google account with a doc at admins/{uid} gets through.
  */
-
-export type InboxStatus = 'open' | 'done';
-
-export interface AdminSuggestion {
-  id: string;
-  category: string;
-  text: string;
-  createdAt: number;
-  status: InboxStatus;
-}
-
-export interface AdminReport {
-  id: string;
-  reporterId: string;
-  targetId: string;
-  targetType: string;
-  reason: string;
-  createdAt: number;
-  status: InboxStatus;
-}
 
 export interface AdminUnsaidPost {
   id: string;
@@ -112,10 +93,6 @@ export function splitPeriods(counts: number[], range: number): { current: number
 function toMillis(value: unknown): number {
   if (value && typeof (value as Timestamp).toMillis === 'function') return (value as Timestamp).toMillis();
   return 0;
-}
-
-function toStatus(value: unknown): InboxStatus {
-  return value === 'done' ? 'done' : 'open';
 }
 
 /** Local midnights for the last `days` days, oldest first. */
@@ -284,42 +261,10 @@ async function fetchStats(range: StatsRange): Promise<AdminStats> {
 
 // ---------------------------------------------------------------- Inbox
 
-export async function loadSuggestions(): Promise<AdminSuggestion[]> {
-  if (!db) return [];
-  const snap = await getDocs(query(collection(db, 'suggestions'), orderBy('createdAt', 'desc'), limit(200)));
-  return snap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      category: String(data.category ?? 'other'),
-      text: String(data.text ?? ''),
-      createdAt: toMillis(data.createdAt),
-      status: toStatus(data.status),
-    };
-  });
-}
-
-export async function loadReports(): Promise<AdminReport[]> {
-  if (!db) return [];
-  const snap = await getDocs(query(collection(db, 'reports'), orderBy('timestamp', 'desc'), limit(200)));
-  return snap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      reporterId: String(data.reporterId ?? ''),
-      targetId: String(data.targetId ?? ''),
-      targetType: String(data.targetType ?? ''),
-      reason: String(data.reason ?? ''),
-      createdAt: toMillis(data.timestamp),
-      status: toStatus(data.status),
-    };
-  });
-}
-
 export async function setInboxStatus(
   collectionName: 'suggestions' | 'reports',
   id: string,
-  status: InboxStatus
+  status: SuggestionStatus | ReportStatus
 ): Promise<void> {
   if (!db) return;
   await updateDoc(doc(db, collectionName, id), { status });

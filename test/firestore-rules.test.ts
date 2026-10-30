@@ -1666,3 +1666,42 @@ test('MA-10: Retention counts a cohort only once its windows are complete', asyn
   assert.equal(first.rates[14], null); // day 14 of the last cohort day is today: not finished
   assert.equal(first.rates[30], null);
 });
+
+// ---------------------------------------------------------------- Separate Suggestions and Reports pages: statuses
+
+test('IN-01: An admin CAN move a suggestion through every suggestion status, and only those', async () => {
+  await seedAdmin();
+  await seedInbox();
+  const s1 = adminDb().doc('suggestions/s1');
+  for (const status of ['reviewed', 'in_progress', 'implemented', 'archived', 'open', 'done']) await assertSucceeds(s1.update({ status }));
+  for (const status of ['reviewing', 'resolved', 'dismissed', 'banned', '', 5]) await assertFails(s1.update({ status }));
+});
+
+test('IN-02: An admin CAN move a report through every report status, and only those', async () => {
+  await seedAdmin();
+  await seedInbox();
+  const r1 = adminDb().doc('reports/r1');
+  for (const status of ['reviewing', 'resolved', 'dismissed', 'open', 'done']) await assertSucceeds(r1.update({ status }));
+  for (const status of ['reviewed', 'in_progress', 'implemented', 'archived', 'banned']) await assertFails(r1.update({ status }));
+});
+
+test('IN-03: Members CANNOT set a status, read the inbox, or change a submission, and still CAN submit', async () => {
+  await seedInbox();
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc('suggestions/s1').update({ status: 'reviewed' }));
+  await assertFails(alice.doc('reports/r1').update({ status: 'resolved' }));
+  await assertFails(alice.collection('reports').get());
+  await assertFails(testEnv.authenticatedContext('bob').firestore().collection('suggestions').get());
+  // A new submission carries no status (it counts as New / Open); a member cannot send one with a status.
+  await assertFails(stampedAdd('carol', 'suggestions', { ...suggestion('carol'), status: 'implemented' }, 'suggestion'));
+  await assertSucceeds(stampedAdd('carol', 'suggestions', suggestion('carol'), 'suggestion'));
+});
+
+test('IN-04: An admin CAN read the newest-first window the live listeners use', async () => {
+  await seedAdmin();
+  await seedInbox();
+  const cha = adminDb();
+  await assertSucceeds(cha.collection('suggestions').orderBy('createdAt', 'desc').limit(200).get());
+  await assertSucceeds(cha.collection('reports').orderBy('timestamp', 'desc').limit(200).get());
+  await assertFails(testEnv.authenticatedContext('alice').firestore().collection('reports').orderBy('timestamp', 'desc').limit(200).get());
+});

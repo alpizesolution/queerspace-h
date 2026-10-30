@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { User } from 'firebase/auth';
 import {
   ArrowLeft,
-  Ban,
   Check,
   Copy,
-  Inbox,
+  Flag,
   LayoutDashboard,
+  Lightbulb,
   LifeBuoy,
   LogOut,
   Megaphone,
@@ -19,28 +19,21 @@ import {
 import { ConfirmDialog } from '../components/Sheet.tsx';
 import { isFirebaseConfigured, subscribeAuthState } from '../lib/firebase.ts';
 import {
-  AdminReport,
   AdminStats,
-  AdminSuggestion,
   AdminUnsaidPost,
   AdminCheck,
   checkAdmin,
-  deleteInboxItem,
   finishRedirectSignIn,
-  InboxStatus,
   isGoogleUser,
   loadDisplayName,
   loadFlaggedUnsaid,
-  loadReports,
   loadStats,
   statsFetchedAt,
   STATS_RANGES,
   DEFAULT_STATS_RANGE,
   type StatsRange,
-  loadSuggestions,
   removeUnsaid,
   restoreUnsaid,
-  setInboxStatus,
   signInAdmin,
   signOutAdmin,
 } from '../services/adminService.ts';
@@ -51,16 +44,17 @@ import { rememberAdminDevice } from '../utils/adminDevice.ts';
 import { SupportTab } from './SupportTab.tsx';
 import { BirthdayCorrectionsTab } from './BirthdayCorrectionsTab.tsx';
 import { RoomTab } from './RoomTab.tsx';
-import { AgeReviewHelp, AgeReviewTag } from './AgeReviewMarks.tsx';
-import { isAgeReview } from '../utils/ageReview.ts';
+import { SuggestionsPage, ReportsPage } from './InboxPages.tsx';
+import { AdminToasts, SoundToggle, type AdminToast, MAX_TOASTS } from './AdminToasts.tsx';
+import { useAdminInbox } from './useAdminInbox.ts';
+import { adminSoundEnabled, playAdminChime, setAdminSoundEnabled } from '../utils/adminNotify.ts';
 import { AppUpdatesTab } from './AppUpdatesTab.tsx';
 import { countUnreadSupport } from '../services/supportService.ts';
 import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
 import type { CommunityPost } from '../types.ts';
 import { whileActive } from '../utils/whileActive.ts';
-import { liftSuspension, loadSuspensions, suspendUser, type Suspension } from '../services/suspensionService.ts';
 
-type Tab = 'overview' | 'support' | 'room' | 'inbox' | 'moderation' | 'updates';
+type Tab = 'overview' | 'support' | 'room' | 'suggestions' | 'reports' | 'moderation' | 'updates';
 
 interface PendingConfirm {
   title: string;
@@ -79,6 +73,23 @@ export function formatAgo(ms: number, now: number = Date.now()): string {
   return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/** Turns the new-submission chime on or off for this device (off by default). */
+const HeaderSound: React.FC = () => {
+  const [on, setOn] = useState(adminSoundEnabled());
+  return (
+    <SoundToggle
+      on={on}
+      onToggle={() => {
+        const next = !on;
+        setAdminSoundEnabled(next);
+        setOn(next);
+        // Turning it on is a tap, so the browser allows this preview chime (and later ones).
+        if (next) playAdminChime(true);
+      }}
+    />
+  );
+};
+
 const Shell: React.FC<{ children: React.ReactNode; user?: User | null }> = ({ children, user }) => (
   <div className="min-h-dvh bg-ink text-fg">
     <header className="sticky top-0 z-40 bg-ink/85 backdrop-blur-xl border-b border-line pt-safe">
@@ -93,6 +104,7 @@ const Shell: React.FC<{ children: React.ReactNode; user?: User | null }> = ({ ch
         {user && isGoogleUser(user) && (
           <div className="ml-auto flex items-center gap-1 min-w-0">
             <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle truncate hidden sm:block">{user.email}</span>
+            <HeaderSound />
             <button onClick={() => signOutAdmin()} className="icon-btn" aria-label="Sign out" title="Sign out">
               <LogOut className="w-[18px] h-[18px]" />
             </button>
@@ -266,32 +278,39 @@ export default function AdminApp() {
 
 const Dashboard: React.FC = () => {
   const [tab, setTab] = useState<Tab>('overview');
-  const [suggestions, setSuggestions] = useState<AdminSuggestion[] | null>(null);
-  const [reports, setReports] = useState<AdminReport[] | null>(null);
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
 
-  const refreshInbox = useCallback(() => {
-    loadSuggestions().then(setSuggestions).catch(() => setSuggestions([]));
-    loadReports().then(setReports).catch(() => setReports([]));
+  // New submissions announce themselves: a toast (never with the submission's text) and, if this admin turned it on, a chime.
+  const [toasts, setToasts] = useState<AdminToast[]>([]);
+  const [focus, setFocus] = useState<{ tab: 'suggestions' | 'reports'; id: string } | null>(null);
+  const handleArrival = useCallback((kind: 'suggestion' | 'report', ids: string[]) => {
+    const now = Date.now();
+    setToasts((prev) => {
+      const known = new Set(prev.map((t) => t.key));
+      const fresh = ids.map((id) => ({ key: `${kind}-${id}`, kind, itemId: id, at: now })).filter((t) => !known.has(t.key));
+      return [...fresh, ...prev].slice(0, MAX_TOASTS * 2);
+    });
+    playAdminChime();
   }, []);
-
-  useEffect(refreshInbox, [refreshInbox]);
+  const inbox = useAdminInbox(handleArrival);
 
   const [unreadSupport, setUnreadSupport] = useState(0);
   useEffect(() => {
     countUnreadSupport().then(setUnreadSupport);
   }, []);
 
-  const openSuggestions = suggestions?.filter((s) => s.status === 'open').length ?? 0;
-  const openReports = reports?.filter((r) => r.status === 'open').length ?? 0;
+  const openSuggestions = inbox.pendingSuggestions;
+  const openReports = inbox.openReports;
 
-  const [inboxView, setInboxView] = useState<'suggestions' | 'reports' | 'birthdays'>('suggestions');
+  // Birthday corrections sit under Moderation: they are about members, not about content.
+  const [moderationView, setModerationView] = useState<'content' | 'birthdays'>('content');
 
-  const tabs: { id: Tab; label: string; short: string; icon: typeof Inbox; badge?: number }[] = [
+  const tabs: { id: Tab; label: string; short: string; icon: typeof Lightbulb; badge?: number }[] = [
     { id: 'overview', label: 'Overview', short: 'Home', icon: LayoutDashboard },
     { id: 'support', label: 'Support', short: 'Support', icon: LifeBuoy, badge: unreadSupport },
     { id: 'room', label: 'Public Room', short: 'Room', icon: Users },
-    { id: 'inbox', label: 'Inbox', short: 'Inbox', icon: Inbox, badge: openSuggestions + openReports },
+    { id: 'suggestions', label: 'Suggestions', short: 'Ideas', icon: Lightbulb, badge: openSuggestions },
+    { id: 'reports', label: 'Reports', short: 'Reports', icon: Flag, badge: openReports },
     { id: 'moderation', label: 'Moderation', short: 'Moderate', icon: ShieldCheck },
     { id: 'updates', label: 'App Updates', short: 'Updates', icon: Megaphone },
   ];
@@ -327,52 +346,67 @@ const Dashboard: React.FC = () => {
       {tab === 'overview' && <Overview openSuggestions={openSuggestions} openReports={openReports} />}
       {tab === 'support' && <SupportTab formatAgo={(ms) => formatAgo(ms)} onUnreadChange={setUnreadSupport} focusId={supportFocus} />}
       {tab === 'room' && <RoomTab onConfirm={setConfirm} />}
-      {tab === 'inbox' && (
+      {tab === 'suggestions' && (
+        <SuggestionsPage
+          items={inbox.suggestions}
+          liveError={inbox.liveError}
+          onRetryLive={inbox.retry}
+          onConfirm={setConfirm}
+          formatAgo={(ms) => formatAgo(ms)}
+          focusId={focus?.tab === 'suggestions' ? focus.id : null}
+          onFocusHandled={() => setFocus(null)}
+        />
+      )}
+      {tab === 'reports' && (
+        <ReportsPage
+          items={inbox.reports}
+          liveError={inbox.liveError}
+          onRetryLive={inbox.retry}
+          onConfirm={setConfirm}
+          formatAgo={(ms) => formatAgo(ms)}
+          focusId={focus?.tab === 'reports' ? focus.id : null}
+          onFocusHandled={() => setFocus(null)}
+          onOpenSupport={(uid) => {
+            go('support');
+            setSupportFocus(uid);
+          }}
+        />
+      )}
+      {tab === 'moderation' && (
         <>
-          <div className="flex gap-2 mb-5" role="group" aria-label="Inbox">
-            {(
-              [
-                ['suggestions', 'Suggestions', openSuggestions],
-                ['reports', 'Reports', openReports],
-                ['birthdays', 'Birthdays', 0],
-              ] as const
-            ).map(([id, label, count]) => (
+          <div className="flex gap-2 mb-5" role="group" aria-label="Moderation">
+            {([['content', 'Content'], ['birthdays', 'Birthdays']] as const).map(([id, label]) => (
               <button
                 key={id}
-                onClick={() => setInboxView(id)}
-                aria-pressed={inboxView === id}
-                className={`chip h-8 px-3 text-[length:calc(13px_*_var(--fs,1))] ${inboxView === id ? '!bg-raised !text-fg !border-line-strong' : ''}`}
+                onClick={() => setModerationView(id)}
+                aria-pressed={moderationView === id}
+                className={`chip h-8 px-3 text-[length:calc(13px_*_var(--fs,1))] ${moderationView === id ? '!bg-raised !text-fg !border-line-strong' : ''}`}
               >
                 {label}
-                {count ? <span className="ml-1 text-[length:calc(11px_*_var(--fs,1))] font-semibold text-berry">{count}</span> : null}
               </button>
             ))}
           </div>
-          {inboxView === 'birthdays' ? (
-            <BirthdayCorrectionsTab />
-          ) : inboxView === 'suggestions' ? (
-            <SuggestionsTab items={suggestions} setItems={setSuggestions} onConfirm={setConfirm} />
-          ) : (
-            <ReportsTab
-              items={reports}
-              setItems={setReports}
-              onConfirm={setConfirm}
-              onOpenSupport={(uid) => {
-                go('support');
-                setSupportFocus(uid);
-              }}
-            />
-          )}
+          {moderationView === 'birthdays' ? <BirthdayCorrectionsTab /> : <ModerationTab onConfirm={setConfirm} />}
         </>
       )}
-      {tab === 'moderation' && <ModerationTab onConfirm={setConfirm} />}
       {tab === 'updates' && <AppUpdatesTab onConfirm={setConfirm} />}
+
+      <AdminToasts
+        toasts={toasts}
+        onDismiss={(key) => setToasts((prev) => prev.filter((t) => t.key !== key))}
+        onOpen={(t) => {
+          const target = t.kind === 'suggestion' ? 'suggestions' : 'reports';
+          setToasts((prev) => prev.filter((x) => x.key !== t.key));
+          go(target);
+          setFocus({ tab: target, id: t.itemId });
+        }}
+      />
 
       <nav
         aria-label="Admin sections"
         className="tabbar desk:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/90 backdrop-blur-xl border-t border-line pb-safe"
       >
-        <div className="grid grid-cols-6 h-14 max-w-2xl mx-auto">
+        <div className="grid grid-cols-7 h-14 max-w-2xl mx-auto">
           {tabs.map(({ id, short, icon: Icon, badge }) => {
             const active = tab === id;
             return (
@@ -546,20 +580,6 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
 
 // ---------------------------------------------------------------- Inbox tabs
 
-function useStatusFilter() {
-  const [filter, setFilter] = useState<InboxStatus>('open');
-  const chips = (
-    <div className="flex gap-2 mb-4" role="group" aria-label="Filter">
-      {(['open', 'done'] as const).map((s) => (
-        <button key={s} aria-pressed={filter === s} onClick={() => setFilter(s)} className="chip">
-          {s === 'open' ? 'Open' : 'Done'}
-        </button>
-      ))}
-    </div>
-  );
-  return { filter, chips };
-}
-
 const Empty: React.FC<{ text: string }> = ({ text }) => (
   <p className="text-center text-sm text-muted py-14">{text}</p>
 );
@@ -571,224 +591,6 @@ const Skeleton: React.FC = () => (
     ))}
   </div>
 );
-
-interface InboxProps<T> {
-  items: T[] | null;
-  setItems: React.Dispatch<React.SetStateAction<T[] | null>>;
-  onConfirm: (c: PendingConfirm) => void;
-}
-
-function StatusButton({ status, onToggle }: { status: InboxStatus; onToggle: () => void }) {
-  return (
-    <button onClick={onToggle} className="btn btn-secondary btn-sm">
-      {status === 'open' ? (
-        <>
-          <Check className="w-4 h-4" /> Done
-        </>
-      ) : (
-        <>
-          <RotateCcw className="w-4 h-4" /> Reopen
-        </>
-      )}
-    </button>
-  );
-}
-
-const SuggestionsTab: React.FC<InboxProps<AdminSuggestion>> = ({ items, setItems, onConfirm }) => {
-  const { filter, chips } = useStatusFilter();
-  const visible = items?.filter((s) => s.status === filter) ?? [];
-
-  const toggle = async (s: AdminSuggestion) => {
-    const next: InboxStatus = s.status === 'open' ? 'done' : 'open';
-    setItems((prev) => prev?.map((x) => (x.id === s.id ? { ...x, status: next } : x)) ?? prev);
-    await setInboxStatus('suggestions', s.id, next).catch(() =>
-      setItems((prev) => prev?.map((x) => (x.id === s.id ? { ...x, status: s.status } : x)) ?? prev)
-    );
-  };
-
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight mb-4">Suggestions</h1>
-      {chips}
-      {!items ? (
-        <Skeleton />
-      ) : visible.length === 0 ? (
-        <Empty text={filter === 'open' ? 'Inbox zero. Nothing new.' : 'Nothing marked done yet.'} />
-      ) : (
-        <ul className="space-y-3">
-          {visible.map((s) => (
-            <li key={s.id} className="card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="tag capitalize">{s.category}</span>
-                <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">{formatAgo(s.createdAt)}</span>
-              </div>
-              <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg leading-relaxed whitespace-pre-wrap break-words">{s.text}</p>
-              <div className="flex gap-2 mt-3">
-                <StatusButton status={s.status} onToggle={() => toggle(s)} />
-                <button
-                  onClick={() =>
-                    onConfirm({
-                      title: 'Delete this suggestion?',
-                      message: 'It’s removed for good.',
-                      confirmLabel: 'Delete',
-                      run: async () => {
-                        await deleteInboxItem('suggestions', s.id);
-                        setItems((prev) => prev?.filter((x) => x.id !== s.id) ?? prev);
-                      },
-                    })
-                  }
-                  className="icon-btn w-9 h-9 ml-auto"
-                  aria-label="Delete suggestion"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-};
-
-function describeTarget(r: AdminReport, names: Record<string, string | null>): string {
-  if (r.reason.startsWith('Unsaid:')) return 'Unsaid post';
-  if (r.targetType === 'user') return names[r.targetId] ? `User “${names[r.targetId]}”` : 'User';
-  if (r.targetType === 'message') return 'Message';
-  return 'Post';
-}
-
-const ReportsTab: React.FC<InboxProps<AdminReport> & { onOpenSupport: (uid: string) => void }> = ({ items, setItems, onConfirm, onOpenSupport }) => {
-  const { filter, chips } = useStatusFilter();
-  const [names, setNames] = useState<Record<string, string | null>>({});
-  const [suspensions, setSuspensions] = useState<Record<string, Suspension>>({});
-  const visible = items?.filter((r) => r.status === filter) ?? [];
-  // How many reports each user has, so repeat offenders stand out.
-  const reportCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    items?.forEach((r) => {
-      if (r.targetType === 'user') counts[r.targetId] = (counts[r.targetId] ?? 0) + 1;
-    });
-    return counts;
-  }, [items]);
-
-  useEffect(() => {
-    loadSuspensions().then(setSuspensions).catch(() => {});
-  }, []);
-
-  const confirmSuspend = (r: AdminReport) =>
-    onConfirm({
-      title: `Suspend ${names[r.targetId] ? `“${names[r.targetId]}”` : 'this user'}?`,
-      message: 'They can still read and message support, but can’t match, chat or post until you lift it.',
-      confirmLabel: 'Suspend',
-      run: async () => {
-        await suspendUser(r.targetId, r.reason, r.id);
-        setSuspensions((prev) => ({
-          ...prev,
-          [r.targetId]: { uid: r.targetId, source: 'admin', reason: r.reason, createdAt: Date.now() },
-        }));
-      },
-    });
-
-  const confirmLift = (r: AdminReport) =>
-    onConfirm({
-      title: 'Lift this suspension?',
-      message: 'They can match, chat and post again right away.',
-      confirmLabel: 'Lift suspension',
-      run: async () => {
-        await liftSuspension(r.targetId);
-        setSuspensions((prev) => {
-          const next = { ...prev };
-          delete next[r.targetId];
-          return next;
-        });
-      },
-    });
-
-  useEffect(() => {
-    const missing = [...new Set(visible.filter((r) => r.targetType === 'user').map((r) => r.targetId))].filter(
-      (id) => !(id in names)
-    );
-    missing.forEach((id) => loadDisplayName(id).then((name) => setNames((prev) => ({ ...prev, [id]: name }))));
-  }, [visible.map((r) => r.id).join()]);
-
-  const toggle = async (r: AdminReport) => {
-    const next: InboxStatus = r.status === 'open' ? 'done' : 'open';
-    setItems((prev) => prev?.map((x) => (x.id === r.id ? { ...x, status: next } : x)) ?? prev);
-    await setInboxStatus('reports', r.id, next).catch(() =>
-      setItems((prev) => prev?.map((x) => (x.id === r.id ? { ...x, status: r.status } : x)) ?? prev)
-    );
-  };
-
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight mb-1">Reports</h1>
-      <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mb-4">Flagged Unsaid posts can be restored or removed under Moderation.</p>
-      {chips}
-      {!items ? (
-        <Skeleton />
-      ) : visible.length === 0 ? (
-        <Empty text={filter === 'open' ? 'No open reports. All calm.' : 'Nothing marked done yet.'} />
-      ) : (
-        <ul className="space-y-3">
-          {visible.map((r) => (
-            <li key={r.id} className="card p-4">
-              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                {r.targetType === 'user' && isAgeReview(r.reason) && <AgeReviewTag />}
-                <span className="tag !text-danger">{describeTarget(r, names)}</span>
-                {suspensions[r.targetId] && (
-                  <span className="tag !text-danger !bg-danger/10">
-                    Suspended{suspensions[r.targetId].source === 'auto-underage' ? ' · auto' : ''}
-                  </span>
-                )}
-                {(reportCounts[r.targetId] ?? 0) > 1 && (
-                  <span className="text-[length:calc(12px_*_var(--fs,1))] font-medium text-danger">{reportCounts[r.targetId]} reports</span>
-                )}
-                <span className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">{formatAgo(r.createdAt)}</span>
-              </div>
-              <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg">{r.reason.replace(/^Unsaid:\s*/, '')}</p>
-              <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-1 font-mono break-all">
-                {r.targetType === 'user' ? 'user' : 'id'}: {r.targetId}
-              </p>
-              {r.targetType === 'user' && isAgeReview(r.reason) && <AgeReviewHelp onOpenSupport={() => onOpenSupport(r.targetId)} />}
-              <div className="flex gap-2 mt-3">
-                <StatusButton status={r.status} onToggle={() => toggle(r)} />
-                {r.targetType === 'user' &&
-                  r.targetId &&
-                  (suspensions[r.targetId] ? (
-                    <button onClick={() => confirmLift(r)} className="btn btn-secondary btn-sm">
-                      <RotateCcw className="w-4 h-4" /> Lift suspension
-                    </button>
-                  ) : (
-                    <button onClick={() => confirmSuspend(r)} className="btn btn-secondary btn-sm !text-danger">
-                      <Ban className="w-4 h-4" /> Suspend
-                    </button>
-                  ))}
-                <button
-                  onClick={() =>
-                    onConfirm({
-                      title: 'Delete this report?',
-                      message: 'It’s removed for good.',
-                      confirmLabel: 'Delete',
-                      run: async () => {
-                        await deleteInboxItem('reports', r.id);
-                        setItems((prev) => prev?.filter((x) => x.id !== r.id) ?? prev);
-                      },
-                    })
-                  }
-                  className="icon-btn w-9 h-9 ml-auto"
-                  aria-label="Delete report"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-};
 
 // ---------------------------------------------------------------- Moderation
 
