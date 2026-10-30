@@ -1,4 +1,4 @@
-import React, { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowLeft, LoaderCircle, MessageCircle, RefreshCw, Reply, Send, X } from 'lucide-react';
 import { auth } from '../lib/firebase.ts';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
@@ -7,15 +7,21 @@ import { isValidAvatar } from '../utils/avatar.ts';
 import { soundEffects } from '../utils/sound.ts';
 import { SwipeToReply } from './SwipeToReply.tsx';
 import { hasNewIncomingMessage } from '../utils/incomingMessage.ts';
+import { QUICK_REACTIONS } from '../utils/reactions.ts';
+import {
+  applyMyReaction,
+  describeSendFailure,
+  mergeMessages,
+  newerCursor,
+  visibleThread,
+  type PendingMessage,
+  type ThreadMessage,
+} from '../utils/signalsThread.ts';
 
-type SignalMessage = {
-  id: string;
-  senderId: string;
-  text: string;
-  createdAt: string | null;
-  replyTo?: { messageId: string; senderId: string; text: string } | null;
-  reactions?: { emoji: string; count: number; userReacted: boolean }[];
-};
+type SignalMessage = ThreadMessage;
+
+/** A request that has not answered in this long is treated as failed, so nothing waits forever. */
+const REQUEST_TIMEOUT_MS = 20_000;
 
 /** The other member's public pseudonym and avatar, as returned by the Signals API. */
 export type SignalsPartner = { displayName: string | null; avatar: string | null };
@@ -31,15 +37,24 @@ async function request<T>(path: string, body?: Record<string, unknown>): Promise
   const user = auth?.currentUser;
   if (!user) throw new Error('Your session is still preparing. Please try again.');
   const token = await user.getIdToken();
-  const response = await fetch(path, {
-    method: body ? 'POST' : 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  const data = await response.json().catch(() => ({}));
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response: Response;
+  let data: Record<string, unknown> & { error?: string };
+  try {
+    response = await fetch(path, {
+      method: body ? 'POST' : 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+      signal: controller.signal,
+    });
+    data = await response.json().catch(() => ({}));
+  } finally {
+    window.clearTimeout(timer);
+  }
   if (!response.ok) {
     const messages: Record<string, string> = {
       unauthenticated: 'Your session needs to refresh. Please try again.',
@@ -49,7 +64,7 @@ async function request<T>(path: string, body?: Record<string, unknown>): Promise
       account_unavailable: 'Messaging is temporarily unavailable for this account.',
       internal_error: 'Signals is temporarily unavailable. Please try again.',
     };
-    throw new Error(messages[data.error] || 'Could not complete that action. Please try again.');
+    throw new Error(messages[data.error ?? ''] || 'Could not complete that action. Please try again.');
   }
   return data as T;
 }
@@ -65,11 +80,11 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [messages, setMessages] = useState<SignalMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  /** Messages written but not yet confirmed by the server: shown at once, marked while sending or failed. */
+  const [pending, setPending] = useState<PendingMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
   const [replyingTo, setReplyingTo] = useState<SignalMessage | null>(null);
-  const [reactingId, setReactingId] = useState<string | null>(null);
   /** Message whose Reply / reaction actions are open (tap or Enter on the bubble). */
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hasUnseen, setHasUnseen] = useState(false);
@@ -80,6 +95,12 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const stickToBottom = useRef(true);
   const lastCount = useRef(0);
   const lastOwnSend = useRef(false);
+  /** Where the last poll left off, so the next one asks only for what changed. */
+  const cursor = useRef<string | null>(null);
+  /** Sends go out one at a time, in the order they were written, so they land in that order. */
+  const sendQueue = useRef<Promise<void>>(Promise.resolve());
+  /** Messages with a reaction request in flight; a second tap on the same message waits for the first. */
+  const reacting = useRef(new Set<string>());
   const lastMessageId = useRef<string | null>(null);
   /** Set after the first successful load, so a failed first load cannot make history chime later. */
   const loadedOnce = useRef(false);
@@ -96,15 +117,18 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const loadMessages = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      const result = await request<{ messages: SignalMessage[] }>(
-        `/api/signals?view=messages&pairId=${encodeURIComponent(pairId)}`
+      // After the first load, a poll asks only for messages that are new or changed (a reaction) since the cursor.
+      const since = quiet && cursor.current ? `&after=${encodeURIComponent(cursor.current)}` : '';
+      const result = await request<{ messages: SignalMessage[]; cursor?: string | null }>(
+        `/api/signals?view=messages&pairId=${encodeURIComponent(pairId)}${since}`
       );
       const next = Array.isArray(result.messages) ? result.messages : [];
+      cursor.current = newerCursor(cursor.current, result.cursor);
       if (!loadedOnce.current) {
         loadedOnce.current = true;
         lastMessageId.current = next.length ? next[next.length - 1].id : '';
       }
-      setMessages(next);
+      setMessages((current) => (loadedOnce.current && current.length ? mergeMessages(current, next) : next));
       setError(null);
       setEnded(false);
     } catch (err) {
@@ -121,6 +145,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     const timer = window.setInterval(() => void loadMessages(true), 4000);
     return () => window.clearInterval(timer);
   }, [loadMessages]);
+
+  const thread = useMemo(() => visibleThread(messages, pending, userId ?? ''), [messages, pending, userId]);
 
   const scrollToBottom = useCallback((smooth: boolean) => {
     const el = listRef.current;
@@ -140,14 +166,14 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
 
   // Follow new messages only while the reader is at the bottom (or just sent one); otherwise flag them.
   useLayoutEffect(() => {
-    const grew = messages.length > lastCount.current;
+    const grew = thread.length > lastCount.current;
     const first = lastCount.current === 0;
-    lastCount.current = messages.length;
+    lastCount.current = thread.length;
     if (!grew) return;
     if (first || stickToBottom.current || lastOwnSend.current) scrollToBottom(!first);
     else setHasUnseen(true);
     lastOwnSend.current = false;
-  }, [messages, scrollToBottom]);
+  }, [thread.length, scrollToBottom]);
 
   // Opening the keyboard shrinks the list; keep the newest message in view if the reader was there.
   useEffect(() => {
@@ -162,51 +188,101 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
   }, [draft]);
 
-  const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text || sending || ended) return;
-    setSending(true);
-    setError(null);
+  /** Sends one pending message to the server. Safe to repeat: the server keeps a single copy per message id. */
+  const deliver = async (item: PendingMessage) => {
+    setPending((list) => list.map((p) => (p.id === item.id ? { ...p, status: 'sending', error: undefined } : p)));
     try {
-      const reply = replyingTo;
       const result = await request<SignalMessage>('/api/signals', {
         action: 'send-message',
         pairId,
-        text,
-        ...(reply ? {
-          replyTo: {
-            messageId: reply.id,
-            text: reply.text,
-            sender: reply.senderId === userId ? 'self' : 'partner',
-          },
-        } : {}),
+        messageId: item.id,
+        text: item.text,
+        ...(item.replyTo ? { replyTo: { messageId: item.replyTo.messageId, text: item.replyTo.text, sender: item.replyTo.sender } } : {}),
       });
-      lastOwnSend.current = true;
-      if (!soundMutedRef.current) soundEffects.playMessageSent();
-      setMessages((current) => current.some((item) => item.id === result.id) ? current : [...current, result]);
-      setDraft('');
-      setReplyingTo(null);
+      setMessages((current) => mergeMessages(current, [result]));
+      setPending((list) => list.filter((p) => p.id !== item.id));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Message could not be sent.';
-      if (message.toLowerCase().includes('ended')) setEnded(true);
-      setError(message);
-    } finally {
-      setSending(false);
+      const failure = describeSendFailure(err);
+      if (!failure.retryable && failure.message.toLowerCase().includes('ended')) setEnded(true);
+      setPending((list) =>
+        list.map((p) => (p.id === item.id ? { ...p, status: 'failed', error: failure.message, retryable: failure.retryable } : p))
+      );
     }
   };
 
-  const toggleReaction = async (message: SignalMessage, emoji: string) => {
-    if (reactingId || ended) return;
-    setReactingId(message.id);
+  const enqueue = (item: PendingMessage) => {
+    sendQueue.current = sendQueue.current.then(() => deliver(item));
+  };
+
+  /** Puts the message on screen and in the outbox right away; the write to the server happens behind it. */
+  const submitDraft = () => {
+    const text = draft.trim();
+    if (!text || ended) return;
+    const reply = replyingTo;
+    const item: PendingMessage = {
+      id: crypto.randomUUID(),
+      text,
+      replyTo: reply
+        ? { messageId: reply.id, text: reply.text, sender: reply.senderId === userId ? 'self' : 'partner', senderId: reply.senderId }
+        : null,
+      status: 'sending',
+      retryable: true,
+      createdAt: Date.now(),
+    };
+    lastOwnSend.current = true;
+    stickToBottom.current = true;
+    if (!soundMutedRef.current) soundEffects.playMessageSent();
+    setPending((list) => [...list, item]);
+    setDraft('');
+    setReplyingTo(null);
     setError(null);
+    enqueue(item);
+  };
+
+  const sendMessage = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    submitDraft();
+  };
+
+  // Same keys as the MATCHING chat: Enter sends on a computer (Shift+Enter for a new line); on a phone Enter adds a line.
+  const handleComposerKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey && !coarsePointer && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      submitDraft();
+    }
+  };
+
+  const retrySend = (id: string) => {
+    const item = pending.find((p) => p.id === id);
+    if (item && item.status === 'failed') enqueue(item);
+  };
+
+  const discardPending = (id: string) => setPending((list) => list.filter((p) => p.id !== id));
+
+  // A dropped connection that comes back retries what could not be sent, once, without making copies.
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  useEffect(() => {
+    const onOnline = () => pendingRef.current.filter((p) => p.status === 'failed' && p.retryable).forEach((p) => enqueue(p));
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** One reaction per person: the same emoji again removes it, another replaces it. Shown at once, undone if it fails. */
+  const toggleReaction = async (message: SignalMessage, emoji: string) => {
+    if (ended || reacting.current.has(message.id)) return;
+    reacting.current.add(message.id);
+    const before = message.reactions;
+    setError(null);
+    setMessages((current) => current.map((m) => (m.id === message.id ? { ...m, reactions: applyMyReaction(m.reactions, emoji) } : m)));
     try {
       await request('/api/signals', { action: 'react-message', pairId, messageId: message.id, emoji });
-      await loadMessages(true);
     } catch (err) {
+      setMessages((current) => current.map((m) => (m.id === message.id ? { ...m, reactions: before } : m)));
       setError(err instanceof Error ? err.message : 'Could not update reaction.');
     } finally {
-      setReactingId(null);
+      reacting.current.delete(message.id);
     }
   };
 
@@ -258,22 +334,23 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
               <div className="flex h-full min-h-40 items-center justify-center gap-2 text-sm text-muted">
                 <LoaderCircle className="h-4 w-4 animate-spin text-berry" /> Opening your conversation…
               </div>
-            ) : messages.length === 0 ? (
+            ) : thread.length === 0 ? (
               <div className="flex h-full min-h-40 flex-col items-center justify-center px-4 text-center">
                 <p className="text-sm font-medium text-fg">A quiet little beginning</p>
                 <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">Say hello to {partnerName} when you're ready. There's no need to rush.</p>
               </div>
             ) : (
-              messages.map((message, index) => {
+              thread.map((message, index) => {
                 const mine = message.senderId === userId;
-                const sameSenderAsPrev = index > 0 && messages[index - 1].senderId === message.senderId;
+                const unsent = Boolean(message.pending);
+                const sameSenderAsPrev = index > 0 && thread[index - 1].senderId === message.senderId;
                 const open = activeId === message.id;
                 const toggleActive = () => setActiveId((current) => (current === message.id ? null : message.id));
                 return (
                   <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'} ${index === 0 ? '' : sameSenderAsPrev ? 'mt-0.5' : 'mt-2'}`}>
                     <div className={`flex min-w-0 max-w-[82%] flex-col sm:max-w-[75%] ${mine ? 'items-end' : 'items-start'}`}>
                       <SwipeToReply
-                        disabled={ended}
+                        disabled={ended || unsent}
                         className="max-w-full"
                         onReply={() => { setReplyingTo(message); setActiveId(null); textareaRef.current?.focus(); }}
                       >
@@ -282,11 +359,11 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                         tabIndex={0}
                         aria-expanded={open}
                         aria-label={`${mine ? 'Your' : `${partnerName}'s`} message: ${message.text}. Show actions`}
-                        onClick={toggleActive}
+                        onClick={unsent ? undefined : toggleActive}
                         onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleActive(); }
+                          if (!unsent && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggleActive(); }
                         }}
-                        className={`min-w-0 max-w-full cursor-pointer rounded-2xl px-3 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}
+                        className={`${unsent ? 'opacity-70' : ''} min-w-0 max-w-full cursor-pointer rounded-2xl px-3 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}
                       >
                         {message.replyTo && (
                           <div className={`mb-1 rounded-md border-l-2 px-2 py-0.5 text-[length:calc(11px_*_var(--fs,1))] leading-snug ${mine ? 'border-ink/40 bg-ink/10 text-ink/80' : 'border-lavender bg-surface/70 text-muted'}`}>
@@ -300,10 +377,28 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                         </div>
                       </div>
                       </SwipeToReply>
+                      {message.pending && (
+                        <p
+                          className={`mt-0.5 flex flex-wrap items-center gap-x-2 text-[length:calc(11px_*_var(--fs,1))] ${message.pending.status === 'failed' ? 'text-danger' : 'text-subtle'}`}
+                          role={message.pending.status === 'failed' ? 'alert' : 'status'}
+                        >
+                          {message.pending.status === 'sending' ? (
+                            <span className="inline-flex items-center gap-1"><LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" /> Sending…</span>
+                          ) : (
+                            <>
+                              <span>Not sent. {message.pending.error}</span>
+                              {message.pending.retryable && (
+                                <button type="button" onClick={() => retrySend(message.id)} className="font-semibold text-berry underline underline-offset-4">Retry</button>
+                              )}
+                              <button type="button" onClick={() => discardPending(message.id)} className="font-semibold text-muted underline underline-offset-4">Discard</button>
+                            </>
+                          )}
+                        </p>
+                      )}
                       {((message.reactions || []).length > 0 || open) && (
                         <div className={`mt-0.5 flex flex-wrap items-center gap-1 ${mine ? 'justify-end' : 'justify-start'}`}>
                           {(message.reactions || []).map((reaction) => (
-                            <button key={reaction.emoji} type="button" onClick={() => void toggleReaction(message, reaction.emoji)} disabled={reactingId === message.id} aria-label={`${reaction.emoji} reaction, ${reaction.count} total`} className={`flex h-7 min-w-7 items-center justify-center rounded-full border px-1.5 text-xs transition ${reaction.userReacted ? 'border-berry/60 bg-plum/40' : 'border-line bg-raised/70'} disabled:opacity-50`}>
+                            <button key={reaction.emoji} type="button" onClick={() => void toggleReaction(message, reaction.emoji)} aria-pressed={reaction.userReacted} aria-label={`${reaction.emoji} reaction, ${reaction.count} total`} className={`flex h-7 min-w-7 items-center justify-center rounded-full border px-1.5 text-xs transition ${reaction.userReacted ? 'border-berry/60 bg-plum/40' : 'border-line bg-raised/70'}`}>
                               {reaction.emoji}{reaction.count > 1 ? ` ${reaction.count}` : ''}
                             </button>
                           ))}
@@ -312,9 +407,12 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                               <button type="button" onClick={() => { setReplyingTo(message); setActiveId(null); textareaRef.current?.focus(); }} aria-label="Reply to message" className="flex h-8 items-center gap-1 rounded-full px-2 text-[length:calc(11px_*_var(--fs,1))] text-muted transition hover:bg-raised hover:text-fg">
                                 <Reply className="h-3.5 w-3.5" /> Reply
                               </button>
-                              {['💜', '🥹', '😂', '✨'].map((emoji) => (
-                                <button key={emoji} type="button" onClick={() => { void toggleReaction(message, emoji); setActiveId(null); }} disabled={reactingId === message.id} aria-label={`React with ${emoji}`} className="flex h-8 w-8 items-center justify-center rounded-full text-sm transition hover:bg-raised disabled:opacity-40">{emoji}</button>
-                              ))}
+                              {QUICK_REACTIONS.map((emoji) => {
+                                const mineNow = (message.reactions || []).some((r) => r.emoji === emoji && r.userReacted);
+                                return (
+                                  <button key={emoji} type="button" onClick={() => { void toggleReaction(message, emoji); setActiveId(null); }} aria-pressed={mineNow} aria-label={mineNow ? `Remove ${emoji} reaction` : `React with ${emoji}`} className={`flex h-8 w-8 items-center justify-center rounded-full text-sm transition active:scale-125 ${mineNow ? 'bg-plum/50' : 'hover:bg-raised'}`}>{emoji}</button>
+                                );
+                              })}
                             </>
                           )}
                         </div>
@@ -365,14 +463,15 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 onChange={(event) => setDraft(event.target.value.slice(0, 1000))}
                 onFocus={() => setComposerFocused(true)}
                 onBlur={() => setComposerFocused(false)}
+                onKeyDown={handleComposerKey}
+                enterKeyHint={coarsePointer ? 'enter' : 'send'}
                 placeholder="Write a message…"
                 rows={1}
                 maxLength={1000}
-                disabled={sending}
-                className="max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-2xl border border-line bg-raised px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug text-fg outline-none placeholder:text-subtle focus:border-berry/60 disabled:opacity-60"
+                className="max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-2xl border border-line bg-raised px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug text-fg outline-none placeholder:text-subtle focus:border-berry/60"
               />
-              <button type="submit" disabled={!draft.trim() || sending} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-berry text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
-                {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              <button type="submit" disabled={!draft.trim()} onMouseDown={(event) => event.preventDefault()} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-berry text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
+                <Send className="h-4 w-4" />
               </button>
             </form>
           </div>
