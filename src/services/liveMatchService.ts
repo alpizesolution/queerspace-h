@@ -287,7 +287,13 @@ export function joinLiveMatchQueue(
     claiming = true;
     try {
       // The server picks a compatible, eligible partner and claims them atomically.
-      const result = await matchRequest<{ matched: boolean; partnerId?: string; convId?: string }>({ action: 'claim', excludeIds });
+      const result = await matchRequest<{ matched: boolean; partnerId?: string; convId?: string }>({
+        action: 'claim',
+        excludeIds,
+        // The range this search runs with, every time, so a change since joining reaches the server (null = no age filter).
+        ageMin: ageRange?.ageMin ?? null,
+        ageMax: ageRange?.ageMax ?? null,
+      });
       if (result.matched && result.partnerId && result.convId) {
         emptyScans = 0;
         await finish(result.partnerId, result.convId);
