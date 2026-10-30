@@ -19,6 +19,7 @@ import { PartnerProfile, UserPreferences } from './types.ts';
 import { generateSapphicPseudonym } from './utils/matching-logic.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from './utils/storage.ts';
 import { ensureAnonymousAuth, isFirebaseConfigured, logScreenView } from './lib/firebase.ts';
+import { recordDailyActivity } from './services/activityService.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature } from './services/profilePersistence.ts';
 import { applyFilters, applyProfile, FilterFields, matchPrefsForMode, ProfileFields } from './utils/preferences.ts';
@@ -243,6 +244,15 @@ export default function App() {
   useEffect(() => {
     logScreenView(currentView);
   }, [currentView]);
+
+  // Counts the member as active once a day (see activityService); a tab left open overnight counts again on return.
+  useEffect(() => {
+    if (!isFirebaseConfigured || userPrefs.profileComplete !== true || ageRestricted) return;
+    void recordDailyActivity();
+    const onVisible = () => document.visibilityState === 'visible' && void recordDailyActivity();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [userPrefs.profileComplete, ageRestricted]);
 
   const handleNavigate = (view: NavTarget) => {
     if (view === 'signals') setSignalAlert(false);
