@@ -34,7 +34,6 @@ import {
   loadReports,
   loadStats,
   statsFetchedAt,
-  pctChange,
   STATS_RANGES,
   DEFAULT_STATS_RANGE,
   type StatsRange,
@@ -46,6 +45,8 @@ import {
   signOutAdmin,
 } from '../services/adminService.ts';
 import { BarChart } from './BarChart.tsx';
+import { Delta, SectionHeading, Stat } from './Kpi.tsx';
+import { GrowthView, RetentionView } from './GrowthPanel.tsx';
 import { rememberAdminDevice } from '../utils/adminDevice.ts';
 import { SupportTab } from './SupportTab.tsx';
 import { BirthdayCorrectionsTab } from './BirthdayCorrectionsTab.tsx';
@@ -416,33 +417,6 @@ const Dashboard: React.FC = () => {
 
 // ---------------------------------------------------------------- Overview
 
-/** "▲ 12% vs yesterday". Nothing is shown when the earlier period has no activity to compare with. */
-const Delta: React.FC<{ current: number; previous: number; versus: string }> = ({ current, previous, versus }) => {
-  const change = pctChange(current, previous);
-  if (change === null) return <span className="text-subtle">{previous === 0 && current > 0 ? `new vs ${versus}` : `no data vs ${versus}`}</span>;
-  const tone = change > 0 ? 'text-emerald-400' : change < 0 ? 'text-danger' : 'text-subtle';
-  return (
-    <span className={tone}>
-      {change > 0 ? '▲' : change < 0 ? '▼' : '•'} {Math.abs(change)}% <span className="text-subtle">vs {versus}</span>
-    </span>
-  );
-};
-
-const Stat: React.FC<{ label: string; value: number | string; note?: React.ReactNode; hero?: boolean }> = ({ label, value, note, hero }) => (
-  <div className="card p-4">
-    <p className="text-[length:calc(12px_*_var(--fs,1))] text-muted">{label}</p>
-    <p className={`${hero ? 'text-3xl' : 'text-2xl'} font-semibold tracking-tight mt-1 tabular-nums`}>{value}</p>
-    {note && <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-0.5">{note}</p>}
-  </div>
-);
-
-const SectionHeading: React.FC<{ children: React.ReactNode; hint?: string }> = ({ children, hint }) => (
-  <div className="flex items-baseline justify-between gap-2">
-    <h2 className="text-[length:calc(13px_*_var(--fs,1))] font-medium text-fg">{children}</h2>
-    {hint && <span className="text-[length:calc(11px_*_var(--fs,1))] text-subtle">{hint}</span>}
-  </div>
-);
-
 const updatedLabel = (at: number | null) =>
   at ? `Updated ${new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}` : '';
 
@@ -452,6 +426,9 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  const [view, setView] = useState<'summary' | 'growth' | 'retention'>('summary');
+  // Bumped by Refresh so the growth and retention views fetch fresh numbers too.
+  const [reload, setReload] = useState(0);
 
   const refresh = useCallback((force = false) => {
     setLoading(true);
@@ -486,13 +463,24 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
           <span className="hidden sm:inline text-[length:calc(11px_*_var(--fs,1))] text-subtle tabular-nums" aria-live="polite">
             {loading ? 'Updating…' : updatedLabel(updatedAt)}
           </span>
-          <button onClick={() => refresh(true)} className="icon-btn" aria-label="Refresh" disabled={loading}>
+          <button onClick={() => { setReload((n) => n + 1); refresh(true); }} className="icon-btn" aria-label="Refresh" disabled={loading}>
             <RefreshCw className={`w-[18px] h-[18px] ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
+      <div className="flex gap-1.5" role="group" aria-label="Overview section">
+        {([['summary', 'Summary'], ['growth', 'Growth'], ['retention', 'Retention']] as const).map(([id, label]) => (
+          <button key={id} onClick={() => setView(id)} aria-pressed={view === id} className="chip">
+            {label}
+          </button>
+        ))}
+      </div>
+
       {error && <p className="card p-4 text-sm text-danger">Couldn’t load stats. Try refreshing.</p>}
+
+      {view === 'growth' && <GrowthView range={range} members={stats?.members ?? 0} reload={reload} />}
+      {view === 'retention' && <RetentionView range={range} reload={reload} />}
 
       {stats?.indexLink && (
         <div className="card p-4 text-[length:calc(13px_*_var(--fs,1))] text-muted">
@@ -507,7 +495,7 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
         </div>
       )}
 
-      {!stats && loading ? (
+      {view !== 'summary' ? null : !stats && loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" aria-hidden="true">
           {Array.from({ length: 8 }, (_, i) => (
             <div key={i} className="card h-[92px] animate-pulse" />

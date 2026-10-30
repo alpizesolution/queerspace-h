@@ -853,6 +853,48 @@ service cloud.firestore {
     }
 
     // ====================================================
+    // MEMBER ACTIVITY (daily active users, retention, sign-up source)
+    // ====================================================
+    // One document per member, member_activity/{uid}: the days they opened the app as day markers
+    // ("d20261030": true) plus the first day and, once, where they came from. No content, no profile data.
+    // The day is Philippine time (UTC+8) taken from the server clock, so a member can only mark today.
+    // Only the member can write it, only admins and the member can read it, and nothing is ever deleted.
+
+    function activityToday() {
+      let t = request.time + duration.value(8, 'h');
+      return t.year() * 10000 + t.month() * 100 + t.day();
+    }
+
+    function activityTodayKey() {
+      return 'd' + string(activityToday());
+    }
+
+    match /member_activity/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+
+      allow create: if isOwner(userId)
+        && isEligibleMember(userId)
+        && request.resource.data.keys().hasAll(['firstDay', 'days'])
+        && request.resource.data.keys().hasOnly(['firstDay', 'days', 'source'])
+        && request.resource.data.firstDay == activityToday()
+        && request.resource.data.days is map
+        && request.resource.data.days.keys().hasOnly([activityTodayKey()])
+        && request.resource.data.days[activityTodayKey()] == true
+        && (!('source' in request.resource.data)
+            || request.resource.data.source in ['tiktok', 'facebook', 'reddit', 'direct', 'referral', 'other']);
+
+      // Later days only add today's marker; firstDay and source never change.
+      allow update: if isOwner(userId)
+        && isEligibleMember(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['days'])
+        && request.resource.data.days.diff(resource.data.days).affectedKeys().hasOnly([activityTodayKey()])
+        && request.resource.data.days[activityTodayKey()] == true
+        && request.resource.data.days.size() <= 400;
+
+      allow delete: if false;
+    }
+
+    // ====================================================
     // SIGNALS (SERVER-MANAGED CONSENT RECORDS)
     // ====================================================
     // Invitation acceptance, expiry, idempotency, and pair creation are handled

@@ -1524,3 +1524,56 @@ test('RR-04: A suspended member CANNOT reply, and the slow mode still applies to
   });
   await assertFails(stampedAdd('erin', 'public_room_messages', memberReply('erin', quote), 'publicRoom'));
 });
+
+// ---------------------------------------------------------------- Member activity (DAU, retention, source)
+
+const manilaDay = (offsetDays = 0) => {
+  const d = new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000);
+  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+};
+const todayKey = () => `d${manilaDay()}`;
+const activityDoc = (uid: string) => testEnv.authenticatedContext(uid).firestore().doc(`member_activity/${uid}`);
+
+test('MA-01: A member CAN create their own activity record for today, with or without a source', async () => {
+  await assertSucceeds(activityDoc('alice').set({ firstDay: manilaDay(), days: { [todayKey()]: true } }));
+  await assertSucceeds(activityDoc('bob').set({ firstDay: manilaDay(), days: { [todayKey()]: true }, source: 'tiktok' }));
+});
+
+test('MA-02: A record CANNOT claim another day, another member, an unknown source or extra data', async () => {
+  const today = { firstDay: manilaDay(), days: { [todayKey()]: true } };
+  await assertFails(activityDoc('alice').set({ firstDay: manilaDay(-3), days: { [`d${manilaDay(-3)}`]: true } }));
+  await assertFails(activityDoc('alice').set({ firstDay: manilaDay(), days: { [`d${manilaDay(-1)}`]: true } }));
+  await assertFails(activityDoc('alice').set({ firstDay: manilaDay(), days: { [todayKey()]: true, [`d${manilaDay(-1)}`]: true } }));
+  await assertFails(activityDoc('alice').set({ ...today, source: 'myspace' }));
+  await assertFails(activityDoc('alice').set({ ...today, displayName: 'Willow' }));
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('member_activity/alice').set(today));
+  await assertFails(testEnv.authenticatedContext('nobody').firestore().doc('member_activity/nobody').set(today));
+});
+
+test('MA-03: Later days CAN add today only; firstDay, source and earlier days never change', async () => {
+  await testEnv.withSecurityRulesDisabled((ctx) => ctx.firestore().doc('member_activity/carol').set({
+    firstDay: manilaDay(-5), days: { [`d${manilaDay(-5)}`]: true, [`d${manilaDay(-2)}`]: true }, source: 'reddit',
+  }));
+  const carol = activityDoc('carol');
+  await assertFails(carol.update({ [`days.d${manilaDay(-1)}`]: true }));
+  await assertFails(carol.update({ firstDay: manilaDay() }));
+  await assertFails(carol.update({ source: 'facebook' }));
+  await assertFails(carol.update({ [`days.d${manilaDay(-2)}`]: false }));
+  await assertFails(carol.update({ [`days.${todayKey()}`]: false }));
+  await assertSucceeds(carol.update({ [`days.${todayKey()}`]: true }));
+  await assertFails(carol.delete());
+});
+
+test('MA-04: Only the member and admins CAN read an activity record; an admin CAN count them', async () => {
+  await testEnv.withSecurityRulesDisabled((ctx) => ctx.firestore().doc('member_activity/dana').set({ firstDay: manilaDay(), days: { [todayKey()]: true } }));
+  await assertSucceeds(activityDoc('dana').get());
+  await assertFails(testEnv.authenticatedContext("eve").firestore().doc("member_activity/dana").get());
+  await assertFails(testEnv.authenticatedContext('eve').firestore().collection('member_activity').get());
+  await seedAdmin();
+  await assertSucceeds(adminDb().collection('member_activity').where(`days.${todayKey()}`, '==', true).get());
+});
+
+test('MA-05: A member who is not eligible yet (no completed profile) CANNOT record activity', async () => {
+  await testEnv.withSecurityRulesDisabled((ctx) => ctx.firestore().doc('users/newbie/public/profile').set({ displayName: 'n', pronouns: 'she/her', intention: 'open', region: 'x', topics: [], updatedAt: new Date() }));
+  await assertFails(testEnv.authenticatedContext('newbie').firestore().doc('member_activity/newbie').set({ firstDay: manilaDay(), days: { [todayKey()]: true } }));
+});

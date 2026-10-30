@@ -7,12 +7,16 @@ import './index.css';
 import { hideSplash } from './utils/splash.ts';
 import { unlockAudioOnFirstTap } from './utils/sound.ts';
 import { installQuotaWatch } from './utils/quotaGuard.ts';
+import { captureAcquisitionSource } from './utils/acquisition.ts';
 
 installQuotaWatch();
 
 // The admin page is its own bundle, so regular visitors never download it.
 const AdminApp = lazy(() => import('./admin/AdminApp.tsx'));
 const isAdminRoute = /^\/admin\/?$/.test(window.location.pathname);
+
+// Remember where a first-time visitor came from (?ref=, referring site) before anything is saved on this device.
+if (!isAdminRoute) captureAcquisitionSource();
 
 // /admin installs as its own home-screen app ("QS Admin") that opens straight to the dashboard.
 if (isAdminRoute) {
