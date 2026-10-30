@@ -28,6 +28,7 @@ import { ICEBREAKER_PROMPTS } from '../utils/mock-partners.ts';
 import { INTENTION_LABELS, formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
 import { createTypingSender, createTypingWatcher, TypingSender } from '../utils/typing-indicator.ts';
+import { QUICK_REACTIONS } from '../utils/reactions.ts';
 import { usePartnerAge } from '../hooks/usePartnerAge.ts';
 import { chatEventManager } from '../utils/chat-events.ts';
 import {
@@ -1044,7 +1045,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
   );
 };
 
-const QUICK_REACTIONS = ['😻', '😹', '😽', '🙀', '😿', '❤️'];
 const EMOJIS = ['😺', '😻', '😹', '😽', '🙀', '😿', '😼', '🐈', '🐾', '🌸', '❤️', '✨', '🫂', '🥺', '🎉'];
 const REPORT_REASONS = [
   'Harassment or disrespectful behavior',

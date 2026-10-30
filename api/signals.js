@@ -29,6 +29,39 @@ function safeId(value) {
 }
 
 /**
+ * How far back a delta poll looks past the client's cursor, so a write that lands just behind it (clock differences,
+ * a commit that finished a moment after the read) is never missed. Kept under the 4-second poll interval, so a change
+ * is sent at most twice and a quiet conversation costs nothing.
+ */
+export const DELTA_OVERLAP_MS = 3000;
+
+/** Cat-themed reactions shared with the MATCHING chat (src/utils/reactions.ts), plus the earlier set so old reactions still show and can be removed. */
+export const ALLOWED_REACTIONS = ['😻', '😹', '😽', '🙀', '😿', '❤️', '💜', '🥹', '😂', '✨'];
+
+/** The cursor handed back with a poll: the moment the server read the messages, as an ISO string. */
+export function deltaCursor(startedAtMs) {
+  return new Date(startedAtMs).toISOString();
+}
+
+/**
+ * One reaction per member per message: choosing another emoji replaces it, choosing the same one removes it.
+ * Works on the stored map { emoji: [uid, ...] } and also tidies up any older multiple reactions by the same member.
+ */
+export function toggleReaction(reactions, uid, emoji) {
+  const next = {};
+  let previous = null;
+  for (const [key, users] of Object.entries(reactions && typeof reactions === 'object' ? reactions : {})) {
+    const list = Array.isArray(users) ? users : [];
+    if (list.includes(uid)) previous = previous ?? key;
+    const kept = list.filter(user => user !== uid);
+    if (kept.length) next[key] = kept;
+  }
+  const selected = previous === emoji ? null : emoji;
+  if (selected) next[selected] = [...(next[selected] || []), uid];
+  return { reactions: next, selected };
+}
+
+/**
  * Public-safe view of the other person in a connection: their pseudonym and avatar only.
  * Anything missing or malformed becomes null so the client shows a deliberate fallback.
  */
@@ -107,7 +140,15 @@ export default async function handler(req, res) {
           || ownSuspension.exists || otherSuspension.exists) {
           return send(res, 403, { error: 'not_allowed' });
         }
-        const messageSnap = await db.collection('signalsPairs').doc(pairId).collection('messages').orderBy('createdAt', 'asc').limit(100).get();
+        // After the first load the client sends `after` (the cursor it was given) and only gets messages that are new or
+        // changed (a reaction) since then, instead of the whole history every few seconds.
+        const afterParam = req.query?.after || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('after');
+        const afterMs = typeof afterParam === 'string' ? Date.parse(afterParam) : Number.NaN;
+        const pollStartedAt = Date.now();
+        const messagesRef = db.collection('signalsPairs').doc(pairId).collection('messages');
+        const messageSnap = Number.isFinite(afterMs)
+          ? await messagesRef.where('updatedAt', '>', Timestamp.fromMillis(afterMs - DELTA_OVERLAP_MS)).orderBy('updatedAt', 'asc').limit(100).get()
+          : await messagesRef.orderBy('createdAt', 'asc').limit(100).get();
         const messages = messageSnap.docs.map(snap => {
           const data = snap.data();
           const reactions = data.reactions && typeof data.reactions === 'object' ? data.reactions : {};
@@ -128,7 +169,7 @@ export default async function handler(req, res) {
             ),
           };
         });
-        return send(res, 200, { messages });
+        return send(res, 200, { messages, cursor: deltaCursor(pollStartedAt) });
       }
       if (view === 'pairs') {
         const pairSnapshots = await Promise.all([
@@ -277,8 +318,7 @@ export default async function handler(req, res) {
       const pairId = req.body?.pairId;
       const messageId = req.body?.messageId;
       const emoji = req.body?.emoji;
-      const allowedReactions = ['💜', '🥹', '😂', '✨'];
-      if (!safeId(pairId) || !safeId(messageId) || !allowedReactions.includes(emoji)) {
+      if (!safeId(pairId) || !safeId(messageId) || !ALLOWED_REACTIONS.includes(emoji)) {
         return send(res, 400, { error: 'invalid_reaction' });
       }
       const pairRef = db.doc(`signalsPairs/${pairId}`);
@@ -306,16 +346,9 @@ export default async function handler(req, res) {
       const result = await db.runTransaction(async tx => {
         const messageSnap = await tx.get(messageRef);
         if (!messageSnap.exists) throw Object.assign(new Error('message_not_found'), { statusCode: 404 });
-        const data = messageSnap.data();
-        const reactions = data.reactions && typeof data.reactions === 'object' ? { ...data.reactions } : {};
-        const users = Array.isArray(reactions[emoji]) ? [...reactions[emoji]] : [];
-        const index = users.indexOf(uid);
-        if (index >= 0) users.splice(index, 1);
-        else users.push(uid);
-        if (users.length) reactions[emoji] = users;
-        else delete reactions[emoji];
+        const { reactions, selected } = toggleReaction(messageSnap.data().reactions, uid, emoji);
         tx.update(messageRef, { reactions, updatedAt: FieldValue.serverTimestamp() });
-        return { emoji, count: users.length, userReacted: index < 0 };
+        return { emoji, count: (reactions[emoji] || []).length, userReacted: selected === emoji, mine: selected };
       });
       return send(res, 200, result);
     }
@@ -324,7 +357,10 @@ export default async function handler(req, res) {
       const pairId = req.body?.pairId;
       const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
       const replyToInput = req.body?.replyTo;
+      // The app picks the message id up front, so a retry after a dropped connection can't create a second copy.
+      const requestedId = req.body?.messageId;
       if (!safeId(pairId) || !text || text.length > 1000) return send(res, 400, { error: 'invalid_message' });
+      if (requestedId !== undefined && !safeId(requestedId)) return send(res, 400, { error: 'invalid_message' });
       let replyTo = null;
       if (replyToInput !== undefined && replyToInput !== null) {
         if (!safeId(replyToInput.messageId) || typeof replyToInput.text !== 'string'
@@ -354,8 +390,24 @@ export default async function handler(req, res) {
         || (Array.isArray(otherBlocked) && otherBlocked.includes(uid))) {
         return send(res, 403, { error: 'not_allowed' });
       }
-      const messageRef = pairRef.collection('messages').doc(randomUUID());
-      await messageRef.create({ senderId: uid, text, ...(replyTo ? { replyTo } : {}), createdAt: FieldValue.serverTimestamp() });
+      const messageRef = pairRef.collection('messages').doc(requestedId ?? randomUUID());
+      const stamp = FieldValue.serverTimestamp();
+      try {
+        await messageRef.create({ senderId: uid, text, ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
+      } catch (error) {
+        // ALREADY_EXISTS: this exact send already went through (a retry). Answer with what was stored, never a copy.
+        if (error?.code !== 6) throw error;
+        const stored = (await messageRef.get()).data();
+        if (stored?.senderId !== uid) return send(res, 409, { error: 'invalid_message' });
+        return send(res, 200, {
+          id: messageRef.id,
+          senderId: uid,
+          text: stored.text,
+          replyTo: stored.replyTo ? { ...stored.replyTo, senderId: stored.replyTo.sender === 'self' ? uid : otherUid } : null,
+          reactions: [],
+          createdAt: stored.createdAt?.toDate?.().toISOString?.() || new Date().toISOString(),
+        });
+      }
       return send(res, 201, {
         id: messageRef.id,
         senderId: uid,
