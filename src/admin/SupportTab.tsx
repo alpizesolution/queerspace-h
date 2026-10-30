@@ -152,7 +152,6 @@ export const SupportTab: React.FC<{
 const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void }> = ({ thread, onBack }) => {
   const [messages, setMessages] = useState<SupportMessage[] | null>(null);
   const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   // Phones: fill the screen between the admin header and tab bar, shrinking with the on-screen keyboard.
@@ -175,15 +174,19 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
     if (list) list.scrollTop = list.scrollHeight;
   }, [messages?.length]);
 
-  const send = async (e: React.FormEvent) => {
+  // The reply shows in the chat and the box clears the moment you send (Firestore queues the write and the chat
+  // listener shows it straight away). If the write is refused, the text comes back so nothing you typed is lost.
+  const send = async (e: React.FormEvent | React.KeyboardEvent) => {
     e.preventDefault();
-    if (!text.trim() || sending) return;
-    setSending(true);
+    const body = text.trim();
+    if (!body) return;
     setFailed(false);
-    const ok = await replyAsTeam(thread.id, text);
-    setSending(false);
-    if (ok) setText('');
-    else setFailed(true);
+    setText('');
+    const ok = await replyAsTeam(thread.id, body);
+    if (!ok) {
+      setText((current) => (current ? [body, current].join('\n') : body));
+      setFailed(true);
+    }
   };
 
   return (
@@ -232,7 +235,7 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) send(e);
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) send(e);
           }}
           rows={2}
           maxLength={SUPPORT_MAX_LENGTH}
@@ -242,7 +245,10 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
         />
         <button
           type="submit"
-          disabled={!text.trim() || sending}
+          // Pressing Send must not take focus from the box: on a phone that closes the keyboard, the layout moves,
+          // and the tap is lost, so the reply only went out after leaving the input.
+          onMouseDown={(e) => e.preventDefault()}
+          disabled={!text.trim()}
           className="w-11 h-11 shrink-0 rounded-full bg-berry text-ink flex items-center justify-center disabled:bg-raised disabled:text-subtle cursor-pointer disabled:cursor-not-allowed"
           aria-label="Send reply"
         >
