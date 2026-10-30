@@ -69,11 +69,20 @@ service cloud.firestore {
     }
     function isEligibleMember(userId) { return isAgeEligible(userId) && isProfileComplete(userId); }
 
-    // An admin marking an inbox item (suggestion or report) as open or done.
-    function isAdminStatusChange() {
+    // An admin moving an inbox item (suggestion or report) to another status. 'done' is the old single status and
+    // stays valid so existing items and older admin pages keep working. A new item has no status (shown as New / Open).
+    function isAdminStatusChange(allowed) {
       return isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        && request.resource.data.status in ['open', 'done'];
+        && request.resource.data.status in allowed;
+    }
+
+    function suggestionStatuses() {
+      return ['open', 'reviewed', 'in_progress', 'implemented', 'archived', 'done'];
+    }
+
+    function reportStatuses() {
+      return ['open', 'reviewing', 'resolved', 'dismissed', 'done'];
     }
 
     // Valid categories for community posts
@@ -574,7 +583,7 @@ service cloud.firestore {
 
       // Only admins can read reports; reporters can't see each other's.
       allow read, delete: if isAdmin();
-      allow update: if isAdminStatusChange();
+      allow update: if isAdminStatusChange(reportStatuses());
     }
 
     // ====================================================
@@ -704,7 +713,7 @@ service cloud.firestore {
         && slowMode('suggestion', 30);
 
       allow read, delete: if isAdmin();
-      allow update: if isAdminStatusChange();
+      allow update: if isAdminStatusChange(suggestionStatuses());
     }
 
     // ====================================================
