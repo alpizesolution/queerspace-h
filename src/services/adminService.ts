@@ -78,12 +78,36 @@ export interface AdminStats {
   unsaidLive: number;
   memberDays: DayCount[];
   chatDays: DayCount[];
+  /** Totals for comparisons: yesterday, and the same number of days just before the chart's range. */
+  membersYesterday: number;
+  chatsYesterday: number;
+  roomYesterday: number;
+  membersRange: number;
+  membersPrevRange: number;
+  chatsRange: number;
+  chatsPrevRange: number;
+  range: StatsRange;
   /** Set when a count needs a Firestore index that hasn't been created yet. */
   indexLink: string | null;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-export const CHART_DAYS = 14;
+export const STATS_RANGES = [7, 14, 30] as const;
+export type StatsRange = (typeof STATS_RANGES)[number];
+export const DEFAULT_STATS_RANGE: StatsRange = 14;
+
+/** How a count moved against the period before it. `null` when there is nothing to compare with. */
+export function pctChange(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+/** Splits per-day counts (oldest first) into the last `range` days and the `range` days before them. */
+export function splitPeriods(counts: number[], range: number): { current: number[]; previous: number[] } {
+  const current = counts.slice(-range);
+  const previous = counts.slice(-range * 2, -range);
+  return { current, previous };
+}
 
 function toMillis(value: unknown): number {
   if (value && typeof (value as Timestamp).toMillis === 'function') return (value as Timestamp).toMillis();
@@ -171,21 +195,30 @@ async function count(q: Query): Promise<number> {
  * with the app. Reopening Overview within a few minutes reuses the last result; Refresh forces.
  */
 const STATS_TTL_MS = 5 * 60_000;
-let cachedStats: { at: number; stats: AdminStats } | null = null;
+const cachedStats = new Map<StatsRange, { at: number; stats: AdminStats }>();
 
-export async function loadStats(force = false): Promise<AdminStats> {
-  if (!force && cachedStats && Date.now() - cachedStats.at < STATS_TTL_MS) return cachedStats.stats;
-  const stats = await fetchStats();
-  cachedStats = { at: Date.now(), stats };
+export async function loadStats(range: StatsRange = DEFAULT_STATS_RANGE, force = false): Promise<AdminStats> {
+  const hit = cachedStats.get(range);
+  if (!force && hit && Date.now() - hit.at < STATS_TTL_MS) return hit.stats;
+  const stats = await fetchStats(range);
+  cachedStats.set(range, { at: Date.now(), stats });
   return stats;
 }
 
-async function fetchStats(): Promise<AdminStats> {
+/** When the stats for this range were last fetched (for "Updated 3:05 PM"). */
+export function statsFetchedAt(range: StatsRange): number | null {
+  return cachedStats.get(range)?.at ?? null;
+}
+
+async function fetchStats(range: StatsRange): Promise<AdminStats> {
   if (!db) throw new Error('Firebase is not configured');
   const firestore = db;
-  const days = lastDays(CHART_DAYS);
+  // The range plus the same number of days before it, so every figure can be compared with the last period.
+  const allDays = lastDays(range * 2);
+  const days = allDays.slice(-range);
   const ts = (ms: number) => Timestamp.fromMillis(ms);
   const today = days[days.length - 1];
+  const yesterday = today - DAY_MS;
 
   const members = collectionGroup(firestore, 'public');
   const chats = collection(firestore, 'conversations');
@@ -204,16 +237,21 @@ async function fetchStats(): Promise<AdminStats> {
     });
 
   // Today and this week come from the daily counts, so each day's index entries are scanned once.
-  const [memberTotal, chatsTotal, roomToday, unsaidLive, queueSnap, memberDayCounts, chatDayCounts] = await Promise.all([
+  const [memberTotal, chatsTotal, roomToday, roomYesterday, unsaidLive, queueSnap, memberAllCounts, chatAllCounts] = await Promise.all([
     count(members),
     count(chats),
     count(between(collection(firestore, 'public_room_messages'), 'timestamp', today)),
+    count(between(collection(firestore, 'public_room_messages'), 'timestamp', yesterday, today)),
     // Echoes are permanent, so this is every Echo ever written.
     count(collection(firestore, 'unsaid')),
     getDocs(query(collection(firestore, 'match_queue'), where('status', '==', 'waiting'))),
-    Promise.all(days.map((d) => memberCount(between(members, 'createdAt', d, d + DAY_MS)))),
-    Promise.all(days.map((d) => count(between(chats, 'createdAt', d, d + DAY_MS)))),
+    Promise.all(allDays.map((d) => memberCount(between(members, 'createdAt', d, d + DAY_MS)))),
+    Promise.all(allDays.map((d) => count(between(chats, 'createdAt', d, d + DAY_MS)))),
   ]);
+  const memberPeriods = splitPeriods(memberAllCounts, range);
+  const chatPeriods = splitPeriods(chatAllCounts, range);
+  const memberDayCounts = memberPeriods.current;
+  const chatDayCounts = chatPeriods.current;
   const sum = (counts: number[]) => counts.reduce((a, b) => a + b, 0);
   const membersToday = memberDayCounts[memberDayCounts.length - 1];
   const membersWeek = sum(memberDayCounts.slice(-7));
@@ -232,6 +270,14 @@ async function fetchStats(): Promise<AdminStats> {
     unsaidLive,
     memberDays: days.map((day, i) => ({ day, count: memberDayCounts[i] })),
     chatDays: days.map((day, i) => ({ day, count: chatDayCounts[i] })),
+    membersYesterday: memberAllCounts[memberAllCounts.length - 2] ?? 0,
+    chatsYesterday: chatAllCounts[chatAllCounts.length - 2] ?? 0,
+    roomYesterday,
+    membersRange: sum(memberPeriods.current),
+    membersPrevRange: sum(memberPeriods.previous),
+    chatsRange: sum(chatPeriods.current),
+    chatsPrevRange: sum(chatPeriods.previous),
+    range,
     indexLink,
   };
 }
