@@ -445,7 +445,10 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
       .finally(() => setLoading(false));
   }, [range]);
 
-  useEffect(() => refresh(), [refresh]);
+  // Only the Summary needs these numbers; Growth and Retention load their own, so switching to them costs nothing extra.
+  useEffect(() => {
+    if (view === 'summary') refresh();
+  }, [refresh, view]);
 
   // While another range loads, the last figures stay up (dimmed) and are labelled with the range they cover.
   return (
@@ -461,10 +464,10 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
             ))}
           </div>
           <span className="hidden sm:inline text-[length:calc(11px_*_var(--fs,1))] text-subtle tabular-nums" aria-live="polite">
-            {loading ? 'Updating…' : updatedLabel(updatedAt)}
+            {view !== 'summary' ? '' : loading ? 'Updating…' : updatedLabel(updatedAt)}
           </span>
-          <button onClick={() => { setReload((n) => n + 1); refresh(true); }} className="icon-btn" aria-label="Refresh" disabled={loading}>
-            <RefreshCw className={`w-[18px] h-[18px] ${loading ? 'animate-spin' : ''}`} />
+          <button onClick={() => { setReload((n) => n + 1); if (view === 'summary') refresh(true); }} className="icon-btn" aria-label="Refresh" disabled={view === 'summary' && loading}>
+            <RefreshCw className={`w-[18px] h-[18px] ${view === 'summary' && loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
@@ -479,7 +482,7 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
 
       {error && <p className="card p-4 text-sm text-danger">Couldn’t load stats. Try refreshing.</p>}
 
-      {view === 'growth' && <GrowthView range={range} members={stats?.members ?? 0} reload={reload} />}
+      {view === 'growth' && <GrowthView range={range} reload={reload} />}
       {view === 'retention' && <RetentionView range={range} reload={reload} />}
 
       {stats?.indexLink && (

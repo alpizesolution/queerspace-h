@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeRetention, sumLast } from './adminGrowthService.ts';
+import { ANALYTICS_CACHE_MS, clearAnalyticsCache, computeRetention, remember, sumLast } from './adminGrowthService.ts';
 import { addDays } from '../utils/acquisition.ts';
 
 test('addDays walks across month and year ends', () => {
@@ -42,4 +42,35 @@ test('a later day completes the 7-day window, and empty or partial cohorts never
   const none = await computeRetention(20261101, 20261120, lookups([]));
   assert.equal(none[0].size, 0);
   assert.equal(none[0].rates[1], null);
+});
+
+test('the 5-minute analytics cache serves repeats, refreshes on demand and after expiry, and keeps ranges apart', async () => {
+  clearAnalyticsCache();
+  const realNow = Date.now;
+  let clock = 1_000_000;
+  Date.now = () => clock;
+  try {
+    let loads = 0;
+    const load = async () => ++loads;
+    assert.equal(await remember('a', false, load), 1);
+    assert.equal(await remember('a', false, load), 1);            // cached
+    clock += ANALYTICS_CACHE_MS - 1;
+    assert.equal(await remember('a', false, load), 1);            // still inside 5 minutes
+    assert.equal(await remember('b', false, load), 2);            // another key (another range) loads once
+    assert.equal(await remember('a', true, load), 3);             // Refresh forces a reload
+    assert.equal(await remember('a', false, load), 3);            // ... and that result is cached again
+    clock += ANALYTICS_CACHE_MS;
+    assert.equal(await remember('a', false, load), 4);            // expired
+    assert.equal(ANALYTICS_CACHE_MS, 5 * 60_000);
+  } finally {
+    Date.now = realNow;
+    clearAnalyticsCache();
+  }
+});
+
+test('analytics use one-off reads only: no live listeners anywhere in the growth code', async () => {
+  const fs = await import('node:fs');
+  for (const file of ['src/services/adminGrowthService.ts', 'src/services/activityService.ts', 'src/admin/GrowthPanel.tsx', 'api/admin-growth.js']) {
+    assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /onSnapshot|\.listen\(/, file);
+  }
 });

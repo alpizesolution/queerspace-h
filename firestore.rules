@@ -883,13 +883,14 @@ service cloud.firestore {
         && (!('source' in request.resource.data)
             || request.resource.data.source in ['tiktok', 'facebook', 'reddit', 'direct', 'referral', 'other']);
 
-      // Later days only add today's marker; firstDay and source never change.
+      // Later days only add today's marker; firstDay and source never change. There is no cap on the number of days:
+      // a member can add one marker per day, so growth is one small entry a day (about 54 years fit under Firestore's
+      // 40,000 index-entry limit per document).
       allow update: if isOwner(userId)
         && isEligibleMember(userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['days'])
         && request.resource.data.days.diff(resource.data.days).affectedKeys().hasOnly([activityTodayKey()])
-        && request.resource.data.days[activityTodayKey()] == true
-        && request.resource.data.days.size() <= 400;
+        && request.resource.data.days[activityTodayKey()] == true;
 
       allow delete: if false;
     }

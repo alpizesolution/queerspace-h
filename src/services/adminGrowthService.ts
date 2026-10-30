@@ -1,4 +1,4 @@
-import { and, collection, getCountFromServer, getDocs, limit, orderBy, or, query, Query, where } from 'firebase/firestore';
+import { Firestore, and, collection, collectionGroup, getCountFromServer, getDocs, limit, orderBy, or, query, Query, where } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.ts';
 import { ACQUISITION_SOURCES, AcquisitionSource, activityDayKey, activityDayNumber, addDays, dayNumberToLocalMs } from '../utils/acquisition.ts';
 import type { DayCount } from './adminService.ts';
@@ -7,7 +7,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const CACHE_MS = 5 * 60_000;
 
 const memo = new Map<string, { at: number; value: unknown }>();
-async function remember<T>(key: string, force: boolean, load: () => Promise<T>): Promise<T> {
+export const ANALYTICS_CACHE_MS = CACHE_MS;
+export function clearAnalyticsCache() {
+  memo.clear();
+}
+
+/** Runs `load` unless the same key was loaded in the last 5 minutes; `force` (the Refresh button) always reloads. */
+export async function remember<T>(key: string, force: boolean, load: () => Promise<T>): Promise<T> {
   const hit = memo.get(key);
   if (!force && hit && Date.now() - hit.at < CACHE_MS) return hit.value as T;
   const value = await load();
@@ -44,6 +50,14 @@ export async function loadAuthGrowth(force = false): Promise<AuthGrowth> {
   });
 }
 
+/** Members with a completed profile (one count query, cached 5 minutes). */
+export async function loadMemberTotal(force = false, firestore: Firestore | null = db): Promise<number> {
+  return remember('member-total', force, async () => {
+    if (!firestore) throw new Error('Firebase is not configured');
+    return countOf(collectionGroup(firestore, 'public'));
+  });
+}
+
 /** Sum of the last `n` entries. */
 export const sumLast = (days: DayCount[], n: number) => days.slice(-n).reduce((total, d) => total + d.count, 0);
 
@@ -66,10 +80,15 @@ export interface ActivityStats {
 
 const dayField = (key: string) => `days.${key}`;
 
-export async function loadActivityStats(range: number, force = false, now: number = Date.now()): Promise<ActivityStats> {
+export async function loadActivityStats(
+  range: number,
+  force = false,
+  now: number = Date.now(),
+  firestore: Firestore | null = db
+): Promise<ActivityStats> {
   return remember(`activity-${range}-${activityDayNumber(now)}`, force, async () => {
-    if (!db) throw new Error('Firebase is not configured');
-    const members = collection(db, 'member_activity');
+    if (!firestore) throw new Error('Firebase is not configured');
+    const members = collection(firestore, 'member_activity');
     const keys = Array.from({ length: 30 }, (_, i) => activityDayKey(now - i * DAY_MS)); // today first
     const activeOn = (key: string) => query(members, where(dayField(key), '==', true));
     const anyOf = (list: string[]) => query(members, or(...list.map((k) => where(dayField(k), '==', true))));
@@ -169,10 +188,15 @@ export async function computeRetention(
   return rows;
 }
 
-export async function loadRetention(trackingSince: number, force = false, now: number = Date.now()): Promise<CohortRow[]> {
+export async function loadRetention(
+  trackingSince: number,
+  force = false,
+  now: number = Date.now(),
+  firestore: Firestore | null = db
+): Promise<CohortRow[]> {
   return remember(`retention-${activityDayNumber(now)}`, force, async () => {
-    if (!db) throw new Error('Firebase is not configured');
-    const members = collection(db, 'member_activity');
+    if (!firestore) throw new Error('Firebase is not configured');
+    const members = collection(firestore, 'member_activity');
     return computeRetention(trackingSince, activityDayNumber(now), {
       cohortSize: (day) => countOf(query(members, where('firstDay', '==', day))),
       retained: (day, n) =>

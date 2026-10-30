@@ -8,6 +8,7 @@ import {
   RETENTION_DAYS,
   loadActivityStats,
   loadAuthGrowth,
+  loadMemberTotal,
   loadRetention,
   sumLast,
 } from '../services/adminGrowthService.ts';
@@ -38,6 +39,10 @@ const Notice: React.FC<{ title: string; children: React.ReactNode }> = ({ title,
   </div>
 );
 
+// Refresh bumps `reload`. Each view forces a fresh fetch only for a reload it has not handled yet, so switching
+// ranges or tabs afterwards goes back to the 5-minute cache instead of re-querying every time.
+const handledReload = { growth: 0, retention: 0 };
+
 function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
   const [value, setValue] = useState<T | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -62,11 +67,16 @@ function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
 }
 
 /** Accounts, registrations, daily/weekly/monthly active members and where they came from. */
-export const GrowthView: React.FC<{ range: number; members: number; reload: number }> = ({ range, members, reload }) => {
+export const GrowthView: React.FC<{ range: number; reload: number }> = ({ range, reload }) => {
   const [regRange, setRegRange] = useState<(typeof REG_RANGES)[number]>(30);
-  const force = reload > 0;
+  const force = reload > handledReload.growth;
   const auth = useLoad<AuthGrowth>(() => loadAuthGrowth(force), [reload]);
   const activity = useLoad<ActivityStats>(() => loadActivityStats(range, force), [range, reload]);
+  const memberTotal = useLoad<number>(() => loadMemberTotal(force), [reload]);
+  const members = memberTotal.value ?? 0;
+  useEffect(() => {
+    handledReload.growth = reload;
+  }, [reload]);
   const a = activity.value;
   const g = auth.value;
 
@@ -127,6 +137,10 @@ export const GrowthView: React.FC<{ range: number; members: number; reload: numb
                 <Stat hero label="Returning" value={a.returningWeek} note={`this week · ${a.returningMonth} this month`} />
               </div>
               <BarChart title="Daily active members" data={a.dauDays} />
+              <p className="text-[length:calc(11px_*_var(--fs,1))] text-subtle">
+                Each member is counted once per period. “Returning” means active in the period but first counted before it; activity tracking began
+                {a.trackingSince ? ` ${dayLabel(a.trackingSince)}` : ''}, so until a full period has passed, members who already had accounts count as new.
+              </p>
             </>
           )
         ) : (
@@ -172,12 +186,15 @@ export const GrowthView: React.FC<{ range: number; members: number; reload: numb
 
 /** Weekly cohorts: of the members who first showed up that week, how many came back on day 1, 7, 14, 30. */
 export const RetentionView: React.FC<{ range: number; reload: number }> = ({ range, reload }) => {
-  const force = reload > 0;
+  const force = reload > handledReload.retention;
   const since = useLoad<number | null>(async () => (await loadActivityStats(range, force)).trackingSince, [reload]);
   const rows = useLoad<CohortRow[]>(
     async () => (since.value ? loadRetention(since.value, force) : []),
     [since.value, reload]
   );
+  useEffect(() => {
+    handledReload.retention = reload;
+  }, [reload]);
 
   if (since.loading && since.value === null) return <SkeletonGrid n={2} />;
   if (since.error) {
@@ -193,7 +210,7 @@ export const RetentionView: React.FC<{ range: number; reload: number }> = ({ ran
 
   return (
     <div className="space-y-3">
-      <SectionHeading hint={`Counted since ${dayLabel(since.value)}`}>Retention by first week</SectionHeading>
+      <SectionHeading hint={`Tracking began ${dayLabel(since.value)}`}>First-activity cohorts</SectionHeading>
       {rows.loading && !rows.value ? (
         <SkeletonGrid n={2} />
       ) : (
@@ -201,7 +218,7 @@ export const RetentionView: React.FC<{ range: number; reload: number }> = ({ ran
           <table className="w-full text-[length:calc(13px_*_var(--fs,1))]">
             <thead>
               <tr className="text-left text-muted border-b border-line">
-                <th scope="col" className="px-4 py-2.5 font-medium">First seen</th>
+                <th scope="col" className="px-4 py-2.5 font-medium">First active</th>
                 <th scope="col" className="px-2 py-2.5 font-medium text-right">Members</th>
                 {RETENTION_DAYS.map((n) => (
                   <th key={n} scope="col" className="px-2 py-2.5 font-medium text-right">Day {n}</th>
@@ -227,8 +244,10 @@ export const RetentionView: React.FC<{ range: number; reload: number }> = ({ ran
         </div>
       )}
       <p className="text-[length:calc(11px_*_var(--fs,1))] text-subtle">
-        A member counts as active on a day when they open the app signed in. “Day N” is the share of a week’s new members who were active again exactly N days after
-        their first day. A dash means that window hasn’t finished yet, and a week only shows rates once all seven of its days have.
+        These are first-activity cohorts, not sign-up cohorts: members are grouped by the first day they were counted active since tracking began
+        ({dayLabel(since.value)}), so everyone who already had an account lands in the first week. A member is active on a day when they open the app
+        signed in. “Day N” is the share of a week’s members who were active again exactly N days after that first day. A dash means the window hasn’t
+        finished yet, and a week shows rates only once all seven of its days have.
       </p>
     </div>
   );
