@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { GROWTH_DAYS, bucketCreations, manilaDate } from './admin-growth.js';
+import { GROWTH_DAYS, bucketCreations, manilaDate } from '../../api/admin-growth.js';
 
 test('days follow Philippine time', () => {
   assert.equal(manilaDate(Date.UTC(2026, 9, 30, 15, 59)), '2026-10-30');

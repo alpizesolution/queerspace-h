@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { HOME, PAGES, SITE } from '../scripts/seo/pages.mjs';
+import { HOME, PAGES, SITE } from '../../scripts/seo/pages.mjs';
 
 // Line endings differ between Windows checkouts and the generator, so compare with LF only.
 const read = (f) => fs.readFileSync(f, 'utf8').split('\r\n').join('\n');

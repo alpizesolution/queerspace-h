@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import handler, { partnerSummary } from './signals.js';
+import handler, { partnerSummary } from '../../api/signals.js';
 
 function makeResponse() {
   return {

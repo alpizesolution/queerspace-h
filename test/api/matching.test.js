@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ageFromDate, parseBirthDate } from './_lib.js';
-import { ageFits, agesCompatible, orderCandidates, queueFiltersCompatible } from './_matching.js';
-import * as jsLocations from './_locations.js';
-import * as tsLocations from '../src/utils/philippines-locations.ts';
-import { calculateAge, isValidBirthDate } from '../src/utils/ageEligibility.ts';
-import { filtersCompatible, pickQueueCandidates } from '../src/services/liveMatchService.ts';
+import { ageFromDate, parseBirthDate } from '../../api/_lib.js';
+import { ageFits, agesCompatible, orderCandidates, queueFiltersCompatible } from '../../api/_matching.js';
+import * as jsLocations from '../../api/_locations.js';
+import * as tsLocations from '../../src/utils/philippines-locations.ts';
+import { calculateAge, isValidBirthDate } from '../../src/utils/ageEligibility.ts';
+import { filtersCompatible, pickQueueCandidates } from '../../src/services/liveMatchService.ts';
 
 test('server age calculation matches the client for every day around a birthday', () => {
   const dates = ['2000-02-29', '1999-12-31', '2007-06-15', '1980-01-01', '2008-03-01'];
