@@ -33,6 +33,11 @@ import {
   loadFlaggedUnsaid,
   loadReports,
   loadStats,
+  statsFetchedAt,
+  pctChange,
+  STATS_RANGES,
+  DEFAULT_STATS_RANGE,
+  type StatsRange,
   loadSuggestions,
   removeUnsaid,
   restoreUnsaid,
@@ -411,40 +416,80 @@ const Dashboard: React.FC = () => {
 
 // ---------------------------------------------------------------- Overview
 
-const Stat: React.FC<{ label: string; value: number | string; note?: string }> = ({ label, value, note }) => (
+/** "▲ 12% vs yesterday". Nothing is shown when the earlier period has no activity to compare with. */
+const Delta: React.FC<{ current: number; previous: number; versus: string }> = ({ current, previous, versus }) => {
+  const change = pctChange(current, previous);
+  if (change === null) return <span className="text-subtle">{previous === 0 && current > 0 ? `new vs ${versus}` : `no data vs ${versus}`}</span>;
+  const tone = change > 0 ? 'text-emerald-400' : change < 0 ? 'text-danger' : 'text-subtle';
+  return (
+    <span className={tone}>
+      {change > 0 ? '▲' : change < 0 ? '▼' : '•'} {Math.abs(change)}% <span className="text-subtle">vs {versus}</span>
+    </span>
+  );
+};
+
+const Stat: React.FC<{ label: string; value: number | string; note?: React.ReactNode; hero?: boolean }> = ({ label, value, note, hero }) => (
   <div className="card p-4">
     <p className="text-[length:calc(12px_*_var(--fs,1))] text-muted">{label}</p>
-    <p className="text-2xl font-semibold tracking-tight mt-1 tabular-nums">{value}</p>
+    <p className={`${hero ? 'text-3xl' : 'text-2xl'} font-semibold tracking-tight mt-1 tabular-nums`}>{value}</p>
     {note && <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-0.5">{note}</p>}
   </div>
 );
 
+const SectionHeading: React.FC<{ children: React.ReactNode; hint?: string }> = ({ children, hint }) => (
+  <div className="flex items-baseline justify-between gap-2">
+    <h2 className="text-[length:calc(13px_*_var(--fs,1))] font-medium text-fg">{children}</h2>
+    {hint && <span className="text-[length:calc(11px_*_var(--fs,1))] text-subtle">{hint}</span>}
+  </div>
+);
+
+const updatedLabel = (at: number | null) =>
+  at ? `Updated ${new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}` : '';
+
 const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ openSuggestions, openReports }) => {
+  const [range, setRange] = useState<StatsRange>(DEFAULT_STATS_RANGE);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
   const refresh = useCallback((force = false) => {
     setLoading(true);
     setError(false);
-    loadStats(force)
-      .then(setStats)
+    loadStats(range, force)
+      .then((next) => {
+        setStats(next);
+        setUpdatedAt(statsFetchedAt(range));
+      })
       .catch((err) => {
         console.warn('[Admin] Stats failed:', err);
         setError(true);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [range]);
 
   useEffect(() => refresh(), [refresh]);
 
+  // While another range loads, the last figures stay up (dimmed) and are labelled with the range they cover.
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
-        <button onClick={() => refresh(true)} className="icon-btn" aria-label="Refresh" disabled={loading}>
-          <RefreshCw className={`w-[18px] h-[18px] ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5" role="group" aria-label="Date range">
+            {STATS_RANGES.map((r) => (
+              <button key={r} onClick={() => setRange(r)} aria-pressed={range === r} className="chip">
+                {r}d
+              </button>
+            ))}
+          </div>
+          <span className="hidden sm:inline text-[length:calc(11px_*_var(--fs,1))] text-subtle tabular-nums" aria-live="polite">
+            {loading ? 'Updating…' : updatedLabel(updatedAt)}
+          </span>
+          <button onClick={() => refresh(true)} className="icon-btn" aria-label="Refresh" disabled={loading}>
+            <RefreshCw className={`w-[18px] h-[18px] ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {error && <p className="card p-4 text-sm text-danger">Couldn’t load stats. Try refreshing.</p>}
@@ -469,26 +514,40 @@ const Overview: React.FC<{ openSuggestions: number; openReports: number }> = ({ 
           ))}
         </div>
       ) : stats ? (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Stat label="Members" value={stats.members} note={`+${stats.membersWeek} this week`} />
-            <Stat label="New today" value={stats.membersToday} />
-            <Stat label="Chats started" value={stats.chatsTotal} note={`+${stats.chatsWeek} this week`} />
-            <Stat label="Chats today" value={stats.chatsToday} />
-            <Stat label="Searching now" value={stats.searchingNow} />
-            <Stat label="Public Room today" value={stats.roomToday} note="messages" />
-            <Stat label="Echoes" value={stats.unsaidLive} />
-            <Stat label="To review" value={openSuggestions + openReports} note={`${openSuggestions} ${openSuggestions === 1 ? 'idea' : 'ideas'} · ${openReports} ${openReports === 1 ? 'report' : 'reports'}`} />
-          </div>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <BarChart title="New members" data={stats.memberDays} />
-            <BarChart title="Chats started" data={stats.chatDays} />
-          </div>
+        <div className={`space-y-6 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
+          <section className="space-y-2.5">
+            <SectionHeading hint="All time">Totals</SectionHeading>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Stat hero label="Members" value={stats.members} note={<>+{stats.membersRange} in {stats.range}d · <Delta current={stats.membersRange} previous={stats.membersPrevRange} versus={`prev ${stats.range}d`} /></>} />
+              <Stat hero label="Chats started" value={stats.chatsTotal} note={<>+{stats.chatsRange} in {stats.range}d · <Delta current={stats.chatsRange} previous={stats.chatsPrevRange} versus={`prev ${stats.range}d`} /></>} />
+              <Stat hero label="Echoes" value={stats.unsaidLive} note="posts on the wall" />
+              <Stat hero label="To review" value={openSuggestions + openReports} note={`${openSuggestions} ${openSuggestions === 1 ? 'idea' : 'ideas'} · ${openReports} ${openReports === 1 ? 'report' : 'reports'}`} />
+            </div>
+          </section>
+
+          <section className="space-y-2.5">
+            <SectionHeading hint="Since midnight">Today</SectionHeading>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Stat label="New today" value={stats.membersToday} note={<Delta current={stats.membersToday} previous={stats.membersYesterday} versus="yesterday" />} />
+              <Stat label="Chats today" value={stats.chatsToday} note={<Delta current={stats.chatsToday} previous={stats.chatsYesterday} versus="yesterday" />} />
+              <Stat label="Public Room today" value={stats.roomToday} note={<>messages · <Delta current={stats.roomToday} previous={stats.roomYesterday} versus="yesterday" /></>} />
+              <Stat label="Searching now" value={stats.searchingNow} note="live" />
+            </div>
+          </section>
+
+          <section className="space-y-2.5">
+            <SectionHeading hint={`Last ${stats.range} days`}>Trends</SectionHeading>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <BarChart title="New members" data={stats.memberDays} />
+              <BarChart title="Chats started" data={stats.chatDays} />
+            </div>
+          </section>
+
           <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">
-            Members are people who finished setting up a profile. Join dates are tracked from this update on, so older
-            members show up in the total but not in the daily chart.
+            Members are people who finished setting up a profile. Join dates are tracked from a recent update on, so older
+            members show up in the total but not in the daily chart or the comparisons.
           </p>
-        </>
+        </div>
       ) : null}
     </div>
   );
