@@ -111,11 +111,10 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
       ageMax: Number(ageMax),
     };
 
-    // Filter switches only matter for a Custom search, so only check them then.
-    const checked = activeTab === 'custom' ? filters : { ...filters, applyAgeFilter: false };
+    // Every filter rule is checked for either kind of search: a switched-on age range applies to Quick as well.
     // Only filter rules apply here; the name is checked (and fixable) in "Your profile".
     const { displayName: _name, ...filterErrors } = validateSetupProfile(
-      { displayName: 'ok', ...checked },
+      { displayName: 'ok', ...filters },
       isAgeConfirmed
     ).errors;
     if (Object.keys(filterErrors).length > 0) {
@@ -140,6 +139,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
           {errorList.length > 0 && (
             <p role="alert" className="mb-2 text-[length:calc(13px_*_var(--fs,1))] text-danger">
               {errorList[0]}
+              {!isCustom && errors.ageRange ? ' Fix it in Custom, or switch the age range off.' : ''}
             </p>
           )}
           <button type="button" onClick={handleSubmit} className="btn btn-primary w-full h-12 text-[length:calc(15px_*_var(--fs,1))]">
@@ -175,7 +175,9 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
           <p className="mt-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
             {isCustom
               ? 'Match on intention, topics, age, location and My Type.'
-              : 'Meet anyone available right now. Your Custom filters are kept for next time.'}
+              : applyAgeFilter
+                ? `Meet anyone available right now. Your age range (${ageMin}–${ageMax}) still applies; your other Custom filters are kept for next time.`
+                : 'Meet anyone available right now. Your Custom filters are kept for next time.'}
           </p>
         </div>
 

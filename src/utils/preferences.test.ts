@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { UserPreferences } from '../types.ts';
 import { applyFilters, applyProfile, matchPrefsForMode, pickFilters, pickProfile, PROFILE_KEYS, FILTER_KEYS } from './preferences.ts';
-import { queueMatchFields } from '../services/liveMatchService.ts';
+import { ageRangeFromPrefs, queueMatchFields } from '../services/liveMatchService.ts';
 
 const full: UserPreferences = {
   displayName: 'Cozy_Raccoon',
@@ -51,11 +51,13 @@ test('changing chat filters does not change profile fields or visibility flags',
   assert.deepEqual(pickProfile(next), pickProfile(full));
 });
 
-test('a Quick search runs without filters but leaves the saved Custom filters intact', () => {
+test('a Quick search skips the taste filters but still honours a switched-on age range, and leaves the saved Custom filters intact', () => {
   const quick = matchPrefsForMode(full, 'quick');
   assert.equal(quick.intention, 'open');
   assert.deepEqual(quick.topics, []);
-  assert.equal(quick.applyAgeFilter, false);
+  assert.equal(quick.applyAgeFilter, true, 'a saved age range is not dropped by Quick');
+  assert.deepEqual(ageRangeFromPrefs(quick), { ageMin: 24, ageMax: 32 });
+  assert.equal(ageRangeFromPrefs(matchPrefsForMode({ ...full, applyAgeFilter: false }, 'quick')), null, 'switched off stays off');
   assert.equal(quick.applyLocationFilter, false);
   assert.equal(quick.applyGenderExpressionFilter, false);
   // The input is not modified, so switching back to Custom finds everything still set.
@@ -84,4 +86,14 @@ test('private gender expression and hidden area stay out of the queue while my o
   const shown = queueMatchFields({ ...full, showGenderExpressionOnProfile: true, showLocationOnProfile: true });
   assert.deepEqual(shown.expr, ['Andro']);
   assert.deepEqual(shown.areas, ['Cebu']);
+});
+
+test('a switched-on age range that cannot be used gives no range, which the search screen treats as a stop, never as "no filter"', () => {
+  for (const bad of [{ ageMin: 40, ageMax: 20 }, { ageMin: 17, ageMax: 30 }, { ageMin: 25, ageMax: 100 }, { ageMin: undefined, ageMax: 30 }, { ageMin: 25.5, ageMax: 30 }]) {
+    const prefs = { ...full, applyAgeFilter: true, ...bad };
+    assert.equal(ageRangeFromPrefs(prefs), null, JSON.stringify(bad));
+    assert.equal(prefs.applyAgeFilter && !ageRangeFromPrefs(prefs), true, 'the guard in SearchingState stops this search');
+    // Quick does not turn the problem into "search without an age filter".
+    assert.equal(matchPrefsForMode(prefs, 'quick').applyAgeFilter, true);
+  }
 });

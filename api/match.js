@@ -63,6 +63,15 @@ export async function pairInTransaction(db, uid, partnerId, now) {
     if (!agesCompatible({ age: me.age, range: me.range }, { age: partner.age, range: partner.range })) {
       throw new HttpError(409, 'not_compatible');
     }
+    // A server-only note of what the age check had to go on, so a doubtful match can be investigated later (ranges are
+    // overwritten as soon as someone searches again). It holds whether each side had an age range, never an age or a
+    // birthday, and no rule lets any client read it.
+    tx.set(db.doc(`matchAudit/${convRef.id}`), {
+      participants: [uid, partnerId].sort(),
+      createdAt: FieldValue.serverTimestamp(),
+      ageRangeApplied: { [uid]: Boolean(me.range), [partnerId]: Boolean(partner.range) },
+      ageChecked: true,
+    });
     tx.set(convRef, {
       participants: [uid, partnerId].sort(),
       status: 'active',

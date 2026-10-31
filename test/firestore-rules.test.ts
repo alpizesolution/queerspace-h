@@ -1705,3 +1705,18 @@ test('IN-04: An admin CAN read the newest-first window the live listeners use', 
   await assertSucceeds(cha.collection('reports').orderBy('timestamp', 'desc').limit(200).get());
   await assertFails(testEnv.authenticatedContext('alice').firestore().collection('reports').orderBy('timestamp', 'desc').limit(200).get());
 });
+
+test('MQ-01: The match audit notes, and the private age ranges, can never be read or written from the app, by members or admins', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('matchAudit/c1').set({ participants: ['alice', 'bob'], ageChecked: true });
+    await ctx.firestore().doc('matchPrefs/alice').set({ ageMin: 25, ageMax: 35 });
+  });
+  await seedAdmin();
+  for (const db of [testEnv.authenticatedContext('alice').firestore(), testEnv.authenticatedContext('bob').firestore(), adminDb()]) {
+    await assertFails(db.doc('matchAudit/c1').get());
+    await assertFails(db.doc('matchAudit/c2').set({ ageChecked: true }));
+    await assertFails(db.doc('matchAudit/c1').delete());
+    await assertFails(db.doc('matchPrefs/alice').get());
+    await assertFails(db.doc('matchPrefs/alice').set({ ageMin: 18, ageMax: 99 }));
+  }
+});
