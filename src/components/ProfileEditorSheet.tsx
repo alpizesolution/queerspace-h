@@ -4,7 +4,8 @@ import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { Sheet } from './Sheet.tsx';
 import { isValidAvatar, randomAvatar } from '../utils/avatar.ts';
 import { UserPreferences } from '../types.ts';
-import { MY_VIBE_OPTIONS, PERSONAL_STYLE_OPTIONS, PRONOUN_OPTIONS, SEXUAL_ORIENTATIONS, GENDER_IDENTITIES, GENDER_EXPRESSIONS, generateSapphicPseudonym } from '../utils/matching-logic.ts';
+import { MY_VIBE_OPTIONS, PERSONAL_STYLE_OPTIONS, PRONOUN_OPTIONS, SEXUAL_ORIENTATIONS, GENDER_IDENTITIES, GENDER_EXPRESSIONS } from '../utils/matching-logic.ts';
+import { suggestPseudonym } from '../services/pseudonymService.ts';
 import { ProfileFields } from '../utils/preferences.ts';
 interface ProfileEditorSheetProps { currentPrefs: UserPreferences; onClose: () => void; onSave: (profile: ProfileFields) => void; }
 /** Anonymous profile: a pseudonym and illustrated avatar, never a required photo or real name. */
@@ -67,7 +68,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
         <label htmlFor="qs-name" className="label">Display name</label>
         <div className="flex gap-2"><div className="relative flex-1 min-w-0">
           <input id="qs-name" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Lavender Lark" maxLength={25} autoComplete="off" aria-invalid={!!errors.displayName} className="input pr-11" />
-          <button type="button" onClick={() => setDisplayName(generateSapphicPseudonym().name)} className="icon-btn absolute right-0.5 top-0.5 w-10 h-10" title="Random pseudonym" aria-label="Generate a random pseudonym"><Dices className="w-[18px] h-[18px]" /></button>
+          <button type="button" onClick={() => void suggestPseudonym().then(setDisplayName)} className="icon-btn absolute right-0.5 top-0.5 w-10 h-10" title="Random pseudonym" aria-label="Generate a random pseudonym"><Dices className="w-[18px] h-[18px]" /></button>
         </div><select value={pronouns} onChange={(e) => setPronouns(e.target.value)} aria-label="Pronouns" className="input w-[8.25rem] sm:w-40 shrink-0">
           {[...PRONOUN_OPTIONS, ...(PRONOUN_OPTIONS.includes(pronouns) ? [] : [pronouns])].map((p) => <option key={p} value={p}>{p}</option>)}
         </select></div>

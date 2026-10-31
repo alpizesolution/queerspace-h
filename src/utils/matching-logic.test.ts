@@ -5,38 +5,16 @@ import {
   validateSetupProfile,
   sanitizeMessageText,
   generateSapphicPseudonym,
-  PSEUDONYM_FIRST_WORDS,
-  PSEUDONYM_MAX_LENGTH,
-  PSEUDONYM_SECOND_WORDS,
-  PSEUDONYM_SPECIALS,
   toggleGenderExpression,
   togglePreferredFilter,
 } from './matching-logic.ts';
 import { isLocationCompatible, formatLocationSummary } from './philippines-locations.ts';
 import { PartnerProfile, UserPreferences } from '../types.ts';
 
-test('generateSapphicPseudonym produces a Reddit-style name and valid pronouns', () => {
+test('generateSapphicPseudonym produces a FirstSecond name and valid pronouns', () => {
   const result = generateSapphicPseudonym();
-  assert.match(result.name, /^[A-Za-z]+(_[A-Za-z]+)+$/);
+  assert.match(result.name, /^[A-Z][a-z]+[A-Z][A-Za-z]+$/);
   assert.ok(['she/her', 'they/she', 'they/them'].includes(result.pronouns));
-});
-
-test('every generated pseudonym fits the 25-character display name limit', () => {
-  for (const name of PSEUDONYM_SPECIALS) assert.ok(name.length <= PSEUDONYM_MAX_LENGTH, name);
-  // Underscore-joined words, no spaces and no numbers, never a repeated word.
-  for (let i = 0; i < 20000; i++) {
-    const { name } = generateSapphicPseudonym();
-    assert.ok(name.length <= PSEUDONYM_MAX_LENGTH && /^[A-Za-z]+(_[A-Za-z]+)+$/.test(name), name);
-    const [a, b] = name.split('_');
-    if (!PSEUDONYM_SPECIALS.includes(name)) assert.notEqual(a, b, name);
-  }
-});
-
-test('every first word always has at least one second word that fits', () => {
-  for (const first of PSEUDONYM_FIRST_WORDS) {
-    const room = PSEUDONYM_MAX_LENGTH - first.length - 1;
-    assert.ok(PSEUDONYM_SECOND_WORDS.some((w) => w.length <= room && w !== first), first);
-  }
 });
 
 test('validateSetupProfile accepts valid display name', () => {

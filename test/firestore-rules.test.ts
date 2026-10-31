@@ -564,6 +564,7 @@ const profile = (overrides: Record<string, unknown> = {}) => ({
 });
 
 test('A-01: Users CAN save a short avatar code on their public profile, not a long or non-string one', async () => {
+  await reserveFor('alice', 'Willow'); // names must be reserved by the server first
   const alice = testEnv.authenticatedContext('alice').firestore();
   await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ avatar: 'cat.1.2' })));
   await assertSucceeds(alice.doc('users/alice/public/profile').set(profile()));
@@ -721,9 +722,11 @@ test('AD-03: Admins CAN moderate and count, but still CANNOT read private chats 
 });
 
 test('AD-04: A profile join date CAN only be set once, to now', async () => {
+  await reserveFor('alice', 'Willow');
   const alice = testEnv.authenticatedContext('alice').firestore();
   await assertFails(alice.doc('users/alice/public/profile').set(profile({ createdAt: new Date(0) })));
   await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ createdAt: now() })));
+  await reserveFor('alice', 'Ivy');
   await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ displayName: 'Ivy' }), { merge: true }));
   await assertFails(alice.doc('users/alice/public/profile').set(profile({ createdAt: now() }), { merge: true }));
   // Profiles saved before join dates existed can get one later.
@@ -1258,6 +1261,7 @@ const publicProfile = (extra: Record<string, unknown> = {}) => ({
 });
 
 test('P-01: The public profile CANNOT carry an age, but CAN carry the Show my age switch', async () => {
+  await reserveFor('alice', 'Alice');
   const alice = testEnv.authenticatedContext('alice').firestore();
   await assertFails(alice.doc('users/alice/public/profile').set(publicProfile({ age: 27 })));
   await assertSucceeds(alice.doc('users/alice/public/profile').set(publicProfile({ showAgeOnProfile: true })));
@@ -1719,4 +1723,48 @@ test('MQ-01: The match audit notes, and the private age ranges, can never be rea
     await assertFails(db.doc('matchPrefs/alice').get());
     await assertFails(db.doc('matchPrefs/alice').set({ ageMin: 18, ageMax: 99 }));
   }
+});
+
+// ------------------------------------------------------------------
+// Pseudonym reservations: displayName can only change to the name the server reserved for the account
+// ------------------------------------------------------------------
+const profileBody = (displayName: string) => ({
+  displayName, pronouns: 'she/her', intention: 'open', region: 'Anywhere', topics: [], profileComplete: true, updatedAt: new Date(),
+});
+const reserveFor = (uid: string, name: string) =>
+  testEnv.withSecurityRulesDisabled((ctx) => ctx.firestore().doc(`pseudonymOwners/${uid}`).set({ key: name.toLowerCase(), name, updatedAt: new Date() }));
+
+test('PS-01: a first profile needs the reserved name; an unreserved or someone else\'s name is refused', async () => {
+  const ivy = testEnv.authenticatedContext('ivy').firestore();
+  await assertFails(ivy.doc('users/ivy/public/profile').set(profileBody('VelvetMuse')));
+  await reserveFor('ivy', 'VelvetMuse');
+  await assertFails(ivy.doc('users/ivy/public/profile').set(profileBody('DreamyFox')));
+  await assertFails(testEnv.authenticatedContext('eve').firestore().doc('users/eve/public/profile').set(profileBody('VelvetMuse')));
+  await assertSucceeds(ivy.doc('users/ivy/public/profile').set(profileBody('VelvetMuse')));
+});
+
+test('PS-02: existing members with an unregistered name can still edit everything but the name', async () => {
+  await seedEligibleMember('alice'); // profile says "alice", no reservation exists
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc('users/alice/public/profile').set({ ...profileBody('alice'), aboutMe: 'hello', region: 'Cebu' }, { merge: true }));
+  await assertSucceeds(alice.doc('users/alice/public/profile').update({ pronouns: 'they/them', updatedAt: new Date() }));
+});
+
+test('PS-03: changing the name needs a reservation for exactly that name', async () => {
+  await seedEligibleMember('bob');
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(bob.doc('users/bob/public/profile').update({ displayName: 'ChaoticCupid', updatedAt: new Date() }));
+  await reserveFor('bob', 'ChaoticCupid');
+  await assertFails(bob.doc('users/bob/public/profile').update({ displayName: 'chaoticcupid', updatedAt: new Date() }));
+  await assertSucceeds(bob.doc('users/bob/public/profile').update({ displayName: 'ChaoticCupid', updatedAt: new Date() }));
+});
+
+test('PS-04: clients cannot read or write reservations to give themselves a name', async () => {
+  await reserveFor('carol', 'SoftMuse');
+  const dave = testEnv.authenticatedContext('dave').firestore();
+  await assertFails(dave.doc('pseudonyms/softmuse').set({ uid: 'dave', name: 'SoftMuse' }));
+  await assertFails(dave.doc('pseudonymOwners/dave').set({ key: 'x', name: 'Whatever' }));
+  await assertFails(dave.doc('pseudonymOwners/carol').get());
+  await assertFails(dave.doc('pseudonyms/softmuse').get());
+  await assertFails(dave.doc('users/dave/public/profile').set(profileBody('SoftMuse')));
 });
