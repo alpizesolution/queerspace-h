@@ -205,6 +205,10 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() >= 1
         && request.resource.data.displayName.size() <= 30
+        // A name can only be set or changed to the one /api/pseudonym reserved for this account (pseudonymOwners, which
+        // clients cannot write). An unchanged name is never checked, so accounts whose names are not registered yet keep working.
+        && ((resource != null && resource.data.get('displayName', null) == request.resource.data.displayName)
+            || get(/databases/$(database)/documents/pseudonymOwners/$(userId)).data.name == request.resource.data.displayName)
         && request.resource.data.pronouns is string
         && request.resource.data.pronouns.size() >= 1
         && request.resource.data.pronouns.size() <= 20

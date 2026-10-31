@@ -17,6 +17,8 @@ import { FloatingCatsBackground } from './components/FloatingCatsBackground.tsx'
 import { InstallPrompt } from './components/InstallPrompt.tsx';
 import { PartnerProfile, UserPreferences } from './types.ts';
 import { generateSapphicPseudonym } from './utils/matching-logic.ts';
+import { reservePseudonym } from './services/pseudonymService.ts';
+import { createNameGate } from './services/pseudonymGate.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from './utils/storage.ts';
 import { ensureAnonymousAuth, isFirebaseConfigured, logScreenView } from './lib/firebase.ts';
 import { recordDailyActivity } from './services/activityService.ts';
@@ -157,6 +159,7 @@ export default function App() {
             loadAnonymousProfile().then((res) => {
               if (!res.fromCloudSuccess) return;
               setUserPrefs(res.prefs);
+              nameGate.markHeld(res.cloudDisplayName ?? null);
               setAgeGateOpen(!isAdultBirthDate(res.prefs.birthDate));
               setAgeRestricted(false);
               cloudSignatureRef.current = cloudProfileSignature(res.prefs, res.blockedPartnerIds ?? []);
@@ -206,13 +209,29 @@ export default function App() {
     setSupportOpen(true);
   };
 
-  /** Saves on this device, and to the cloud only when something the cloud stores has changed. */
+  // The server decides who holds a name. Nothing carrying a name it has not confirmed is written to the cloud.
+  const nameGate = useRef(createNameGate((name, options) => reservePseudonym(name, options))).current;
+
+  /** Saves on this device, and to the cloud only when something the cloud stores has changed and the name is confirmed. */
   const persistPrefs = async (prefs: UserPreferences, options: { withBirthDate?: boolean } = {}) => {
-    const signature = cloudProfileSignature(prefs, blockedPartnerIds);
+    let toSave = prefs;
+    let nameProblem: string | null = null;
+    if (isFirebaseConfigured) {
+      const check = await nameGate.ensure(prefs.displayName, prefs.profileComplete !== true);
+      if (check.ok) {
+        if (check.name !== prefs.displayName) { toSave = { ...prefs, displayName: check.name }; setUserPrefs(toSave); }
+      } else {
+        nameProblem = check.message;
+      }
+    }
+    const signature = cloudProfileSignature(toSave, blockedPartnerIds);
     // The birthday is immutable once the cloud has it, so it is sent only until the cloud is known to hold it.
-    const withBirthDate = Boolean(options.withBirthDate || (!cloudHasBirthDateRef.current && isAdultBirthDate(prefs.birthDate)));
+    const withBirthDate = Boolean(options.withBirthDate || (!cloudHasBirthDateRef.current && isAdultBirthDate(toSave.birthDate)));
     const cloudChanged = withBirthDate || signature !== cloudSignatureRef.current;
-    const feedback = await saveAnonymousProfile(prefs, blockedPartnerIds, cloudChanged, { withBirthDate });
+    const feedback = await saveAnonymousProfile(toSave, blockedPartnerIds, cloudChanged && !nameProblem, { withBirthDate });
+    if (nameProblem && cloudChanged) {
+      return { feedback: { ...feedback, savedToCloud: false, userMessage: nameProblem }, cloudChanged };
+    }
     if (feedback.savedToCloud) {
       cloudSignatureRef.current = signature;
       if (withBirthDate) cloudHasBirthDateRef.current = true;
@@ -222,6 +241,15 @@ export default function App() {
 
   // Profile and filters are saved separately: each only replaces its own fields.
   const handleSaveProfile = async (profile: ProfileFields) => {
+    // A new or changed name must be confirmed by the server before anything is saved, on this device or in the cloud.
+    // Unchanged names are not re-checked. An untouched name the app made up is swapped for a free one if it was taken.
+    if (isFirebaseConfigured) {
+      const untouchedSuggestion = userPrefs.profileComplete !== true && profile.displayName === userPrefs.displayName;
+      const check = await nameGate.ensure(profile.displayName, untouchedSuggestion);
+      if (!check.ok) { showToast(check.message); return; }
+      if (check.replaced) showToast(`${profile.displayName} was taken, so you're ${check.name}.`);
+      profile = { ...profile, displayName: check.name };
+    }
     const next = { ...applyProfile(userPrefs, profile), profileComplete: true };
     setUserPrefs(next);
     setProfileEditOpen(false);

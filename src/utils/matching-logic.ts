@@ -1,5 +1,6 @@
 import { GenderExpressionOption, Intention, PartnerProfile, UserPreferences } from '../types.ts';
 import { isLocationCompatible } from './philippines-locations.ts';
+import { generatePseudonym } from './pseudonyms.ts';
 
 export const INTENTION_LABELS: Record<Intention, string> = {
   friendship: 'Friendship & Bonding',
@@ -202,84 +203,11 @@ export function togglePreferredFilter(
   return next.length > 0 ? next : ['Any / No preference'];
 }
 
-// Reddit-style usernames (Adjective_Noun) without the trailing numbers, queer-coded.
-// Generated names stay within the 25-character display name limit (see generateSapphicPseudonym).
-export const PSEUDONYM_MAX_LENGTH = 25;
-
-export const PSEUDONYM_FIRST_WORDS = [
-  // Existing favorites
-  'Chaotic', 'Cozy', 'Soft', 'Feral', 'Sapphic', 'Bisexual', 'Lesbian', 'Tender', 'Moody', 'Sleepy',
-  'Butch', 'Femme', 'Thrifted', 'Lovesick', 'Kilig', 'Marupok', 'Flannel', 'Tarot', 'Lavender',
-  'Overthinking', 'Dreamy', 'Clumsy', 'Witty', 'Gentle', 'Spicy', 'Mossy', 'Velvet', 'Starry',
-  // Sapphic chaos
-  'DownBad', 'Yearning', 'Pining', 'Simping', 'Delulu', 'Clingy',
-  'Hopeless', 'Flustered', 'Jealous', 'Thirsty', 'Whipped', 'Obsessed',
-  // Soft sapphic energy
-  'Blushing', 'Lovestruck', 'Starcrossed', 'Moonstruck', 'Giddy',
-  'Dreaming', 'Shy', 'Secretly', 'Tenderhearted', 'Heartbroken',
-  // WLW-coded aesthetics
-  'Cottagecore', 'Goth', 'Punk', 'Golden', 'Midnight', 'Rosy',
-  'Cosmic', 'Angelic', 'Enchanted', 'Moonlit', 'Ethereal', 'Blooming',
-  // Filipino-coded
-  'Marites', 'Torpe', 'KiligOverload', 'Baka', 'SanaAll',
-  'Tampo', 'Lambing', 'Ligaw', 'Harana', 'Paasa',
-  // Lesbian humor
-  'Useless', 'Unhinged', 'Dramatic', 'Delusional',
-  'TouchStarved', 'Emotionally', 'Accidentally', 'Chronically',
-  'Unavailable', 'Hopelessly', 'Questionably',
-];
-
-export const PSEUDONYM_SECOND_WORDS = [
-  // Existing favorites
-  'Carabiner', 'Cardigan', 'Gremlin', 'Frog', 'Moth', 'Raccoon', 'Witch', 'Poet', 'Heartthrob',
-  'Mushroom', 'Bookworm', 'Beshie', 'PlantMom', 'CatLady', 'Stargazer', 'Daydreamer', 'Romantic',
-  'Sweetheart', 'Sunflower', 'Otter', 'Capybara', 'Tulip', 'Mango', 'Ube', 'Siopao', 'Pandesal',
-  // Sapphic stereotypes and inside jokes
-  'UHaul', 'Situationship', 'Girlfriend', 'WifeMaterial',
-  'ExGirlfriend', 'Crush', 'Heartbreaker', 'SoftMasc',
-  'PillowPrincess', 'GoldenRetriever', 'BlackCat',
-  'FemmeFatale', 'BabyGay', 'LesbianPanic',
-  // Flirting and yearning
-  'EyeContact', 'LoveLetter', 'LoveSong', 'SlowBurn',
-  'FirstKiss', 'SecretCrush', 'AlmostGirlfriend',
-  'MutualCrush', 'MissedConnection', 'LoveConfession',
-  'WeddingPlanner', 'FutureWife', 'HandHolder',
-  // Queer-coded objects and aesthetics
-  'Flannel', 'DocMartens', 'SilverRing', 'ToteBag',
-  'VinylRecord', 'PoetryBook', 'Lipstick', 'LavenderField',
-  'MatchaLatte', 'FilmCamera', 'Moonstone', 'PaperMoon',
-  // Filipino humor
-  'Marites', 'Chismosa', 'Bestie', 'Ate',
-  'Tita', 'Tambay', 'Harana', 'Kundiman',
-  'Jeepney', 'HaloHalo', 'Sampaguita', 'Bibingka',
-  // Cute chaos
-  'Menace', 'Disaster', 'MenaceToSociety', 'Catastrophe',
-  'EmotionalSupport', 'WalkingRedFlag', 'GreenFlag',
-  'PlotTwist', 'GayPanic', 'Daydream', 'LoveBug',
-];
-
-// Hand-picked names that don't fit the two-part pattern.
-export const PSEUDONYM_SPECIALS = [
-  'UHaul_Enthusiast', 'Carabiner_Collector', 'Certified_Pining_Expert', 'Kilig_Professional',
-  'Marupok_Era', 'Ate_Of_The_GroupChat', 'Beshie_With_Feelings', 'Two_Cats_One_Cardigan',
-  'ToteBag_Philosopher', 'PlantMom_Energy', 'SadGirl_Hours', 'Disaster_Bisexual',
-  'Useless_Lesbian', 'Mutual_Pining', 'Situationship_Survivor', 'MainCharacter_Energy',
-];
-
-const pick = <T,>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
-
+// Pseudonyms are FirstSecond names (VelvetMuse) built from the curated vocabulary in pseudonyms.ts. This keeps the
+// call sites that also need pronouns; the name itself is only a proposal until the server reserves it (api/pseudonym.js).
 export function generateSapphicPseudonym(): { name: string; pronouns: string } {
-  let name: string;
-  if (Math.random() < 0.2) {
-    name = pick(PSEUDONYM_SPECIALS);
-  } else {
-    const first = pick(PSEUDONYM_FIRST_WORDS);
-    // Only second words that keep the whole name within the display name limit, and never a repeat.
-    const room = PSEUDONYM_MAX_LENGTH - first.length - 1;
-    name = `${first}_${pick(PSEUDONYM_SECOND_WORDS.filter((w) => w.length <= room && w !== first))}`;
-  }
   const pronouns = Math.random() > 0.35 ? 'she/her' : (Math.random() > 0.5 ? 'they/she' : 'they/them');
-  return { name, pronouns };
+  return { name: generatePseudonym(), pronouns };
 }
 
 /**

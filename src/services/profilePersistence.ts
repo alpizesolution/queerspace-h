@@ -15,6 +15,8 @@ export interface ProfileLoadResult {
   blockedPartnerIds?: string[];
   /** True when the cloud already holds the member's birthday (which is then never rewritten from the client). */
   cloudHasBirthDate?: boolean;
+  /** The name on a COMPLETED cloud profile: an existing pseudonym, usable as it is without being reserved again. */
+  cloudDisplayName?: string;
 }
 
 /**
@@ -299,6 +301,7 @@ export async function loadAnonymousProfile(): Promise<ProfileLoadResult> {
       fromCloudSuccess: true,
       blockedPartnerIds: strings(privateData.blockedPartnerIds) ?? [],
       cloudHasBirthDate: privateData.birthDate instanceof Timestamp,
+      cloudDisplayName: publicData.profileComplete === true ? text(publicData.displayName) : undefined,
     };
   } catch (err: unknown) {
     console.warn('[ProfilePersistence] Error loading cloud profile:', err);
