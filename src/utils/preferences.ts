@@ -70,8 +70,10 @@ export const applyFilters = (prefs: UserPreferences, filters: FilterFields): Use
 });
 
 /**
- * What a search actually runs with. Quick Match meets anyone available: no intention, topic, age,
- * location or expression filters. The saved Custom filters are left untouched for next time.
+ * What a search actually runs with. Quick Match skips the intention, topic, location and expression filters.
+ * An age range that is switched on still applies to every search: who you are willing to talk to is not a taste
+ * to relax for speed, and a saved 25-35 must never be ignored because of which button started the search.
+ * The saved Custom filters are left untouched for next time.
  */
 export function matchPrefsForMode(prefs: UserPreferences, mode: 'quick' | 'custom'): UserPreferences {
   if (mode === 'custom') return prefs;
@@ -79,7 +81,6 @@ export function matchPrefsForMode(prefs: UserPreferences, mode: 'quick' | 'custo
     ...prefs,
     intention: 'open',
     topics: [],
-    applyAgeFilter: false,
     applyLocationFilter: false,
     applyGenderExpressionFilter: false,
   };

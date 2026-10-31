@@ -33,7 +33,14 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
     setError(null);
 
     return startSearchAttempt({
-      join: (onError) => joinLiveMatchQueue(blockedPartnerIds, { onMatched, onError }, queueMatchFields(prefs), ageRangeFromPrefs(prefs)),
+      join: (onError) => {
+        // An age range that is switched on but unusable must stop the search, never quietly search with no age filter.
+        if (prefs.applyAgeFilter && !ageRangeFromPrefs(prefs)) {
+          onError('Your age range isn’t valid. Open Start a chat, fix it or switch it off, then try again.');
+          return () => {};
+        }
+        return joinLiveMatchQueue(blockedPartnerIds, { onMatched, onError }, queueMatchFields(prefs), ageRangeFromPrefs(prefs));
+      },
       windowSeconds: SEARCH_WINDOW_S,
       onTick: setSecondsElapsed,
       onTimeout: () => setSearchTimedOut(true),
