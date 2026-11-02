@@ -10,6 +10,8 @@ interface SheetProps {
   size?: 'sm' | 'md' | 'lg';
   /** Hide the close button for dialogs that must be answered explicitly. */
   hideClose?: boolean;
+  /** Keep Tab / Shift+Tab inside the dialog while it is open, so the page behind can't be reached by keyboard. */
+  trapFocus?: boolean;
 }
 
 const SIZES = {
@@ -30,6 +32,7 @@ export const Sheet: React.FC<SheetProps> = ({
   icon,
   size = 'md',
   hideClose = false,
+  trapFocus = false,
 }) => {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -42,6 +45,15 @@ export const Sheet: React.FC<SheetProps> = ({
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if (trapFocus && e.key === 'Tab' && panelRef.current) {
+        const items = Array.from(panelRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+        if (items.length === 0) { e.preventDefault(); panelRef.current.focus(); return; }
+        const first = items[0];
+        const last = items[items.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && (active === first || active === panelRef.current)) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && (active === last || !panelRef.current.contains(active))) { e.preventDefault(); first.focus(); }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {

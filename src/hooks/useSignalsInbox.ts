@@ -13,7 +13,7 @@ export interface SignalsInboxState extends SignalsInboxSnapshot {
  * Real-time pending Signals for the signed-in member. `onNewRequest` fires once per invitation id,
  * never for requests that were already pending when the app opened.
  */
-export function useSignalsInbox(onNewRequest: () => void): SignalsInboxState {
+export function useSignalsInbox(onNewRequest: () => void, onAccepted?: (pairId: string) => void): SignalsInboxState {
   const [snapshot, setSnapshot] = useState(EMPTY_INBOX);
   const [live, setLive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,10 +21,13 @@ export function useSignalsInbox(onNewRequest: () => void): SignalsInboxState {
   const rawRef = useRef<unknown>(null);
   const callbackRef = useRef(onNewRequest);
   callbackRef.current = onNewRequest;
+  const acceptedRef = useRef(onAccepted);
+  acceptedRef.current = onAccepted;
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
     const seen = new Set<string>();
+    const seenAccepted = new Set<string>();
     let first = true;
     const stopListening = () => {
       unsubscribe?.();
@@ -33,6 +36,7 @@ export function useSignalsInbox(onNewRequest: () => void): SignalsInboxState {
     const stopAuth = subscribeAuthState((user) => {
       stopListening();
       seen.clear();
+      seenAccepted.clear();
       first = true;
       rawRef.current = null;
       setSnapshot(EMPTY_INBOX);
@@ -46,6 +50,9 @@ export function useSignalsInbox(onNewRequest: () => void): SignalsInboxState {
           const next = parseInbox(data);
           const fresh = takeNewIds(next.pendingIds, seen);
           if (!first && fresh.length > 0) callbackRef.current();
+          // Each acceptance is announced once; ones already waiting when the app opened stay quiet.
+          const accepted = takeNewIds(next.acceptedUnread, seenAccepted);
+          if (!first) accepted.forEach((pairId) => acceptedRef.current?.(pairId));
           first = false;
           setSnapshot(next);
           setLive(true);
