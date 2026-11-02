@@ -22,7 +22,7 @@ import { DEFAULT_NSFW_PREFERENCE, parseNsfwPreference } from './nsfwPreference.t
 
 const post = (over: Partial<LookingForPost> = {}): LookingForPost => ({
   id: 'u1_dating', authorId: 'u1', author: 'Willow', authorPronouns: 'she/her', title: 't', intro: 'i', lookingFor: 'l',
-  intention: 'dating', tags: [], isNsfw: false, contentWarning: null, timestamp: 1, ...over,
+  intention: 'dating', tags: [], isNsfw: false, contentWarning: null, requestsPaused: false, timestamp: 1, ...over,
 });
 
 const draft = (over: Partial<LookingForDraft> = {}): LookingForDraft => ({

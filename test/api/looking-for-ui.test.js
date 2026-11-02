@@ -73,12 +73,14 @@ test('the content setting is in Settings, defaults to Always hide, and is stored
   assert.match(app, /nsfwPreference=\{nsfwPreference\}/);
 });
 
-test('contacting an author reuses Signals; there is no separate messaging system', () => {
-  assert.match(service, /fetch\('\/api\/signals'/);
-  assert.match(service, /action: 'create'/);
-  assert.doesNotMatch(service, /collection\(db, '(messages|conversations|chats)/);
-  assert.match(board, /sendSignalFromPost/);
-  assert.match(board, /they can accept or decline|accept or decline/);
+test('contacting an author is a connection request through the Signals API; there is no separate messaging system', () => {
+  const requests = read('src/services/connectionRequestsService.ts');
+  assert.match(requests, /fetch\(`\/api\/signals/);
+  assert.match(requests, /action: 'request-create'/);
+  assert.doesNotMatch(requests + service, /collection\(db, '(messages|conversations|chats|signalsPairs)/);
+  assert.match(board, /<ConnectionRequestSheet/);
+  assert.doesNotMatch(board + service, /sendSignalFromPost|SignalSheet/, 'the earlier direct Signal shortcut is gone');
+  assert.match(read('src/components/ConnectionRequestSheet.tsx'), /needs to accept before private messaging opens/);
 });
 
 test('reporting and blocking are available on every other member\'s post', () => {
@@ -126,6 +128,6 @@ test('optional empty fields are not run through the content filter, which treats
   assert.match(read('src/utils/matching-logic.ts'), /if \(!trimmed\) \{\s*return \{ cleanText: '', isBlocked: true/);
 });
 
-test('a Signal with no message is allowed: the optional hello skips the content filter', () => {
-  assert.match(board, /text\.trim\(\) \? sanitizeMessageText\(text\.trim\(\)\) : \{ cleanText: '', isBlocked: false \}/);
+test('a request with no introduction is allowed: the optional hello skips the content filter', () => {
+  assert.match(read('src/components/ConnectionRequestSheet.tsx'), /text\.trim\(\) \? sanitizeMessageText\(text\.trim\(\)\) : \{ cleanText: '', isBlocked: false \}/);
 });

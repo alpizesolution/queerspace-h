@@ -11,20 +11,21 @@ function sourceFiles(dir) {
   });
 }
 
-// A Signal can be started from exactly two places. The matched, active conversation is the original and the default.
-// The Cosmos Looking For board is the second: its author published the post to be contacted, the server re-checks the
-// post, the sender's adult status, blocks and pacing, and the author still has to accept. No profile, card or other
-// listing may offer it.
-test('only the chat screen and a Looking For post can start a Signal', () => {
+// A Signal invitation can be started from exactly one place: the matched, active conversation. Meeting someone from the
+// Cosmos Looking For board is a different, consent-based flow (connection requests), which has its own tests; it never
+// creates a Signal directly, and no profile, card or other listing may offer a Signal.
+test('only the chat screen can start a Signal', () => {
   const starters = sourceFiles('src').filter((file) => /action:\s*'create'/.test(fs.readFileSync(file, 'utf8')) && /api\/signals/.test(fs.readFileSync(file, 'utf8')));
-  assert.deepEqual(starters.map((f) => path.basename(f)).sort(), ['ChatView.tsx', 'lookingForService.ts']);
+  assert.deepEqual(starters.map((f) => path.basename(f)), ['ChatView.tsx']);
   const offers = sourceFiles('src').filter((file) => /Send a Signal/.test(fs.readFileSync(file, 'utf8')));
   assert.deepEqual(offers.map((f) => path.basename(f)), ['ChatView.tsx']);
 });
 
-test('a Looking For Signal always names the post it comes from and sends no conversation', () => {
-  const service = fs.readFileSync('src/services/lookingForService.ts', 'utf8');
-  assert.match(service, /action: 'create',\s*recipientId: post\.authorId,\s*lookingForPostId: post\.id/);
+test('connection requests are started from exactly one place, and only ever ask: they never open a conversation themselves', () => {
+  const starters = sourceFiles('src').filter((file) => /action: 'request-create'/.test(fs.readFileSync(file, 'utf8')));
+  assert.deepEqual(starters.map((f) => path.basename(f)), ['connectionRequestsService.ts']);
+  const service = fs.readFileSync('src/services/connectionRequestsService.ts', 'utf8');
+  assert.match(service, /action: 'request-create',\s*recipientId: post\.authorId,\s*lookingForPostId: post\.id/);
   assert.doesNotMatch(service, /convId/);
 });
 

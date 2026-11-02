@@ -1399,6 +1399,62 @@ test('LF-08: Reports about a Looking For post are accepted from members, never r
   await assertFails(bob.collection('reports').get());
 });
 
+test('CR-01: Connection requests, their locks and the audit trail are closed to clients, even to the two people involved', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const fs = ctx.firestore();
+    await fs.doc('connection_requests/req-1').set({ senderId: 'alice', recipientId: 'bob', lookingForPostId: 'p1', status: 'pending', message: 'hi' });
+    await fs.doc('connection_request_locks/alice_bob').set({ state: 'pending' });
+    await fs.doc('connection_request_events/e1').set({ requestId: 'req-1', actorId: 'alice', action: 'create' });
+  });
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  const carol = testEnv.authenticatedContext('carol').firestore();
+  for (const db of [alice, bob, carol, testEnv.unauthenticatedContext().firestore()]) {
+    await assertFails(db.doc('connection_requests/req-1').get());
+    await assertFails(db.collection('connection_requests').get());
+    await assertFails(db.doc('connection_request_locks/alice_bob').get());
+    await assertFails(db.doc('connection_request_events/e1').get());
+  }
+  // Nobody can create a request, forge an acceptance, rewrite a participant, or clear a lock from a client.
+  await assertFails(alice.doc('connection_requests/req-2').set({ senderId: 'alice', recipientId: 'bob', lookingForPostId: 'p1', status: 'pending' }));
+  await assertFails(bob.doc('connection_requests/req-1').update({ status: 'accepted', conversationId: 'x' }));
+  await assertFails(alice.doc('connection_requests/req-1').update({ status: 'withdrawn' }));
+  await assertFails(alice.doc('connection_requests/req-1').update({ recipientId: 'carol' }));
+  await assertFails(alice.doc('connection_requests/req-1').delete());
+  await assertFails(alice.doc('connection_request_locks/alice_bob').delete());
+  await assertFails(alice.doc('connection_request_events/e2').set({ requestId: 'req-1', action: 'accept' }));
+});
+
+test('CR-02: Admins can read the audit trail for moderation, but cannot write it, and cannot read or change requests directly', async () => {
+  await seedAdmin();
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('connection_request_events/e1').set({ requestId: 'req-1', actorId: 'alice', action: 'create' });
+    await ctx.firestore().doc('connection_requests/req-1').set({ senderId: 'alice', recipientId: 'bob', status: 'pending' });
+  });
+  const admin = adminDb();
+  await assertSucceeds(admin.doc('connection_request_events/e1').get());
+  await assertFails(admin.doc('connection_request_events/e2').set({ requestId: 'req-1', action: 'x' }));
+  await assertFails(admin.doc('connection_requests/req-1').get());
+  await assertFails(admin.doc('connection_requests/req-1').update({ status: 'accepted' }));
+});
+
+test('LF-09: The author can pause and resume requests on their own post; nobody else can, and only a boolean is accepted', async () => {
+  await seedLfPost('alice');
+  const path = `looking_for_posts/${lfId('alice')}`;
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc(path).update({ requestsPaused: true, updatedAt: now() }));
+  await assertSucceeds(alice.doc(path).update({ requestsPaused: false, updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ requestsPaused: 'yes', updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ requestsPaused: 1, updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ requestsPaused: true }));
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc(path).update({ requestsPaused: true, updatedAt: now() }));
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc(path).update({ requestsPaused: true, updatedAt: now() }));
+  // A new post may be created already paused, but not with an invalid flag.
+  await assertSucceeds(lfCreate('bob', lfPost('bob', { intention: 'gaming', requestsPaused: true })));
+  await seedStamp('bob', 'lookingForPost', 61);
+  await assertFails(lfCreate('bob', lfPost('bob', { intention: 'talk', requestsPaused: 'no' })));
+});
+
 // ------------------------------------------------------------------
 // Age privacy and birthday integrity
 // ------------------------------------------------------------------

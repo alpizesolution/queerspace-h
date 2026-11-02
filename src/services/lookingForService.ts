@@ -58,6 +58,7 @@ export function toLookingForPost(id: string, data: Record<string, unknown>): Loo
     region: typeof data.region === 'string' && data.region ? data.region.slice(0, LIMITS.region) : undefined,
     tags: Array.isArray(data.tags) ? data.tags.map(String).slice(0, LIMITS.tags) : [],
     isNsfw: data.isNsfw === true,
+    requestsPaused: data.requestsPaused === true,
     contentWarning: data.isNsfw === true && typeof data.contentWarning === 'string' && data.contentWarning ? data.contentWarning.slice(0, LIMITS.contentWarning) : null,
     timestamp: millis(data.timestamp) ?? Date.now(),
     updatedAt: millis(data.updatedAt),
@@ -114,7 +115,7 @@ export function subscribeToLookingFor(
 export type LookingForWriteResult = 'ok' | 'denied' | 'failed';
 
 /** Optional fields that the draft turned off must be removed from an existing post, not just left out. */
-const OPTIONAL_FIELDS = ['authorAvatar', 'age', 'seekAgeMin', 'seekAgeMax', 'region'] as const;
+const OPTIONAL_FIELDS = ['authorAvatar', 'age', 'seekAgeMin', 'seekAgeMax', 'region'] as const; // requestsPaused is kept as it is when a post is edited
 
 /**
  * Posts, or edits the member's existing post for that intention (one per intention). The rules re-check eligibility,
@@ -186,41 +187,14 @@ export async function reportLookingForPost(postId: string, reason: string): Prom
   }
 }
 
-export type SignalOutcome = { ok: true } | { ok: false; message: string };
-
-const SIGNAL_ERRORS: Record<string, string> = {
-  unauthenticated: 'Your session needs to refresh. Please try again.',
-  not_matched: 'This post is no longer open for new Signals.',
-  not_allowed: 'You can’t send a Signal to this member.',
-  account_unavailable: 'Signals are temporarily unavailable for this account.',
-  rate_limited: 'You can send one Signal every 30 seconds. Take a breath and try again.',
-  already_invited: 'You already have a Signal waiting with this member.',
-  already_connected: 'You are already connected with this member.',
-  invalid_message: 'That message can’t be sent. Try shortening it.',
-  internal_error: 'Signals is temporarily unavailable. Please try again.',
-};
-
-/** Sends a Signal invitation to a post's author through the existing Signals API (they still have to accept). */
-export async function sendSignalFromPost(post: Pick<LookingForPost, 'id' | 'authorId'>, message: string): Promise<SignalOutcome> {
+/** Pauses or resumes new connection requests on the member's own post. The rules let only the author change it. */
+export async function setRequestsPaused(postId: string, paused: boolean): Promise<boolean> {
+  if (!db) return false;
   try {
-    const user = auth?.currentUser;
-    if (!user) return { ok: false, message: SIGNAL_ERRORS.unauthenticated };
-    const token = await user.getIdToken();
-    const response = await fetch('/api/signals', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'create',
-        recipientId: post.authorId,
-        lookingForPostId: post.id,
-        idempotencyKey: crypto.randomUUID(),
-        message: message.trim().slice(0, 240),
-      }),
-    });
-    if (response.ok) return { ok: true };
-    const data = await response.json().catch(() => ({}));
-    return { ok: false, message: SIGNAL_ERRORS[String(data?.error)] ?? 'Could not send your Signal. Please try again.' };
-  } catch {
-    return { ok: false, message: 'No connection. Please try again.' };
+    await updateDoc(doc(db, 'looking_for_posts', postId), { requestsPaused: paused, updatedAt: serverTimestamp() });
+    return true;
+  } catch (err) {
+    console.warn('[LookingFor] Could not change requests:', err);
+    return false;
   }
 }

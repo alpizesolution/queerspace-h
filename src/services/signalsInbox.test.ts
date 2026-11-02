@@ -9,8 +9,8 @@ test('parseInbox counts only unexpired pending invitations and tolerates junk', 
   const inbox = parseInbox({ rev: 3, pending: { a: ts(2_000), b: ts(500), c: 5_000, d: 'nope', e: null } }, now);
   assert.deepEqual(inbox.pendingIds.sort(), ['a', 'c']);
   assert.equal(inbox.rev, 3);
-  assert.deepEqual(parseInbox(null), { rev: 0, pendingIds: [], unread: {}, acceptedUnread: [] });
-  assert.deepEqual(parseInbox({ rev: 'x', pending: 'y' }), { rev: 0, pendingIds: [], unread: {}, acceptedUnread: [] });
+  assert.deepEqual(parseInbox(null), { rev: 0, pendingIds: [], unread: {}, acceptedUnread: [], requestIds: [] });
+  assert.deepEqual(parseInbox({ rev: 'x', pending: 'y' }), { rev: 0, pendingIds: [], unread: {}, acceptedUnread: [], requestIds: [] });
 });
 
 test('takeNewIds announces each invitation once, even if the snapshot repeats', () => {
@@ -66,4 +66,19 @@ test('a notification that is read in a later snapshot disappears, and a repeated
   const seen = new Set<string>();
   assert.deepEqual(takeNewIds(parseInbox(unread).acceptedUnread, seen), ['p1']);
   assert.deepEqual(takeNewIds(parseInbox(unread).acceptedUnread, seen), [], 'a reconnect snapshot is not announced again');
+});
+
+test('parseInbox lists waiting connection requests by id and ignores expired or malformed ones', () => {
+  const now = 1_000;
+  const inbox = parseInbox({ requests: { r1: ts(2_000), r2: ts(500), r3: 5_000, r4: 'nope', r5: null } }, now);
+  assert.deepEqual(inbox.requestIds.sort(), ['r1', 'r3']);
+  assert.deepEqual(parseInbox({ requests: 'x' }).requestIds, []);
+  assert.deepEqual(parseInbox(null).requestIds, []);
+});
+
+test('a waiting request is announced once, and a reconnect snapshot does not announce it again', () => {
+  const raw = { requests: { r1: 9_999_999_999_999 } };
+  const seen = new Set<string>();
+  assert.deepEqual(takeNewIds(parseInbox(raw).requestIds, seen), ['r1']);
+  assert.deepEqual(takeNewIds(parseInbox(raw).requestIds, seen), []);
 });

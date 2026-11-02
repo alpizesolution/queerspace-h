@@ -59,6 +59,8 @@ export interface LookingForPost {
   tags: string[];
   isNsfw: boolean;
   contentWarning: string | null;
+  /** The author has paused new connection requests on this post. */
+  requestsPaused: boolean;
   timestamp: number;
   updatedAt?: number;
 }

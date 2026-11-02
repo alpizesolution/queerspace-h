@@ -13,7 +13,11 @@ export interface SignalsInboxState extends SignalsInboxSnapshot {
  * Real-time pending Signals for the signed-in member. `onNewRequest` fires once per invitation id,
  * never for requests that were already pending when the app opened.
  */
-export function useSignalsInbox(onNewRequest: () => void, onAccepted?: (pairId: string) => void): SignalsInboxState {
+export function useSignalsInbox(
+  onNewRequest: () => void,
+  onAccepted?: (pairId: string) => void,
+  onConnectionRequest?: (requestId: string) => void
+): SignalsInboxState {
   const [snapshot, setSnapshot] = useState(EMPTY_INBOX);
   const [live, setLive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,11 +27,14 @@ export function useSignalsInbox(onNewRequest: () => void, onAccepted?: (pairId: 
   callbackRef.current = onNewRequest;
   const acceptedRef = useRef(onAccepted);
   acceptedRef.current = onAccepted;
+  const connectionRef = useRef(onConnectionRequest);
+  connectionRef.current = onConnectionRequest;
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
     const seen = new Set<string>();
     const seenAccepted = new Set<string>();
+    const seenRequests = new Set<string>();
     let first = true;
     const stopListening = () => {
       unsubscribe?.();
@@ -37,6 +44,7 @@ export function useSignalsInbox(onNewRequest: () => void, onAccepted?: (pairId: 
       stopListening();
       seen.clear();
       seenAccepted.clear();
+      seenRequests.clear();
       first = true;
       rawRef.current = null;
       setSnapshot(EMPTY_INBOX);
@@ -53,6 +61,9 @@ export function useSignalsInbox(onNewRequest: () => void, onAccepted?: (pairId: 
           // Each acceptance is announced once; ones already waiting when the app opened stay quiet.
           const accepted = takeNewIds(next.acceptedUnread, seenAccepted);
           if (!first) accepted.forEach((pairId) => acceptedRef.current?.(pairId));
+          // Each new connection request is announced once; ones already waiting at start-up stay quiet.
+          const requested = takeNewIds(next.requestIds, seenRequests);
+          if (!first) requested.forEach((id) => connectionRef.current?.(id));
           first = false;
           setSnapshot(next);
           setLive(true);

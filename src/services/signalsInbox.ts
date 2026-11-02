@@ -10,9 +10,11 @@ export interface SignalsInboxSnapshot {
   unread: Record<string, number>;
   /** Pair ids whose "your request was accepted" notification has not been opened yet. */
   acceptedUnread: string[];
+  /** Connection requests waiting for this member's answer (as the author of a Looking For post). */
+  requestIds: string[];
 }
 
-export const EMPTY_INBOX: SignalsInboxSnapshot = { rev: 0, pendingIds: [], unread: {}, acceptedUnread: [] };
+export const EMPTY_INBOX: SignalsInboxSnapshot = { rev: 0, pendingIds: [], unread: {}, acceptedUnread: [], requestIds: [] };
 
 /** Badge text for an unread count: nothing at zero, the number up to 99, then "99+". */
 export function formatUnread(count: number | undefined): string | null {
@@ -28,7 +30,7 @@ const toMillis = (value: unknown): number | null => {
 
 /** Turns the raw inbox document into a safe snapshot; expired or malformed entries never count. */
 export function parseInbox(data: unknown, now: number = Date.now()): SignalsInboxSnapshot {
-  const raw = (data ?? {}) as { rev?: unknown; pending?: unknown; unread?: unknown; notifications?: unknown };
+  const raw = (data ?? {}) as { rev?: unknown; pending?: unknown; unread?: unknown; notifications?: unknown; requests?: unknown };
   const rev = typeof raw.rev === 'number' && Number.isFinite(raw.rev) ? raw.rev : 0;
   const pending = raw.pending && typeof raw.pending === 'object' ? (raw.pending as Record<string, unknown>) : {};
   const pendingIds = Object.entries(pending)
@@ -50,7 +52,15 @@ export function parseInbox(data: unknown, now: number = Date.now()): SignalsInbo
       if (entry && entry.type === 'accepted' && entry.read !== true) acceptedUnread.push(pairId);
     }
   }
-  return { rev, pendingIds, unread, acceptedUnread };
+  // Waiting connection requests, like invitations, carry their expiry; an expired one no longer counts.
+  const waiting = raw.requests && typeof raw.requests === 'object' ? (raw.requests as Record<string, unknown>) : {};
+  const requestIds = Object.entries(waiting)
+    .filter(([, expires]) => {
+      const at = toMillis(expires);
+      return at !== null && at > now;
+    })
+    .map(([id]) => id);
+  return { rev, pendingIds, unread, acceptedUnread, requestIds };
 }
 
 /** Ids that have never been announced before; `seen` is updated so each request notifies once. */

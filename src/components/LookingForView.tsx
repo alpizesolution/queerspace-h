@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, EyeOff, Flag, MapPin, Pencil, Plus, Send, ShieldAlert, SlidersHorizontal, Trash2, UserX, X } from 'lucide-react';
+import { CheckCircle2, EyeOff, Flag, MapPin, Pause, Pencil, Plus, ShieldAlert, SlidersHorizontal, Trash2, UserX } from 'lucide-react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { LookingForBody } from './LookingForBody.tsx';
+import { ConnectionRequestSheet } from './ConnectionRequestSheet.tsx';
 import { LookingForComposer } from './LookingForComposer.tsx';
 import type { UserPreferences } from '../types.ts';
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
@@ -28,7 +29,7 @@ import {
   isLookingForAvailable,
   REPORT_REASONS,
   reportLookingForPost,
-  sendSignalFromPost,
+  setRequestsPaused,
   subscribeToLookingFor,
 } from '../services/lookingForService.ts';
 import { whileActive } from '../utils/whileActive.ts';
@@ -40,6 +41,8 @@ interface Props {
   /** Opens Settings so the member can change how mature posts are handled. */
   onOpenSettings?: () => void;
   onBlockMember?: (memberId: string) => void;
+  /** Opens Signals → Requests, where sent requests are managed. */
+  onViewRequests?: () => void;
 }
 
 const fieldClass = 'w-full px-4 rounded-xl bg-ink border border-line text-base sm:text-sm text-fg placeholder:text-subtle focus:outline-none focus:border-berry';
@@ -60,7 +63,7 @@ const CoverLines: React.FC = () => (
   </div>
 );
 
-export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, nsfwPreference, onOpenSettings, onBlockMember }) => {
+export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, nsfwPreference, onOpenSettings, onBlockMember, onViewRequests }) => {
   const [filters, setFilters] = useState<LookingForFilters>(NO_FILTERS);
   const [posts, setPosts] = useState<LookingForPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +74,7 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
   const [confirmReveal, setConfirmReveal] = useState<LookingForPost | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [composer, setComposer] = useState<{ editing: LookingForPost | null } | null>(null);
-  const [contactPost, setContactPost] = useState<LookingForPost | null>(null);
+  const [requestPost, setRequestPost] = useState<LookingForPost | null>(null);
   const [reportPost, setReportPost] = useState<LookingForPost | null>(null);
   const [deletePost, setDeletePost] = useState<LookingForPost | null>(null);
   const [blockPost, setBlockPost] = useState<LookingForPost | null>(null);
@@ -203,6 +206,7 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                     </p>
                     <p className="mt-0.5 flex items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle min-w-0">
                       <Badge>{INTENTION_LABELS[post.intention]}</Badge>
+                      {post.requestsPaused && <span className="shrink-0 text-subtle">Paused</span>}
                       <span className="truncate">
                         {presentation === 'open' && post.age !== undefined && <>{post.age} · </>}
                         {presentation === 'open' && post.region && <><MapPin className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> {post.region} · </>}
@@ -220,6 +224,7 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                         {mine ? (
                           <>
                             <button role="menuitem" type="button" onClick={() => { setMenuFor(null); openComposer(post); }} className="flex min-h-11 w-full items-center gap-2 px-4 text-left text-sm text-fg hover:bg-surface/70"><Pencil className="w-4 h-4" /> Edit</button>
+                            <button role="menuitem" type="button" onClick={async () => { setMenuFor(null); const ok = await setRequestsPaused(post.id, !post.requestsPaused); setToast(ok ? { text: post.requestsPaused ? 'Requests are open again.' : 'New requests are paused. Existing ones stay in Signals.', ok: true } : { text: 'Couldn’t change that. Please try again.', ok: false }); }} className="flex min-h-11 w-full items-center gap-2 px-4 text-left text-sm text-fg hover:bg-surface/70"><Pause className="w-4 h-4" /> {post.requestsPaused ? 'Resume requests' : 'Pause requests'}</button>
                             <button role="menuitem" type="button" onClick={() => { setMenuFor(null); setDeletePost(post); }} className="flex min-h-11 w-full items-center gap-2 px-4 text-left text-sm text-danger hover:bg-surface/70"><Trash2 className="w-4 h-4" /> Delete</button>
                           </>
                         ) : (
@@ -239,7 +244,7 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                     mine={mine}
                     canCoverAgain={post.isNsfw && !mine && nsfwPreference !== 'hide'}
                     onCoverAgain={() => setRevealed((prev) => { const next = new Set(prev); next.delete(post.id); return next; })}
-                    onSignal={() => setContactPost(post)}
+                    onRequest={() => setRequestPost(post)}
                   />
                 ) : (
                   <div className="mt-3 relative rounded-2xl border border-line bg-ink/40 overflow-hidden">
@@ -337,7 +342,7 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
         />
       )}
 
-      {contactPost && <SignalSheet post={contactPost} onClose={() => setContactPost(null)} onSent={() => { setContactPost(null); setToast({ text: `Signal sent to ${contactPost.author}. They can accept or decline.`, ok: true }); }} />}
+      {requestPost && <ConnectionRequestSheet post={requestPost} onClose={() => setRequestPost(null)} onViewRequests={onViewRequests} />}
       {reportPost && <ReportSheet post={reportPost} onClose={() => setReportPost(null)} onDone={(ok) => { setReportPost(null); setToast(ok ? { text: 'Thanks. Our safety team will review this post.', ok: true } : { text: 'Couldn’t send your report. Please try again.', ok: false }); }} />}
 
       {confirmReveal && (
@@ -371,44 +376,6 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
         </div>
       )}
     </div>
-  );
-};
-
-/** Message box for the Signal invitation. Sending goes through the existing Signals API; the author must accept. */
-const SignalSheet: React.FC<{ post: LookingForPost; onClose: () => void; onSent: () => void }> = ({ post, onClose, onSent }) => {
-  const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const send = async () => {
-    if (sending) return;
-    // The hello is optional, and the filter treats an empty text as blocked, so only a real message is checked.
-    const cleaned = text.trim() ? sanitizeMessageText(text.trim()) : { cleanText: '', isBlocked: false };
-    if (cleaned.isBlocked) {
-      setError('This goes against our guidelines, so it can’t be sent.');
-      return;
-    }
-    setSending(true);
-    setError(null);
-    const result = await sendSignalFromPost(post, cleaned.cleanText);
-    setSending(false);
-    if (result.ok) onSent();
-    else setError(result.message);
-  };
-
-  return (
-    <Sheet
-      title={`Signal ${post.author}`}
-      size="sm"
-      onClose={() => { if (!sending) onClose(); }}
-      footer={<button type="button" onClick={send} disabled={sending} className="btn btn-primary w-full">{sending ? 'Sending…' : 'Send Signal'}</button>}
-    >
-      <p className="mb-3">Say hello. They’ll get an invitation they can accept or decline; no chat opens until they accept.</p>
-      <label htmlFor="lf-signal" className="sr-only">Your message</label>
-      <textarea id="lf-signal" value={text} onChange={(e) => setText(e.target.value.slice(0, 240))} maxLength={240} rows={4} placeholder="A short hello (optional)" className={`${fieldClass} py-2.5 resize-none`} />
-      <p className="mt-1 text-right text-[length:calc(11px_*_var(--fs,1))] text-subtle">{text.length}/240</p>
-      {error && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
-    </Sheet>
   );
 };
 

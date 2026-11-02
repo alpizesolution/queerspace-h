@@ -35,6 +35,7 @@ interface CommunityFeedViewProps {
   nsfwPreference?: NsfwPreference;
   onOpenSettings?: () => void;
   onBlockMember?: (memberId: string) => void;
+  onViewRequests?: () => void;
 }
 
 // Which posts this device has liked, so the heart shows filled. The server still allows one like per person.
@@ -157,6 +158,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   nsfwPreference = 'hide',
   onOpenSettings,
   onBlockMember,
+  onViewRequests,
 }) => {
   const [section, setSection] = useState<'community' | 'lookingFor'>('community');
   const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -348,7 +350,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
       </div>
 
       {section === 'lookingFor' ? (
-        <LookingForView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onBlockMember={onBlockMember} />
+        <LookingForView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onBlockMember={onBlockMember} onViewRequests={onViewRequests} />
       ) : (
       <>
       <div
