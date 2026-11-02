@@ -20,6 +20,8 @@ import {
 } from '../services/communityService.ts';
 import { whileActive } from '../utils/whileActive.ts';
 import { LookingForView } from './LookingForView.tsx';
+import { ExpandableText } from './ExpandableText.tsx';
+import { formatRelativeTime } from '../utils/relativeTime.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 
 /** What the confirmation dialog is about to remove. */
@@ -392,15 +394,18 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
             const userLiked = Boolean(liked[post.id]);
             const replyCount = post.replyCount ?? 0;
             return (
-              <article key={post.id} className="rounded-3xl border border-line bg-gradient-to-b from-raised/60 to-surface p-4 sm:p-5">
+              <article key={post.id} className="scroll-mt-[calc(var(--header-h)+0.5rem)] rounded-3xl border border-line bg-gradient-to-b from-raised/60 to-surface p-4 sm:p-5">
                 <header className="flex items-center gap-2.5 mb-3">
                   <AnimalAvatar avatar={post.authorAvatar} seed={post.authorId || post.author} className="w-9 h-9" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[length:calc(13px_*_var(--fs,1))] font-semibold text-fg truncate">
                       {post.author} <span className="font-normal text-subtle">{post.authorPronouns}</span>
                     </p>
-                    <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">
-                      {CATEGORY_EMOJI[post.category] ?? '🌸'} {CATEGORY_LABELS[post.category] ?? post.category} · {formatChatTime(post.timestamp)}
+                    <p className="mt-0.5 flex items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">
+                      <span className="inline-flex items-center h-5 px-2 rounded-full bg-plum/30 text-lavender text-[length:calc(11px_*_var(--fs,1))] font-semibold">
+                        {CATEGORY_EMOJI[post.category] ?? '🌸'} {CATEGORY_LABELS[post.category] ?? post.category}
+                      </span>
+                      <span>· {formatRelativeTime(post.timestamp)}</span>
                     </p>
                   </div>
                   {(isAdmin || (uid && post.authorId === uid)) && (
@@ -416,9 +421,11 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                 </header>
 
                 <h2 className="text-[length:calc(15px_*_var(--fs,1))] sm:text-[length:calc(17px_*_var(--fs,1))] font-semibold text-fg leading-snug">{post.title}</h2>
-                <p className="mt-1 text-[length:calc(14px_*_var(--fs,1))] sm:text-[length:calc(15px_*_var(--fs,1))] text-muted leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
-                  {post.content}
-                </p>
+                <ExpandableText
+                  key={post.id}
+                  text={post.content}
+                  className="mt-1 text-[length:calc(14px_*_var(--fs,1))] sm:text-[length:calc(15px_*_var(--fs,1))] text-muted leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
+                />
 
                 {post.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-3">
