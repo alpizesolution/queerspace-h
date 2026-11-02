@@ -1,8 +1,9 @@
 import React, { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, LoaderCircle, MessageCircle, RefreshCw, Reply, Send, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, Ellipsis, LoaderCircle, MessageCircle, RefreshCw, Reply, Send, X } from 'lucide-react';
 import { auth } from '../lib/firebase.ts';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { ConfirmDialog } from './Sheet.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { soundEffects } from '../utils/sound.ts';
 import { SwipeToReply } from './SwipeToReply.tsx';
@@ -31,6 +32,8 @@ type SignalsConversationProps = {
   partner?: SignalsPartner;
   isSoundMuted?: boolean;
   onBack: () => void;
+  /** Ends this connection with the existing `end` action. Resolves to null on success, or a message to show. */
+  onEnd?: () => Promise<string | null>;
 };
 
 async function request<T>(path: string, body?: Record<string, unknown>): Promise<T> {
@@ -76,7 +79,7 @@ function formatTime(value: string | null): string {
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
-export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, isSoundMuted = false, onBack }) => {
+export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, isSoundMuted = false, onBack, onEnd }) => {
   const [messages, setMessages] = useState<SignalMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -89,6 +92,12 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hasUnseen, setHasUnseen] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [endBusy, setEndBusy] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   /** True while the reader is at (or near) the newest message; scrolling up pauses auto-scroll. */
@@ -145,6 +154,33 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     const timer = window.setInterval(() => void loadMessages(true), 4000);
     return () => window.clearInterval(timer);
   }, [loadMessages]);
+
+  // The options menu closes on an outside tap or Escape, and focus returns to its button.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') { setMenuOpen(false); menuButtonRef.current?.focus(); }
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  const confirmEndConversation = async () => {
+    if (!onEnd || endBusy) return;
+    setEndBusy(true);
+    setEndError(null);
+    const failure = await onEnd();
+    setEndBusy(false);
+    if (failure) setEndError(failure);
+    else setConfirmEnd(false);
+  };
 
   const thread = useMemo(() => visibleThread(messages, pending, userId ?? ''), [messages, pending, userId]);
 
@@ -335,6 +371,34 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
           <button type="button" onClick={() => void loadMessages()} disabled={loading} aria-label="Refresh messages" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-fg disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
+          {onEnd && !ended && (
+            <div ref={menuRef} className="relative shrink-0">
+              <button
+                ref={menuButtonRef}
+                type="button"
+                onClick={() => setMenuOpen((open) => !open)}
+                aria-label="Conversation options"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60"
+              >
+                <Ellipsis className="h-5 w-5" />
+              </button>
+              {menuOpen && (
+                <div role="menu" aria-label="Conversation options" className="absolute right-0 top-11 z-20 min-w-44 overflow-hidden rounded-xl border border-line bg-raised py-1 shadow-lg shadow-black/40">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    autoFocus
+                    onClick={() => { setMenuOpen(false); setEndError(null); setConfirmEnd(true); }}
+                    className="flex min-h-11 w-full items-center px-4 text-left text-sm text-danger transition hover:bg-surface/70 focus-visible:bg-surface/70 focus-visible:outline-none"
+                  >
+                    End Conversation
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </header>
 
         <div className="relative min-h-0 flex-1">
@@ -497,6 +561,23 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
           </div>
         )}
       </section>
+      {confirmEnd && (
+        <ConfirmDialog
+          title="End this conversation?"
+          message={
+            <>
+              This will close the mutual connection in QUEERSPACE. You can’t undo this action, and no message will be sent to the other person.
+              {endError && <span role="alert" className="mt-2 block text-danger">{endError}</span>}
+            </>
+          }
+          confirmLabel={endBusy ? 'Ending…' : endError ? 'Try again' : 'End conversation'}
+          cancelLabel="Keep conversation"
+          tone="danger"
+          busy={endBusy}
+          onCancel={() => { if (!endBusy) setConfirmEnd(false); }}
+          onConfirm={() => void confirmEndConversation()}
+        />
+      )}
     </>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Inbox, Info, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { auth, isFirebaseConfigured } from '../lib/firebase.ts';
-import { ConfirmDialog, Sheet } from './Sheet.tsx';
+import { Sheet } from './Sheet.tsx';
 import { SignalsConversation } from './SignalsConversation.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
@@ -103,8 +103,6 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
   const [invitations, setInvitations] = useState<SignalInvitation[]>([]);
   const [invitationActionId, setInvitationActionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [endingId, setEndingId] = useState<string | null>(null);
-  const [pairToEnd, setPairToEnd] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [openPairId, setOpenPairId] = useState<string | null>(null);
@@ -148,10 +146,9 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
   const invitationsRef = useRef<HTMLDivElement>(null);
   const scrolledToRequests = useRef(false);
 
-  const endPair = async (pairId: string): Promise<boolean> => {
-    setEndingId(pairId);
+  /** Ends a connection with the existing `end` action. Returns null on success, or words for the member. */
+  const endPair = async (pairId: string): Promise<string | null> => {
     setError(null);
-    setNotice(null);
     try {
       await signalsRequest<{ status: string; alreadyEnded: boolean }>('/api/signals', {
         action: 'end',
@@ -161,12 +158,9 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
         pair.id === pairId ? { ...pair, status: 'ended', endedAt: new Date().toISOString() } : pair
       ));
       setNotice('Connection ended. No message was sent.');
-      return true;
+      return null;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not end this connection.');
-      return false;
-    } finally {
-      setEndingId(null);
+      return err instanceof Error ? err.message : 'Could not end this connection.';
     }
   };
 
@@ -209,7 +203,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
   if (openPairId) {
     const selectedPair = pairs.find((pair) => pair.id === openPairId);
     if (selectedPair?.status === 'active') {
-      return <SignalsConversation pairId={openPairId} partner={selectedPair.partner} isSoundMuted={isSoundMuted} onBack={() => setOpenPairId(null)} />;
+      return <SignalsConversation pairId={openPairId} partner={selectedPair.partner} isSoundMuted={isSoundMuted} onBack={() => setOpenPairId(null)} onEnd={() => endPair(openPairId)} />;
     }
   }
 
@@ -316,44 +310,30 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
             {activePairs.length === 0 ? (
               <p className="px-1 py-2 text-sm text-muted">No active connections yet.</p>
             ) : (
-              <ul className="divide-y divide-line/60">
+              <ul className="space-y-0.5">
                 {activePairs.map((pair) => {
                   const name = nameOf(pair.partner);
                   const unreadText = formatUnread(inbox?.unread[pair.id]);
                   return (
-                    <li key={pair.id} className="flex items-center gap-3 py-2.5">
-                      <PartnerAvatar avatar={pair.partner?.avatar} seed={pair.id} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
-                          {unreadText && (
-                            <span
-                              role="status"
-                              aria-label={`${unreadText} unread from ${name}`}
-                              className="shrink-0 rounded-full bg-berry px-1.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold leading-[18px] tabular-nums text-ink"
-                            >
-                              {unreadText}
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-0.5 text-xs text-subtle">Since {formatShortDate(pair.createdAt)}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setPairToEnd(pair.id)}
-                        disabled={endingId !== null}
-                        aria-label={`End connection with ${name}`}
-                        className="h-9 shrink-0 rounded-full px-3 text-xs font-semibold text-muted transition hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {endingId === pair.id ? 'Ending…' : 'End'}
-                      </button>
+                    <li key={pair.id}>
                       <button
                         type="button"
                         onClick={() => setOpenPairId(pair.id)}
-                        aria-label={`Open chat with ${name}`}
-                        className="h-9 shrink-0 rounded-full bg-berry px-4 text-xs font-semibold text-ink transition hover:brightness-110"
+                        aria-label={unreadText ? `Open chat with ${name}, ${unreadText} unread` : `Open chat with ${name}`}
+                        className="-mx-2 flex min-h-16 w-[calc(100%+1rem)] items-center gap-3 rounded-2xl px-2 py-2.5 text-left transition-colors hover:bg-raised/60 active:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60"
                       >
-                        Open
+                        <PartnerAvatar avatar={pair.partner?.avatar} seed={pair.id} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
+                            {unreadText && (
+                              <span className="shrink-0 rounded-full bg-berry px-1.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold leading-[18px] tabular-nums text-ink">
+                                {unreadText}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-xs text-subtle">Since {formatShortDate(pair.createdAt)}</p>
+                        </div>
                       </button>
                     </li>
                   );
@@ -383,21 +363,6 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
         <Sheet title="Private connections" size="sm" icon={<ShieldCheck className="h-5 w-5" />} onClose={() => setPrivacyOpen(false)}>
           <p className="text-sm leading-relaxed text-muted">Only you can view your connections. Ending a connection closes it here; no message is sent.</p>
         </Sheet>
-      )}
-      {pairToEnd && (
-        <ConfirmDialog
-          title="End this connection?"
-          message="This will close the mutual connection in QUEERSPACE. You can’t undo this action, and no message will be sent to the other person."
-          confirmLabel={endingId === pairToEnd ? 'Ending…' : 'End connection'}
-          cancelLabel="Keep connection"
-          tone="danger"
-          busy={endingId === pairToEnd}
-          onCancel={() => setPairToEnd(null)}
-          onConfirm={async () => {
-            const id = pairToEnd;
-            if (await endPair(id)) setPairToEnd(null);
-          }}
-        />
       )}
     </section>
   );
