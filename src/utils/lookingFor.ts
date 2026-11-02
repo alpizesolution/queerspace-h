@@ -234,13 +234,10 @@ export function draftToDocument(
   };
 }
 
-/** When a post went up: a clock time today, otherwise the day ("Nov 2", or with the year if it is from another year). */
-export function formatPostedDate(timestamp: number, now: number = Date.now()): string {
-  const posted = new Date(timestamp);
-  const today = new Date(now);
-  if (posted.toDateString() === today.toDateString()) return posted.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  const options: Intl.DateTimeFormatOptions = posted.getFullYear() === today.getFullYear() ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' };
-  return posted.toLocaleDateString([], options);
+/** The first few interests for a collapsed card, and how many are held back. Everything shows once expanded. */
+export function previewTags(tags: string[], expanded: boolean, max = 3): { shown: string[]; hidden: number } {
+  if (expanded || tags.length <= max) return { shown: tags, hidden: 0 };
+  return { shown: tags.slice(0, max), hidden: tags.length - max };
 }
 
 /** "Looking for 24–32" style text for the preferred age range, or null when none is set. */

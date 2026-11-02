@@ -3,22 +3,22 @@ import { CheckCircle2, EyeOff, Flag, MapPin, Pencil, Plus, Send, ShieldAlert, Sl
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
+import { LookingForBody } from './LookingForBody.tsx';
 import { LookingForComposer } from './LookingForComposer.tsx';
 import type { UserPreferences } from '../types.ts';
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
+import { formatRelativeTime } from '../utils/relativeTime.ts';
 import { isAdultBirthDate } from '../utils/ageEligibility.ts';
 import { PHILIPPINE_REGIONS_AND_LOCATIONS } from '../utils/philippines-locations.ts';
 import { NSFW_PREFERENCE_OPTIONS, type NsfwPreference } from '../utils/nsfwPreference.ts';
 import {
   activeFilterCount,
   applyLookingForFilters,
-  formatPostedDate,
   INTENTION_LABELS,
   LOOKING_FOR_CATEGORIES,
   NO_FILTERS,
   popularTags,
   postPresentation,
-  preferredAgeText,
   revealNeedsDialog,
   type LookingForFilters,
   type LookingForPost,
@@ -193,20 +193,21 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
             const mine = post.authorId === uid;
             // Members always see their own posts open (so they can find, edit and delete them); the NSFW badge stays on.
             const presentation = mine ? 'open' : postPresentation(post, nsfwPreference, revealed.has(post.id));
-            const preferred = preferredAgeText(post);
-            const meta = [INTENTION_LABELS[post.intention], post.age !== undefined ? `${post.age}` : null].filter(Boolean).join(' · ');
             return (
-              <article key={post.id} className="rounded-3xl border border-line bg-gradient-to-b from-raised/60 to-surface p-4 sm:p-5">
+              <article key={post.id} className="scroll-mt-[calc(var(--header-h)+0.5rem)] rounded-3xl border border-line bg-gradient-to-b from-raised/60 to-surface p-4 sm:p-5">
                 <header className="flex items-center gap-2.5">
                   <AnimalAvatar avatar={post.authorAvatar} seed={post.authorId || post.author} className="w-10 h-10" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg truncate">
                       {post.author} {post.authorPronouns && <span className="font-normal text-subtle">{post.authorPronouns}</span>}
                     </p>
-                    <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle truncate">
-                      {meta}
-                      {presentation === 'open' && post.region && <> · <MapPin className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> {post.region}</>}
-                      {' · '}{formatPostedDate(post.timestamp)}
+                    <p className="mt-0.5 flex items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle min-w-0">
+                      <Badge>{INTENTION_LABELS[post.intention]}</Badge>
+                      <span className="truncate">
+                        {presentation === 'open' && post.age !== undefined && <>{post.age} · </>}
+                        {presentation === 'open' && post.region && <><MapPin className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> {post.region} · </>}
+                        {formatRelativeTime(post.timestamp)}
+                      </span>
                     </p>
                   </div>
                   {post.isNsfw && <Badge tone="nsfw">NSFW</Badge>}
@@ -233,29 +234,17 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                 </header>
 
                 {presentation === 'open' ? (
-                  <>
-                    <h3 className="mt-3 text-[length:calc(16px_*_var(--fs,1))] font-semibold text-fg leading-snug [overflow-wrap:anywhere]">{post.title}</h3>
-                    <p className="mt-1.5 text-[length:calc(14px_*_var(--fs,1))] text-muted leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{post.intro}</p>
-                    <div className="mt-3 rounded-2xl bg-ink/50 border border-line px-3.5 py-2.5">
-                      <p className="text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-[0.12em] text-lavender">Looking for{preferred ? ` · ${preferred}` : ''}</p>
-                      <p className="mt-1 text-[length:calc(14px_*_var(--fs,1))] text-fg leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{post.lookingFor}</p>
-                    </div>
-                    {post.tags.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {post.tags.map((tag) => <span key={tag} className="tag">#{tag}</span>)}
-                      </div>
-                    )}
-                    <div className="mt-4 flex items-center justify-end gap-2">
-                      {post.isNsfw && !mine && nsfwPreference !== 'hide' && (
-                        <button type="button" onClick={() => setRevealed((prev) => { const next = new Set(prev); next.delete(post.id); return next; })} className="btn btn-ghost btn-sm"><EyeOff className="w-4 h-4" /> Hide again</button>
-                      )}
-                      {!mine && <button type="button" onClick={() => setContactPost(post)} className="btn btn-primary btn-sm"><Send className="w-4 h-4" /> Send Signal</button>}
-                    </div>
-                  </>
+                  <LookingForBody
+                    post={post}
+                    mine={mine}
+                    canCoverAgain={post.isNsfw && !mine && nsfwPreference !== 'hide'}
+                    onCoverAgain={() => setRevealed((prev) => { const next = new Set(prev); next.delete(post.id); return next; })}
+                    onSignal={() => setContactPost(post)}
+                  />
                 ) : (
                   <div className="mt-3 relative rounded-2xl border border-line bg-ink/40 overflow-hidden">
                     <div className="absolute inset-0 p-4"><CoverLines /></div>
-                    <div className="relative flex flex-col items-center gap-2 bg-surface/60 px-4 py-6 text-center">
+                    <div className="relative flex flex-col items-center gap-1.5 bg-surface/60 px-4 py-4 text-center">
                       <EyeOff className="w-5 h-5 text-lavender" aria-hidden="true" />
                       <p className="text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg">Sensitive content</p>
                       {post.contentWarning && <p className="text-[length:calc(12px_*_var(--fs,1))] text-muted [overflow-wrap:anywhere]">{post.contentWarning}</p>}

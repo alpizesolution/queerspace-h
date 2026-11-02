@@ -9,7 +9,7 @@ import {
   EMPTY_DRAFT,
   lookingForPostId,
   NO_FILTERS,
-  formatPostedDate,
+  previewTags,
   popularTags,
   postPresentation,
   preferredAgeText,
@@ -147,11 +147,10 @@ test('tags are cleaned and bounded, and the age range reads naturally', () => {
   assert.equal(preferredAgeText({}), null);
 });
 
-test('a post date shows the time today and the day afterwards', () => {
-  const noon = new Date(2026, 10, 3, 12, 0).getTime();
-  assert.match(formatPostedDate(new Date(2026, 10, 3, 9, 5).getTime(), noon), /\d{1,2}:\d{2}/);
-  assert.doesNotMatch(formatPostedDate(new Date(2026, 10, 2, 9, 5).getTime(), noon), /:/);
-  assert.match(formatPostedDate(new Date(2026, 10, 2, 9, 5).getTime(), noon), /Nov/);
-  assert.doesNotMatch(formatPostedDate(new Date(2026, 10, 2, 9, 5).getTime(), noon), /2026/);
-  assert.match(formatPostedDate(new Date(2025, 11, 30, 9, 5).getTime(), noon), /2025/);
+test('a collapsed card previews three interests and says how many are held back', () => {
+  const tags = ['a', 'b', 'c', 'd', 'e'];
+  assert.deepEqual(previewTags(tags, false), { shown: ['a', 'b', 'c'], hidden: 2 });
+  assert.deepEqual(previewTags(tags, true), { shown: tags, hidden: 0 });
+  assert.deepEqual(previewTags(['a', 'b', 'c'], false), { shown: ['a', 'b', 'c'], hidden: 0 }, 'three fit, so nothing is hidden');
+  assert.deepEqual(previewTags([], false), { shown: [], hidden: 0 });
 });
