@@ -148,6 +148,26 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
 
   const thread = useMemo(() => visibleThread(messages, pending, userId ?? ''), [messages, pending, userId]);
 
+  // Mark the conversation read once the reader can actually see the newest incoming message: the tab is visible and
+  // the chat is open. The server recounts from that message, so anything that arrives afterwards stays unread.
+  const markedThrough = useRef<string | null>(null);
+  const [tabVisible, setTabVisible] = useState(() => typeof document === 'undefined' || document.visibilityState === 'visible');
+  useEffect(() => {
+    const onVisibility = () => setTabVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+  useEffect(() => {
+    if (!tabVisible || !userId) return;
+    const newestIncoming = [...messages].reverse().find((m) => m.senderId !== userId);
+    if (!newestIncoming || markedThrough.current === newestIncoming.id) return;
+    markedThrough.current = newestIncoming.id;
+    request('/api/signals', { action: 'mark-read', pairId, throughMessageId: newestIncoming.id }).catch(() => {
+      // Not marked: allow the next poll to try again.
+      if (markedThrough.current === newestIncoming.id) markedThrough.current = null;
+    });
+  }, [messages, tabVisible, userId, pairId]);
+
   const scrollToBottom = useCallback((smooth: boolean) => {
     const el = listRef.current;
     if (!el) return;

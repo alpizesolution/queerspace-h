@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseInbox, takeNewIds } from './signalsInbox.ts';
+import { formatUnread, parseInbox, takeNewIds } from './signalsInbox.ts';
 
 const ts = (ms: number) => ({ toMillis: () => ms });
 
@@ -9,8 +9,8 @@ test('parseInbox counts only unexpired pending invitations and tolerates junk', 
   const inbox = parseInbox({ rev: 3, pending: { a: ts(2_000), b: ts(500), c: 5_000, d: 'nope', e: null } }, now);
   assert.deepEqual(inbox.pendingIds.sort(), ['a', 'c']);
   assert.equal(inbox.rev, 3);
-  assert.deepEqual(parseInbox(null), { rev: 0, pendingIds: [] });
-  assert.deepEqual(parseInbox({ rev: 'x', pending: 'y' }), { rev: 0, pendingIds: [] });
+  assert.deepEqual(parseInbox(null), { rev: 0, pendingIds: [], unread: {} });
+  assert.deepEqual(parseInbox({ rev: 'x', pending: 'y' }), { rev: 0, pendingIds: [], unread: {} });
 });
 
 test('takeNewIds announces each invitation once, even if the snapshot repeats', () => {
@@ -20,4 +20,26 @@ test('takeNewIds announces each invitation once, even if the snapshot repeats', 
   assert.deepEqual(takeNewIds(['b', 'c'], seen), ['c']);
   assert.deepEqual(takeNewIds([], seen), []);
   assert.deepEqual(takeNewIds(['a'], seen), [], 'a request that resolved and reappears is not re-announced');
+});
+
+test('parseInbox reads per-pair unread counts and ignores zero, negative and junk values', () => {
+  const inbox = parseInbox({ unread: { p1: 3, p2: 0, p3: -2, p4: 'x', p5: 12 } });
+  assert.deepEqual(inbox.unread, { p1: 3, p5: 12 });
+  assert.deepEqual(parseInbox({ unread: 'nope' }).unread, {});
+});
+
+test('formatUnread shows nothing at zero, the exact count up to 99, then 99+', () => {
+  assert.equal(formatUnread(undefined), null);
+  assert.equal(formatUnread(0), null);
+  assert.equal(formatUnread(1), '1');
+  assert.equal(formatUnread(12), '12');
+  assert.equal(formatUnread(99), '99');
+  assert.equal(formatUnread(100), '99+');
+  assert.equal(formatUnread(5000), '99+');
+});
+
+test('unread counts are replaced by each snapshot, so a repeated or reconnected snapshot never adds up', () => {
+  const raw = { unread: { p1: 2 } };
+  assert.deepEqual(parseInbox(raw).unread, parseInbox(raw).unread);
+  assert.equal(parseInbox(raw).unread.p1, 2);
 });

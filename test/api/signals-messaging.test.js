@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ALLOWED_REACTIONS, DELTA_OVERLAP_MS, deltaCursor, toggleReaction } from '../../api/signals.js';
+import { ALLOWED_REACTIONS, DELTA_OVERLAP_MS, countUnread, deltaCursor, toggleReaction } from '../../api/signals.js';
 
 test('the server accepts every cat reaction the MATCHING chat offers, plus the earlier set so old reactions can be removed', () => {
   const source = fs.readFileSync('src/utils/reactions.ts', 'utf8');
@@ -38,4 +38,17 @@ test('the polling cursor is the moment the server read the messages, and the ove
   assert.equal(deltaCursor(5000), new Date(5000).toISOString());
   assert.ok(DELTA_OVERLAP_MS >= 1000, 'a poll looks slightly behind the cursor so a late write is never missed');
   assert.ok(DELTA_OVERLAP_MS < 4000, 'shorter than the 4-second poll interval, so an idle conversation costs nothing');
+});
+
+test("countUnread counts only the other person's live messages", () => {
+  const messages = [
+    { senderId: 'them' },
+    { senderId: 'me' },
+    { senderId: 'them', deleted: true },
+    { senderId: 'them', deletedAt: new Date() },
+    { senderId: 'them', reactions: { '😻': ['me'] } },
+  ];
+  assert.equal(countUnread(messages, 'them'), 2);
+  assert.equal(countUnread([], 'them'), 0);
+  assert.equal(countUnread([{ senderId: 'me' }], 'them'), 0);
 });

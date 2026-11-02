@@ -95,6 +95,17 @@ export function isActiveMatch(conversation, uid, otherId) {
     && uid !== otherId;
 }
 
+/**
+ * Unread messages for a member: only what the other person wrote, never their own, and never a deleted message.
+ * Reactions are fields on a message, not messages, so they cannot reach this count.
+ */
+export function countUnread(messages, otherUid) {
+  return messages.filter(message => message?.senderId === otherUid && message.deleted !== true && !message.deletedAt).length;
+}
+
+/** How far a recount looks past the last message the reader saw; a longer backlog simply shows as 99+. */
+export const UNREAD_RECOUNT_LIMIT = 100;
+
 function idempotencyDocId(uid, key) {
   return createHash('sha256').update(uid + ':' + key).digest('hex');
 }
@@ -393,7 +404,12 @@ export default async function handler(req, res) {
       const messageRef = pairRef.collection('messages').doc(requestedId ?? randomUUID());
       const stamp = FieldValue.serverTimestamp();
       try {
-        await messageRef.create({ senderId: uid, text, ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
+        // The message and the recipient's unread counter commit together. A retried send fails on create(), so the
+        // whole batch is rejected and the counter is never incremented twice for one message.
+        const batch = db.batch();
+        batch.create(messageRef, { senderId: uid, text, ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
+        batch.set(db.doc(`signalsInbox/${otherUid}`), { unread: { [pairId]: FieldValue.increment(1) } }, { merge: true });
+        await batch.commit();
       } catch (error) {
         // ALREADY_EXISTS: this exact send already went through (a retry). Answer with what was stored, never a copy.
         if (error?.code !== 6) throw error;
@@ -416,6 +432,33 @@ export default async function handler(req, res) {
         reactions: [],
         createdAt: new Date().toISOString(),
       });
+    }
+
+    if (action === 'mark-read') {
+      const pairId = req.body?.pairId;
+      const throughId = req.body?.throughMessageId;
+      if (!safeId(pairId) || !safeId(throughId)) return send(res, 400, { error: 'invalid_request' });
+      const pairRef = db.doc(`signalsPairs/${pairId}`);
+      const inboxRef = db.doc(`signalsInbox/${uid}`);
+      const result = await db.runTransaction(async tx => {
+        const [pairSnap, seenSnap] = await Promise.all([tx.get(pairRef), tx.get(pairRef.collection('messages').doc(throughId))]);
+        if (!pairSnap.exists) throw Object.assign(new Error('pair_not_found'), { statusCode: 404 });
+        const participants = pairSnap.data().participants;
+        if (!Array.isArray(participants) || !participants.includes(uid)) throw Object.assign(new Error('not_allowed'), { statusCode: 403 });
+        const otherUid = participants.find(participant => participant !== uid);
+        const seenAt = seenSnap.exists ? seenSnap.data().createdAt : null;
+        if (!(seenAt instanceof Timestamp)) throw Object.assign(new Error('message_not_found'), { statusCode: 404 });
+        // Every send writes the inbox doc, so a message that lands while this runs makes the transaction retry
+        // and it stays unread instead of being wiped by a stale count.
+        const [later] = await Promise.all([
+          tx.get(pairRef.collection('messages').where('createdAt', '>', seenAt).orderBy('createdAt', 'asc').limit(UNREAD_RECOUNT_LIMIT)),
+          tx.get(inboxRef),
+        ]);
+        const unread = countUnread(later.docs.map(snap => snap.data()), otherUid);
+        tx.set(inboxRef, { unread: { [pairId]: unread > 0 ? unread : FieldValue.delete() } }, { merge: true });
+        return { unread };
+      });
+      return send(res, 200, result);
     }
 
     if (action === 'end') {
