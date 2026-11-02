@@ -38,6 +38,7 @@ import { submitAgeEligibilityReview } from './services/ageReviewService.ts';
 import { AppearanceSettingsModal } from './components/AppearanceSettingsModal.tsx';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
 import { FONT_SIZE_CHOSEN_KEY, FONT_SIZE_KEY, FontSize, isPhoneDevice, resolveFontSize } from './utils/fontSize.ts';
+import { loadNsfwPreference, saveNsfwPreference, type NsfwPreference } from './utils/nsfwPreference.ts';
 import { useSignalsInbox } from './hooks/useSignalsInbox.ts';
 import { useUnreadUpdates } from './hooks/useUnreadUpdates.ts';
 import { WhatsNewSheet } from './components/WhatsNewSheet.tsx';
@@ -81,6 +82,12 @@ export default function App() {
   const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() => {
     return getStorageItem(STORAGE_KEYS.SOUND_MUTED.current, STORAGE_KEYS.SOUND_MUTED.legacies) === 'true';
   });
+
+  const [nsfwPreference, setNsfwPreference] = useState<NsfwPreference>(loadNsfwPreference);
+  const chooseNsfwPreference = (value: NsfwPreference) => {
+    setNsfwPreference(value);
+    saveNsfwPreference(value);
+  };
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   // Live Signals: a one-time banner for each new incoming request while the app is open.
@@ -229,7 +236,8 @@ export default function App() {
   const nameGate = useRef(createNameGate((name, options) => reservePseudonym(name, options))).current;
 
   /** Saves on this device, and to the cloud only when something the cloud stores has changed and the name is confirmed. */
-  const persistPrefs = async (prefs: UserPreferences, options: { withBirthDate?: boolean } = {}) => {
+  const persistPrefs = async (prefs: UserPreferences, options: { withBirthDate?: boolean; blocked?: string[] } = {}) => {
+    const blocked = options.blocked ?? blockedPartnerIds;
     let toSave = prefs;
     let nameProblem: string | null = null;
     if (isFirebaseConfigured) {
@@ -240,11 +248,11 @@ export default function App() {
         nameProblem = check.message;
       }
     }
-    const signature = cloudProfileSignature(toSave, blockedPartnerIds);
+    const signature = cloudProfileSignature(toSave, blocked);
     // The birthday is immutable once the cloud has it, so it is sent only until the cloud is known to hold it.
     const withBirthDate = Boolean(options.withBirthDate || (!cloudHasBirthDateRef.current && isAdultBirthDate(toSave.birthDate)));
     const cloudChanged = withBirthDate || signature !== cloudSignatureRef.current;
-    const feedback = await saveAnonymousProfile(toSave, blockedPartnerIds, cloudChanged && !nameProblem, { withBirthDate });
+    const feedback = await saveAnonymousProfile(toSave, blocked, cloudChanged && !nameProblem, { withBirthDate });
     if (nameProblem && cloudChanged) {
       return { feedback: { ...feedback, savedToCloud: false, userMessage: nameProblem }, cloudChanged };
     }
@@ -340,6 +348,17 @@ export default function App() {
     setActivePartner(null);
     setCurrentView('home');
     showToast('Conversation closed safely. Transcripts cleared.');
+  };
+
+  /** Blocks a member from Looking For: hidden from this member's board, and the server refuses their Signals. */
+  const handleBlockMember = (memberId: string) => {
+    if (!memberId || blockedPartnerIds.includes(memberId)) return;
+    const updated = [...blockedPartnerIds, memberId];
+    setBlockedPartnerIds(updated);
+    setStorageItem(STORAGE_KEYS.BLOCKED_IDS.current, JSON.stringify(updated));
+    void persistPrefs(userPrefs, { blocked: updated }).then(({ feedback }) => {
+      showToast(feedback.savedToCloud ? 'Blocked. You won’t see their posts and they can’t Signal you.' : 'Blocked on this device. We’ll sync it when you’re back online.');
+    });
   };
 
   const handleBlockAndReport = (
@@ -528,7 +547,7 @@ export default function App() {
 
         {currentView === 'unsaid' && <UnsaidView />}
 
-        {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} />}
+        {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={() => setSettingsOpen(true)} onBlockMember={handleBlockMember} />}
 
         {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} requestedPairId={signalsOpenPairId} onRequestedPairHandled={() => setSignalsOpenPairId(null)} />}
       </main>
@@ -577,6 +596,8 @@ export default function App() {
           onChangeTheme={setTheme}
           fontSize={fontSize}
           onChangeFontSize={chooseFontSize}
+          nsfwPreference={nsfwPreference}
+          onChangeNsfwPreference={chooseNsfwPreference}
           hasUnreadUpdates={hasUnreadUpdates}
           onOpenWhatsNew={() => { setSettingsOpen(false); setWhatsNewOpen(true); }}
           onClose={() => setSettingsOpen(false)}

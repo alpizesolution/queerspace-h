@@ -111,7 +111,7 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       // Only stamps of "now" can be written, so the clock can't be wound back.
       allow create, update: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['publicRoom', 'unsaid', 'suggestion', 'communityPost', 'communityReply', 'support'])
+        && request.resource.data.keys().hasOnly(['publicRoom', 'unsaid', 'suggestion', 'communityPost', 'communityReply', 'support', 'lookingForPost'])
         && (!('publicRoom' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
             || request.resource.data.publicRoom == request.time)
         && (!('unsaid' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
@@ -123,7 +123,9 @@ service cloud.firestore {
         && (!('communityReply' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
             || request.resource.data.communityReply == request.time)
         && (!('support' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
-            || request.resource.data.support == request.time);
+            || request.resource.data.support == request.time)
+        && (!('lookingForPost' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.lookingForPost == request.time);
       allow delete: if false;
     }
 
@@ -567,6 +569,80 @@ service cloud.firestore {
           && getAfter(postPath(postId)).data.replyCount == get(postPath(postId)).data.replyCount - 1;
         allow update: if false;
       }
+    }
+
+    // ====================================================
+    // 4b. COSMOS "LOOKING FOR" BOARD (adult connection posts)
+    // ====================================================
+    // Kept apart from community_posts. Only adult members with a saved profile can read or write here, checked
+    // from the private birthday (never from anything the client sends). A post's id is "{uid}_{intention}", so a
+    // member has at most one post per intention (five in total) and posting again edits that one. An age shown on a
+    // post must match the private birthday. Contacting the author goes through Signals (api/signals.js), which
+    // re-checks age, blocks and suspensions on the server.
+
+    function lookingForIntentions() {
+      return ['dating', 'friendship', 'talk', 'gaming', 'open'];
+    }
+
+    function lookingForPath(postId) {
+      return /databases/$(database)/documents/looking_for_posts/$(postId);
+    }
+
+    // An age is only believable if the private birthday puts the member in that year of life (a few days of slack
+    // for leap years). Posts that show no age skip this.
+    function lookingForAgeMatches(age) {
+      let p = /databases/$(database)/documents/users/$(request.auth.uid)/private/settings;
+      return age is int && age >= 18 && age <= 99
+        && exists(p) && get(p).data.birthDate is timestamp
+        && get(p).data.birthDate <= request.time - duration.value(age * 365, 'd')
+        && get(p).data.birthDate > request.time - duration.value((age + 1) * 366, 'd');
+    }
+
+    function validLookingForBody(data) {
+      return validAuthorFields(data)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 90
+        && data.intro is string && data.intro.size() >= 1 && data.intro.size() <= 400
+        && data.lookingFor is string && data.lookingFor.size() >= 1 && data.lookingFor.size() <= 400
+        && data.intention in lookingForIntentions()
+        && data.tags is list && data.tags.size() <= 6
+        && data.isNsfw is bool
+        && (data.isNsfw
+              ? (data.contentWarning == null || (data.contentWarning is string && data.contentWarning.size() <= 120))
+              : data.contentWarning == null)
+        && (!('age' in data) || lookingForAgeMatches(data.age))
+        && (!('seekAgeMin' in data) || (data.seekAgeMin is int && data.seekAgeMin >= 18 && data.seekAgeMin <= 99))
+        && (!('seekAgeMax' in data) || (data.seekAgeMax is int && data.seekAgeMax >= 18 && data.seekAgeMax <= 99))
+        && (!('seekAgeMin' in data && 'seekAgeMax' in data) || data.seekAgeMin <= data.seekAgeMax)
+        && (!('region' in data) || (data.region is string && data.region.size() >= 1 && data.region.size() <= 60));
+    }
+
+    match /looking_for_posts/{postId} {
+      allow read: if isAuthenticated() && isEligibleMember(request.auth.uid);
+
+      allow create: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
+        && !isSuspended()
+        && postId == request.auth.uid + '_' + request.resource.data.intention
+        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'title', 'intro', 'lookingFor', 'intention', 'tags', 'isNsfw', 'contentWarning', 'timestamp'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'intro', 'lookingFor', 'intention', 'age', 'seekAgeMin', 'seekAgeMax', 'region', 'tags', 'isNsfw', 'contentWarning', 'timestamp', 'updatedAt'])
+        && validLookingForBody(request.resource.data)
+        && request.resource.data.timestamp == request.time
+        && slowMode('lookingForPost', 60);
+
+      // The author edits their own post: identity, intention and first-posted time never change.
+      allow update: if isAuthenticated()
+        && request.auth.uid == resource.data.authorId
+        && isEligibleMember(request.auth.uid)
+        && !isSuspended()
+        && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'title', 'intro', 'lookingFor', 'intention', 'tags', 'isNsfw', 'contentWarning', 'timestamp', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'intro', 'lookingFor', 'intention', 'age', 'seekAgeMin', 'seekAgeMax', 'region', 'tags', 'isNsfw', 'contentWarning', 'timestamp', 'updatedAt'])
+        && request.resource.data.authorId == resource.data.authorId
+        && request.resource.data.intention == resource.data.intention
+        && request.resource.data.timestamp == resource.data.timestamp
+        && request.resource.data.updatedAt == request.time
+        && validLookingForBody(request.resource.data);
+
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorId || isAdmin());
     }
 
     // ====================================================

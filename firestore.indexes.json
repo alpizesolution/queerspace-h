@@ -9,6 +9,14 @@
       ]
     },
     {
+      "collectionGroup": "looking_for_posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "intention", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "app_updates",
       "queryScope": "COLLECTION",
       "fields": [

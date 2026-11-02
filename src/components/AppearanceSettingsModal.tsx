@@ -1,19 +1,22 @@
 import React from 'react';
 import { ChevronRight, MoonStar, Sparkles, Sun, X } from 'lucide-react';
 import { FONT_SIZE_OPTIONS, FontSize } from '../utils/fontSize.ts';
+import { NSFW_PREFERENCE_OPTIONS, type NsfwPreference } from '../utils/nsfwPreference.ts';
 
 interface AppearanceSettingsModalProps {
   theme: 'dark' | 'light';
   onChangeTheme: (theme: 'dark' | 'light') => void;
   fontSize: FontSize;
   onChangeFontSize: (size: FontSize) => void;
+  nsfwPreference?: NsfwPreference;
+  onChangeNsfwPreference?: (value: NsfwPreference) => void;
   hasUnreadUpdates?: boolean;
   onOpenWhatsNew: () => void;
   onClose: () => void;
 }
 
 export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = ({
-  theme, onChangeTheme, fontSize, onChangeFontSize, hasUnreadUpdates = false, onOpenWhatsNew, onClose,
+  theme, onChangeTheme, fontSize, onChangeFontSize, nsfwPreference = 'hide', onChangeNsfwPreference, hasUnreadUpdates = false, onOpenWhatsNew, onClose,
 }) => (
   <div
     className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 anim-fade"
@@ -81,6 +84,30 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
           This is how messages and posts will read. <span className="text-xs text-subtle">12:30</span>
         </p>
       </div>
+      {onChangeNsfwPreference && (
+        <div className="mt-5">
+          <p id="nsfw-pref-label" className="text-sm font-semibold text-fg">Show NSFW content</p>
+          <p className="text-xs text-subtle mt-0.5 mb-2">For mature posts in Cosmos. Each post is only revealed when you choose.</p>
+          <div role="radiogroup" aria-labelledby="nsfw-pref-label" className="space-y-1.5">
+            {NSFW_PREFERENCE_OPTIONS.map(({ id, label, hint }) => (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={nsfwPreference === id}
+                onClick={() => onChangeNsfwPreference(id)}
+                className={`flex w-full items-center gap-3 min-h-11 rounded-xl border px-3 text-left transition-colors cursor-pointer ${nsfwPreference === id ? 'border-berry bg-raised' : 'border-line hover:border-line-strong'}`}
+              >
+                <span className={`h-4 w-4 shrink-0 rounded-full border ${nsfwPreference === id ? 'border-berry bg-berry' : 'border-line-strong'}`} aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-fg">{label}</span>
+                  <span className="block text-xs text-muted">{hint}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <button
         type="button"
         onClick={onOpenWhatsNew}
