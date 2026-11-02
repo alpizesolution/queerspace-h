@@ -1271,6 +1271,135 @@ test('N-02: acceptance notifications are readable only by their owner and cannot
 });
 
 // ------------------------------------------------------------------
+// Cosmos "Looking For" board (adult connection posts)
+// ------------------------------------------------------------------
+const lfPost = (uid: string, overrides: Record<string, unknown> = {}) => ({
+  authorId: uid, authorName: 'Willow', authorPronouns: 'she/her', title: 'Coffee and books?', intro: 'Bookish and quiet.',
+  lookingFor: 'Someone to share novels with', intention: 'friendship', tags: ['Books'], isNsfw: false, contentWarning: null,
+  timestamp: now(), ...overrides,
+});
+const lfId = (uid: string, intention = 'friendship') => `${uid}_${intention}`;
+
+function lfCreate(uid: string, data: Record<string, unknown>, id = lfId(uid, String(data.intention ?? 'friendship'))) {
+  const fs = testEnv.authenticatedContext(uid).firestore();
+  const batch = fs.batch();
+  batch.set(fs.doc(`looking_for_posts/${id}`), data);
+  batch.set(fs.doc(`rate_limits/${uid}`), { lookingForPost: now() }, { merge: true });
+  return batch.commit();
+}
+
+async function seedLfPost(uid: string, intention = 'friendship', extra: Record<string, unknown> = {}) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`looking_for_posts/${lfId(uid, intention)}`).set({
+      authorId: uid, authorName: 'Willow', authorPronouns: 'she/her', title: 't', intro: 'i', lookingFor: 'l', intention,
+      tags: [], isNsfw: false, contentWarning: null, timestamp: new Date(), ...extra,
+    });
+  });
+}
+
+test('LF-01: Adult members CAN post and read; minors, signed-out and incomplete profiles CANNOT', async () => {
+  await assertSucceeds(lfCreate('alice', lfPost('alice')));
+  await assertSucceeds(testEnv.authenticatedContext('bob').firestore().collection('looking_for_posts').get());
+  await assertFails(testEnv.unauthenticatedContext().firestore().collection('looking_for_posts').get());
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('users/minor/private/settings').set({ birthDate: new Date(Date.now() - 15 * 365 * 86400000), createdAt: new Date(), updatedAt: new Date() });
+    await ctx.firestore().doc('users/minor/public/profile').set({ displayName: 'minor', profileComplete: true, updatedAt: new Date() });
+    await ctx.firestore().doc('users/draft/private/settings').set({ birthDate: new Date(Date.now() - 30 * 365 * 86400000), createdAt: new Date(), updatedAt: new Date() });
+    await ctx.firestore().doc('users/draft/public/profile').set({ displayName: 'draft', profileComplete: false, updatedAt: new Date() });
+  });
+  const minor = testEnv.authenticatedContext('minor').firestore();
+  await assertFails(minor.collection('looking_for_posts').get());
+  await assertFails(lfCreate('minor', lfPost('minor')));
+  await assertFails(testEnv.authenticatedContext('draft').firestore().collection('looking_for_posts').get());
+  await assertFails(lfCreate('draft', lfPost('draft')));
+});
+
+test('LF-02: A post must be the author own, in their own derived id, with only the allowed fields', async () => {
+  await assertFails(lfCreate('alice', lfPost('bob'), lfId('alice')));
+  await assertFails(lfCreate('alice', lfPost('alice'), 'alice_dating'));
+  await assertFails(lfCreate('alice', lfPost('alice'), 'someone-elses-id'));
+  await assertFails(lfCreate('alice', lfPost('alice', { birthDate: new Date() })));
+  await assertFails(lfCreate('alice', lfPost('alice', { role: 'admin' })));
+  await assertFails(lfCreate('alice', lfPost('alice', { status: 'approved' })));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'hookup' }), 'alice_hookup'));
+  await assertFails(lfCreate('alice', lfPost('alice', { title: '' })));
+  await assertFails(lfCreate('alice', lfPost('alice', { intro: 'x'.repeat(401) })));
+  await assertFails(lfCreate('alice', lfPost('alice', { timestamp: new Date(0) })));
+  await assertFails(lfCreate('alice', lfPost('alice', { tags: ['1', '2', '3', '4', '5', '6', '7'] })));
+  await assertFails(lfCreate('alice', lfPost('alice', { region: 'x'.repeat(61) })));
+  await assertFails(lfCreate('alice', lfPost('alice', { seekAgeMin: 40, seekAgeMax: 20 })));
+  await assertFails(lfCreate('alice', lfPost('alice', { seekAgeMin: 15 })));
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { seekAgeMin: 24, seekAgeMax: 32, region: 'Quezon City', authorAvatar: 'cat.1.2' })));
+});
+
+test('LF-03: A shown age must match the private birthday; no age needs no proof', async () => {
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { intention: 'dating', age: 30 })));
+  await seedStamp('alice', 'lookingForPost', 61);
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'gaming', age: 22 })));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'gaming', age: 41 })));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'gaming', age: 17 })));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'gaming', age: 30.5 })));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'gaming', age: '30' })));
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { intention: 'gaming' })));
+});
+
+test('LF-04: NSFW is a flag with an optional, bounded warning that only exists when the flag is on', async () => {
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { intention: 'dating', isNsfw: true, contentWarning: 'Mature themes' })));
+  await seedStamp('alice', 'lookingForPost', 61);
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { intention: 'gaming', isNsfw: true, contentWarning: null })));
+  await seedStamp('alice', 'lookingForPost', 61);
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'talk', isNsfw: false, contentWarning: 'sneaky' })));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'talk', isNsfw: true, contentWarning: 'x'.repeat(121) })));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'talk', isNsfw: 'yes' })));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'talk', isNsfw: true, contentWarning: 5 })));
+});
+
+test('LF-05: New posts are limited to one a minute, and a suspended member cannot post', async () => {
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { intention: 'dating' })));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'friendship' })));
+  await seedStamp('alice', 'lookingForPost', 61);
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { intention: 'friendship' })));
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('suspensions/bob').set({ source: 'admin', reason: 'test', createdAt: new Date() });
+  });
+  await assertFails(lfCreate('bob', lfPost('bob')));
+});
+
+test('LF-06: Only the author edits a post, and identity, intention and first-posted time never change', async () => {
+  await seedLfPost('alice');
+  const path = `looking_for_posts/${lfId('alice')}`;
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc(path).update({ title: 'Updated', updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ title: 'No stamp' }));
+  await assertFails(alice.doc(path).update({ intention: 'dating', updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ authorId: 'bob', updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ timestamp: now(), updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ age: 22, updatedAt: now() }));
+  await assertSucceeds(alice.doc(path).update({ age: 30, updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ isNsfw: false, contentWarning: 'leftover', updatedAt: now() }));
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc(path).update({ title: 'Hijack', updatedAt: now() }));
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc(path).update({ title: 'Hijack', updatedAt: now() }));
+});
+
+test('LF-07: The author or an admin can delete a post; nobody else can', async () => {
+  await seedLfPost('alice');
+  await seedLfPost('carol');
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc(`looking_for_posts/${lfId('alice')}`).delete());
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc(`looking_for_posts/${lfId('alice')}`).delete());
+  await assertSucceeds(testEnv.authenticatedContext('alice').firestore().doc(`looking_for_posts/${lfId('alice')}`).delete());
+  await seedAdmin();
+  await assertSucceeds(adminDb().doc(`looking_for_posts/${lfId('carol')}`).delete());
+});
+
+test('LF-08: Reports about a Looking For post are accepted from members, never readable by them', async () => {
+  await seedLfPost('alice');
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertSucceeds(bob.collection('reports').add({ reporterId: 'bob', targetId: `looking_for:${lfId('alice')}`, targetType: 'post', reason: 'Spam, scam or solicitation', timestamp: now() }));
+  await assertFails(bob.collection('reports').add({ reporterId: 'alice', targetId: `looking_for:${lfId('alice')}`, targetType: 'post', reason: 'forged reporter', timestamp: now() }));
+  await assertFails(bob.collection('reports').get());
+});
+
+// ------------------------------------------------------------------
 // Age privacy and birthday integrity
 // ------------------------------------------------------------------
 const publicProfile = (extra: Record<string, unknown> = {}) => ({

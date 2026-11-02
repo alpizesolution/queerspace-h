@@ -19,6 +19,8 @@ import {
   subscribeToReplies,
 } from '../services/communityService.ts';
 import { whileActive } from '../utils/whileActive.ts';
+import { LookingForView } from './LookingForView.tsx';
+import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 
 /** What the confirmation dialog is about to remove. */
 type PendingDelete =
@@ -27,6 +29,10 @@ type PendingDelete =
 
 interface CommunityFeedViewProps {
   userPrefs: UserPreferences;
+  blockedPartnerIds?: string[];
+  nsfwPreference?: NsfwPreference;
+  onOpenSettings?: () => void;
+  onBlockMember?: (memberId: string) => void;
 }
 
 // Which posts this device has liked, so the heart shows filled. The server still allows one like per person.
@@ -145,7 +151,12 @@ const Replies: React.FC<{
 
 export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   userPrefs,
+  blockedPartnerIds = [],
+  nsfwPreference = 'hide',
+  onOpenSettings,
+  onBlockMember,
 }) => {
+  const [section, setSection] = useState<'community' | 'lookingFor'>('community');
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedError, setFeedError] = useState(false);
@@ -312,12 +323,32 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-[calc(var(--tabbar-h)+6rem)] desk:pb-16">
       <div className="flex items-center justify-between gap-3 mb-4">
         <h1 className="text-2xl sm:text-[length:calc(28px_*_var(--fs,1))] font-semibold tracking-tight text-fg">Cosmos</h1>
-        <button onClick={openComposer} className="btn btn-primary btn-sm hidden sm:inline-flex">
-          <Plus className="w-4 h-4" />
-          New post
-        </button>
+        {section === 'community' && (
+          <button onClick={openComposer} className="btn btn-primary btn-sm hidden sm:inline-flex">
+            <Plus className="w-4 h-4" />
+            New post
+          </button>
+        )}
       </div>
 
+      <div role="tablist" aria-label="Cosmos sections" className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1 mb-5">
+        {([['community', 'Community'], ['lookingFor', 'Looking For']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={section === id}
+            onClick={() => setSection(id)}
+            className={`h-10 rounded-full text-[length:calc(14px_*_var(--fs,1))] font-semibold transition-colors cursor-pointer ${section === id ? 'bg-raised text-fg ring-1 ring-berry/50 shadow-sm shadow-black/30' : 'text-muted hover:text-fg'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'lookingFor' ? (
+        <LookingForView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onBlockMember={onBlockMember} />
+      ) : (
+      <>
       <div
         role="tablist"
         aria-label="Categories"
@@ -454,6 +485,8 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
 
       {/* Mobile compose button, kept clear of the tab bar */}
       <FloatingAddButton onClick={openComposer} label="New post" />
+      </>
+      )}
 
       {showCreateModal && (
         <Sheet
