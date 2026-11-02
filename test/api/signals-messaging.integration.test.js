@@ -34,7 +34,7 @@ async function setup() {
   const send = (user, text, messageId) => call(user, 'POST', { action: 'send-message', pairId, text, ...(messageId ? { messageId } : {}) });
   const react = (user, messageId, emoji) => call(user, 'POST', { action: 'react-message', pairId, messageId, emoji });
   const load = (user, after) => call(user, 'GET', undefined, { view: 'messages', pairId, ...(after ? { after } : {}) });
-  return { db, pairId, a, b, outsider, send, react, load };
+  return { db, pairId, a, b, outsider, call, send, react, load };
 }
 
 test('a send can be retried safely: the same message id never makes a second copy', { skip }, async () => {
@@ -110,4 +110,40 @@ test('reactions: the cat set, one per member, change and remove, both members se
   assert.equal((await react(outsider, id, '😻')).statusCode, 403);
   assert.equal((await load(outsider)).statusCode, 403);
   assert.equal((await send(outsider, 'let me in', 'client-message-2002')).statusCode, 403);
+});
+
+test('unread counter: incoming counts, own messages and reactions do not, retries never double-count, reading clears it', { skip }, async () => {
+  const { db, a, b, send, react, call, pairId } = await setup();
+  const unreadOf = async (user) => (await db.doc(`signalsInbox/${user.uid}`).get()).data()?.unread?.[pairId] ?? 0;
+  const markRead = (user, id) => call(user, 'POST', { action: 'mark-read', pairId, throughMessageId: id });
+  assert.equal(await unreadOf(b), 0, 'a new conversation has no badge');
+  await send(a, 'one', 'unread-message-0001');
+  assert.equal(await unreadOf(b), 1);
+  await send(a, 'one', 'unread-message-0001');
+  assert.equal(await unreadOf(b), 1, 'a retried send is not counted twice');
+  await send(a, 'two', 'unread-message-0002');
+  await send(a, 'three', 'unread-message-0003');
+  assert.equal(await unreadOf(b), 3);
+  assert.equal(await unreadOf(a), 0, 'sending does not make your own conversation unread');
+  await send(b, 'mine', 'unread-message-0004');
+  await react(b, 'unread-message-0001', '😻');
+  assert.equal(await unreadOf(b), 3, 'own messages and reactions do not count');
+  assert.equal(await unreadOf(a), 1, 'the other side sees their own incoming message');
+  // Read up to message two: message three stays unread.
+  assert.equal((await markRead(b, 'unread-message-0002')).body.unread, 1);
+  assert.equal(await unreadOf(b), 1);
+  assert.equal((await markRead(b, 'unread-message-0003')).body.unread, 0);
+  assert.equal(await unreadOf(b), 0, 'reading everything clears the badge');
+  await send(a, 'four', 'unread-message-0005');
+  assert.equal(await unreadOf(b), 1, 'a message after the read stays unread');
+  assert.equal(await unreadOf(a), 1, "the other person's counter is independent");
+});
+
+test('mark-read: outsiders are refused and unknown messages are not found', { skip }, async () => {
+  const { a, outsider, send, call, pairId } = await setup();
+  await send(a, 'hi', 'unread-message-0101');
+  const body = { action: 'mark-read', pairId, throughMessageId: 'unread-message-0101' };
+  assert.equal((await call(outsider, 'POST', body)).statusCode, 403);
+  assert.equal((await call(a, 'POST', { ...body, throughMessageId: 'does-not-exist-1' })).statusCode, 404);
+  assert.equal((await call(a, 'POST', { action: 'mark-read', pairId })).statusCode, 400);
 });

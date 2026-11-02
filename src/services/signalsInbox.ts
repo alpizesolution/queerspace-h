@@ -6,9 +6,17 @@ export interface SignalsInboxSnapshot {
   rev: number;
   /** Non-expired pending invitation ids addressed to this member, oldest id order not implied. */
   pendingIds: string[];
+  /** Unread incoming messages per pair id; pairs with none are absent. */
+  unread: Record<string, number>;
 }
 
-export const EMPTY_INBOX: SignalsInboxSnapshot = { rev: 0, pendingIds: [] };
+export const EMPTY_INBOX: SignalsInboxSnapshot = { rev: 0, pendingIds: [], unread: {} };
+
+/** Badge text for an unread count: nothing at zero, the number up to 99, then "99+". */
+export function formatUnread(count: number | undefined): string | null {
+  if (!count || !Number.isFinite(count) || count < 1) return null;
+  return count > 99 ? '99+' : String(Math.floor(count));
+}
 
 const toMillis = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -18,7 +26,7 @@ const toMillis = (value: unknown): number | null => {
 
 /** Turns the raw inbox document into a safe snapshot; expired or malformed entries never count. */
 export function parseInbox(data: unknown, now: number = Date.now()): SignalsInboxSnapshot {
-  const raw = (data ?? {}) as { rev?: unknown; pending?: unknown };
+  const raw = (data ?? {}) as { rev?: unknown; pending?: unknown; unread?: unknown };
   const rev = typeof raw.rev === 'number' && Number.isFinite(raw.rev) ? raw.rev : 0;
   const pending = raw.pending && typeof raw.pending === 'object' ? (raw.pending as Record<string, unknown>) : {};
   const pendingIds = Object.entries(pending)
@@ -27,7 +35,13 @@ export function parseInbox(data: unknown, now: number = Date.now()): SignalsInbo
       return at !== null && at > now;
     })
     .map(([id]) => id);
-  return { rev, pendingIds };
+  const unread: Record<string, number> = {};
+  if (raw.unread && typeof raw.unread === 'object') {
+    for (const [pairId, count] of Object.entries(raw.unread as Record<string, unknown>)) {
+      if (typeof count === 'number' && Number.isFinite(count) && count >= 1) unread[pairId] = Math.floor(count);
+    }
+  }
+  return { rev, pendingIds, unread };
 }
 
 /** Ids that have never been announced before; `seen` is updated so each request notifies once. */

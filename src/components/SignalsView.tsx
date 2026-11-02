@@ -6,6 +6,7 @@ import { SignalsConversation } from './SignalsConversation.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import type { SignalsInboxState } from '../hooks/useSignalsInbox.ts';
+import { formatUnread } from '../services/signalsInbox.ts';
 
 /** The other person's public pseudonym and avatar, resolved by the API; null fields when they have none. */
 type SignalPartner = { displayName: string | null; avatar: string | null };
@@ -97,7 +98,6 @@ const PartnerAvatar: React.FC<{ avatar?: string | null; seed: string; small?: bo
 };
 
 const nameOf = (partner?: SignalPartner) => partner?.displayName?.trim() || 'Anonymous member';
-
 export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: boolean }> = ({ inbox, isSoundMuted = false }) => {
   const [pairs, setPairs] = useState<SignalPair[]>([]);
   const [invitations, setInvitations] = useState<SignalInvitation[]>([]);
@@ -319,11 +319,23 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
               <ul className="divide-y divide-line/60">
                 {activePairs.map((pair) => {
                   const name = nameOf(pair.partner);
+                  const unreadText = formatUnread(inbox?.unread[pair.id]);
                   return (
                     <li key={pair.id} className="flex items-center gap-3 py-2.5">
                       <PartnerAvatar avatar={pair.partner?.avatar} seed={pair.id} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
+                          {unreadText && (
+                            <span
+                              role="status"
+                              aria-label={`${unreadText} unread from ${name}`}
+                              className="shrink-0 rounded-full bg-berry px-1.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold leading-[18px] tabular-nums text-ink"
+                            >
+                              {unreadText}
+                            </span>
+                          )}
+                        </div>
                         <p className="mt-0.5 text-xs text-subtle">Since {formatShortDate(pair.createdAt)}</p>
                       </div>
                       <button
