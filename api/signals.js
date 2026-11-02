@@ -76,12 +76,22 @@ export function partnerSummary(profile) {
  * It holds no sender identity: only a revision counter and the ids/expiry of pending
  * invitations. Keyed by invitation id, so repeated writes can never double-count.
  */
-export function touchInbox(tx, db, uid, pending) {
+export function touchInbox(tx, db, uid, pending, extra) {
   tx.set(db.doc(`signalsInbox/${uid}`), {
     rev: FieldValue.increment(1),
     updatedAt: FieldValue.serverTimestamp(),
     ...(pending ? { pending } : {}),
+    ...(extra ?? {}),
   }, { merge: true });
+}
+
+/**
+ * The note left for the original sender when their invitation is accepted. It is keyed by the pair id, which is the
+ * invitation id and exists only once, and it is written in the same transaction that creates the pair. It carries no
+ * identity: the app resolves the other member's pseudonym from the pair, like everywhere else in Signals.
+ */
+export function acceptedNotification(pairId) {
+  return { notifications: { [pairId]: { type: 'accepted', read: false, createdAt: FieldValue.serverTimestamp() } } };
 }
 
 /** True when `conversation` is an active chat between exactly these two members. */
@@ -461,6 +471,18 @@ export default async function handler(req, res) {
       return send(res, 200, result);
     }
 
+    if (action === 'ack-notification') {
+      const pairId = req.body?.pairId;
+      if (!safeId(pairId)) return send(res, 400, { error: 'invalid_request' });
+      const inboxRef = db.doc(`signalsInbox/${uid}`);
+      await db.runTransaction(async tx => {
+        const note = (await tx.get(inboxRef)).data()?.notifications?.[pairId];
+        // Only the member's own notification can be marked, and only once.
+        if (note && note.read !== true) tx.set(inboxRef, { notifications: { [pairId]: { read: true } } }, { merge: true });
+      });
+      return send(res, 200, { ok: true });
+    }
+
     if (action === 'end') {
       const pairId = req.body?.pairId;
       if (!safeId(pairId)) return send(res, 400, { error: 'invalid_request' });
@@ -506,9 +528,9 @@ export default async function handler(req, res) {
         throw Object.assign(new Error('invitation_not_pending'), { statusCode: 409 });
       }
       // Resolving removes it from the recipient's pending list and wakes both people's live listeners.
-      const resolved = () => {
+      const resolved = (senderExtra) => {
         touchInbox(tx, db, invite.recipientId, { [invitationId]: FieldValue.delete() });
-        touchInbox(tx, db, invite.senderId);
+        touchInbox(tx, db, invite.senderId, undefined, senderExtra);
       };
       if (!(invite.expiresAt instanceof Timestamp) || invite.expiresAt.toMillis() <= Date.now()) {
         tx.update(inviteRef, { status: 'expired', updatedAt: FieldValue.serverTimestamp() });
@@ -543,7 +565,8 @@ export default async function handler(req, res) {
           createdAt: FieldValue.serverTimestamp(),
         });
         tx.update(inviteRef, { status: 'accepted', updatedAt: FieldValue.serverTimestamp() });
-        resolved();
+        // Only a successful acceptance notifies the sender, atomically with the pair, so a retry can never add a second one.
+        resolved(acceptedNotification(invitationId));
         return { status: 'accepted', pairId: invitationId };
       }
       const nextStatus = action === 'decline' ? 'declined' : 'revoked';

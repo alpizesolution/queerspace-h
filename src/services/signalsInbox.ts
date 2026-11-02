@@ -8,9 +8,11 @@ export interface SignalsInboxSnapshot {
   pendingIds: string[];
   /** Unread incoming messages per pair id; pairs with none are absent. */
   unread: Record<string, number>;
+  /** Pair ids whose "your request was accepted" notification has not been opened yet. */
+  acceptedUnread: string[];
 }
 
-export const EMPTY_INBOX: SignalsInboxSnapshot = { rev: 0, pendingIds: [], unread: {} };
+export const EMPTY_INBOX: SignalsInboxSnapshot = { rev: 0, pendingIds: [], unread: {}, acceptedUnread: [] };
 
 /** Badge text for an unread count: nothing at zero, the number up to 99, then "99+". */
 export function formatUnread(count: number | undefined): string | null {
@@ -26,7 +28,7 @@ const toMillis = (value: unknown): number | null => {
 
 /** Turns the raw inbox document into a safe snapshot; expired or malformed entries never count. */
 export function parseInbox(data: unknown, now: number = Date.now()): SignalsInboxSnapshot {
-  const raw = (data ?? {}) as { rev?: unknown; pending?: unknown; unread?: unknown };
+  const raw = (data ?? {}) as { rev?: unknown; pending?: unknown; unread?: unknown; notifications?: unknown };
   const rev = typeof raw.rev === 'number' && Number.isFinite(raw.rev) ? raw.rev : 0;
   const pending = raw.pending && typeof raw.pending === 'object' ? (raw.pending as Record<string, unknown>) : {};
   const pendingIds = Object.entries(pending)
@@ -41,7 +43,14 @@ export function parseInbox(data: unknown, now: number = Date.now()): SignalsInbo
       if (typeof count === 'number' && Number.isFinite(count) && count >= 1) unread[pairId] = Math.floor(count);
     }
   }
-  return { rev, pendingIds, unread };
+  const acceptedUnread: string[] = [];
+  if (raw.notifications && typeof raw.notifications === 'object') {
+    for (const [pairId, note] of Object.entries(raw.notifications as Record<string, unknown>)) {
+      const entry = note as { type?: unknown; read?: unknown } | null;
+      if (entry && entry.type === 'accepted' && entry.read !== true) acceptedUnread.push(pairId);
+    }
+  }
+  return { rev, pendingIds, unread, acceptedUnread };
 }
 
 /** Ids that have never been announced before; `seen` is updated so each request notifies once. */

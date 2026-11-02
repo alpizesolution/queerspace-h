@@ -9,7 +9,7 @@ import { ChatView } from './components/ChatView.tsx';
 import { PublicRoomView } from './components/PublicRoomView.tsx';
 import { CommunityFeedView } from './components/CommunityFeedView.tsx';
 import { UnsaidView } from './components/UnsaidView.tsx';
-import { SignalsView, fetchNewestPendingSenderName } from './components/SignalsView.tsx';
+import { SignalsView, fetchNewestPendingSenderName, fetchPartnerName } from './components/SignalsView.tsx';
 import { InfoModals } from './components/InfoModals.tsx';
 import { DonationModal } from './components/DonationModal.tsx';
 import { SupportChat } from './components/SupportChat.tsx';
@@ -86,6 +86,9 @@ export default function App() {
   // Live Signals: a one-time banner for each new incoming request while the app is open.
   const [signalAlert, setSignalAlert] = useState(false);
   const [signalSender, setSignalSender] = useState<string | null>(null);
+  // A request this member sent was accepted: one banner per acceptance, and the connection to open from it.
+  const [acceptedAlert, setAcceptedAlert] = useState<{ pairId: string; name: string | null } | null>(null);
+  const [signalsOpenPairId, setSignalsOpenPairId] = useState<string | null>(null);
   const currentViewRef = useRef(currentView);
   currentViewRef.current = currentView;
   // Keep /signals in the address bar while the Signals inbox is open, and drop it when leaving.
@@ -94,13 +97,26 @@ export default function App() {
     if (currentView === 'signals' && !onSignalsPath) window.history.replaceState(null, '', '/signals');
     else if (currentView !== 'signals' && onSignalsPath) window.history.replaceState(null, '', '/');
   }, [currentView]);
-  const signalsInbox = useSignalsInbox(() => {
-    if (currentViewRef.current === 'signals') return;
-    setSignalSender(null);
-    setSignalAlert(true);
-    // The API resolves the sender's public pseudonym; until then the banner stays generic.
-    void fetchNewestPendingSenderName().then(setSignalSender);
-  });
+  const signalsInbox = useSignalsInbox(
+    () => {
+      if (currentViewRef.current === 'signals') return;
+      setSignalSender(null);
+      setSignalAlert(true);
+      // The API resolves the sender's public pseudonym; until then the banner stays generic.
+      void fetchNewestPendingSenderName().then(setSignalSender);
+    },
+    (pairId) => {
+      // On the Signals screen the notification card is already in view.
+      if (currentViewRef.current === 'signals') return;
+      setAcceptedAlert({ pairId, name: null });
+      void fetchPartnerName(pairId).then((name) => setAcceptedAlert((current) => (current?.pairId === pairId ? { pairId, name } : current)));
+    }
+  );
+  useEffect(() => {
+    if (!acceptedAlert) return;
+    const timer = window.setTimeout(() => setAcceptedAlert(null), 9000);
+    return () => window.clearTimeout(timer);
+  }, [acceptedAlert]);
   useEffect(() => {
     if (!signalAlert) return;
     const timer = window.setTimeout(() => setSignalAlert(false), 9000);
@@ -283,7 +299,7 @@ export default function App() {
   }, [userPrefs.profileComplete, ageRestricted]);
 
   const handleNavigate = (view: NavTarget) => {
-    if (view === 'signals') setSignalAlert(false);
+    if (view === 'signals') { setSignalAlert(false); setAcceptedAlert(null); }
     if (view === 'setup') handleOpenSetup('quick');
     else setCurrentView(view);
     window.scrollTo({ top: 0 });
@@ -411,6 +427,22 @@ export default function App() {
         </div>
       )}
 
+      {acceptedAlert && currentView !== 'signals' && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed z-[60] left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] w-[calc(100%-2rem)] max-w-sm flex items-start gap-2.5 bg-raised/95 backdrop-blur-xl text-fg pl-4 pr-2 py-2.5 rounded-2xl shadow-2xl shadow-black/50 border border-berry/40 text-sm anim-pop"
+        >
+          <CheckCircle2 className="w-[18px] h-[18px] text-berry shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Connection request accepted!</p>
+            <p className="mt-0.5 text-xs leading-snug text-muted">{acceptedAlert.name ?? 'Someone'} accepted your connection request. You can now start chatting on QUEERSPACE.</p>
+          </div>
+          <button type="button" onClick={() => { setSignalsOpenPairId(acceptedAlert.pairId); handleNavigate('signals'); }} className="shrink-0 rounded-full bg-berry px-3.5 py-1.5 text-xs font-semibold text-ink hover:brightness-110">Chat</button>
+          <button type="button" onClick={() => setAcceptedAlert(null)} aria-label="Dismiss" className="shrink-0 rounded-full px-2 py-1 text-muted hover:text-fg">✕</button>
+        </div>
+      )}
+
       {toastMessage && (
         <div
           role="status"
@@ -437,7 +469,7 @@ export default function App() {
           hasSupportReply={hasSupportReply}
           hasUnreadUpdates={hasUnreadUpdates}
           profile={userPrefs}
-          badges={{ signals: signalsInbox.pendingIds.length }}
+          badges={{ signals: signalsInbox.pendingIds.length + signalsInbox.acceptedUnread.length }}
         />
       )}
 
@@ -498,7 +530,7 @@ export default function App() {
 
         {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} />}
 
-        {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} />}
+        {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} requestedPairId={signalsOpenPairId} onRequestedPairHandled={() => setSignalsOpenPairId(null)} />}
       </main>
 
       {showChrome && currentView !== 'public' && (
@@ -512,7 +544,7 @@ export default function App() {
         />
       )}
 
-      {showChrome && <BottomNavigation currentView={currentView} onNavigate={handleNavigate} badges={{ signals: signalsInbox.pendingIds.length }} />}
+      {showChrome && <BottomNavigation currentView={currentView} onNavigate={handleNavigate} badges={{ signals: signalsInbox.pendingIds.length + signalsInbox.acceptedUnread.length }} />}
 
       {setupModalOpen && (
         <MatchSetupModal

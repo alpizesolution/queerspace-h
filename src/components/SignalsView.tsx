@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Inbox, Info, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { Check, ChevronRight, Inbox, Info, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { auth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { Sheet } from './Sheet.tsx';
 import { SignalsConversation } from './SignalsConversation.tsx';
@@ -54,6 +54,8 @@ async function signalsRequest<T>(path: string, body?: Record<string, unknown>): 
       not_allowed: 'You are not allowed to change this connection.',
       pair_not_found: 'This connection could not be found.',
       pair_not_active: 'This connection is no longer active.',
+      invitation_not_pending: 'This invitation was already answered.',
+      invitation_not_found: 'This invitation is no longer available.',
       internal_error: 'Signals is temporarily unavailable. Please try again.',
     };
     throw new Error(messages[data.error] || 'Something went wrong. Please try again.');
@@ -70,6 +72,16 @@ export async function fetchNewestPendingSenderName(): Promise<string | null> {
     const { invitations } = await signalsRequest<{ invitations: SignalInvitation[] }>('/api/signals');
     const newest = (invitations || []).find((item) => item.direction === 'received' && item.status === 'pending');
     return newest ? newest.partner?.displayName?.trim() || 'Anonymous member' : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Pseudonym of the member on the other side of a connection, for the "request accepted" banner; null if unknown. */
+export async function fetchPartnerName(pairId: string): Promise<string | null> {
+  try {
+    const { pairs } = await signalsRequest<{ pairs: SignalPair[] }>('/api/signals?view=pairs');
+    return (pairs || []).find((pair) => pair.id === pairId)?.partner?.displayName?.trim() || null;
   } catch {
     return null;
   }
@@ -98,7 +110,13 @@ const PartnerAvatar: React.FC<{ avatar?: string | null; seed: string; small?: bo
 };
 
 const nameOf = (partner?: SignalPartner) => partner?.displayName?.trim() || 'Anonymous member';
-export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: boolean }> = ({ inbox, isSoundMuted = false }) => {
+export const SignalsView: React.FC<{
+  inbox?: SignalsInboxState;
+  isSoundMuted?: boolean;
+  /** A connection to open as soon as the list has loaded (from a notification). */
+  requestedPairId?: string | null;
+  onRequestedPairHandled?: () => void;
+}> = ({ inbox, isSoundMuted = false, requestedPairId = null, onRequestedPairHandled }) => {
   const [pairs, setPairs] = useState<SignalPair[]>([]);
   const [invitations, setInvitations] = useState<SignalInvitation[]>([]);
   const [invitationActionId, setInvitationActionId] = useState<string | null>(null);
@@ -107,6 +125,9 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
   const [notice, setNotice] = useState<string | null>(null);
   const [openPairId, setOpenPairId] = useState<string | null>(null);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [selectedInvitationId, setSelectedInvitationId] = useState<string | null>(null);
+  const [invitationError, setInvitationError] = useState<string | null>(null);
+  const [invitationAction, setInvitationAction] = useState<'accept' | 'decline' | null>(null);
 
   const loadPairs = useCallback(async (quiet = false) => {
     if (!isFirebaseConfigured) {
@@ -164,7 +185,9 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
     }
   };
 
-  const respondToInvitation = async (invitation: SignalInvitation, action: 'accept' | 'decline' | 'revoke') => {
+  /** Answers an invitation with the existing accept / decline / revoke actions. Returns null on success, or words for the member. */
+  const respondToInvitation = async (invitation: SignalInvitation, action: 'accept' | 'decline' | 'revoke'): Promise<string | null> => {
+    if (invitationActionId !== null) return null;
     setInvitationActionId(invitation.id);
     setError(null);
     setNotice(null);
@@ -181,17 +204,72 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
       } else {
         setNotice('This invitation is no longer available.');
       }
+      return null;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update this invitation.');
+      return err instanceof Error ? err.message : 'Could not update this invitation.';
     } finally {
       setInvitationActionId(null);
     }
+  };
+
+  /** Answers from the invitation dialog: it closes on success and stays open, with the invitation intact, on failure. */
+  const answerFromDialog = async (invitation: SignalInvitation, action: 'accept' | 'decline') => {
+    setInvitationError(null);
+    setInvitationAction(action);
+    const failure = await respondToInvitation(invitation, action);
+    setInvitationAction(null);
+    if (failure) setInvitationError(failure);
+    else setSelectedInvitationId(null);
+  };
+
+  // Sheet keeps the onClose it was opened with, so the busy check reads a ref that is current on every render.
+  const answeringRef = useRef(false);
+  answeringRef.current = invitationActionId !== null;
+  const closeInvitation = () => {
+    if (answeringRef.current) return;
+    setSelectedInvitationId(null);
+    setInvitationError(null);
+  };
+
+  /** Opens a conversation, and marks its "request accepted" notification as seen. */
+  const openPair = (pairId: string) => {
+    if (inbox?.acceptedUnread.includes(pairId)) void signalsRequest('/api/signals', { action: 'ack-notification', pairId }).catch(() => {});
+    setOpenPairId(pairId);
   };
 
   const pendingReceived = invitations.filter((item) => item.direction === 'received' && item.status === 'pending');
   const pendingSent = invitations.filter((item) => item.direction === 'sent' && item.status === 'pending');
   const activePairs = pairs.filter((pair) => pair.status === 'active');
   const endedPairs = pairs.filter((pair) => pair.status === 'ended');
+  const selectedInvitation = pendingReceived.find((item) => item.id === selectedInvitationId) ?? null;
+  const acceptedNotes = (inbox?.acceptedUnread ?? []).flatMap((id) => {
+    const pair = activePairs.find((item) => item.id === id);
+    return pair ? [pair] : [];
+  });
+
+  // A notification asked for a conversation: open it once the list is in, refreshing once if it isn't there yet.
+  const retriedRequestedPair = useRef<string | null>(null);
+  useEffect(() => {
+    if (!requestedPairId || loading) return;
+    const pair = pairs.find((item) => item.id === requestedPairId);
+    if (pair) {
+      if (pair.status === 'active') openPair(pair.id);
+      onRequestedPairHandled?.();
+    } else if (retriedRequestedPair.current !== requestedPairId) {
+      retriedRequestedPair.current = requestedPairId;
+      void loadPairs(true);
+    } else {
+      onRequestedPairHandled?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedPairId, loading, pairs]);
+
+  // A notification for a connection that has since ended has nothing to open, so clear it instead of leaving a badge.
+  useEffect(() => {
+    for (const id of inbox?.acceptedUnread ?? []) {
+      if (pairs.find((item) => item.id === id)?.status === 'ended') void signalsRequest('/api/signals', { action: 'ack-notification', pairId: id }).catch(() => {});
+    }
+  }, [inbox?.acceptedUnread, pairs]);
 
   // Arriving from the new-request banner or tab badge: bring the invitations into view once.
   useEffect(() => {
@@ -209,7 +287,10 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
 
   const hasInvitations = pendingReceived.length + pendingSent.length > 0;
 
+  // The dialogs sit beside the section, not inside it: its entrance animation would otherwise pin them to the section
+  // instead of the screen.
   return (
+    <>
     <section aria-labelledby="signals-title" className="relative mx-auto flex w-full max-w-xl flex-col px-4 pb-6 pt-4 anim-rise sm:px-6 sm:pt-6">
       <header className="flex items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-raised text-berry">
@@ -266,6 +347,26 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
         </div>
       ) : (
         <>
+          {acceptedNotes.length > 0 && (
+            <ul className="mb-4 space-y-2" aria-label="Notifications">
+              {acceptedNotes.map((pair) => (
+                <li key={pair.id}>
+                  <button
+                    type="button"
+                    onClick={() => openPair(pair.id)}
+                    className="flex w-full items-center gap-3 rounded-2xl border border-berry/40 bg-plum/25 p-3 text-left transition-colors hover:bg-plum/40 active:bg-plum/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60"
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-berry" role="img" aria-label="Unread" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-fg">Connection request accepted!</p>
+                      <p className="mt-0.5 text-xs leading-snug text-muted">{nameOf(pair.partner)} accepted your connection request. You can now start chatting on QUEERSPACE.</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <div ref={invitationsRef} className="scroll-mt-20">
             <SectionHeader title="Invitations" count={pendingReceived.length + pendingSent.length} />
             {!hasInvitations ? (
@@ -275,19 +376,21 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
                 {pendingReceived.map((invitation) => {
                   const name = nameOf(invitation.partner);
                   return (
-                    <li key={invitation.id} className="rounded-2xl border border-lavender/25 bg-raised/70 p-3">
-                      <div className="flex items-center gap-3">
+                    <li key={invitation.id}>
+                      <button
+                        type="button"
+                        onClick={() => { setInvitationError(null); setSelectedInvitationId(invitation.id); }}
+                        aria-label={`Open connection request from ${name}`}
+                        className="flex w-full items-center gap-3 rounded-2xl border border-lavender/25 bg-raised/70 p-3 text-left transition-colors hover:bg-raised active:bg-plum/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60"
+                      >
                         <PartnerAvatar avatar={invitation.partner?.avatar} seed={invitation.id} />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
                           <p className="mt-0.5 text-xs text-subtle">Wants to connect · {formatShortDate(invitation.createdAt)}</p>
+                          {invitation.message && <p className="mt-1 line-clamp-1 [overflow-wrap:anywhere] text-sm text-muted">{invitation.message}</p>}
                         </div>
-                      </div>
-                      {invitation.message && <p className="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl bg-surface/70 px-3 py-2 text-sm leading-snug text-fg">{invitation.message}</p>}
-                      <div className="mt-1.5 flex justify-end gap-1">
-                        <button type="button" onClick={() => void respondToInvitation(invitation, 'decline')} disabled={invitationActionId !== null} aria-label={`Decline ${name}`} className="h-9 rounded-full px-3 text-xs font-semibold text-muted transition hover:text-fg disabled:opacity-50">Decline</button>
-                        <button type="button" onClick={() => void respondToInvitation(invitation, 'accept')} disabled={invitationActionId !== null} aria-label={`Accept ${name}`} className="h-9 rounded-full bg-berry px-4 text-xs font-semibold text-ink transition hover:brightness-110 disabled:opacity-50">{invitationActionId === invitation.id ? 'Saving…' : 'Accept'}</button>
-                      </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
+                      </button>
                     </li>
                   );
                 })}
@@ -298,7 +401,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
                       <p className="truncate text-sm text-fg">Waiting for {nameOf(invitation.partner)}</p>
                       <p className="text-xs text-subtle">Sent {formatShortDate(invitation.createdAt)}</p>
                     </div>
-                    <button type="button" onClick={() => void respondToInvitation(invitation, 'revoke')} disabled={invitationActionId !== null} className="h-9 shrink-0 rounded-full px-3 text-xs font-semibold text-muted hover:text-fg disabled:opacity-50">{invitationActionId === invitation.id ? 'Withdrawing…' : 'Withdraw'}</button>
+                    <button type="button" onClick={async () => { const failure = await respondToInvitation(invitation, 'revoke'); if (failure) setError(failure); }} disabled={invitationActionId !== null} className="h-9 shrink-0 rounded-full px-3 text-xs font-semibold text-muted hover:text-fg disabled:opacity-50">{invitationActionId === invitation.id ? 'Withdrawing…' : 'Withdraw'}</button>
                   </li>
                 ))}
               </ul>
@@ -318,7 +421,7 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
                     <li key={pair.id}>
                       <button
                         type="button"
-                        onClick={() => setOpenPairId(pair.id)}
+                        onClick={() => openPair(pair.id)}
                         aria-label={unreadText ? `Open chat with ${name}, ${unreadText} unread` : `Open chat with ${name}`}
                         className="-mx-2 flex min-h-16 w-[calc(100%+1rem)] items-center gap-3 rounded-2xl px-2 py-2.5 text-left transition-colors hover:bg-raised/60 active:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60"
                       >
@@ -358,12 +461,42 @@ export const SignalsView: React.FC<{ inbox?: SignalsInboxState; isSoundMuted?: b
           )}
         </>
       )}
-
+    </section>
+      {selectedInvitation && (
+        <Sheet
+          title="Connection request"
+          size="md"
+          trapFocus
+          onClose={closeInvitation}
+          footer={
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => void answerFromDialog(selectedInvitation, 'decline')} disabled={invitationActionId !== null} className="btn btn-ghost w-full sm:w-auto">
+                {invitationAction === 'decline' ? 'Declining…' : 'Decline'}
+              </button>
+              <button type="button" onClick={() => void answerFromDialog(selectedInvitation, 'accept')} disabled={invitationActionId !== null} className="btn btn-primary w-full sm:w-auto">
+                {invitationAction === 'accept' ? 'Accepting…' : 'Accept'}
+              </button>
+            </div>
+          }
+        >
+          <div className="flex items-center gap-3">
+            <PartnerAvatar avatar={selectedInvitation.partner?.avatar} seed={selectedInvitation.id} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[length:calc(16px_*_var(--fs,1))] font-semibold leading-tight text-fg">{nameOf(selectedInvitation.partner)}</p>
+              <p className="mt-0.5 text-xs text-subtle">Wants to connect · {formatShortDate(selectedInvitation.createdAt)}</p>
+            </div>
+          </div>
+          {selectedInvitation.message
+            ? <p className="mt-3 whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl bg-raised/70 px-3 py-2.5 text-sm leading-snug text-fg">{selectedInvitation.message}</p>
+            : <p className="mt-3 text-sm text-subtle">No message was included.</p>}
+          {invitationError && <p role="alert" className="mt-3 text-sm text-danger">{invitationError}</p>}
+        </Sheet>
+      )}
       {privacyOpen && (
         <Sheet title="Private connections" size="sm" icon={<ShieldCheck className="h-5 w-5" />} onClose={() => setPrivacyOpen(false)}>
           <p className="text-sm leading-relaxed text-muted">Only you can view your connections. Ending a connection closes it here; no message is sent.</p>
         </Sheet>
       )}
-    </section>
+    </>
   );
 };

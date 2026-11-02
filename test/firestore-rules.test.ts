@@ -1253,6 +1253,23 @@ test('N-01: Only the owner can read their Signals inbox, and nobody can write it
   await assertFails(alice.doc('signalsInvitations/x').set({ senderId: 'bob', recipientId: 'alice', status: 'pending' }));
 });
 
+test('N-02: acceptance notifications are readable only by their owner and cannot be forged or edited from a client', async () => {
+  await testEnv.withSecurityRulesDisabled((ctx) => ctx.firestore().doc('signalsInbox/alice').set({
+    rev: 2, pending: {}, notifications: { pair12345: { type: 'accepted', read: false, createdAt: new Date() } },
+  }));
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const snap = await assertSucceeds(alice.doc('signalsInbox/alice').get());
+  assert.equal(snap.data()?.notifications?.pair12345?.type, 'accepted');
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('signalsInbox/alice').get());
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('signalsInbox/alice').get());
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  // Nobody can plant a fake notification in someone else's inbox, or in their own, or flip one to read.
+  await assertFails(bob.doc('signalsInbox/alice').set({ notifications: { fake1234: { type: 'accepted', read: false } } }, { merge: true }));
+  await assertFails(alice.doc('signalsInbox/alice').set({ notifications: { fake1234: { type: 'accepted', read: false } } }, { merge: true }));
+  await assertFails(alice.doc('signalsInbox/alice').update({ 'notifications.pair12345.read': true }));
+  await assertFails(alice.doc('signalsInbox/alice').delete());
+});
+
 // ------------------------------------------------------------------
 // Age privacy and birthday integrity
 // ------------------------------------------------------------------

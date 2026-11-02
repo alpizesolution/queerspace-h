@@ -7,7 +7,7 @@ const chat = fs.readFileSync('src/components/SignalsConversation.tsx', 'utf8');
 const activeRows = view.slice(view.indexOf('{activePairs.map('), view.indexOf('Past" count'));
 
 test('an Active row is one button that opens the chat, with hover, pressed and focus states', () => {
-  assert.match(activeRows, /<button[^>]*onClick=\{\(\) => setOpenPairId\(pair\.id\)\}/s);
+  assert.match(activeRows, /<button[^>]*onClick=\{\(\) => openPair\(pair\.id\)\}/s);
   assert.match(activeRows, /hover:bg-raised/);
   assert.match(activeRows, /active:bg-raised/);
   assert.match(activeRows, /focus-visible:ring-2/);
