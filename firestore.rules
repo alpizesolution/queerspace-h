@@ -613,7 +613,8 @@ service cloud.firestore {
         && (!('seekAgeMin' in data) || (data.seekAgeMin is int && data.seekAgeMin >= 18 && data.seekAgeMin <= 99))
         && (!('seekAgeMax' in data) || (data.seekAgeMax is int && data.seekAgeMax >= 18 && data.seekAgeMax <= 99))
         && (!('seekAgeMin' in data && 'seekAgeMax' in data) || data.seekAgeMin <= data.seekAgeMax)
-        && (!('region' in data) || (data.region is string && data.region.size() >= 1 && data.region.size() <= 60));
+        && (!('region' in data) || (data.region is string && data.region.size() >= 1 && data.region.size() <= 60))
+        && (!('requestsPaused' in data) || data.requestsPaused is bool);
     }
 
     match /looking_for_posts/{postId} {
@@ -624,7 +625,7 @@ service cloud.firestore {
         && !isSuspended()
         && postId == request.auth.uid + '_' + request.resource.data.intention
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'title', 'intro', 'lookingFor', 'intention', 'tags', 'isNsfw', 'contentWarning', 'timestamp'])
-        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'intro', 'lookingFor', 'intention', 'age', 'seekAgeMin', 'seekAgeMax', 'region', 'tags', 'isNsfw', 'contentWarning', 'timestamp', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'intro', 'lookingFor', 'intention', 'age', 'seekAgeMin', 'seekAgeMax', 'region', 'tags', 'isNsfw', 'contentWarning', 'requestsPaused', 'timestamp', 'updatedAt'])
         && validLookingForBody(request.resource.data)
         && request.resource.data.timestamp == request.time
         && slowMode('lookingForPost', 60);
@@ -635,7 +636,7 @@ service cloud.firestore {
         && isEligibleMember(request.auth.uid)
         && !isSuspended()
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'title', 'intro', 'lookingFor', 'intention', 'tags', 'isNsfw', 'contentWarning', 'timestamp', 'updatedAt'])
-        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'intro', 'lookingFor', 'intention', 'age', 'seekAgeMin', 'seekAgeMax', 'region', 'tags', 'isNsfw', 'contentWarning', 'timestamp', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'intro', 'lookingFor', 'intention', 'age', 'seekAgeMin', 'seekAgeMax', 'region', 'tags', 'isNsfw', 'contentWarning', 'requestsPaused', 'timestamp', 'updatedAt'])
         && request.resource.data.authorId == resource.data.authorId
         && request.resource.data.intention == resource.data.intention
         && request.resource.data.timestamp == resource.data.timestamp
@@ -643,6 +644,26 @@ service cloud.firestore {
         && validLookingForBody(request.resource.data);
 
       allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorId || isAdmin());
+    }
+
+    // ====================================================
+    // 4c. CONNECTION REQUESTS (SERVER-MANAGED)
+    // ====================================================
+    // A request asks the author of a Looking For post for permission to start a private Signals conversation. Requests,
+    // their duplicate-prevention locks and their audit trail are written only by the Signals API (Admin SDK), which
+    // validates every status change. Clients can read none of them: the API returns a member only their own requests.
+    // Admins can read the audit trail, so moderation can see what happened; members never can.
+    match /connection_requests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /connection_request_locks/{lockId} {
+      allow read, write: if false;
+    }
+
+    match /connection_request_events/{eventId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // ====================================================

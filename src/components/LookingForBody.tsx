@@ -1,5 +1,5 @@
 import React, { useId, useState } from 'react';
-import { EyeOff, Send } from 'lucide-react';
+import { EyeOff, UserPlus } from 'lucide-react';
 import { keepCardInView, MoreButton, useClampOverflow } from './ExpandableText.tsx';
 import { previewTags, preferredAgeText, type LookingForPost } from '../utils/lookingFor.ts';
 
@@ -9,15 +9,15 @@ interface Props {
   /** Mature posts the member opened can be covered again; shown only for those. */
   canCoverAgain: boolean;
   onCoverAgain: () => void;
-  onSignal: () => void;
+  onRequest: () => void;
 }
 
 /**
- * The open content of a connection card: a short preview with the Send Signal action always in reach, and "View details"
+ * The open content of a connection card: a short preview with the Send Connection Request action always in reach, and "View details"
  * for the rest. It is only ever rendered for a post that is already open, so a concealed mature post has no details
  * control and nothing here can reveal it. Which cards are expanded is this component's own state, one card at a time.
  */
-export const LookingForBody: React.FC<Props> = ({ post, mine, canCoverAgain, onCoverAgain, onSignal }) => {
+export const LookingForBody: React.FC<Props> = ({ post, mine, canCoverAgain, onCoverAgain, onRequest }) => {
   const [expanded, setExpanded] = useState(false);
   const introId = useId();
   const seekId = useId();
@@ -50,13 +50,15 @@ export const LookingForBody: React.FC<Props> = ({ post, mine, canCoverAgain, onC
         </div>
       )}
 
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         {hasMore || expanded ? (
           <MoreButton expanded={expanded} controls={`${introId} ${seekId}`} onClick={toggle} more="View details" />
         ) : <span />}
         <div className="ml-auto flex items-center gap-2">
           {canCoverAgain && <button type="button" onClick={onCoverAgain} className="btn btn-ghost btn-sm"><EyeOff className="w-4 h-4" /> Hide again</button>}
-          {!mine && <button type="button" onClick={onSignal} className="btn btn-primary btn-sm"><Send className="w-4 h-4" /> Send Signal</button>}
+          {!mine && (post.requestsPaused
+            ? <button type="button" disabled className="btn btn-secondary btn-sm" title="This member is not taking new requests right now">Requests paused</button>
+            : <button type="button" onClick={onRequest} className="btn btn-primary btn-sm"><UserPlus className="w-4 h-4" /> Send Connection Request</button>)}
         </div>
       </div>
     </>

@@ -3,6 +3,7 @@ import { Check, ChevronRight, Inbox, Info, LoaderCircle, RadioTower, RefreshCw, 
 import { auth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { Sheet } from './Sheet.tsx';
 import { SignalsConversation } from './SignalsConversation.tsx';
+import { ConnectionRequestsPanel } from './ConnectionRequestsPanel.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import type { SignalsInboxState } from '../hooks/useSignalsInbox.ts';
@@ -116,7 +117,16 @@ export const SignalsView: React.FC<{
   /** A connection to open as soon as the list has loaded (from a notification). */
   requestedPairId?: string | null;
   onRequestedPairHandled?: () => void;
-}> = ({ inbox, isSoundMuted = false, requestedPairId = null, onRequestedPairHandled }) => {
+  /** Which area to open first: the usual inbox, or Requests (from a Looking For shortcut or a request banner). */
+  initialSection?: 'inbox' | 'requests';
+  onInitialSectionHandled?: () => void;
+  onBlockMember?: (memberId: string) => void;
+}> = ({ inbox, isSoundMuted = false, requestedPairId = null, onRequestedPairHandled, initialSection = 'inbox', onInitialSectionHandled, onBlockMember }) => {
+  const [section, setSection] = useState<'inbox' | 'requests'>(initialSection);
+  useEffect(() => {
+    onInitialSectionHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [pairs, setPairs] = useState<SignalPair[]>([]);
   const [invitations, setInvitations] = useState<SignalInvitation[]>([]);
   const [invitationActionId, setInvitationActionId] = useState<string | null>(null);
@@ -324,6 +334,15 @@ export const SignalsView: React.FC<{
         </button>
       </div>
 
+      <div role="tablist" aria-label="Signals sections" className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1">
+        {([['inbox', 'Inbox'], ['requests', 'Requests']] as const).map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={section === id} onClick={() => setSection(id)} className={`h-9 rounded-full text-[length:calc(13px_*_var(--fs,1))] font-semibold transition-colors cursor-pointer ${section === id ? 'bg-raised text-fg ring-1 ring-berry/40' : 'text-muted hover:text-fg'}`}>
+            {label}
+            {id === 'requests' && (inbox?.requestIds.length ?? 0) > 0 && <span className="ml-1.5 text-berry" aria-label={`${inbox?.requestIds.length} waiting`}>{inbox?.requestIds.length}</span>}
+          </button>
+        ))}
+      </div>
+
       {notice && (
         <div role="status" className="mb-3 flex items-center gap-2 rounded-xl bg-plum/20 px-3 py-2 text-sm text-fg">
           <Check className="h-4 w-4 shrink-0 text-berry" />
@@ -341,7 +360,9 @@ export const SignalsView: React.FC<{
         </div>
       )}
 
-      {loading ? (
+      {section === 'requests' ? (
+        <ConnectionRequestsPanel rev={inbox?.rev ?? 0} onChanged={() => void loadPairs(true)} onOpenConversation={openPair} onBlockMember={onBlockMember} />
+      ) : loading ? (
         <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted">
           <LoaderCircle className="h-4 w-4 animate-spin text-berry" /> Finding your connections…
         </div>

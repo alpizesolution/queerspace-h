@@ -2,7 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
-import { isAdultMember } from './_adult.js';
+import { createRequestHandlers } from './_requests.js';
 
 const MAX_MESSAGE_LENGTH = 240;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -117,10 +117,7 @@ export function countUnread(messages, otherUid) {
 /** How far a recount looks past the last message the reader saw; a longer backlog simply shows as 99+. */
 export const UNREAD_RECOUNT_LIMIT = 100;
 
-/** True when `post` is a Looking For post written by `recipientId`: the only reason, besides a match, to Signal someone. */
-export function isOpenLookingForPost(post, recipientId) {
-  return Boolean(post) && post.authorId === recipientId && typeof post.intention === 'string';
-}
+const connectionRequests = createRequestHandlers({ touchInbox, acceptedNotification });
 
 function idempotencyDocId(uid, key) {
   return createHash('sha256').update(uid + ':' + key).digest('hex');
@@ -198,6 +195,7 @@ export default async function handler(req, res) {
         });
         return send(res, 200, { messages, cursor: deltaCursor(pollStartedAt) });
       }
+      if (view === 'requests') return send(res, 200, await connectionRequests.list(db, uid));
       if (view === 'pairs') {
         const pairSnapshots = await Promise.all([
           db.collection('signalsPairs').where('participants', 'array-contains', uid).limit(100).get(),
@@ -265,7 +263,13 @@ export default async function handler(req, res) {
       const invitations = sorted.map(invite => ({ ...invite, partner: profiles.get(otherId(invite)) || partnerSummary(null) }));
       return send(res, 200, { invitations });
     }
-    const { action, recipientId, invitationId, message, idempotencyKey, convId, lookingForPostId } = req.body || {};
+    const { action, recipientId, invitationId, message, idempotencyKey, convId } = req.body || {};
+
+    // Connection requests from the Looking For board: sent, accepted, declined and withdrawn through one set of checks.
+    if (typeof action === 'string' && action.startsWith('request-')) {
+      const outcome = await connectionRequests.handle(action, req.body || {}, uid, db);
+      return send(res, outcome.status, outcome.body);
+    }
 
     if (['create'].includes(action)) {
       if (!safeId(recipientId) || recipientId === uid) return send(res, 400, { error: 'invalid_recipient' });
@@ -282,11 +286,8 @@ export default async function handler(req, res) {
       const now = Timestamp.now();
       const expiresAt = Timestamp.fromMillis(now.toMillis() + INVITE_TTL_MS);
 
-      // Contacting someone from their Looking For post is the one way to Signal without a match. It only applies when no
-      // conversation is named, so the matched path behaves exactly as before.
-      const viaPost = !safeId(convId) && safeId(lookingForPostId);
       const result = await db.runTransaction(async tx => {
-        const [prior, rateSnap, senderSettings, recipientSettings, senderSuspension, recipientSuspension, convSnap, postSnap, openInvite, existingPair] = await Promise.all([
+        const [prior, rateSnap, senderSettings, recipientSettings, senderSuspension, recipientSuspension, convSnap] = await Promise.all([
           tx.get(idemRef),
           tx.get(rateRef),
           tx.get(db.doc(`users/${uid}/private/settings`)),
@@ -295,11 +296,6 @@ export default async function handler(req, res) {
           tx.get(db.doc(`suspensions/${recipientId}`)),
           // The conversation the match created; only the matching API can create one (clients are denied by rules).
           tx.get(db.doc(`conversations/${safeId(convId) ? convId : 'invalid-conversation'}`)),
-          tx.get(db.doc(`looking_for_posts/${viaPost ? lookingForPostId : 'invalid-post'}`)),
-          viaPost
-            ? tx.get(db.collection('signalsInvitations').where('senderId', '==', uid).where('recipientId', '==', recipientId).where('status', '==', 'pending').limit(1))
-            : Promise.resolve(null),
-          viaPost ? tx.get(db.collection('signalsPairs').where('participants', '==', [uid, recipientId].sort()).where('status', '==', 'active').limit(1)) : Promise.resolve(null),
         ]);
         if (prior.exists) {
           const priorData = prior.data();
@@ -310,17 +306,7 @@ export default async function handler(req, res) {
         }
         // A Signal is a way to stay in touch after a match: only between the two members of a conversation
         // that is currently active. It is never a way to contact someone you have not been matched with.
-        if (viaPost) {
-          // Eligibility comes from the sender's private account record, never from anything in the request.
-          if (!isOpenLookingForPost(postSnap.exists ? postSnap.data() : null, recipientId)) {
-            throw Object.assign(new Error('not_matched'), { statusCode: 403 });
-          }
-          if (!isAdultMember(senderSettings.data())) {
-            throw Object.assign(new Error('not_allowed'), { statusCode: 403 });
-          }
-          if (openInvite && !openInvite.empty) throw Object.assign(new Error('already_invited'), { statusCode: 409 });
-          if (existingPair && !existingPair.empty) throw Object.assign(new Error('already_connected'), { statusCode: 409 });
-        } else if (!isActiveMatch(convSnap.exists ? convSnap.data() : null, uid, recipientId)) {
+        if (!isActiveMatch(convSnap.exists ? convSnap.data() : null, uid, recipientId)) {
           throw Object.assign(new Error('not_matched'), { statusCode: 403 });
         }
         if (senderSuspension.exists || recipientSuspension.exists) {
