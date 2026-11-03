@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowUp, Check, CheckCircle2, Heart, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Info, Check, CheckCircle2, Heart, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
 import { MemberAvatar } from './ProfileNav.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
@@ -24,6 +24,7 @@ import { LookingForView } from './LookingForView.tsx';
 import { ExpandableText } from './ExpandableText.tsx';
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, FILTER_CATEGORIES } from '../utils/communityCategories.ts';
 import { ChipScroller } from './ChipScroller.tsx';
+import { CosmosGuidelines } from './CosmosGuidelines.tsx';
 import { postLink, postVisibleTo, type PostLoad } from '../utils/communityPostLink.ts';
 import { formatRelativeTime } from '../utils/relativeTime.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
@@ -170,6 +171,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   onCloseFocus,
 }) => {
   const [section, setSection] = useState<'community' | 'lookingFor'>('community');
+  const [showGuidelines, setShowGuidelines] = useState(false);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedError, setFeedError] = useState(false);
@@ -351,7 +353,19 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-3 sm:pt-8 pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+6rem)] desk:pb-16">
       <div className="flex items-center justify-between gap-3 mb-2.5 sm:mb-4">
-        <h1 className="text-[length:calc(23px_*_var(--fs,1))] sm:text-[length:calc(28px_*_var(--fs,1))] leading-tight font-semibold tracking-tight text-fg">COSMOS</h1>
+        <div className="-ml-3 -my-2 flex min-w-0 items-center">
+          {/* The guidelines, one tap from both Community and Looking For. A 44px target that takes no more height than the title. */}
+          <button
+            type="button"
+            onClick={() => setShowGuidelines(true)}
+            aria-label="Community Guidelines"
+            title="Community Guidelines"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-subtle transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60 cursor-pointer"
+          >
+            <Info className="h-[18px] w-[18px]" aria-hidden="true" />
+          </button>
+          <h1 className="text-[length:calc(23px_*_var(--fs,1))] sm:text-[length:calc(28px_*_var(--fs,1))] leading-tight font-semibold tracking-tight text-fg">COSMOS</h1>
+        </div>
         {section === 'community' && (
           <button onClick={openComposer} className="btn btn-primary btn-sm hidden sm:inline-flex">
             <Plus className="w-4 h-4" />
@@ -517,6 +531,8 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
       {!focusMode && <FloatingAddButton onClick={openComposer} label="New post" />}
       </>
       )}
+
+      {showGuidelines && <CosmosGuidelines onClose={() => setShowGuidelines(false)} />}
 
       {showCreateModal && (
         <Sheet
