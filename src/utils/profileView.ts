@@ -146,3 +146,38 @@ export function parseProfileResponse(data: unknown): ProfileResponse | null {
   if (typeof member.showsAge !== 'boolean') return null;
   return raw as unknown as ProfileResponse;
 }
+
+export type PostsFailure = 'permission' | 'network' | 'failed';
+export type PostsOutcome<T> = { ok: true; page: T } | { ok: false; reason: PostsFailure };
+
+/** Tells a refused read from a connection problem from anything else, by the error's code. Used for wording and logs only. */
+export function classifyPostsFailure(error: unknown): PostsFailure {
+  const code = String((error as { code?: unknown } | null)?.code ?? '');
+  if (code.includes('permission-denied')) return 'permission';
+  if (code.includes('unavailable') || code.includes('deadline-exceeded') || code.includes('network')) return 'network';
+  return 'failed';
+}
+
+/**
+ * Runs a posts request and says how it ended. Only a request that really succeeded is `ok`, and an `ok` page may hold no
+ * posts: that is an empty profile, not an error. Anything thrown is a failure, never an empty result.
+ */
+export async function settlePostsLoad<T>(load: () => Promise<T>): Promise<PostsOutcome<T>> {
+  try {
+    return { ok: true, page: await load() };
+  } catch (error) {
+    return { ok: false, reason: classifyPostsFailure(error) };
+  }
+}
+
+export type PostsView = 'loading' | 'empty' | 'error' | 'list';
+
+/**
+ * What the Posts section shows. Empty is a successful answer with nothing in it; error means the request failed. Once some
+ * posts are listed, a failed "show more" keeps them and shows the retry underneath instead.
+ */
+export function postsView(state: { loading: boolean; failed: boolean; count: number }): PostsView {
+  if (state.count > 0) return 'list';
+  if (state.failed) return 'error';
+  return state.loading ? 'loading' : 'empty';
+}

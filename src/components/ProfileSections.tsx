@@ -8,6 +8,7 @@ import { ConfirmDialog } from './Sheet.tsx';
 import type { CommunityPost } from '../types.ts';
 import { CATEGORY_EMOJI, CATEGORY_LABELS } from '../utils/communityCategories.ts';
 import { INTENTION_LABELS, postPresentation, revealNeedsDialog, type LookingForPost } from '../utils/lookingFor.ts';
+import { postsView } from '../utils/profileView.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 import { formatRelativeTime } from '../utils/relativeTime.ts';
 import { fetchMemberCommunityPosts } from '../services/profileViewService.ts';
@@ -23,7 +24,8 @@ export const Section: React.FC<{ title: string; children: React.ReactNode }> = (
 /**
  * A member's public Cosmos Community posts, a few at a time. They come from the same collection and rules as the feed,
  * so nothing private is reachable: a deleted post is simply gone, and every post here was public when it was written.
- * Hidden entirely when there are none.
+ * Three different answers: still loading, loaded with nothing to show ("No public posts yet"), and a request that failed
+ * (with a retry). An empty list is never treated as a failure.
  */
 export const ProfilePosts: React.FC<{ memberId: string }> = ({ memberId }) => {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -35,12 +37,13 @@ export const ProfilePosts: React.FC<{ memberId: string }> = ({ memberId }) => {
   const load = useCallback(async (after: QueryDocumentSnapshot | null) => {
     setLoading(true);
     setError(false);
-    const page = await fetchMemberCommunityPosts(memberId, after);
+    const outcome = await fetchMemberCommunityPosts(memberId, after);
     setLoading(false);
-    if (!page) {
+    if (!outcome.ok) {
       setError(true);
       return;
     }
+    const { page } = outcome;
     setPosts((current) => (after ? [...current, ...page.posts] : page.posts));
     setCursor(page.cursor);
     setDone(page.done);
@@ -53,7 +56,39 @@ export const ProfilePosts: React.FC<{ memberId: string }> = ({ memberId }) => {
     void load(null);
   }, [load]);
 
-  if (!loading && !error && posts.length === 0) return null;
+  const view = postsView({ loading, failed: error, count: posts.length });
+  if (view === 'loading') {
+    return (
+      <Section title="Posts">
+        <div role="status" aria-label="Loading posts" className="space-y-2.5">
+          {[0, 1].map((n) => (
+            <div key={n} className="animate-pulse rounded-2xl border border-line bg-raised/40 p-3.5">
+              <div className="h-4 w-24 rounded-full bg-plum/25" />
+              <div className="mt-3 h-3.5 w-3/4 rounded-full bg-plum/20" />
+              <div className="mt-2 h-3 w-full rounded-full bg-plum/15" />
+            </div>
+          ))}
+        </div>
+      </Section>
+    );
+  }
+  if (view === 'empty') {
+    return (
+      <Section title="Posts">
+        <div className="rounded-2xl border border-dashed border-line bg-raised/30 px-4 py-6 text-center">
+          <p className="text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg">No public posts yet</p>
+          <p className="mt-1 text-[length:calc(13px_*_var(--fs,1))] text-subtle">Their shared posts will appear here.</p>
+        </div>
+      </Section>
+    );
+  }
+  if (view === 'error') {
+    return (
+      <Section title="Posts">
+        <p role="alert" className="text-sm text-muted">Couldn’t load posts. <button type="button" onClick={() => void load(cursor)} className="font-semibold text-berry underline underline-offset-4">Try again</button></p>
+      </Section>
+    );
+  }
   return (
     <Section title="Posts">
       <ul className="space-y-2.5">
