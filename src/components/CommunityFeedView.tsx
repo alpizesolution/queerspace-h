@@ -328,7 +328,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-3 sm:pt-8 pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+6rem)] desk:pb-16">
       <div className="flex items-center justify-between gap-3 mb-2.5 sm:mb-4">
-        <h1 className="text-[length:calc(23px_*_var(--fs,1))] sm:text-[length:calc(28px_*_var(--fs,1))] leading-tight font-semibold tracking-tight text-fg">The COSMOS</h1>
+        <h1 className="text-[length:calc(23px_*_var(--fs,1))] sm:text-[length:calc(28px_*_var(--fs,1))] leading-tight font-semibold tracking-tight text-fg">COSMOS</h1>
         {section === 'community' && (
           <button onClick={openComposer} className="btn btn-primary btn-sm hidden sm:inline-flex">
             <Plus className="w-4 h-4" />

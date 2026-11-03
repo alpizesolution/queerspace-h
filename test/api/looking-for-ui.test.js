@@ -15,7 +15,7 @@ const rules = read('firestore.rules');
 const lfRules = rules.slice(rules.indexOf('4b. COSMOS "LOOKING FOR" BOARD'), rules.indexOf('5. ABUSE & SAFETY REPORTS'));
 
 test('Cosmos gets a Community / Looking For switch under the heading, and the community feed is kept as it was', () => {
-  const heading = cosmos.indexOf('>The COSMOS</h1>');
+  const heading = cosmos.indexOf('>COSMOS</h1>');
   const tabs = cosmos.indexOf('aria-label="Cosmos sections"');
   assert.ok(heading > 0 && tabs > heading, 'the switch sits below the Cosmos heading');
   assert.match(cosmos, /\['community', 'Community'\], \['lookingFor', 'Looking For'\]/);
@@ -245,11 +245,11 @@ test('the rules require 100 trimmed characters in both sections on a new post, a
   assert.match(lfRules, /data\.intro is string && data\.intro\.size\(\) >= 1 && data\.intro\.size\(\) <= 400/, 'the maximums are kept');
 });
 
-test('the COSMOS header is just "The COSMOS", with no subtitle, and the page is tighter on a phone', () => {
+test('the COSMOS header is just "COSMOS", with no subtitle, and the page is tighter on a phone', () => {
   const header = cosmos.slice(cosmos.indexOf('<h1'), cosmos.indexOf('</h1>') + 5);
-  assert.match(header, />The COSMOS<\/h1>/);
+  assert.match(header, />COSMOS<\/h1>/);
   assert.match(header, /text-\[length:calc\(23px_\*_var\(--fs,1\)\)\] sm:text-\[length:calc\(28px_\*_var\(--fs,1\)\)\]/, '23px on a phone, 28px from tablet up');
-  const top = cosmos.slice(cosmos.indexOf('The COSMOS</h1>'), cosmos.indexOf('aria-label="Cosmos sections"'));
+  const top = cosmos.slice(cosmos.indexOf('COSMOS</h1>'), cosmos.indexOf('aria-label="Cosmos sections"'));
   assert.doesNotMatch(top, /<p[\s>]/, 'no description under the heading');
   assert.match(cosmos, /pt-3 sm:pt-8 pb-\[calc\(var\(--tabbar-h\)\+env\(safe-area-inset-bottom\)\+6rem\)\]/, 'less space above, safe area below');
   assert.match(cosmos, /grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-0\.5 mb-3/, 'a full-width, shorter switch');
