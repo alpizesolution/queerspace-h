@@ -3,6 +3,7 @@ import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { createRequestHandlers } from './_requests.js';
+import { profileView } from './_profiles.js';
 
 const MAX_MESSAGE_LENGTH = 240;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -141,6 +142,9 @@ export default async function handler(req, res) {
     const db = getFirestore(app);
     if (req.method === 'GET') {
       const view = req.query?.view || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('view');
+      // No view means the invitations list, as always. A view this server does not know is an error, never that list, so a
+      // newer app talking to an older server (or a typo) cannot be mistaken for a real answer.
+      if (view && !['messages', 'pairs', 'requests', 'profile'].includes(view)) return send(res, 400, { error: 'invalid_view' });
       if (view === 'messages') {
         const pairId = req.query?.pairId || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('pairId');
         if (!safeId(pairId)) return send(res, 400, { error: 'invalid_request' });
@@ -196,6 +200,10 @@ export default async function handler(req, res) {
         return send(res, 200, { messages, cursor: deltaCursor(pollStartedAt) });
       }
       if (view === 'requests') return send(res, 200, await connectionRequests.list(db, uid));
+      if (view === 'profile') {
+        const memberId = req.query?.memberId || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('memberId');
+        return send(res, 200, await profileView(db, uid, memberId));
+      }
       if (view === 'pairs') {
         const pairSnapshots = await Promise.all([
           db.collection('signalsPairs').where('participants', 'array-contains', uid).limit(100).get(),

@@ -54,6 +54,78 @@ export function postAvailability(post) {
   return post.requestsPaused === true ? 'paused' : 'active';
 }
 
+/*
+ * Contention and the time it can take.
+ *
+ * Measured on the Firestore emulator: an uncontended transaction here takes about 40 ms (worst seen 129 ms), but two
+ * transactions that read and then write the same document both give up with ABORTED after about 2.1 s, and neither
+ * succeeds. The Admin SDK also retries each transaction up to 5 times by default, so a single call could spend ~10 s
+ * inside the SDK alone. So: every transaction here is ONE SDK attempt (`once`), and this file does the retrying, inside
+ * a fixed time budget that leaves a wide margin under Vercel's 10 s default function limit (the project sets no
+ * maxDuration, and its plan is not known, so nothing larger is assumed).
+ *
+ *   RETRY_BUDGET_MS      total time one request may spend queued and retrying
+ *   ATTEMPT_ALLOWANCE_MS room kept for one more attempt (about the 2.1 s lock wait above, rounded up), so a retry only
+ *                        starts if it could still finish inside the budget
+ *
+ * Worst case for one request is therefore about RETRY_BUDGET_MS plus the sign-in check and the response, roughly 6.5 s.
+ * That relies on a failed attempt taking about as long as the emulator's lock wait; the production lock wait has not been
+ * measured.
+ */
+export const RETRY_BUDGET_MS = 6000;
+export const ATTEMPT_ALLOWANCE_MS = 2500;
+
+/** Codes that can mean "try again": ABORTED (contention), DEADLINE_EXCEEDED and UNAVAILABLE (a blip). Every action here is safe to repeat. */
+const RETRYABLE_CODES = new Set([4, 10, 14]);
+const isRetryable = (error) => RETRYABLE_CODES.has(error?.code) || /ABORTED|lock timeout|too much contention/i.test(String(error?.message ?? ''));
+
+/** One transaction attempt, with no hidden SDK retries: the caller owns the retrying and the clock. */
+const once = (db, update) => db.runTransaction(update, { maxAttempts: 1 });
+
+/**
+ * Runs `run`, trying again after a randomised pause while the time budget allows. Pauses use full jitter (a random
+ * time between nothing and a growing, capped ceiling), so callers that collided do not collide again in step. A retry
+ * starts only if the elapsed time, the pause and one more attempt still fit in `budgetMs`; otherwise the error is raised.
+ * An aborted transaction commits nothing, and every action here is idempotent, so a repeat is always safe. Errors that
+ * are not retryable are raised at once.
+ */
+export async function withContentionRetry(run, {
+  budgetMs = RETRY_BUDGET_MS, attemptMs = ATTEMPT_ALLOWANCE_MS, baseMs = 50, maxPauseMs = 500,
+  now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), random = Math.random,
+} = {}) {
+  const started = now();
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      if (!isRetryable(error)) throw error;
+      const pause = random() * Math.min(maxPauseMs, baseMs * 2 ** attempt);
+      if (now() - started + pause + attemptMs > budgetMs) throw error;
+      await sleep(pause);
+    }
+  }
+}
+
+/**
+ * Runs tasks that share a key one after another, in the order they arrived; different keys run side by side. Within one
+ * server instance this turns "many requests touching the same author at once" into a line instead of a pile-up of
+ * transactions that all abort. It cannot see other instances, which still rely on the retry above and on the
+ * idempotent checks inside every transaction. A failing task never blocks the ones behind it.
+ */
+export function createKeyedQueue() {
+  const tails = new Map();
+  return {
+    run(key, task) {
+      const result = (tails.get(key) ?? Promise.resolve()).then(() => task());
+      const tail = result.catch(() => {});
+      tails.set(key, tail);
+      tail.then(() => { if (tails.get(key) === tail) tails.delete(key); });
+      return result;
+    },
+    get size() { return tails.size; },
+  };
+}
+
 const idemId = (uid, key) => createHash('sha256').update(`${uid}:request:${key}`).digest('hex');
 const lockPath = (senderId, recipientId) => `connection_request_locks/${senderId}_${recipientId}`;
 
@@ -92,7 +164,7 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
     const now = Timestamp.now();
     const nowMs = now.toMillis();
 
-    return db.runTransaction(async tx => {
+    return once(db, async tx => {
       const [prior, rateSnap, senderSettings, recipientSettings, senderSuspension, recipientSuspension, postSnap, lockSnap, pendingSent, existingPair] = await Promise.all([
         tx.get(idemRef),
         tx.get(rateRef),
@@ -179,7 +251,7 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
   async function accept(db, uid, body) {
     if (!safeId(body.requestId)) throw fail(400, 'invalid_request');
     const ref = db.doc(`connection_requests/${body.requestId}`);
-    return db.runTransaction(async tx => {
+    return once(db, async tx => {
       const snap = await tx.get(ref);
       const data = mine(snap, uid, 'recipient');
       const nowMs = Date.now();
@@ -233,7 +305,7 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
   async function decline(db, uid, body) {
     if (!safeId(body.requestId)) throw fail(400, 'invalid_request');
     const ref = db.doc(`connection_requests/${body.requestId}`);
-    return db.runTransaction(async tx => {
+    return once(db, async tx => {
       const data = mine(await tx.get(ref), uid, 'recipient');
       if (data.status === 'declined') return { status: 'declined', replayed: true };
       if (data.status !== 'pending') throw fail(409, 'request_not_pending');
@@ -254,7 +326,7 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
   async function withdraw(db, uid, body) {
     if (!safeId(body.requestId)) throw fail(400, 'invalid_request');
     const ref = db.doc(`connection_requests/${body.requestId}`);
-    return db.runTransaction(async tx => {
+    return once(db, async tx => {
       const data = mine(await tx.get(ref), uid, 'sender');
       if (data.status === 'withdrawn') return { status: 'withdrawn', replayed: true };
       if (data.status !== 'pending') throw fail(409, 'request_not_pending');
@@ -271,13 +343,64 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
     });
   }
 
+  /**
+   * When contention beats every retry, the same action may already have gone through (another tab, a double tap). Check
+   * for that instead of reporting an error: an accept, decline or withdraw that has taken effect answers as a repeat, and a
+   * create whose key was already used answers with the request it made. Returns null when nothing has happened yet.
+   */
+  async function alreadyDone(db, uid, action, body) {
+    if (action === 'request-create') {
+      if (typeof body.idempotencyKey !== 'string') return null;
+      const prior = await db.doc(`signalsIdempotency/${idemId(uid, body.idempotencyKey)}`).get();
+      const data = prior.data();
+      return data?.action === 'request-create' && data.recipientId === body.recipientId ? { requestId: data.requestId, status: 'pending', replayed: true } : null;
+    }
+    if (!safeId(body.requestId)) return null;
+    const data = (await db.doc(`connection_requests/${body.requestId}`).get()).data();
+    if (!data) return null;
+    if (action === 'request-accept' && data.recipientId === uid && data.status === 'accepted') return { status: 'accepted', conversationId: data.conversationId, replayed: true };
+    if (action === 'request-decline' && data.recipientId === uid && data.status === 'declined') return { status: 'declined', replayed: true };
+    if (action === 'request-withdraw' && data.senderId === uid && data.status === 'withdrawn') return { status: 'withdrawn', replayed: true };
+    return null;
+  }
+
   const actions = { 'request-create': create, 'request-accept': accept, 'request-decline': decline, 'request-withdraw': withdraw };
 
+  const queue = createKeyedQueue();
+
+  /**
+   * Every action touches the author's inbox document, so every action for one author shares one line. Create knows the
+   * author from the request; accept and decline are the author; withdraw reads the request to find them.
+   */
+  async function queueKey(db, action, body, uid) {
+    if (action === 'request-create') return `author:${body.recipientId}`;
+    if (action === 'request-withdraw' && safeId(body.requestId)) {
+      const data = (await db.doc(`connection_requests/${body.requestId}`).get()).data();
+      return data?.recipientId ? `author:${data.recipientId}` : `request:${body.requestId}`;
+    }
+    return `author:${uid}`;
+  }
+
   /** Runs one lifecycle action. Unknown names are refused. */
-  async function handle(action, body, uid, db) {
+  async function handle(action, body, uid, db, now = Date.now) {
     const run = actions[action];
     if (!run) throw fail(400, 'invalid_request');
-    const result = await run(db, uid, body);
+    const started = now();
+    const key = await queueKey(db, action, body, uid);
+    let result;
+    try {
+      result = await queue.run(key, () => {
+        // Waiting in line counts against the same budget as retrying.
+        const remaining = RETRY_BUDGET_MS - (now() - started);
+        if (remaining < ATTEMPT_ALLOWANCE_MS) throw fail(503, 'busy');
+        return withContentionRetry(() => run(db, uid, body), { budgetMs: remaining, now });
+      });
+    } catch (error) {
+      const done = isRetryable(error) ? await alreadyDone(db, uid, action, body) : null;
+      // Contention that outlasted the budget is a "try again", not a server fault; nothing was written.
+      if (!done) throw isRetryable(error) ? fail(503, 'busy') : error;
+      result = done;
+    }
     return { status: action === 'request-create' && !result.replayed ? 201 : 200, body: result };
   }
 

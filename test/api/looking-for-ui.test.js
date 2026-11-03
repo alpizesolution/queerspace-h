@@ -19,7 +19,7 @@ test('Cosmos gets a Community / Looking For switch under the heading, and the co
   assert.match(cosmos, /\['community', 'Community'\], \['lookingFor', 'Looking For'\]/);
   assert.match(cosmos, /section === 'lookingFor' \? \(\s*<LookingForView/);
   // Every community category, post action and the composer are still there.
-  for (const label of ['All', 'Cozy Vents', 'Books & Media', 'Friend Finder', 'Dating & Advice', 'General']) assert.ok(cosmos.includes(`label: '${label}'`), label);
+  for (const label of ['All', 'Cozy Vents', 'Books & Media', 'Friend Finder', 'Dating & Advice', 'General']) assert.ok(read('src/utils/communityCategories.ts').includes(`label: '${label}'`), label);
   for (const kept of ['subscribeToCommunity', 'setCommunityLike', 'replyToCommunityPost', 'createCommunityPost', 'adminDeleteCommunityPost', 'subscribeToReplies']) assert.ok(cosmos.includes(kept), kept);
   assert.match(cosmos, /useState<'community' \| 'lookingFor'>\('community'\)/, 'opens on Community');
 });
@@ -42,14 +42,15 @@ test('the composer has every requested field, and the NSFW toggle with its descr
 });
 
 test('a covered post puts none of its sensitive text on the page', () => {
-  const start = board.search(/\)\s*:\s*\(\s*<div className="mt-3 relative rounded-2xl border/);
+  const start = board.search(/\)\s*:\s*\(\s*<SensitiveCover/);
   assert.ok(start > 0, 'the covered branch exists');
   const covered = board.slice(start, board.indexOf('</article>', start));
-  assert.ok(covered.includes('CoverLines'), 'placeholder lines stand in for the text');
+  assert.ok(covered.includes('SensitiveCover'), 'the shared cover stands in for the text');
   for (const field of ['post.title', 'post.intro', 'post.lookingFor', 'post.tags', 'post.region']) assert.equal(covered.includes(field), false, `${field} must not render while covered`);
-  assert.match(covered, /Sensitive content/);
-  assert.match(covered, /Reveal content/);
-  assert.match(board, /aria-hidden="true" className="space-y-2 blur/);
+  assert.match(read('src/components/SensitiveCover.tsx'), /Sensitive content/);
+  assert.match(covered, /onReveal=\{\(\) => reveal\(post\)\}/);
+  assert.match(read('src/components/SensitiveCover.tsx'), /Reveal content/);
+  assert.match(read('src/components/SensitiveCover.tsx'), /aria-hidden="true" className="space-y-2 blur/);
 });
 
 test('content is only ever revealed by an explicit action on that one post', () => {

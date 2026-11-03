@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowUp, Check, CheckCircle2, Heart, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
-import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { MemberAvatar } from './ProfileNav.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { CommunityPost, CommunityReply, UserPreferences } from '../types.ts';
@@ -21,6 +21,7 @@ import {
 import { whileActive } from '../utils/whileActive.ts';
 import { LookingForView } from './LookingForView.tsx';
 import { ExpandableText } from './ExpandableText.tsx';
+import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../utils/communityCategories.ts';
 import { formatRelativeTime } from '../utils/relativeTime.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 
@@ -97,7 +98,7 @@ const Replies: React.FC<{
       ) : (
         replies.map((reply) => (
           <div key={reply.id} className="flex gap-2.5 text-[length:calc(14px_*_var(--fs,1))]">
-            <AnimalAvatar avatar={reply.authorAvatar} seed={reply.authorId || reply.author} className="w-7 h-7 mt-0.5" />
+            <MemberAvatar memberId={reply.authorId} avatar={reply.authorAvatar} seed={reply.authorId || reply.author} name={reply.author} className="w-7 h-7 mt-0.5" />
             <div className="min-w-0 flex-1">
               <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">
                 <span className="font-semibold text-fg">{reply.author}</span> {reply.authorPronouns} ·{' '}
@@ -398,7 +399,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
             return (
               <article key={post.id} className="scroll-mt-[calc(var(--header-h)+0.5rem)] rounded-3xl border border-line bg-gradient-to-b from-raised/60 to-surface p-4 sm:p-5">
                 <header className="flex items-center gap-2.5 mb-3">
-                  <AnimalAvatar avatar={post.authorAvatar} seed={post.authorId || post.author} className="w-9 h-9" />
+                  <MemberAvatar memberId={post.authorId} avatar={post.authorAvatar} seed={post.authorId || post.author} name={post.author} className="w-9 h-9" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[length:calc(13px_*_var(--fs,1))] font-semibold text-fg truncate">
                       {post.author} <span className="font-normal text-subtle">{post.authorPronouns}</span>
@@ -627,20 +628,3 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   );
 };
 
-const CATEGORIES = [
-  { id: 'all', label: 'All' },
-  { id: 'vents', label: 'Cozy Vents' },
-  { id: 'media', label: 'Books & Media' },
-  { id: 'friends', label: 'Friend Finder' },
-  { id: 'advice', label: 'Dating & Advice' },
-  { id: 'general', label: 'General' },
-];
-
-const CATEGORY_EMOJI: Record<string, string> = {
-  vents: '☁️',
-  media: '📚',
-  friends: '🫶',
-  advice: '💌',
-  general: '🌸',
-};
-const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(CATEGORIES.map((c) => [c.id, c.label]));

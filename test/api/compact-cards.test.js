@@ -64,20 +64,21 @@ test('a Looking For card previews: three-line intro, short Looking for summary, 
 });
 
 test('mature posts: the details control exists only on an open post, so expanding can never reveal anything', () => {
-  const start = board.search(/\)\s*:\s*\(\s*<div className="mt-3 relative rounded-2xl border/);
+  const start = board.search(/\)\s*:\s*\(\s*<SensitiveCover/);
   assert.ok(start > 0);
   const covered = board.slice(start, board.indexOf('</article>', start));
   for (const leak of ['LookingForBody', 'ExpandableText', 'View details', 'Read more', 'post.intro', 'post.lookingFor', 'post.title', 'post.tags']) {
     assert.equal(covered.includes(leak), false, `${leak} must not appear in the covered branch`);
   }
   assert.match(board, /presentation === 'open' \? \(\s*<LookingForBody/, 'the body is only mounted for an open post');
-  assert.match(covered, /Reveal content/, 'reveal is its own separate action');
+  assert.match(covered, /onReveal=\{\(\) => reveal\(post\)\}/, 'reveal is its own separate action');
+  assert.match(read('src/components/SensitiveCover.tsx'), /Reveal content/);
   assert.equal(body.includes('Reveal content'), false, 'the details control has no reveal in it');
   assert.equal(body.includes('nsfwPreference'), false, 'the preference logic stays in one place');
 });
 
 test('previews never carry hidden text elsewhere: no titles, snippets or labels built from concealed fields', () => {
-  const start = board.search(/\)\s*:\s*\(\s*<div className="mt-3 relative rounded-2xl border/);
+  const start = board.search(/\)\s*:\s*\(\s*<SensitiveCover/);
   const covered = board.slice(start, board.indexOf('</article>', start));
   assert.equal(/aria-label=\{[^}]*post\.(title|intro|lookingFor)/.test(board), false);
   assert.equal(/title=\{[^}]*post\.(title|intro|lookingFor)/.test(board), false);

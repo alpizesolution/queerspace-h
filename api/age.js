@@ -44,6 +44,25 @@ export default async function handler(req, res) {
         return send(res, 200, { age: age !== null && age >= MINIMUM_AGE ? age : null });
       }
 
+      // A member's age on their profile page: only for someone connected to them through Signals, only if they chose to
+      // show it, never when either has blocked the other. Same promise as the chat partner's age above.
+      if (query.view === 'profile-age') {
+        await rateLimit(db, uid, 'profile-age', 120, 60_000);
+        if (!safeId(query.memberId) || query.memberId === uid) throw new HttpError(400, 'invalid_request');
+        const memberId = query.memberId;
+        const [pair, profile, own, theirs] = await Promise.all([
+          db.collection('signalsPairs').where('participants', '==', [uid, memberId].sort()).where('status', '==', 'active').limit(1).get(),
+          db.doc(`users/${memberId}/public/profile`).get(),
+          db.doc(`users/${uid}/private/settings`).get(),
+          db.doc(`users/${memberId}/private/settings`).get(),
+        ]);
+        const blocked = (settings, other) => Array.isArray(settings.data()?.blockedPartnerIds) && settings.data().blockedPartnerIds.includes(other);
+        if (pair.empty || profile.data()?.showAgeOnProfile !== true || profile.data()?.profileComplete !== true
+          || blocked(own, memberId) || blocked(theirs, uid)) return send(res, 200, { age: null });
+        const age = ageFromTimestamp(theirs.data()?.birthDate);
+        return send(res, 200, { age: age !== null && age >= MINIMUM_AGE ? age : null });
+      }
+
       // The caller's own latest correction request (status only).
       if (query.view === 'my-correction') {
         const snap = await db.doc(`birthdayCorrections/${uid}`).get();

@@ -20,6 +20,8 @@ async function newUser() {
 async function setup() {
   await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${process.env.GCLOUD_PROJECT}/databases/(default)/documents`, { method: 'DELETE' });
   const { default: handler } = await import('../../api/signals.js');
+  // A second copy of the module has its own in-process queue, like a second serverless instance would.
+  const { default: secondInstance } = await import('../../api/signals.js?second-instance');
   const { getAdminApp } = await import('../../api/_lib.js');
   const { getFirestore, Timestamp } = await import('firebase-admin/firestore');
   const db = getFirestore(getAdminApp());
@@ -30,11 +32,13 @@ async function setup() {
     await db.doc(`users/${user.uid}/public/profile`).set({ displayName: `Member ${user.uid.slice(0, 4)}`, avatar: 'cat.1.2', pronouns: 'she/her', aboutMe: 'Hello there', profileComplete: true });
     return user;
   };
-  const call = async (user, method, body, query) => {
+  const callOn = (which) => async (user, method, body, query) => {
     const res = { statusCode: 200, body: undefined, status(c) { this.statusCode = c; return this; }, json(x) { this.body = x; return this; }, setHeader() {} };
-    await handler({ method, headers: { authorization: `Bearer ${user.token}` }, body, query: query ?? {} }, res);
+    await which({ method, headers: { authorization: `Bearer ${user.token}` }, body, query: query ?? {} }, res);
     return res;
   };
+  const call = callOn(handler);
+  const callSecond = callOn(secondInstance);
   const author = await member();
   const postId = `${author.uid}_dating`;
   const post = (extra = {}) => db.doc(`looking_for_posts/${postId}`).set({ authorId: author.uid, intention: 'dating', title: 'Quiet reader', intro: 'i', lookingFor: 'l', tags: [], isNsfw: false, contentWarning: null, timestamp: Timestamp.now(), ...extra });
@@ -47,11 +51,12 @@ async function setup() {
     return call(from, 'POST', { action: 'request-create', recipientId: to.uid, lookingForPostId: id, idempotencyKey: `idem-request-${Date.now()}-${n}`, message: 'Hi, I loved your post!', ...extra });
   };
   const act = (user, action, requestId) => call(user, 'POST', { action, requestId });
+  const actSecond = (user, action, requestId) => callSecond(user, 'POST', { action, requestId });
   const getRequest = async (id) => (await db.doc(`connection_requests/${id}`).get()).data();
   const events = async (id) => (await db.collection('connection_request_events').where('requestId', '==', id).get()).docs.map((d) => d.data().action).sort();
   const list = async (user) => (await call(user, 'GET', undefined, { view: 'requests' })).body;
   const inbox = async (user) => (await db.doc(`signalsInbox/${user.uid}`).get()).data() ?? {};
-  return { db, Timestamp, member, call, author, postId, post, ask, act, getRequest, events, list, inbox, adult, YEAR };
+  return { db, Timestamp, member, call, callSecond, actSecond, author, postId, post, ask, act, getRequest, events, list, inbox, adult, YEAR };
 }
 
 test('a valid request is stored with server-controlled fields and nothing private', { skip }, async () => {
@@ -201,11 +206,11 @@ test('sender anti-spam: a cool-down, a daily limit and a cap on waiting requests
   assert.equal(capped.statusCode, 429);
   assert.equal(capped.body.error, 'too_many_pending');
 
-  // Receiving is unlimited: thirty different members can all ask the same author.
+  // Receiving is unlimited: thirty different members can all ask the same author at the same instant.
   const many = [];
   for (let i = 0; i < 30; i += 1) many.push(await member());
   const results = await Promise.all(many.map((m) => ask(m)));
-  assert.ok(results.every((r) => r.statusCode === 201), 'every one of thirty reaches the author');
+  assert.ok(results.every((r) => r.statusCode === 201), 'every one of thirty reaches the author: ' + JSON.stringify(results.map((r) => [r.statusCode, r.body?.error]).filter((x) => x[0] !== 201)));
   assert.ok(Object.keys((await db.doc(`signalsInbox/${author.uid}`).get()).data().requests).length >= 30);
 });
 
@@ -394,4 +399,111 @@ test('the old Looking For shortcut is gone: Signals still needs a match', { skip
   const res = await call(sender, 'POST', { action: 'create', recipientId: author.uid, lookingForPostId: postId, idempotencyKey: 'idem-old-path-0001', message: 'hi' });
   assert.equal(res.statusCode, 403);
   assert.equal(res.body.error, 'not_matched');
+});
+
+// ------------------------------------------------------------------------------- concurrency: no duplicates, no 500s
+const summary = (results) => results.map((r) => [r.statusCode, r.body?.error]).filter((x) => x[0] !== 200 && x[0] !== 201);
+
+test('five accepts at the same instant all succeed with one conversation, one audit entry and one notification', { skip }, async () => {
+  for (let round = 0; round < 5; round += 1) {
+    const { db, member, author, ask, act, events, inbox } = await setup();
+    const sender = await member();
+    const { body: { requestId } } = await ask(sender);
+    const all = await Promise.all(Array.from({ length: 5 }, () => act(author, 'request-accept', requestId)));
+    assert.deepEqual(summary(all), [], `round ${round}: every accept succeeds`);
+    assert.equal(new Set(all.map((r) => r.body.conversationId)).size, 1, 'they all name the same conversation');
+    assert.equal((await db.collection('signalsPairs').get()).size, 1, 'exactly one conversation');
+    assert.deepEqual(await events(requestId), ['accept', 'create'], 'one acceptance in the audit trail');
+    assert.deepEqual(Object.keys((await inbox(sender)).notifications ?? {}), [requestId], 'one notification for the sender');
+  }
+});
+
+test('thirty members asking one author at the same instant all get through, and the author sees thirty requests', { skip }, async () => {
+  for (let round = 0; round < 3; round += 1) {
+    const { db, member, author, ask } = await setup();
+    const many = [];
+    for (let i = 0; i < 30; i += 1) many.push(await member());
+    const results = await Promise.all(many.map((m) => ask(m)));
+    assert.deepEqual(summary(results), [], `round ${round}: nothing refused or failed`);
+    assert.equal(new Set(results.map((r) => r.body.requestId)).size, 30, 'thirty different requests');
+    assert.equal((await db.collection('connection_requests').where('recipientId', '==', author.uid).get()).size, 30);
+    assert.equal(Object.keys((await db.doc(`signalsInbox/${author.uid}`).get()).data().requests).length, 30);
+  }
+});
+
+test('the same send arriving several times at once is one request; different keys for one pair are one request and refusals', { skip }, async () => {
+  const { db, member, author, postId, call } = await setup();
+  const sender = await member();
+  const body = { action: 'request-create', recipientId: author.uid, lookingForPostId: postId, idempotencyKey: 'idem-same-key-0001', message: 'hi' };
+  const same = await Promise.all(Array.from({ length: 5 }, () => call(sender, 'POST', body)));
+  assert.deepEqual(summary(same), [], 'a repeat of the same send is answered, not refused');
+  assert.equal(new Set(same.map((r) => r.body.requestId)).size, 1);
+  assert.equal(same.filter((r) => r.statusCode === 201).length, 1, 'exactly one of them created it');
+  assert.equal((await db.collection('connection_requests').where('senderId', '==', sender.uid).get()).size, 1);
+
+  const other = await member();
+  const bodies = Array.from({ length: 5 }, (_, i) => ({ ...body, idempotencyKey: `idem-different-${i}-0001` }));
+  const different = await Promise.all(bodies.map((b) => call(other, 'POST', b)));
+  assert.equal(different.filter((r) => r.statusCode === 201).length, 1, 'one request is created');
+  assert.ok(different.filter((r) => r.statusCode !== 201).every((r) => r.statusCode === 409 && r.body.error === 'already_pending'), JSON.stringify(summary(different)));
+  assert.equal((await db.collection('connection_requests').where('senderId', '==', other.uid).get()).size, 1);
+});
+
+test('accepting and withdrawing at the same instant leave one consistent outcome', { skip }, async () => {
+  for (let round = 0; round < 5; round += 1) {
+    const { db, member, author, ask, act, getRequest, events } = await setup();
+    const sender = await member();
+    const { body: { requestId } } = await ask(sender);
+    const [accepted, withdrawn] = await Promise.all([act(author, 'request-accept', requestId), act(sender, 'request-withdraw', requestId)]);
+    assert.ok(accepted.statusCode < 500 && withdrawn.statusCode < 500, `round ${round}: ${accepted.statusCode}/${withdrawn.statusCode}`);
+    const final = (await getRequest(requestId)).status;
+    const pairs = (await db.collection('signalsPairs').get()).size;
+    if (final === 'accepted') {
+      assert.equal(pairs, 1);
+      assert.equal(accepted.statusCode, 200);
+      assert.equal(withdrawn.statusCode, 409);
+      assert.deepEqual(await events(requestId), ['accept', 'create']);
+    } else {
+      assert.equal(final, 'withdrawn');
+      assert.equal(pairs, 0, 'a withdrawn request never opens a conversation');
+      assert.equal(withdrawn.statusCode, 200);
+      assert.equal(accepted.statusCode, 409);
+      assert.deepEqual(await events(requestId), ['create', 'withdraw']);
+    }
+  }
+});
+
+// Two instances do not share the in-process queue, so these two tests cover what the transaction and the retry alone give.
+// Contention between instances can still outlast the retry budget, so what is guaranteed is safety and recovery, not success:
+// no duplicate or half-written data, only "retry-able" refusals, and a plain retry afterwards works.
+const calm = (results) => results.every((r) => [200, 201, 409, 503].includes(r.statusCode));
+
+test('two serverless instances answering the same request at once never duplicate anything, and a retry settles it', { skip }, async () => {
+  const { db, member, author, ask, act, actSecond, events, inbox } = await setup();
+  const sender = await member();
+  const { body: { requestId } } = await ask(sender);
+  const all = await Promise.all([act(author, 'request-accept', requestId), actSecond(author, 'request-accept', requestId), act(author, 'request-accept', requestId), actSecond(author, 'request-accept', requestId)]);
+  console.log('cross-instance accepts:', JSON.stringify(all.map((r) => [r.statusCode, r.body?.error])));
+  assert.ok(calm(all), `only success or "busy": ${JSON.stringify(summary(all))}`);
+  assert.ok((await db.collection('signalsPairs').get()).size <= 1, 'never a second conversation');
+  const retry = await act(author, 'request-accept', requestId);
+  assert.equal(retry.statusCode, 200, 'asking again once the contention has passed works');
+  assert.equal((await db.collection('signalsPairs').get()).size, 1);
+  assert.deepEqual(await events(requestId), ['accept', 'create'], 'one acceptance in the audit trail');
+  assert.deepEqual(Object.keys((await inbox(sender)).notifications ?? {}), [requestId], 'one notification');
+});
+
+test('thirty creates split across two instances never duplicate or half-write a request', { skip }, async () => {
+  const { db, member, author, postId, call, callSecond } = await setup();
+  const many = [];
+  for (let i = 0; i < 30; i += 1) many.push(await member());
+  const results = await Promise.all(many.map((m, i) => (i % 2 ? callSecond : call)(m, 'POST', { action: 'request-create', recipientId: author.uid, lookingForPostId: postId, idempotencyKey: `idem-cross-${i}-00001`, message: 'hi' })));
+  const counts = results.reduce((all, r) => ({ ...all, [r.statusCode]: (all[r.statusCode] ?? 0) + 1 }), {});
+  console.log('cross-instance creates:', JSON.stringify(counts));
+  assert.ok(calm(results), `only success or "busy": ${JSON.stringify(summary(results))}`);
+  const stored = (await db.collection('connection_requests').where('recipientId', '==', author.uid).get()).size;
+  assert.equal(stored, results.filter((r) => r.statusCode === 201).length, 'every request reported as created exists, and no others');
+  const waiting = Object.keys((await db.doc(`signalsInbox/${author.uid}`).get()).data()?.requests ?? {}).length;
+  assert.equal(waiting, stored, 'the author\'s list matches the stored requests');
+  assert.equal((await db.collection('connection_request_locks').get()).size, stored, 'one lock per request, none stray');
 });

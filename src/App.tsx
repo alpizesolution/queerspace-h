@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Header } from './components/Header.tsx';
 import { Hero } from './components/Hero.tsx';
 import { SafetySection } from './components/SafetySection.tsx';
@@ -20,7 +20,10 @@ import { generateSapphicPseudonym } from './utils/matching-logic.ts';
 import { reservePseudonym } from './services/pseudonymService.ts';
 import { createNameGate } from './services/pseudonymGate.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from './utils/storage.ts';
-import { ensureAnonymousAuth, isFirebaseConfigured, logScreenView } from './lib/firebase.ts';
+import { auth, ensureAnonymousAuth, isFirebaseConfigured, logScreenView } from './lib/firebase.ts';
+import { ProfilePage } from './components/ProfilePage.tsx';
+import { ProfileNavProvider } from './components/ProfileNav.tsx';
+import { isMemberId, profileIdFromSearch } from './utils/profileView.ts';
 import { recordDailyActivity } from './services/activityService.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature } from './services/profilePersistence.ts';
@@ -71,6 +74,33 @@ export default function App() {
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
+  // Another member's (or the member's own) profile page, opened by tapping an avatar or a shared link.
+  const [profileMemberId, setProfileMemberId] = useState<string | null>(null);
+  const profileOpenRef = useRef(false);
+  profileOpenRef.current = profileMemberId !== null;
+  const openProfile = useCallback((memberId: string) => {
+    if (!isMemberId(memberId)) return;
+    // One history entry while a profile is open, so the phone's back gesture closes it instead of leaving the app.
+    if (!profileOpenRef.current) window.history.pushState({ qsProfile: true }, '');
+    setProfileMemberId(memberId);
+  }, []);
+  const closeProfile = useCallback(() => {
+    if (window.history.state?.qsProfile) window.history.back();
+    else setProfileMemberId(null);
+  }, []);
+  useEffect(() => {
+    const onPop = () => setProfileMemberId(null);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  // A shared link (/?profile=id) opens that profile once, then the address goes back to normal.
+  useEffect(() => {
+    const id = profileIdFromSearch(window.location.search);
+    if (!id) return;
+    window.history.replaceState(null, '', window.location.pathname);
+    setProfileMemberId(id);
+  }, []);
+  const profileNav = useMemo(() => ({ openProfile }), [openProfile]);
   // What the cloud last held, so saves that change nothing there skip Firestore entirely.
   const cloudSignatureRef = useRef<string | null>(null);
   /** True once the cloud holds this member's birthday (restored from it, or saved). It is never rewritten afterwards. */
@@ -419,6 +449,7 @@ export default function App() {
   const showChrome = currentView !== 'chat';
 
   return (
+    <ProfileNavProvider value={profileNav}>
     <div
       className={`min-h-[100dvh] flex flex-col bg-ink text-fg relative ${
         showChrome && currentView !== 'public' ? 'pb-[var(--tabbar-h)]' : ''
@@ -643,6 +674,23 @@ export default function App() {
           }}
         />
       )}
+
+      {profileMemberId && !ageGateOpen && !ageRestricted && (
+        <ProfilePage
+          key={profileMemberId}
+          memberId={profileMemberId}
+          selfId={auth?.currentUser?.uid ?? null}
+          userPrefs={userPrefs}
+          nsfwPreference={nsfwPreference}
+          onClose={closeProfile}
+          onOpenConversation={(conversationId) => { closeProfile(); setSignalsOpenPairId(conversationId); handleNavigate('signals'); }}
+          onOpenRequests={() => { closeProfile(); setSignalsStartSection('requests'); handleNavigate('signals'); }}
+          onEditProfile={() => { closeProfile(); setProfileEditOpen(true); }}
+          onBlockMember={handleBlockMember}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      )}
     </div>
+    </ProfileNavProvider>
   );
 }

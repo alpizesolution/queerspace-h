@@ -68,6 +68,7 @@ const MESSAGES: Record<string, string> = {
   invalid_message: 'That message can’t be sent. Try shortening it.',
   request_not_pending: 'This request was already answered.',
   request_not_found: 'This request is no longer available.',
+  busy: 'This is busy right now. Please try again in a moment.',
   internal_error: 'Requests are temporarily unavailable. Please try again.',
 };
 
