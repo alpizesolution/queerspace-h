@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronRight, Inbox, Info, LoaderCircle, RadioTower, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { auth, isFirebaseConfigured } from '../lib/firebase.ts';
+import { InboxSkeleton } from './Skeleton.tsx';
 import { Sheet } from './Sheet.tsx';
 import { SignalsConversation } from './SignalsConversation.tsx';
 import { ConnectionRequestsPanel } from './ConnectionRequestsPanel.tsx';
@@ -8,33 +9,17 @@ import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import type { SignalsInboxState } from '../hooks/useSignalsInbox.ts';
 import { formatUnread } from '../services/signalsInbox.ts';
-
-/** The other person's public pseudonym and avatar, resolved by the API; null fields when they have none. */
-type SignalPartner = { displayName: string | null; avatar: string | null };
-
-type SignalInvitation = {
-  id: string;
-  senderId: string;
-  recipientId: string;
-  message: string;
-  status: 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
-  createdAt: string | null;
-  expiresAt: string | null;
-  direction: 'sent' | 'received';
-  /** The other person (the sender, for received invitations). */
-  partner?: SignalPartner;
-};
-
-type SignalPair = {
-  id: string;
-  invitationId: string;
-  participants: string[];
-  status: 'active' | 'ended';
-  createdAt: string | null;
-  endedAt: string | null;
-  endedBy: string | null;
-  partner?: SignalPartner;
-};
+import {
+  fetchPair,
+  fetchPairsPage,
+  fetchPendingInvitations,
+  readInboxCache,
+  writeInboxCache,
+  type SignalInvitation,
+  type SignalPair,
+  type SignalPartner,
+} from '../services/signalsListService.ts';
+import { appendPage, inboxFreshness, mergeFirstPage } from '../utils/signalsList.ts';
 
 async function signalsRequest<T>(path: string, body?: Record<string, unknown>): Promise<T> {
   const user = auth?.currentUser;
@@ -70,8 +55,9 @@ async function signalsRequest<T>(path: string, body?: Record<string, unknown>): 
  */
 export async function fetchNewestPendingSenderName(): Promise<string | null> {
   try {
-    const { invitations } = await signalsRequest<{ invitations: SignalInvitation[] }>('/api/signals');
-    const newest = (invitations || []).find((item) => item.direction === 'received' && item.status === 'pending');
+    // The same request the inbox makes, so the two share one answer instead of asking twice.
+    const invitations = await fetchPendingInvitations();
+    const newest = invitations.find((item) => item.direction === 'received' && item.status === 'pending');
     return newest ? newest.partner?.displayName?.trim() || 'Anonymous member' : null;
   } catch {
     return null;
@@ -81,8 +67,10 @@ export async function fetchNewestPendingSenderName(): Promise<string | null> {
 /** Pseudonym of the member on the other side of a connection, for the "request accepted" banner; null if unknown. */
 export async function fetchPartnerName(pairId: string): Promise<string | null> {
   try {
-    const { pairs } = await signalsRequest<{ pairs: SignalPair[] }>('/api/signals?view=pairs');
-    return (pairs || []).find((pair) => pair.id === pairId)?.partner?.displayName?.trim() || null;
+    const cached = readInboxCache(auth?.currentUser?.uid)?.pairs.find((pair) => pair.id === pairId);
+    if (cached?.partner?.displayName?.trim()) return cached.partner.displayName.trim();
+    // One connection, one read: not the whole list.
+    return (await fetchPair(pairId))?.partner?.displayName?.trim() || null;
   } catch {
     return null;
   }
@@ -127,10 +115,21 @@ export const SignalsView: React.FC<{
     onInitialSectionHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [pairs, setPairs] = useState<SignalPair[]>([]);
-  const [invitations, setInvitations] = useState<SignalInvitation[]>([]);
+  // What was loaded last time is shown straight away; the skeleton is only for a first load with nothing to show yet.
+  const ownerId = auth?.currentUser?.uid ?? null;
+  const remembered = useRef(readInboxCache(ownerId));
+  const [pairs, setPairs] = useState<SignalPair[]>(() => remembered.current?.pairs ?? []);
+  const [invitations, setInvitations] = useState<SignalInvitation[]>(() => remembered.current?.invitations ?? []);
+  const [nextCursor, setNextCursor] = useState<string | null>(() => remembered.current?.nextCursor ?? null);
   const [invitationActionId, setInvitationActionId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(remembered.current === null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState(false);
+  const loadedOnce = useRef(remembered.current !== null);
+  const loadedRev = useRef<number | undefined>(remembered.current?.rev);
+  const cursorRef = useRef<string | null>(remembered.current?.nextCursor ?? null);
+  const moreBusy = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [openPairId, setOpenPairId] = useState<string | null>(null);
@@ -145,25 +144,75 @@ export const SignalsView: React.FC<{
       setLoading(false);
       return;
     }
-    if (!quiet) setLoading(true);
+    // Content that is already on screen stays: only a first load with nothing to show uses the skeleton.
+    if (!loadedOnce.current && !quiet) setLoading(true);
+    setRefreshing(true);
     setError(null);
     try {
-      const [pairResult, invitationResult] = await Promise.all([
-        signalsRequest<{ pairs: SignalPair[] }>('/api/signals?view=pairs'),
-        signalsRequest<{ invitations: SignalInvitation[] }>('/api/signals'),
-      ]);
-      setPairs(Array.isArray(pairResult.pairs) ? pairResult.pairs : []);
-      setInvitations(Array.isArray(invitationResult.invitations) ? invitationResult.invitations : []);
+      const [page, pending] = await Promise.all([fetchPairsPage(null), fetchPendingInvitations()]);
+      let kept = false;
+      setPairs((current) => {
+        const merged = mergeFirstPage(current, page.pairs);
+        kept = merged.length > page.pairs.length;
+        return merged;
+      });
+      // If pages further down were already loaded, their cursor still points to what comes next.
+      const cursor = kept ? cursorRef.current : page.nextCursor;
+      cursorRef.current = cursor;
+      setNextCursor(cursor);
+      setInvitations(pending);
+      loadedOnce.current = true;
+      loadedRev.current = latestRev.current;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load your connections.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
+  /** Loads the next page of connections when the end of the list comes into view. */
+  const loadMore = useCallback(async () => {
+    if (!cursorRef.current || moreBusy.current) return;
+    moreBusy.current = true;
+    setLoadingMore(true);
+    setMoreError(false);
+    try {
+      const page = await fetchPairsPage(cursorRef.current);
+      setPairs((current) => appendPage(current, page.pairs));
+      cursorRef.current = page.nextCursor;
+      setNextCursor(page.nextCursor);
+    } catch {
+      setMoreError(true);
+    } finally {
+      moreBusy.current = false;
+      setLoadingMore(false);
+    }
+  }, []);
+
+  const endSentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    void loadPairs();
+    const target = endSentinel.current;
+    if (!target || !nextCursor || moreError || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) void loadMore(); }, { rootMargin: '240px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [nextCursor, moreError, loadMore, pairs.length, section]);
+
+  // Coming back to the inbox: if the live inbox says nothing has changed since it was loaded, ask for nothing at all.
+  const latestRev = useRef(inbox?.rev);
+  latestRev.current = inbox?.rev;
+  useEffect(() => {
+    if (inboxFreshness(remembered.current, inbox?.rev, Date.now()) === 'fresh') return;
+    void loadPairs(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadPairs]);
+
+  // Remember the inbox as it is (including changes made here) for the next visit.
+  useEffect(() => {
+    if (!loadedOnce.current) return;
+    writeInboxCache(ownerId, { pairs, invitations, nextCursor, rev: loadedRev.current, at: Date.now() });
+  }, [pairs, invitations, nextCursor, ownerId]);
 
   // The server bumps this revision whenever a request is sent, accepted, declined, withdrawn or ended
   // (for both people), so the lists refresh straight away without polling.
@@ -313,11 +362,11 @@ export const SignalsView: React.FC<{
         <button
           type="button"
           onClick={() => void loadPairs()}
-          disabled={loading}
+          disabled={loading || refreshing}
           aria-label="Refresh connections"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-fg disabled:opacity-50"
         >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 ${loading || refreshing ? 'animate-spin motion-reduce:animate-none' : ''}`} />
         </button>
       </header>
 
@@ -363,10 +412,8 @@ export const SignalsView: React.FC<{
       {section === 'requests' ? (
         <ConnectionRequestsPanel rev={inbox?.rev ?? 0} onChanged={() => void loadPairs(true)} onOpenConversation={openPair} onBlockMember={onBlockMember} />
       ) : loading ? (
-        <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted">
-          <LoaderCircle className="h-4 w-4 animate-spin text-berry" /> Finding your connections…
-        </div>
-      ) : (
+        <InboxSkeleton />
+      ) : !loadedOnce.current ? null : (
         <>
           {acceptedNotes.length > 0 && (
             <ul className="mb-4 space-y-2" aria-label="Notifications">
@@ -480,6 +527,17 @@ export const SignalsView: React.FC<{
               </ul>
             </div>
           )}
+
+          {/* The end of what is loaded: more arrives when this comes into view, with a small indicator while it does. */}
+          <div ref={endSentinel} aria-hidden={!loadingMore && !moreError} className="flex min-h-8 items-center justify-center py-2 text-xs text-subtle">
+            {loadingMore && <span role="status" className="inline-flex items-center gap-1.5"><LoaderCircle className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none text-berry" aria-hidden="true" /> Loading more…</span>}
+            {moreError && (
+              <span role="alert">Couldn’t load more. <button type="button" onClick={() => void loadMore()} className="font-semibold text-berry underline underline-offset-4">Try again</button></span>
+            )}
+            {nextCursor && !loadingMore && !moreError && typeof IntersectionObserver === 'undefined' && (
+              <button type="button" onClick={() => void loadMore()} className="font-semibold text-berry underline underline-offset-4">Show more</button>
+            )}
+          </div>
         </>
       )}
     </section>

@@ -12,6 +12,7 @@ import { TimedPhotoViewer } from './TimedPhotoViewer.tsx';
 import { pickedFileProblem, pickProblemText, photoCard, photoReadProblemText, type PhotoTimer } from '../utils/timedPhoto.ts';
 import { copyPickedPhoto, prepareTimedPhoto, sendPhotoProblemText, sendTimedPhoto } from '../services/timedPhotoService.ts';
 import { hasNewIncomingMessage } from '../utils/incomingMessage.ts';
+import { whileActive } from '../utils/whileActive.ts';
 import { QUICK_REACTIONS } from '../utils/reactions.ts';
 import {
   applyMyReaction,
@@ -190,11 +191,13 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     }
   }, [pairId]);
 
-  useEffect(() => {
-    void loadMessages();
+  // Polls only while someone is around: a hidden or idle tab stops asking, and coming back makes one quiet catch-up read
+  // (it asks only for what changed since the cursor) before the polling resumes.
+  useEffect(() => whileActive(() => {
+    void loadMessages(loadedOnce.current);
     const timer = window.setInterval(() => void loadMessages(true), 4000);
     return () => window.clearInterval(timer);
-  }, [loadMessages]);
+  }), [loadMessages]);
 
   // The options menu closes on an outside tap or Escape, and focus returns to its button.
   useEffect(() => {

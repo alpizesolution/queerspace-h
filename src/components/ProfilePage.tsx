@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Check, Flag, LoaderCircle, MapPin, MessageCircle, Pencil, Share2, UserPlus, UserX } from 'lucide-react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { ProfileSkeleton } from './Skeleton.tsx';
 import { ConfirmDialog } from './Sheet.tsx';
 import { ConnectionRequestSheet } from './ConnectionRequestSheet.tsx';
 import { ReportMemberSheet } from './ReportMemberSheet.tsx';
@@ -25,6 +26,8 @@ import {
   fetchMemberAge,
   fetchMemberLookingForPosts,
   fetchMemberProfile,
+  peekMemberProfile,
+  prefetchMemberPosts,
   shareMemberProfile,
   type ProfileLoad,
 } from '../services/profileViewService.ts';
@@ -68,7 +71,13 @@ const intentionLabel = (value: string | null): string | null => (value ? (INTENT
 export const ProfilePage: React.FC<Props> = ({
   memberId, selfId, userPrefs, nsfwPreference, onClose, onOpenConversation, onOpenRequests, onEditProfile, onBlockMember, onOpenSettings,
 }) => {
-  const [load, setLoad] = useState<ProfileLoad | null>(null);
+  // A profile seen in the last minute opens at once, with no skeleton and no request.
+  const [load, setLoad] = useState<ProfileLoad | null>(() => {
+    const hit = peekMemberProfile(memberId);
+    return hit ? { ok: true, data: hit } : null;
+  });
+  /** Which load is current, so an answer for a profile the member has already left can never land on this one. */
+  const runId = useRef(0);
   const [age, setAge] = useState<number | null>(null);
   const [lookingFor, setLookingFor] = useState<LookingForPost[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -80,18 +89,26 @@ export const ProfilePage: React.FC<Props> = ({
   const overlayOpen = reporting || blocking || requestPost !== null;
 
   const run = useCallback(async (force = false) => {
-    setLoad(null);
+    const id = ++runId.current;
+    if (force) clearProfileCache(memberId);
+    const cached = force ? null : peekMemberProfile(memberId);
+    if (!cached) setLoad(null);
     setAge(null);
     setLookingFor([]);
-    const result = await fetchMemberProfile(memberId, force);
+    // The posts do not wait for the profile: their reads start now, alongside it. Nothing from them is shown until the
+    // server has said this viewer may see the profile (a blocked or unavailable profile discards them).
+    prefetchMemberPosts(memberId);
+    const lookingForRead = fetchMemberLookingForPosts(memberId);
+    const result: ProfileLoad = cached ? { ok: true, data: cached } : await fetchMemberProfile(memberId, force);
+    if (id !== runId.current) return;
     setLoad(result);
     if (!result.ok || !result.data.member) return;
     const { data } = result;
-    void fetchMemberLookingForPosts(memberId).then((posts) => setLookingFor(posts ?? []));
+    void lookingForRead.then((posts) => { if (id === runId.current) setLookingFor(posts ?? []); });
     if (data.self) {
       setAge(userPrefs.showAgeOnProfile && userPrefs.birthDate ? calculateAge(userPrefs.birthDate) : null);
     } else if (data.member?.showsAge && data.relation.state === 'connected') {
-      void fetchMemberAge(memberId).then(setAge);
+      void fetchMemberAge(memberId).then((value) => { if (id === runId.current) setAge(value); });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId]);
@@ -174,7 +191,7 @@ export const ProfilePage: React.FC<Props> = ({
           <div className="h-36 w-full sm:mt-4 sm:h-44 sm:overflow-hidden sm:rounded-3xl" style={{ backgroundImage: cover }} aria-hidden="true" />
 
           {load === null ? (
-            <div className="flex min-h-48 items-center justify-center gap-2 px-6 text-sm text-muted"><LoaderCircle className="h-4 w-4 animate-spin text-berry" /> Opening profile…</div>
+            <ProfileSkeleton />
           ) : !load.ok ? (
             <div className="px-6 py-14 text-center">
               <p className="text-[length:calc(16px_*_var(--fs,1))] font-semibold text-fg">{failureTitle(load.reason)}</p>
