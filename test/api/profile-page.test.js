@@ -111,7 +111,7 @@ test('avatars open profiles from Community, Looking For, Requests and the Signal
 
 test('the app opens the page, keeps back navigation working, and handles shared links safely', () => {
   assert.match(app, /<ProfileNavProvider value=\{profileNav\}>/);
-  assert.match(app, /window\.history\.pushState\(\{ qsProfile: true \}, ''\)/);
+  assert.match(app, /window\.history\.pushState\(\{ qsProfile: memberId \}, ''\)/);
   assert.match(app, /window\.addEventListener\('popstate', onPop\)/);
   assert.match(app, /if \(window\.history\.state\?\.qsProfile\) window\.history\.back\(\);/);
   assert.match(app, /profileIdFromSearch\(window\.location\.search\)/);
@@ -195,4 +195,63 @@ test('the posts request reports success and failure separately, with the same qu
   assert.match(service, /limit\(PROFILE_PAGE_SIZE \+ 1\)/);
   assert.match(service, /startAfter\(after\)/);
   assert.match(service, /if \(!outcome\.ok\) console\.warn/, 'only a real failure is logged');
+});
+
+// ----------------------------------------------------------------------------- opening a post from a profile
+const feedView = read('src/components/CommunityFeedView.tsx');
+const communityService = read('src/services/communityService.ts');
+
+test('each public post card on a profile opens the original post, with its own tap targets left alone', () => {
+  assert.match(sections, /onClick=\{\(event\) => \{ if \(canOpen\(post\.id\) && !isInnerControl\(event\.target\)\) openPost\?\.\(post\.id\); \}\}/, 'the whole card, by the post\'s own document id');
+  assert.match(sections, /role=\{canOpen\(post\.id\) \? 'link' : undefined\}/);
+  assert.match(sections, /tabIndex=\{canOpen\(post\.id\) \? 0 : undefined\}/, 'keyboard reachable');
+  assert.match(sections, /event\.key === 'Enter' \|\| event\.key === ' '/);
+  assert.match(sections, /target\.closest\('button, a, input, textarea, select'\)/, 'a "more" button inside keeps its own tap');
+  assert.match(sections, /hover:border-line-strong hover:bg-raised\/70 active:bg-raised\/90/, 'a subtle hover and pressed state');
+  assert.match(sections, /cursor-pointer transition-colors/);
+  assert.match(sections, /const openPost = useOpenPost\(\);/);
+  assert.match(sections, /isPostId\(id\)/, 'only a plausible id is opened');
+  // Looking For cards keep their own request flow and are not made into links.
+  const lookingFor = sections.slice(sections.indexOf('export const ProfileLookingFor'));
+  assert.doesNotMatch(lookingFor, /openPost/);
+});
+
+test('the original post is opened live from community_posts by id, never copied, with the same card and handlers as the feed', () => {
+  const sub = communityService.slice(communityService.indexOf('export function subscribeToCommunityPost'), communityService.indexOf('/** Live replies for one post'));
+  assert.match(sub, /doc\(firestore, 'community_posts', postId\)/, 'the original document');
+  assert.match(sub, /onSnapshot\(/, 'live, so likes and replies show');
+  assert.doesNotMatch(sub, /setDoc|addDoc|updateDoc|writeBatch|deleteDoc|\.set\(/, 'reading only: nothing is created, restored or changed');
+  assert.match(sub, /snap\.exists\(\) \? \{ status: 'ready'.* : \{ status: 'unavailable' \}/, 'a deleted post is unavailable, not rebuilt');
+  assert.match(sub, /onState\(postLoadFromError\(err\)\)/);
+  assert.match(feedView, /subscribeToCommunityPost\(focusPostId, setFocus\)/);
+  assert.match(feedView, /const listed = focusMode \? \(focusedPost \? \[focusedPost\] : \[\]\) : filteredPosts;/, 'the same list and card, with one post in it');
+  assert.match(feedView, /\{listed\.map\(\(post\) => \{/);
+  assert.match(feedView, /handleLikePost\(post\.id\)/, 'likes go to the original post');
+  assert.match(feedView, /const isRepliesExpanded = expandedReplies\[post\.id\] \?\? focusMode;/, 'replies are open on a single post');
+  assert.match(feedView, /postVisibleTo\(focus\.post, blockedPartnerIds\)/, 'a blocked author\'s post is not shown');
+});
+
+test('a post that is gone shows "This post is no longer available." and a real failure offers Try again', () => {
+  assert.match(feedView, /listed\.length === 0 && focusMode \? \(\s*<div[^>]*>\s*<p[^>]*>This post is no longer available\.<\/p>/);
+  assert.match(feedView, /Couldn't load this post\. <button[^>]*onClick=\{\(\) => setFocusTry\(\(n\) => n \+ 1\)\}[^>]*>Try again<\/button>/);
+  assert.match(feedView, /\{focusMode && onCloseFocus && \(\s*<button[^>]*onClick=\{onCloseFocus\}/, 'a Back button');
+  assert.match(feedView, /\{!focusMode && <ChipScroller/);
+  assert.match(feedView, /\{!focusMode && <FloatingAddButton/);
+});
+
+test('the app opens a post with history, so Back returns to the profile, and a shared link opens it too', () => {
+  assert.match(app, /window\.history\.pushState\(\{ qsPost: postId \}, ''\);/);
+  assert.match(app, /const openPost = useCallback\(\(postId: string\) => \{\s*if \(!isPostId\(postId\)\) return;/);
+  assert.match(app, /pushState\(\{ qsProfile: memberId \}, ''\)/, 'the profile entry remembers which profile it is');
+  assert.match(app, /replaceState\(\{ qsProfile: memberId \}, ''\)/, 'moving between profiles keeps that right');
+  assert.match(app, /setProfileMemberId\(typeof state\?\.qsProfile === 'string' && isMemberId\(state\.qsProfile\) \? state\.qsProfile : null\);/, 'Back from a post reopens the same profile');
+  assert.match(app, /if \(typeof window\.history\.state\?\.qsPost === 'string'\) window\.history\.back\(\);/);
+  assert.match(app, /const postId = postIdFromSearch\(window\.location\.search\);/);
+  assert.match(app, /focusPostId=\{focusPostId\} onCloseFocus=\{closePost\}/);
+  assert.match(app, /const profileNav = useMemo\(\(\) => \(\{ openProfile, openPost \}\)/);
+  assert.match(feedView, /postLink\(window\.location\.origin, post\.id\)/, 'sharing a post gives a link that opens that post');
+});
+
+test('no rules, API or schema changed to open a post', () => {
+  assert.match(read('firestore.rules'), /match \/community_posts\/\{postId\} \{\s*allow read: if isAuthenticated\(\);/);
 });

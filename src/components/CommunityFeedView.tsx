@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowUp, Check, CheckCircle2, Heart, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Check, CheckCircle2, Heart, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
 import { MemberAvatar } from './ProfileNav.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
@@ -16,6 +16,7 @@ import {
   replyToCommunityPost,
   setCommunityLike,
   subscribeToCommunity,
+  subscribeToCommunityPost,
   subscribeToReplies,
 } from '../services/communityService.ts';
 import { whileActive } from '../utils/whileActive.ts';
@@ -23,6 +24,7 @@ import { LookingForView } from './LookingForView.tsx';
 import { ExpandableText } from './ExpandableText.tsx';
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, FILTER_CATEGORIES } from '../utils/communityCategories.ts';
 import { ChipScroller } from './ChipScroller.tsx';
+import { postLink, postVisibleTo, type PostLoad } from '../utils/communityPostLink.ts';
 import { formatRelativeTime } from '../utils/relativeTime.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 
@@ -38,6 +40,9 @@ interface CommunityFeedViewProps {
   onOpenSettings?: () => void;
   onBlockMember?: (memberId: string) => void;
   onViewRequests?: () => void;
+  /** Show this one post (opened from a member's profile or a link) instead of the feed. */
+  focusPostId?: string | null;
+  onCloseFocus?: () => void;
 }
 
 // Which posts this device has liked, so the heart shows filled. The server still allows one like per person.
@@ -161,6 +166,8 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   onOpenSettings,
   onBlockMember,
   onViewRequests,
+  focusPostId = null,
+  onCloseFocus,
 }) => {
   const [section, setSection] = useState<'community' | 'lookingFor'>('community');
   const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -186,6 +193,18 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
 
   const available = isCommunityAvailable();
+
+  // One post opened from elsewhere: the original document, live, shown with the same card as in the feed.
+  const [focus, setFocus] = useState<PostLoad<CommunityPost> | null>(null);
+  const [focusTry, setFocusTry] = useState(0);
+  const focusMode = focusPostId !== null;
+  useEffect(() => {
+    setFocus(null);
+    if (!focusPostId || !available) return;
+    setSection('community');
+    return subscribeToCommunityPost(focusPostId, setFocus);
+  }, [focusPostId, focusTry, available]);
+  const focusedPost = focus?.status === 'ready' && postVisibleTo(focus.post, blockedPartnerIds) ? focus.post : null;
 
   useEffect(() => {
     if (!available) return;
@@ -304,7 +323,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
 
   const handleShare = async (post: CommunityPost) => {
     const text = `${post.title}\n\n${post.content}`;
-    const url = window.location.origin;
+    const url = postLink(window.location.origin, post.id);
     try {
       if (navigator.share) {
         await navigator.share({ title: post.title, text, url });
@@ -325,6 +344,10 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
 
   const openComposer = () => setShowCreateModal(true);
 
+  const isLoading = focusMode ? focus === null && available : loading;
+  const hasError = focusMode ? focus?.status === 'failed' : feedError;
+  const listed = focusMode ? (focusedPost ? [focusedPost] : []) : filteredPosts;
+
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-3 sm:pt-8 pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+6rem)] desk:pb-16">
       <div className="flex items-center justify-between gap-3 mb-2.5 sm:mb-4">
@@ -337,7 +360,13 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
         )}
       </div>
 
-      <div role="tablist" aria-label="Cosmos sections" className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-0.5 mb-3">
+      {focusMode && onCloseFocus && (
+        <button type="button" onClick={onCloseFocus} className="mb-3 inline-flex h-9 items-center gap-1.5 rounded-full pr-3 text-[length:calc(14px_*_var(--fs,1))] font-semibold text-muted hover:text-fg cursor-pointer">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
+        </button>
+      )}
+
+      {!focusMode && <div role="tablist" aria-label="Cosmos sections" className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-0.5 mb-3">
         {([['community', 'Community'], ['lookingFor', 'Looking For']] as const).map(([id, label]) => (
           <button
             key={id}
@@ -349,25 +378,31 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
             {label}
           </button>
         ))}
-      </div>
+      </div>}
 
-      {section === 'lookingFor' ? (
+      {section === 'lookingFor' && !focusMode ? (
         <LookingForView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onBlockMember={onBlockMember} onViewRequests={onViewRequests} />
       ) : (
       <>
-      <ChipScroller items={FILTER_CATEGORIES} active={activeCategory} onSelect={setActiveCategory} label="Categories" bleed className="mb-3" />
+      {!focusMode && <ChipScroller items={FILTER_CATEGORIES} active={activeCategory} onSelect={setActiveCategory} label="Categories" bleed className="mb-3" />}
 
       {!available ? (
         <p className="card p-5 text-sm text-muted">Cosmos isn't available right now. Please try again later.</p>
-      ) : loading ? (
+      ) : isLoading ? (
         <div className="space-y-3" aria-hidden="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="card h-36 animate-pulse" />
           ))}
         </div>
-      ) : feedError ? (
-        <p className="text-center text-sm text-muted py-12">Couldn't load posts. Please try again soon.</p>
-      ) : filteredPosts.length === 0 ? (
+      ) : hasError ? (
+        focusMode
+          ? <p className="text-center text-sm text-muted py-12">Couldn't load this post. <button type="button" onClick={() => setFocusTry((n) => n + 1)} className="font-semibold text-berry underline underline-offset-4">Try again</button></p>
+          : <p className="text-center text-sm text-muted py-12">Couldn't load posts. Please try again soon.</p>
+      ) : listed.length === 0 && focusMode ? (
+        <div className="text-center py-16 px-6">
+          <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">This post is no longer available.</p>
+        </div>
+      ) : listed.length === 0 ? (
         <div className="text-center py-16 px-6">
           <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">Nothing here yet</p>
           <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1 mb-5">Start the conversation.</p>
@@ -377,8 +412,8 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredPosts.map((post) => {
-            const isRepliesExpanded = expandedReplies[post.id];
+          {listed.map((post) => {
+            const isRepliesExpanded = expandedReplies[post.id] ?? focusMode;
             const userLiked = Boolean(liked[post.id]);
             const replyCount = post.replyCount ?? 0;
             return (
@@ -479,7 +514,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
       )}
 
       {/* Mobile compose button, kept clear of the tab bar */}
-      <FloatingAddButton onClick={openComposer} label="New post" />
+      {!focusMode && <FloatingAddButton onClick={openComposer} label="New post" />}
       </>
       )}
 

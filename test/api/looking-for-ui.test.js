@@ -19,7 +19,7 @@ test('Cosmos gets a Community / Looking For switch under the heading, and the co
   const tabs = cosmos.indexOf('aria-label="Cosmos sections"');
   assert.ok(heading > 0 && tabs > heading, 'the switch sits below the Cosmos heading');
   assert.match(cosmos, /\['community', 'Community'\], \['lookingFor', 'Looking For'\]/);
-  assert.match(cosmos, /section === 'lookingFor' \? \(\s*<LookingForView/);
+  assert.match(cosmos, /section === 'lookingFor' && !focusMode \? \(\s*<LookingForView/);
   // Every community category, post action and the composer are still there.
   for (const label of ['All', 'Cozy Vents', 'Books & Media', 'Friend Finder', 'Dating', 'General']) assert.ok(read('src/utils/communityCategories.ts').includes(`label: '${label}'`), label);
   for (const kept of ['subscribeToCommunity', 'setCommunityLike', 'replyToCommunityPost', 'createCommunityPost', 'adminDeleteCommunityPost', 'subscribeToReplies']) assert.ok(cosmos.includes(kept), kept);

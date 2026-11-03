@@ -3,12 +3,15 @@ import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isMemberId } from '../utils/profileView.ts';
 
 /** Lets any avatar open a member's profile without passing a handler through every screen. */
-const ProfileNavContext = createContext<{ openProfile: (memberId: string) => void } | null>(null);
+const ProfileNavContext = createContext<{ openProfile: (memberId: string) => void; openPost: (postId: string) => void } | null>(null);
 
 export const ProfileNavProvider = ProfileNavContext.Provider;
 
 /** The function that opens a member's profile, or null where there is no app around to do it. */
 export const useOpenProfile = (): ((memberId: string) => void) | null => useContext(ProfileNavContext)?.openProfile ?? null;
+
+/** The function that opens one Cosmos post, or null where there is no app around to do it. */
+export const useOpenPost = (): ((postId: string) => void) | null => useContext(ProfileNavContext)?.openPost ?? null;
 
 /**
  * An avatar that opens the member's profile when tapped. Where no profile can be opened (no id, or no app around it) it is

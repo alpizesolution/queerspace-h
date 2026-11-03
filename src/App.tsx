@@ -24,6 +24,7 @@ import { auth, ensureAnonymousAuth, isFirebaseConfigured, logScreenView } from '
 import { ProfilePage } from './components/ProfilePage.tsx';
 import { ProfileNavProvider } from './components/ProfileNav.tsx';
 import { isMemberId, profileIdFromSearch } from './utils/profileView.ts';
+import { isPostId, postIdFromSearch } from './utils/communityPostLink.ts';
 import { recordDailyActivity } from './services/activityService.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature } from './services/profilePersistence.ts';
@@ -78,29 +79,62 @@ export default function App() {
   const [profileMemberId, setProfileMemberId] = useState<string | null>(null);
   const profileOpenRef = useRef(false);
   profileOpenRef.current = profileMemberId !== null;
+  // One Cosmos post shown on its own, opened from a member's profile or a shared link.
+  const [focusPostId, setFocusPostId] = useState<string | null>(null);
   const openProfile = useCallback((memberId: string) => {
     if (!isMemberId(memberId)) return;
-    // One history entry while a profile is open, so the phone's back gesture closes it instead of leaving the app.
-    if (!profileOpenRef.current) window.history.pushState({ qsProfile: true }, '');
+    // One history entry while a profile is open, so the phone's back gesture closes it instead of leaving the app. The entry
+    // remembers which profile it is for, so coming back from a post lands on the same one.
+    if (!profileOpenRef.current) window.history.pushState({ qsProfile: memberId }, '');
+    else window.history.replaceState({ qsProfile: memberId }, '');
     setProfileMemberId(memberId);
   }, []);
   const closeProfile = useCallback(() => {
     if (window.history.state?.qsProfile) window.history.back();
     else setProfileMemberId(null);
   }, []);
+  // Opens the original post in Cosmos. The profile's own history entry stays underneath, so Back returns to the profile.
+  const openPost = useCallback((postId: string) => {
+    if (!isPostId(postId)) return;
+    window.history.pushState({ qsPost: postId }, '');
+    setProfileMemberId(null);
+    setFocusPostId(postId);
+    setCurrentView('community');
+    window.scrollTo({ top: 0 });
+  }, []);
+  const closePost = useCallback(() => {
+    if (typeof window.history.state?.qsPost === 'string') window.history.back();
+    else setFocusPostId(null);
+  }, []);
   useEffect(() => {
-    const onPop = () => setProfileMemberId(null);
+    const onPop = (event: PopStateEvent) => {
+      const state = event.state as { qsProfile?: unknown; qsPost?: unknown } | null;
+      if (typeof state?.qsPost === 'string') {
+        setProfileMemberId(null);
+        setFocusPostId(state.qsPost);
+        setCurrentView('community');
+        return;
+      }
+      setFocusPostId(null);
+      setProfileMemberId(typeof state?.qsProfile === 'string' && isMemberId(state.qsProfile) ? state.qsProfile : null);
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
-  // A shared link (/?profile=id) opens that profile once, then the address goes back to normal.
+  // A shared link (/?profile=id or /?post=id) opens that profile or post once, then the address goes back to normal.
   useEffect(() => {
     const id = profileIdFromSearch(window.location.search);
-    if (!id) return;
+    const postId = postIdFromSearch(window.location.search);
+    if (!id && !postId) return;
     window.history.replaceState(null, '', window.location.pathname);
-    setProfileMemberId(id);
+    if (postId) {
+      setFocusPostId(postId);
+      setCurrentView('community');
+    } else {
+      setProfileMemberId(id);
+    }
   }, []);
-  const profileNav = useMemo(() => ({ openProfile }), [openProfile]);
+  const profileNav = useMemo(() => ({ openProfile, openPost }), [openProfile, openPost]);
   // What the cloud last held, so saves that change nothing there skip Firestore entirely.
   const cloudSignatureRef = useRef<string | null>(null);
   /** True once the cloud holds this member's birthday (restored from it, or saved). It is never rewritten afterwards. */
@@ -603,7 +637,7 @@ export default function App() {
 
         {currentView === 'unsaid' && <UnsaidView />}
 
-        {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={() => setSettingsOpen(true)} onBlockMember={handleBlockMember} onViewRequests={() => { setSignalsStartSection('requests'); handleNavigate('signals'); }} />}
+        {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={() => setSettingsOpen(true)} onBlockMember={handleBlockMember} onViewRequests={() => { setSignalsStartSection('requests'); handleNavigate('signals'); }} focusPostId={focusPostId} onCloseFocus={closePost} />}
 
         {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} requestedPairId={signalsOpenPairId} onRequestedPairHandled={() => setSignalsOpenPairId(null)} initialSection={signalsStartSection} onInitialSectionHandled={() => setSignalsStartSection('inbox')} onBlockMember={handleBlockMember} />}
       </main>
