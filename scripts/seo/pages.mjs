@@ -78,7 +78,7 @@ ${li([
 <h3>Echoes: say it anonymously</h3>
 <p>Echoes is for the things that are hard to say out loud. Choose <em>Vent</em> or <em>Confession</em>, write it, and let it out. No name or avatar is shown, and posts stay visible until you delete them or moderation removes them. Links, @handles and phone numbers are blocked to keep people anonymous. If you are struggling, the app also shows the NCMH Crisis Hotline for the Philippines: <strong>1553</strong>.</p>
 <h3>Cosmos: stories, recs and advice</h3>
-<p>Cosmos is the community feed. Post with a title, a category and up to four tags. Categories include General, Books &amp; Media, Cozy Vents, Friend Finder, and Dating &amp; Advice. Everyone can like and reply.</p>
+<p>Cosmos is the community feed. Post with a title, a category and up to four tags. Categories include General, Books &amp; Media, Cozy Vents, Friend Finder, and Dating. Everyone can like and reply.</p>
 <h3>1-on-1 chat</h3>
 <p>When you want a conversation with one person, <a href="/anonymous-wlw-chat">anonymous WLW chat</a> pairs you with someone who is online right now.</p>
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Flag, MapPin, Pause, Pencil, Plus, ShieldAlert, SlidersHorizontal, Trash2, UserX } from 'lucide-react';
 import { MemberAvatar } from './ProfileNav.tsx';
+import { ChipScroller } from './ChipScroller.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { LookingForBody } from './LookingForBody.tsx';
@@ -162,14 +163,15 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
-        <div role="tablist" aria-label="Looking for categories" className="-mx-4 px-4 sm:mx-0 sm:px-0 flex flex-1 min-w-0 gap-2 overflow-x-auto scrollbar-none pb-1">
-          {LOOKING_FOR_CATEGORIES.map((cat) => (
-            <button key={cat.id} role="tab" aria-selected={filters.category === cat.id} onClick={() => setFilter('category', cat.id)} className={`chip shrink-0 ${cat.id === 'nsfw' ? (filters.category === cat.id ? '!bg-danger/20 !text-danger !border-danger/60' : '!text-danger/90 !border-danger/30') : filters.category === cat.id ? '!bg-fg !text-ink !border-fg' : ''}`}>
-              {cat.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex items-center gap-2 mb-3">
+        <ChipScroller
+          items={LOOKING_FOR_CATEGORIES}
+          active={filters.category}
+          onSelect={(id) => setFilter('category', id)}
+          label="Looking for categories"
+          className="flex-1"
+          chipClass={(id, on) => (id === 'nsfw' ? (on ? '!bg-danger/20 !text-danger !border-danger/60' : '!text-danger/90 !border-danger/30') : on ? '!bg-fg !text-ink !border-fg' : '')}
+        />
         <button type="button" onClick={() => setFiltersOpen(true)} aria-label={filterCount ? `Filters, ${filterCount} on` : 'Filters'} className="chip shrink-0 !px-3">
           <SlidersHorizontal className="w-4 h-4" />
           {filterCount > 0 && <span className="text-berry font-semibold">{filterCount}</span>}

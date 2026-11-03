@@ -15,13 +15,13 @@ const rules = read('firestore.rules');
 const lfRules = rules.slice(rules.indexOf('4b. COSMOS "LOOKING FOR" BOARD'), rules.indexOf('5. ABUSE & SAFETY REPORTS'));
 
 test('Cosmos gets a Community / Looking For switch under the heading, and the community feed is kept as it was', () => {
-  const heading = cosmos.indexOf('>Cosmos</h1>');
+  const heading = cosmos.indexOf('>The COSMOS</h1>');
   const tabs = cosmos.indexOf('aria-label="Cosmos sections"');
   assert.ok(heading > 0 && tabs > heading, 'the switch sits below the Cosmos heading');
   assert.match(cosmos, /\['community', 'Community'\], \['lookingFor', 'Looking For'\]/);
   assert.match(cosmos, /section === 'lookingFor' \? \(\s*<LookingForView/);
   // Every community category, post action and the composer are still there.
-  for (const label of ['All', 'Cozy Vents', 'Books & Media', 'Friend Finder', 'Dating & Advice', 'General']) assert.ok(read('src/utils/communityCategories.ts').includes(`label: '${label}'`), label);
+  for (const label of ['All', 'Cozy Vents', 'Books & Media', 'Friend Finder', 'Dating', 'General']) assert.ok(read('src/utils/communityCategories.ts').includes(`label: '${label}'`), label);
   for (const kept of ['subscribeToCommunity', 'setCommunityLike', 'replyToCommunityPost', 'createCommunityPost', 'adminDeleteCommunityPost', 'subscribeToReplies']) assert.ok(cosmos.includes(kept), kept);
   assert.match(cosmos, /useState<'community' \| 'lookingFor'>\('community'\)/, 'opens on Community');
 });
@@ -199,7 +199,7 @@ test('NSFW Connection appears in the composer and on the board with its own subt
   assert.match(composer, /const chooseIntention = /);
   assert.match(composer, /id === NSFW_INTENTION \? \(draft\.intention === id \? '!bg-danger\/20 !text-danger !border-danger\/60'/);
   assert.match(composer, /disabled=\{alwaysMature\}/, 'the NSFW switch is locked on for this intention');
-  assert.match(board, /cat\.id === 'nsfw'/, 'a distinct filter chip');
+  assert.match(board, /chipClass=\{\(id, on\) => \(id === 'nsfw' \?/, 'a distinct filter chip');
   assert.match(lfRules, /return \['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw'\];/);
   assert.match(lfRules, /\(data\.intention != 'nsfw' \|\| data\.isNsfw == true\)/, 'the rules force it to be mature');
   assert.match(read('src/utils/lookingFor.ts'), /const isNsfw = draft\.isNsfw \|\| draft\.intention === NSFW_INTENTION;/);
@@ -243,4 +243,44 @@ test('the rules require 100 trimmed characters in both sections on a new post, a
   assert.match(lfRules, /request\.resource\.data\.intro == resource\.data\.intro \|\| lookingForSection\(request\.resource\.data\.intro\)/);
   assert.match(lfRules, /request\.resource\.data\.lookingFor == resource\.data\.lookingFor \|\| lookingForSection\(request\.resource\.data\.lookingFor\)/);
   assert.match(lfRules, /data\.intro is string && data\.intro\.size\(\) >= 1 && data\.intro\.size\(\) <= 400/, 'the maximums are kept');
+});
+
+test('the COSMOS header is just "The COSMOS", with no subtitle, and the page is tighter on a phone', () => {
+  const header = cosmos.slice(cosmos.indexOf('<h1'), cosmos.indexOf('</h1>') + 5);
+  assert.match(header, />The COSMOS<\/h1>/);
+  assert.match(header, /text-\[length:calc\(23px_\*_var\(--fs,1\)\)\] sm:text-\[length:calc\(28px_\*_var\(--fs,1\)\)\]/, '23px on a phone, 28px from tablet up');
+  const top = cosmos.slice(cosmos.indexOf('The COSMOS</h1>'), cosmos.indexOf('aria-label="Cosmos sections"'));
+  assert.doesNotMatch(top, /<p[\s>]/, 'no description under the heading');
+  assert.match(cosmos, /pt-3 sm:pt-8 pb-\[calc\(var\(--tabbar-h\)\+env\(safe-area-inset-bottom\)\+6rem\)\]/, 'less space above, safe area below');
+  assert.match(cosmos, /grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-0\.5 mb-3/, 'a full-width, shorter switch');
+  assert.match(cosmos, /h-9 rounded-full text-/);
+  assert.match(cosmos, /ring-1 ring-berry\/50/, 'the pink active state is kept');
+});
+
+test('both category rows are one-line scrollers that never clip, hide the scrollbar and bring the chosen pill into view', () => {
+  const scroller = read('src/components/ChipScroller.tsx');
+  assert.match(scroller, /overflow-x-auto overscroll-x-contain scrollbar-none/);
+  assert.match(scroller, /touch-pan-x/);
+  assert.doesNotMatch(scroller, /flex-wrap/, 'never a second row');
+  assert.match(scroller, /className=\{`chip shrink-0/, 'pills never shrink or wrap');
+  assert.match(scroller, /<span aria-hidden="true" className="w-2 shrink-0 sm:hidden" \/>/, 'room after the last pill');
+  assert.match(scroller, /container\.scrollTo\(\{ left, behavior: calm \? 'auto' : 'smooth' \}\)/);
+  assert.match(scroller, /\[aria-selected="true"\]/, 'the chosen pill is found and centered');
+  assert.match(scroller, /prefers-reduced-motion/);
+  assert.match(cosmos, /<ChipScroller items=\{FILTER_CATEGORIES\} active=\{activeCategory\} onSelect=\{setActiveCategory\} label="Categories" bleed/);
+  assert.match(board, /<ChipScroller[\s\S]*?items=\{LOOKING_FOR_CATEGORIES\}/);
+  assert.doesNotMatch(board, /-mx-4 px-4 sm:mx-0 sm:px-0 flex flex-1/, 'the Looking For row no longer overlaps the filter button');
+});
+
+test('the filter row lists exactly All, Cozy Vents, Books & Media, Friend Finder and Dating, and no user-facing text says R4R', () => {
+  const categories = read('src/utils/communityCategories.ts');
+  const filter = categories.slice(categories.indexOf('export const FILTER_CATEGORIES'));
+  assert.match(filter, /CATEGORIES\.filter\(\(c\) => c\.id !== 'general'\)/);
+  assert.match(categories, /\{ id: 'advice', label: 'Dating' \}/, 'the stored value "advice" is unchanged; only the label is');
+  for (const file of ['src/components/CommunityFeedView.tsx', 'src/components/ProfileSections.tsx', 'src/utils/communityCategories.ts', 'src/components/Hero.tsx', 'src/components/InfoModals.tsx', 'scripts/seo/pages.mjs', 'public/sapphic-community-philippines.html']) {
+    const text = read(file);
+    assert.doesNotMatch(text, /R4R|Dating (&|&amp;) Advice|Dating (&|&amp;) R4R/i, file);
+  }
+  assert.match(read('src/services/communityService.ts'), /\['vents', 'media', 'friends', 'advice', 'general'\]/, 'stored categories are untouched');
+  assert.match(rules, /cat in \['general', 'media', 'vents', 'friends', 'advice'\]/, 'the rules are untouched');
 });
