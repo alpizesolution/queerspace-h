@@ -250,3 +250,22 @@ export function preferredAgeText(post: Pick<LookingForPost, 'seekAgeMin' | 'seek
   if (seekAgeMax !== undefined) return `up to ${seekAgeMax}`;
   return null;
 }
+
+export type FeedErrorReason = 'denied' | 'failed';
+
+/** A refused read is told apart from every other failure (offline, unavailable, a missing index) by the error's code. */
+export const feedErrorReason = (error: unknown): FeedErrorReason =>
+  String((error as { code?: unknown } | null)?.code ?? '').includes('permission-denied') ? 'denied' : 'failed';
+
+/** Pauses before the board is asked again after a refusal, in milliseconds. */
+export const FEED_RETRY_DELAYS_MS: readonly number[] = [1500, 4000, 9000];
+
+/**
+ * How long to wait before asking the board again on its own, or null to stop. Only a refusal for an account that already
+ * looks eligible on this device is retried: its profile may simply not have reached the server yet (a brand-new member who
+ * opens the board straight after signing up). A member who is not eligible is never retried; the screen explains instead.
+ */
+export function feedRetryDelay(reason: FeedErrorReason | null, locallyEligible: boolean, triesSoFar: number): number | null {
+  if (reason !== 'denied' || !locallyEligible) return null;
+  return FEED_RETRY_DELAYS_MS[triesSoFar] ?? null;
+}

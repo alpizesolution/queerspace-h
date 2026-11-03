@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Flag, MapPin, Pause, Pencil, Plus, ShieldAlert, SlidersHorizontal, Trash2, UserX } from 'lucide-react';
 import { MemberAvatar } from './ProfileNav.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
@@ -16,6 +16,7 @@ import { NSFW_PREFERENCE_OPTIONS, type NsfwPreference } from '../utils/nsfwPrefe
 import {
   activeFilterCount,
   applyLookingForFilters,
+  feedRetryDelay,
   INTENTION_LABELS,
   LOOKING_FOR_CATEGORIES,
   NO_FILTERS,
@@ -75,6 +76,10 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
 
   const available = isLookingForAvailable();
   const adult = isAdultBirthDate(userPrefs.birthDate);
+  const locallyEligible = adult && userPrefs.profileComplete === true;
+  // Bumped to ask the board again: by the member, or on its own after a refusal while the profile reaches the server.
+  const [reloadKey, setReloadKey] = useState(0);
+  const autoTries = useRef(0);
 
   useEffect(() => {
     if (!available) return;
@@ -94,7 +99,23 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
         }
       )
     );
-  }, [available, filters.category]);
+  }, [available, filters.category, reloadKey]);
+
+  // A brand-new member can open the board before their profile has been saved to the server, which is refused at first.
+  // That must not stick: ask again a few times, and again whenever they finish setting up.
+  useEffect(() => {
+    if (locallyEligible) autoTries.current = 0;
+  }, [locallyEligible]);
+
+  useEffect(() => {
+    const delay = feedRetryDelay(loadError, locallyEligible, autoTries.current);
+    if (delay === null) return;
+    const timer = setTimeout(() => {
+      autoTries.current += 1;
+      setReloadKey((n) => n + 1);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [loadError, locallyEligible, reloadKey]);
 
   useEffect(() => {
     if (!toast) return;
@@ -170,9 +191,10 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
           <ShieldAlert className="w-6 h-6 text-lavender mx-auto mb-2" aria-hidden="true" />
           <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">Looking For is for adult members</p>
           <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1">Add your birthday and save your profile to see and post connection requests.</p>
+          {locallyEligible && <button type="button" onClick={() => { autoTries.current = 0; setReloadKey((n) => n + 1); }} className="btn btn-secondary btn-sm mt-4">Try again</button>}
         </div>
       ) : loadError ? (
-        <p className="text-center text-sm text-muted py-12">Couldn’t load posts. Please try again soon.</p>
+        <p className="text-center text-sm text-muted py-12">Couldn’t load posts. <button type="button" onClick={() => { autoTries.current = 0; setReloadKey((n) => n + 1); }} className="font-semibold text-berry underline underline-offset-4">Try again</button></p>
       ) : visible.length === 0 ? (
         <div className="text-center py-16 px-6">
           <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">{filterCount > 0 ? 'No one matches those filters' : 'No posts here yet'}</p>
