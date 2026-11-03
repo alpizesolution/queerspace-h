@@ -248,7 +248,7 @@ test('a photo nobody opens expires after a day, and an upload failure leaves no 
   assert.equal(await code(timedOpen(b, second.id)), '410:photo_expired', 'not after a day');
   // an upload that fails
   store.failPut = true;
-  assert.equal(await code(timedSend(a)), '502:media_unavailable');
+  assert.equal(await code(timedSend(a)), '502:media_storage_failed');
   store.failPut = false;
   const messagesBefore = (await db.collectionGroup('messages').get()).size;
   assert.equal(messagesBefore, 2, 'no message for the failed upload');
@@ -264,7 +264,7 @@ test('if storage fails when opening, the viewing is not used up and a retry work
   const { a, b, timedSend, timedOpen, store, db } = await setup();
   const sent = (await timedSend(a)).body;
   store.failGet = true;
-  assert.equal(await code(timedOpen(b, sent.id)), '502:media_unavailable');
+  assert.equal(await code(timedOpen(b, sent.id)), '502:media_storage_failed');
   assert.equal((await db.collection('signalsMedia').get()).docs[0].data().state, 'unopened');
   store.failGet = false;
   assert.equal((await timedOpen(b, sent.id)).status, 200);
@@ -324,6 +324,7 @@ test('sending is rate limited, and the feature says it is unavailable when stora
   for (const key of ['R2_ENDPOINT', 'R2_BUCKET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY']) delete process.env[key];
   const b = await send(a);
   assert.ok([429, 503].includes(b.statusCode));
+  assert.notEqual(b.body?.error, 'media_storage_failed');
   Object.assign(process.env, saved);
 });
 
@@ -339,4 +340,146 @@ test('ordinary text messages and history are unchanged, and clients cannot read 
   assert.equal(second.kind, 'photo');
   assert.equal(second.photo.status, 'unopened');
   assert.equal((await db.collection('signalsMedia').get()).size, 1);
+});
+
+const withoutR2Settings = async (fn) => {
+  const saved = Object.fromEntries(['R2_ENDPOINT', 'R2_BUCKET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'].map((k) => [k, process.env[k]]));
+  for (const key of Object.keys(saved)) delete process.env[key];
+  try { return await fn(); } finally { for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v; }
+};
+
+test('with storage not configured, sending says so plainly (not a generic failure), and stores nothing', { skip }, async () => {
+  const { a, send, media, db, metaCount } = await setup();
+  media.setMediaStoreForTests(null);
+  await withoutR2Settings(async () => {
+    const res = await send(a);
+    assert.equal(res.statusCode, 503);
+    assert.equal(res.body.error, 'media_not_configured');
+    assert.equal((await db.collectionGroup('messages').get()).size, 0);
+    assert.equal(await metaCount(), 0, 'nothing was even recorded');
+  });
+});
+
+test('an upload that R2 rejects says so, creates no message, and leaves nothing behind once cleaned up', { skip }, async () => {
+  const { a, send, store, db, metaCount, timed, clock } = await setup();
+  store.failPut = true;
+  const res = await send(a);
+  assert.equal(res.statusCode, 502);
+  assert.equal(res.body.error, 'media_storage_failed');
+  assert.equal((await db.collectionGroup('messages').get()).size, 0, 'no message when the upload failed');
+  store.failPut = false;
+  clock.now += 2 * 3_600_000;
+  await timed.sweep(db);
+  assert.equal(await metaCount(), 0);
+  assert.equal(store.objects.size, 0);
+});
+
+test('if the message cannot be saved after a good upload, that is reported separately and the stored object is removed', { skip }, async () => {
+  const { a, db, store, timed, metaCount, pairId } = await setup();
+  const failingBatch = new Proxy(db, {
+    get(target, prop) {
+      if (prop === 'batch') return () => { const batch = target.batch(); return new Proxy(batch, { get(b, p) { if (p === 'commit') return async () => { throw Object.assign(new Error('write failed'), { code: 14 }); }; const v = b[p]; return typeof v === 'function' ? v.bind(b) : v; } }); };
+      const value = target[prop];
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  let uploaded = 0;
+  const watched = { ...store, put: async (...args) => { uploaded += 1; return store.put(...args); }, get: store.get, delete: store.delete };
+  const handlers = (await import('../../api/_media.js')).createMediaHandlers({ getStore: () => watched });
+  const error = await code(handlers.sendPhoto(failingBatch, a.uid, { pairId, messageId: 'message-fails-after-upload-1', timerSeconds: 3, image: toBase64(makeJpeg()) }));
+  assert.equal(error, '503:photo_not_saved');
+  assert.equal(uploaded, 1, 'the upload did happen first');
+  assert.equal(store.objects.size, 0, 'and the orphaned object was removed straight away');
+  assert.equal(await metaCount(), 0, 'with its record');
+  assert.equal((await db.collection(`signalsPairs/${pairId}/messages`).get()).size, 0, 'no message exists');
+  void timed;
+});
+
+test('if removing the orphan also fails, the record stays due so the cleanup removes it later', { skip }, async () => {
+  const { a, db, store, timed, metaCount, pairId, clock } = await setup();
+  const failingBatch = new Proxy(db, {
+    get(target, prop) {
+      if (prop === 'batch') return () => { const batch = target.batch(); return new Proxy(batch, { get(b, p) { if (p === 'commit') return async () => { throw Object.assign(new Error('write failed'), { code: 14 }); }; const v = b[p]; return typeof v === 'function' ? v.bind(b) : v; } }); };
+      const value = target[prop];
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  const flaky = { put: store.put, get: store.get, delete: async () => { throw Object.assign(new Error('r2 down'), { code: 'r2_500' }); } };
+  const handlers = (await import('../../api/_media.js')).createMediaHandlers({ getStore: () => flaky, now: () => clock.now });
+  assert.equal(await code(handlers.sendPhoto(failingBatch, a.uid, { pairId, messageId: 'message-fails-after-upload-2', timerSeconds: 5, image: toBase64(makeJpeg()) })), '503:photo_not_saved');
+  assert.equal(store.objects.size, 1, 'the object could not be removed right now');
+  assert.equal(await metaCount(), 1, 'but its record remains, due for deletion');
+  clock.now += 60_000;
+  const swept = await timed.sweep(db);
+  assert.ok(swept.deleted >= 1);
+  assert.equal(store.objects.size, 0);
+  assert.equal(await metaCount(), 0);
+});
+
+test('tapping Send several times, and retrying after a failure, with one message id makes exactly one message', { skip }, async () => {
+  const { a, call, store, db, pairId, metaCount } = await setup();
+  const body = { action: 'send-photo', pairId, messageId: 'one-photo-many-taps-1', timerSeconds: 5, image: toBase64(makeJpeg()) };
+  store.failPut = true;
+  assert.equal((await call(a, 'POST', body)).statusCode, 502, 'the first try fails at storage');
+  store.failPut = false;
+  const taps = await Promise.all([call(a, 'POST', body), call(a, 'POST', body), call(a, 'POST', body), call(a, 'POST', body)]);
+  assert.ok(taps.every((r) => [200, 201].includes(r.statusCode)), JSON.stringify(taps.map((r) => [r.statusCode, r.body?.error])));
+  assert.equal((await db.collection(`signalsPairs/${pairId}/messages`).get()).size, 1, 'one message');
+  assert.equal(new Set(taps.map((r) => r.body.id)).size, 1);
+  assert.equal(store.objects.size, 1, 'one stored object');
+  assert.equal((await call(a, 'POST', body)).statusCode, 200, 'and a later repeat is answered with the stored message');
+  assert.ok((await metaCount()) <= 2);
+});
+
+test('with the real R2 client over HTTP, a photo uploads, the message is created, the recipient opens it, and cleanup deletes it', { skip }, async () => {
+  const { a, b, db, pairId, media, clock } = await setup();
+  const { startFakeS3 } = await import('./fake-s3-server.js');
+  const s3 = await startFakeS3();
+  try {
+    const real = media.createR2Store({ endpoint: s3.endpoint, bucket: s3.bucket, accessKeyId: s3.accessKeyId, secretAccessKey: s3.secretAccessKey });
+    const handlers = media.createMediaHandlers({ getStore: () => real, now: () => clock.now });
+    for (const timerSeconds of [3, 5, 8]) {
+      const sent = await handlers.sendPhoto(db, a.uid, { pairId, messageId: `real-http-photo-${timerSeconds}`, timerSeconds, image: toBase64(makeJpeg({ pad: 400 })) });
+      assert.equal(sent.status, 201, `${timerSeconds}s`);
+      assert.equal((await db.doc(`signalsPairs/${pairId}/messages/real-http-photo-${timerSeconds}`).get()).data().durationSec, timerSeconds);
+    }
+    assert.equal(s3.objects.size, 3, 'three private objects were stored over HTTP');
+    assert.ok(s3.requests.every((r) => r.authorized), 'every request was correctly signed');
+    const opened = await handlers.openPhoto(db, b.uid, { pairId, messageId: 'real-http-photo-5' });
+    assert.equal(opened.body.durationSec, 5);
+    assert.equal(opened.body.remainingMs, 5000);
+    assert.equal(Buffer.from(opened.body.image, 'base64').includes(GPS_MARKER), false);
+    clock.now += 10_000;
+    assert.equal(await code(handlers.openPhoto(db, b.uid, { pairId, messageId: 'real-http-photo-5' })), '410:photo_expired');
+    clock.now += 2 * 24 * 3_600_000;
+    const swept = await handlers.sweep(db);
+    assert.equal(swept.failed, 0);
+    assert.equal(s3.objects.size, 0, 'cleanup deleted every object over HTTP');
+    assert.equal((await db.collection('signalsMedia').get()).size, 0);
+  } finally {
+    await s3.close();
+  }
+});
+
+test('the protected storage check reports each step, and only to the scheduler\'s secret', { skip }, async () => {
+  const { cleanup, response, media, store } = await setup();
+  const run = async (headers, query) => { const res = response(); await cleanup({ method: 'GET', headers, query }, res); return res; };
+  process.env.CRON_SECRET = 'a-long-random-cron-secret-value';
+  const auth = { authorization: 'Bearer a-long-random-cron-secret-value' };
+  assert.equal((await run({}, { check: '1' })).statusCode, 401, 'no secret, no check');
+  const ok = await run(auth, { check: '1' });
+  assert.equal(ok.statusCode, 200);
+  assert.deepEqual([ok.body.configured, ok.body.put, ok.body.get, ok.body.delete, ok.body.ok], [true, 'ok', 'ok', 'ok', true]);
+  store.failPut = true;
+  const broken = await run(auth, { check: '1' });
+  assert.deepEqual([broken.body.ok, broken.body.put], [false, 'r2_500']);
+  store.failPut = false;
+  media.setMediaStoreForTests(null);
+  await withoutR2Settings(async () => {
+    const none = await run(auth, { check: '1' });
+    assert.equal(none.body.configured, false);
+    assert.deepEqual(none.body.missing, ['R2_ENDPOINT', 'R2_BUCKET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY']);
+    assert.equal(/cron-secret|https?:|cloudflarestorage/.test(JSON.stringify(none.body)), false, 'only setting names, never a value or URL');
+  });
+  delete process.env.CRON_SECRET;
 });

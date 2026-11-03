@@ -4,7 +4,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp, send } from './_lib.js';
-import { createMediaHandlers } from './_media.js';
+import { checkStorage, createMediaHandlers } from './_media.js';
 
 const BATCHES = 8;
 const media = createMediaHandlers();
@@ -24,6 +24,10 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (!authorized(req)) return send(res, 401, { error: 'unauthorized' });
   try {
+    // ?check=1: confirm the storage settings work by writing, reading and deleting a tiny object. Answers with steps and
+    // error codes only, never a credential, an endpoint or a URL.
+    const wantsCheck = (req.query?.check ?? new URL(req.url || '/', 'http://localhost').searchParams.get('check')) === '1';
+    if (wantsCheck) return send(res, 200, await checkStorage(media.currentStore()));
     const db = getFirestore(getAdminApp());
     const total = { due: 0, deleted: 0, failed: 0 };
     for (let i = 0; i < BATCHES; i += 1) {
