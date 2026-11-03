@@ -34,7 +34,7 @@ test('Looking For has the six categories and the filters asked for', () => {
 });
 
 test('the composer has every requested field, and the NSFW toggle with its description', () => {
-  for (const text of ['Title', 'About you', 'What are you looking for?', 'Preferred age range', 'Location', 'Interests', 'Looking for', 'Show my avatar', 'Mark as NSFW', 'Hide mature or sexually suggestive content behind a content warning.', 'Content warning']) {
+  for (const text of ['Title', 'About me', 'About you', 'Preferred age range', 'Location', 'Interests', 'Looking for', 'Show my avatar', 'Mark as NSFW', 'Hide mature or sexually suggestive content behind a content warning.', 'Content warning']) {
     assert.ok(composer.includes(text), text);
   }
   assert.match(composer, /Don’t show a location/, 'location is optional and city or province only');
@@ -159,7 +159,7 @@ test('reading the board still needs an eligible adult member, and the rules for 
 });
 
 test('the flair list is identical in the rules, the server and the app', () => {
-  const inRules = [...rules.slice(rules.indexOf('function lookingForFlairs()'), rules.indexOf('function validLookingForBody')).matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const inRules = [...rules.slice(rules.indexOf('function lookingForFlairs()'), rules.indexOf('// "About me" and "About you"')).matchAll(/'([^']+)'/g)].map((m) => m[1]);
   assert.deepEqual(inRules, [...CLIENT_FLAIRS]);
   assert.deepEqual([...SERVER_FLAIRS], [...CLIENT_FLAIRS]);
   assert.equal(CLIENT_FLAIRS.length, 13);
@@ -181,11 +181,11 @@ test('the composer asks for the flair with compact pills, previews the generated
   assert.match(composer, /role="radiogroup" aria-label="Looking for flair"/);
   assert.match(composer, /LOOKING_FOR_FLAIRS\.map\(\(flair\) =>/);
   assert.match(composer, /aria-checked=\{draft\.flair === flair\}/, 'single selection');
-  assert.match(composer, /const preview = composeTitle\(ownAge, draft\.flair, draft\.title \|\| 'Your title'\);/);
-  assert.match(composer, /aria-live="polite"[^>]*>\{preview\}<\/p>/, 'a live preview');
+  assert.match(composer, /<PostMeta age=\{ownAge \?\? undefined\} flair=\{draft\.flair \|\| undefined\} intention=\{draft\.intention\} \/>/, 'a live preview of age, flair and intention');
+  assert.match(composer, /draft\.title\.trim\(\) \|\| 'Your title'/);
   assert.doesNotMatch(composer, /showAge|lf-show-age/, 'the age is not a toggle or an input');
   assert.match(composer, /You’ll post as \$\{ownAge\}, from your profile\./);
-  assert.match(board.length ? read('src/components/LookingForBody.tsx') : '', /postDisplayTitle\(post\)/, 'cards show the generated title');
+  assert.match(read('src/components/LookingForBody.tsx'), /<PostMeta age=\{post\.age\} flair=\{post\.flair\} intention=\{post\.intention\} \/>/, 'cards show age, flair and intention above the title');
 });
 
 test('the rules require an age and a flair on a new post, validate both, and still let an older post be paused', () => {
@@ -193,4 +193,54 @@ test('the rules require an age and a flair on a new post, validate both, and sti
   assert.match(lfRules, /!\('flair' in data\) \|\| data\.flair in lookingForFlairs\(\)/);
   assert.match(lfRules, /lookingForAgeMatches\(data\.age\)/, 'the age is checked against the private birthday');
   assert.match(lfRules, /affectedKeys\(\)\.hasOnly\(\['requestsPaused', 'updatedAt'\]\)/);
+});
+
+test('NSFW Connection appears in the composer and on the board with its own subtle styling, and always marks the post mature', () => {
+  assert.match(composer, /const chooseIntention = /);
+  assert.match(composer, /id === NSFW_INTENTION \? \(draft\.intention === id \? '!bg-danger\/20 !text-danger !border-danger\/60'/);
+  assert.match(composer, /disabled=\{alwaysMature\}/, 'the NSFW switch is locked on for this intention');
+  assert.match(board, /cat\.id === 'nsfw'/, 'a distinct filter chip');
+  assert.match(lfRules, /return \['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw'\];/);
+  assert.match(lfRules, /\(data\.intention != 'nsfw' \|\| data\.isNsfw == true\)/, 'the rules force it to be mature');
+  assert.match(read('src/utils/lookingFor.ts'), /const isNsfw = draft\.isNsfw \|\| draft\.intention === NSFW_INTENTION;/);
+});
+
+test('the form asks for About me and About you with the requested placeholders and live counters', () => {
+  assert.match(composer, /<Label htmlFor="lf-intro">About me<\/Label>/);
+  assert.match(composer, /<Label htmlFor="lf-looking">About you<\/Label>/);
+  assert.match(composer, /placeholder="Tell us about yourself! Share your personality, hobbies, interests, lifestyle, and little things that make you who you are\."/);
+  assert.match(composer, /placeholder="Describe the person you’d like to meet, their personality, interests, and the kind of connection you hope to build\."/);
+  assert.match(composer, /const aboutMe = draft\.intro\.trim\(\)\.length;/, 'trimmed counts');
+  assert.match(composer, /const aboutYou = draft\.lookingFor\.trim\(\)\.length;/);
+  assert.match(composer, /\{aboutMe\}\/\{LIMITS\.intro\} · at least \{LIMITS\.minSection\}/);
+  assert.match(composer, /\{aboutYou\}\/\{LIMITS\.lookingFor\} · at least \{LIMITS\.minSection\}/);
+  assert.doesNotMatch(composer, /What are you looking for\?/);
+  assert.match(composer, /Object.keys\(errors\)\.length > 0 \|\| saving/, 'publishing is blocked while either section is short');
+});
+
+test('a published post shows meta, then the title, then About me, then About you, and never "What are you looking for?"', () => {
+  const body = read('src/components/LookingForBody.tsx');
+  const at = (text) => body.indexOf(text);
+  assert.ok(at('<PostMeta age={post.age}') > 0 && at('<PostMeta') < at('{post.title}</h3>'), 'age, flair and intention first');
+  assert.ok(at('{post.title}</h3>') < at('aria-label="About me"'), 'the title comes before About me');
+  assert.ok(at('aria-label="About me"') < at('aria-label="About you"'), 'About me is the first section, About you the second');
+  assert.match(body, /<h4[^>]*>About me<\/h4>/);
+  assert.match(body, /<h4[^>]*>About you\{preferred/);
+  assert.doesNotMatch(body, /Looking for\{preferred|What are you looking for/);
+  assert.match(body, /mt-4 rounded-xl/, 'the sections are visually distinct');
+  assert.match(body, /\{post\.intro\}/);
+  assert.match(body, /\{post\.lookingFor\}/);
+  assert.match(body, /INTENTION_LABELS\[intention\]/);
+  for (const file of ['LookingForView', 'ProfileSections']) {
+    const view = read(`src/components/${file}.tsx`);
+    assert.match(view, /presentation !== 'open' && <Badge>\{INTENTION_LABELS\[post\.intention\]\}<\/Badge>/, `${file}: no repeated intention once the post is open`);
+  }
+});
+
+test('the rules require 100 trimmed characters in both sections on a new post, and only on a section an edit changes', () => {
+  assert.match(lfRules, /text\.size\(\) >= 100 && text\.matches\('\^\\\\S\[\\\\s\\\\S\]\*\\\\S\$'\)/);
+  assert.match(lfRules, /&& lookingForSection\(request\.resource\.data\.intro\)\s*&& lookingForSection\(request\.resource\.data\.lookingFor\)/);
+  assert.match(lfRules, /request\.resource\.data\.intro == resource\.data\.intro \|\| lookingForSection\(request\.resource\.data\.intro\)/);
+  assert.match(lfRules, /request\.resource\.data\.lookingFor == resource\.data\.lookingFor \|\| lookingForSection\(request\.resource\.data\.lookingFor\)/);
+  assert.match(lfRules, /data\.intro is string && data\.intro\.size\(\) >= 1 && data\.intro\.size\(\) <= 400/, 'the maximums are kept');
 });

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { Sheet } from './Sheet.tsx';
+import { PostMeta } from './LookingForBody.tsx';
 import type { UserPreferences } from '../types.ts';
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
 import { PHILIPPINE_REGIONS_AND_LOCATIONS } from '../utils/philippines-locations.ts';
@@ -12,7 +13,7 @@ import {
   INTENTION_LABELS,
   LIMITS,
   LOOKING_FOR_FLAIRS,
-  composeTitle,
+  NSFW_INTENTION,
   type DraftErrors,
   lookingForPostId,
   validateDraft,
@@ -31,7 +32,7 @@ const Label: React.FC<{ htmlFor?: string; children: React.ReactNode; hint?: stri
   </div>
 );
 
-const Switch: React.FC<{ checked: boolean; onChange: (value: boolean) => void; label: string; description?: string; id: string }> = ({ checked, onChange, label, description, id }) => (
+const Switch: React.FC<{ checked: boolean; onChange: (value: boolean) => void; label: string; description?: string; id: string; disabled?: boolean }> = ({ checked, onChange, label, description, id, disabled }) => (
   <div className="flex items-start gap-3">
     <div className="min-w-0 flex-1">
       <label htmlFor={id} className="text-[length:calc(14px_*_var(--fs,1))] font-medium text-fg">{label}</label>
@@ -42,8 +43,9 @@ const Switch: React.FC<{ checked: boolean; onChange: (value: boolean) => void; l
       type="button"
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative mt-0.5 h-7 w-12 shrink-0 rounded-full border transition-colors cursor-pointer ${checked ? 'border-berry bg-berry' : 'border-line bg-raised'}`}
+      className={`relative mt-0.5 h-7 w-12 shrink-0 rounded-full border transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${checked ? 'border-berry bg-berry' : 'border-line bg-raised'}`}
     >
       <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-fg transition-all ${checked ? 'left-[26px] !bg-ink' : 'left-0.5'}`} />
     </button>
@@ -70,6 +72,9 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
   const ownAge = ownAgeFrom(userPrefs);
   const errors = useMemo(() => validateDraft(draft, ownAge), [draft, ownAge]);
   const set = <K extends keyof LookingForDraft>(key: K, value: LookingForDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
+  // NSFW Connection is always mature; leaving it clears the mark it added.
+  const chooseIntention = (id: (typeof INTENTIONS)[number]) => setDraft((d) => ({ ...d, intention: id, isNsfw: id === NSFW_INTENTION ? true : d.intention === NSFW_INTENTION ? false : d.isNsfw }));
+  const alwaysMature = draft.intention === NSFW_INTENTION;
   const replacesOwn = !editing && uid && draft.intention && ownPostIds.includes(lookingForPostId(uid, draft.intention));
 
   const addTag = (event: React.SyntheticEvent) => {
@@ -97,6 +102,12 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
       }
       cleaned[key] = result.cleanText;
     }
+    // Cleaning can shorten a text, so the minimum is checked again on what will actually be saved.
+    const cleanedErrors = validateDraft(cleaned, ownAge);
+    if (cleanedErrors.intro || cleanedErrors.lookingFor) {
+      setProblem('After cleaning, one of the sections is shorter than the minimum. Please add a little more.');
+      return;
+    }
     setSaving(true);
     setProblem(null);
     const result = await saveLookingForPost(userPrefs, cleaned);
@@ -107,7 +118,8 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
   };
 
   const shown = (key: keyof DraftErrors) => (submitted ? errors[key] : undefined);
-  const preview = composeTitle(ownAge, draft.flair, draft.title || 'Your title');
+  const aboutMe = draft.intro.trim().length;
+  const aboutYou = draft.lookingFor.trim().length;
 
   return (
     <Sheet
@@ -132,8 +144,8 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
                 role="radio"
                 aria-checked={draft.intention === id}
                 disabled={Boolean(editing) && draft.intention !== id}
-                onClick={() => set('intention', id)}
-                className={`chip ${draft.intention === id ? '!bg-fg !text-ink !border-fg' : ''} disabled:opacity-40`}
+                onClick={() => chooseIntention(id)}
+                className={`chip ${id === NSFW_INTENTION ? (draft.intention === id ? '!bg-danger/20 !text-danger !border-danger/60' : '!text-danger/90 !border-danger/30') : draft.intention === id ? '!bg-fg !text-ink !border-fg' : ''} disabled:opacity-40`}
               >
                 {INTENTION_LABELS[id]}
               </button>
@@ -168,18 +180,25 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
           <Label htmlFor="lf-title">Title</Label>
           <input id="lf-title" value={draft.title} onChange={(e) => set('title', e.target.value.slice(0, LIMITS.title))} maxLength={LIMITS.title} placeholder="Looking for kasama mag-coffee" className={`${field} h-11`} />
           {shown('title') && <p className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">{shown('title')}</p>}
-          <p aria-live="polite" className="mt-2 rounded-xl border border-line bg-raised/40 px-3 py-2 text-[length:calc(13px_*_var(--fs,1))] font-semibold text-fg leading-snug [overflow-wrap:anywhere]">{preview}</p>
+          {draft.intention && (
+            <div className="mt-2 space-y-1.5 rounded-xl border border-line bg-raised/40 px-3 py-2.5">
+              <PostMeta age={ownAge ?? undefined} flair={draft.flair || undefined} intention={draft.intention} />
+              <p className="text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg leading-snug [overflow-wrap:anywhere]">{draft.title.trim() || 'Your title'}</p>
+            </div>
+          )}
         </div>
 
         <div>
-          <Label htmlFor="lf-intro">About you</Label>
-          <textarea id="lf-intro" value={draft.intro} onChange={(e) => set('intro', e.target.value.slice(0, LIMITS.intro))} maxLength={LIMITS.intro} rows={3} placeholder="A short introduction" className={`${field} py-2.5 resize-none`} />
+          <Label htmlFor="lf-intro">About me</Label>
+          <textarea id="lf-intro" value={draft.intro} onChange={(e) => set('intro', e.target.value.slice(0, LIMITS.intro))} maxLength={LIMITS.intro} rows={4} aria-describedby="lf-intro-count" placeholder="Tell us about yourself! Share your personality, hobbies, interests, lifestyle, and little things that make you who you are." className={`${field} py-2.5 resize-none`} />
+          <p id="lf-intro-count" className={`mt-1 text-right text-[length:calc(12px_*_var(--fs,1))] ${aboutMe >= LIMITS.minSection ? 'text-subtle' : submitted ? 'text-danger' : 'text-subtle'}`}>{aboutMe}/{LIMITS.intro} · at least {LIMITS.minSection}</p>
           {shown('intro') && <p className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">{shown('intro')}</p>}
         </div>
 
         <div>
-          <Label htmlFor="lf-looking">What are you looking for?</Label>
-          <textarea id="lf-looking" value={draft.lookingFor} onChange={(e) => set('lookingFor', e.target.value.slice(0, LIMITS.lookingFor))} maxLength={LIMITS.lookingFor} rows={3} placeholder="The kind of person or connection you hope to find" className={`${field} py-2.5 resize-none`} />
+          <Label htmlFor="lf-looking">About you</Label>
+          <textarea id="lf-looking" value={draft.lookingFor} onChange={(e) => set('lookingFor', e.target.value.slice(0, LIMITS.lookingFor))} maxLength={LIMITS.lookingFor} rows={4} aria-describedby="lf-looking-count" placeholder="Describe the person you’d like to meet, their personality, interests, and the kind of connection you hope to build." className={`${field} py-2.5 resize-none`} />
+          <p id="lf-looking-count" className={`mt-1 text-right text-[length:calc(12px_*_var(--fs,1))] ${aboutYou >= LIMITS.minSection ? 'text-subtle' : submitted ? 'text-danger' : 'text-subtle'}`}>{aboutYou}/{LIMITS.lookingFor} · at least {LIMITS.minSection}</p>
           {shown('lookingFor') && <p className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">{shown('lookingFor')}</p>}
         </div>
 
@@ -236,8 +255,8 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
         </div>
 
         <div className="space-y-3 rounded-2xl border border-line bg-raised/40 p-4">
-          <Switch id="lf-nsfw" checked={draft.isNsfw} onChange={(v) => set('isNsfw', v)} label="Mark as NSFW" description="Hide mature or sexually suggestive content behind a content warning." />
-          {draft.isNsfw && (
+          <Switch id="lf-nsfw" checked={draft.isNsfw || alwaysMature} disabled={alwaysMature} onChange={(v) => set('isNsfw', v)} label="Mark as NSFW" description={alwaysMature ? 'NSFW Connection posts are always marked mature.' : 'Hide mature or sexually suggestive content behind a content warning.'} />
+          {(draft.isNsfw || alwaysMature) && (
             <div>
               <Label htmlFor="lf-warning" hint="Optional. Shown on the cover, so keep it brief and free of explicit detail.">Content warning</Label>
               <input id="lf-warning" value={draft.contentWarning} onChange={(e) => set('contentWarning', e.target.value.slice(0, LIMITS.contentWarning))} maxLength={LIMITS.contentWarning} placeholder="e.g. Mature themes" className={`${field} h-11`} />

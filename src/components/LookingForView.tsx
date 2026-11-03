@@ -165,7 +165,7 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
       <div className="flex items-center gap-2 mb-4">
         <div role="tablist" aria-label="Looking for categories" className="-mx-4 px-4 sm:mx-0 sm:px-0 flex flex-1 min-w-0 gap-2 overflow-x-auto scrollbar-none pb-1">
           {LOOKING_FOR_CATEGORIES.map((cat) => (
-            <button key={cat.id} role="tab" aria-selected={filters.category === cat.id} onClick={() => setFilter('category', cat.id)} className={`chip shrink-0 ${filters.category === cat.id ? '!bg-fg !text-ink !border-fg' : ''}`}>
+            <button key={cat.id} role="tab" aria-selected={filters.category === cat.id} onClick={() => setFilter('category', cat.id)} className={`chip shrink-0 ${cat.id === 'nsfw' ? (filters.category === cat.id ? '!bg-danger/20 !text-danger !border-danger/60' : '!text-danger/90 !border-danger/30') : filters.category === cat.id ? '!bg-fg !text-ink !border-fg' : ''}`}>
               {cat.label}
             </button>
           ))}
@@ -218,10 +218,9 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                       {post.author} {post.authorPronouns && <span className="font-normal text-subtle">{post.authorPronouns}</span>}
                     </p>
                     <p className="mt-0.5 flex items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle min-w-0">
-                      <Badge>{INTENTION_LABELS[post.intention]}</Badge>
+                      {presentation !== 'open' && <Badge>{INTENTION_LABELS[post.intention]}</Badge>}
                       {post.requestsPaused && <span className="shrink-0 text-subtle">Paused</span>}
                       <span className="truncate">
-                        {presentation === 'open' && post.age !== undefined && <>{post.age} · </>}
                         {presentation === 'open' && post.region && <><MapPin className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> {post.region} · </>}
                         {formatRelativeTime(post.timestamp)}
                       </span>

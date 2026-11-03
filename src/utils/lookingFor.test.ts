@@ -4,6 +4,12 @@ import {
   activeFilterCount,
   applyLookingForFilters,
   cleanTag,
+  INTENTIONS,
+  LIMITS,
+  INTENTION_LABELS,
+  LOOKING_FOR_CATEGORIES,
+  NSFW_INTENTION,
+  isIntention,
   composeTitle,
   isFlair,
   LOOKING_FOR_FLAIRS,
@@ -32,8 +38,10 @@ const post = (over: Partial<LookingForPost> = {}): LookingForPost => ({
   intention: 'dating', tags: [], isNsfw: false, contentWarning: null, requestsPaused: false, timestamp: 1, ...over,
 });
 
+const ABOUT_ME = "I'm a soft masc who enjoys coffee dates, spontaneous road trips, music, and meaningful conversations. I'm a little introverted at first.";
+const ABOUT_YOU = "Hoping to meet someone feminine who enjoys simple dates, deep conversations, and exploring new places. Someone genuine and kind.";
 const draft = (over: Partial<LookingForDraft> = {}): LookingForDraft => ({
-  ...EMPTY_DRAFT, title: 'Hello', intro: 'About me', lookingFor: 'Someone kind', intention: 'friendship', flair: 'Masc × Femme', ...over,
+  ...EMPTY_DRAFT, title: 'Hello', intro: ABOUT_ME, lookingFor: ABOUT_YOU, intention: 'friendship', flair: 'Masc × Femme', ...over,
 });
 
 test('the board filters by category, blocked authors, age, location, interest and mature posts', () => {
@@ -230,4 +238,66 @@ test('posts from before flairs still read and show their title unchanged', () =>
   assert.equal(postDisplayTitle(post({ title: 'Old post', age: 25 })), 'Old post', 'an age alone adds nothing');
   assert.equal(postDisplayTitle(post({ title: 'Old post', flair: 'Masc × Femme' })), 'Old post', 'a flair alone adds nothing');
   assert.equal(composeTitle(18, 'not a flair', 'Old post'), 'Old post');
+});
+
+// ------------------------------------------------------------------------------------------- NSFW Connection
+test('NSFW Connection is a sixth intention, selectable, named and filterable like the others', () => {
+  assert.equal(INTENTIONS.length, 6);
+  assert.deepEqual([...INTENTIONS], ['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw']);
+  assert.equal(INTENTION_LABELS.nsfw, 'NSFW Connection');
+  assert.equal(NSFW_INTENTION, 'nsfw');
+  assert.ok(isIntention('nsfw'));
+  assert.ok(!isIntention('NSFW'));
+  assert.ok(LOOKING_FOR_CATEGORIES.some((c) => c.id === 'nsfw'));
+  assert.equal(lookingForPostId('abc', 'nsfw'), 'abc_nsfw');
+  const board = [post({ id: 'a_nsfw', authorId: 'a', intention: 'nsfw', isNsfw: true }), post({ id: 'b_dating', authorId: 'b', intention: 'dating' })];
+  assert.deepEqual(applyLookingForFilters(board, { ...NO_FILTERS, category: 'nsfw' }).map((p) => p.id), ['a_nsfw']);
+  assert.deepEqual(applyLookingForFilters(board, { ...NO_FILTERS, category: 'dating' }).map((p) => p.id), ['b_dating']);
+  assert.deepEqual(applyLookingForFilters(board, { ...NO_FILTERS, mature: 'hide' }).map((p) => p.id), ['b_dating'], 'hiding mature posts hides them');
+});
+
+test('an NSFW Connection post is always stored as mature, whatever the switch says, and other intentions are unchanged', () => {
+  const author = { uid: 'u1', name: 'W', pronouns: '' };
+  assert.equal(draftToDocument(draft({ intention: 'nsfw', isNsfw: false }), author, 30).isNsfw, true);
+  assert.equal(draftToDocument(draft({ intention: 'nsfw', isNsfw: true, contentWarning: 'Mature themes' }), author, 30).contentWarning, 'Mature themes');
+  assert.equal(draftToDocument(draft({ intention: 'nsfw', isNsfw: false, contentWarning: 'leftover' }), author, 30).contentWarning, 'leftover', 'the warning travels because the post is mature');
+  assert.equal(draftToDocument(draft({ intention: 'dating', isNsfw: false }), author, 30).isNsfw, false);
+  assert.equal(draftToDocument(draft({ intention: 'dating', isNsfw: true }), author, 30).isNsfw, true);
+  assert.deepEqual(validateDraft(draft({ intention: 'nsfw' }), 27), {});
+  assert.equal(postPresentation({ isNsfw: true }, 'hide', true), 'blocked');
+  assert.equal(postPresentation({ isNsfw: true }, 'ask', false), 'concealed');
+});
+
+// ------------------------------------------------------------------------------------- About me / About you minimums
+test('the two sample sections are long enough, and the minimum is 100 trimmed characters with the old maximums kept', () => {
+  assert.ok(ABOUT_ME.length >= 100 && ABOUT_YOU.length >= 100);
+  assert.equal(LIMITS.minSection, 100);
+  assert.equal(LIMITS.intro, 400);
+  assert.equal(LIMITS.lookingFor, 400);
+});
+
+test('About me and About you each need 100 characters, counted after trimming', () => {
+  const exactly = (n: number) => 'a'.repeat(n);
+  assert.deepEqual(validateDraft(draft({ intro: exactly(100), lookingFor: exactly(100) }), 27), {});
+  assert.ok(validateDraft(draft({ intro: exactly(99) }), 27).intro, '99 is too short');
+  assert.ok(validateDraft(draft({ lookingFor: exactly(99) }), 27).lookingFor, '99 is too short');
+  assert.ok(validateDraft(draft({ intro: '   ' + exactly(98) + '   ' }), 27).intro, 'padding spaces do not count');
+  assert.ok(validateDraft(draft({ lookingFor: '\n\n' + exactly(98) + '\n' }), 27).lookingFor, 'blank lines do not count');
+  assert.equal(validateDraft(draft({ intro: '  ' + exactly(100) + '  ' }), 27).intro, undefined);
+  assert.ok(validateDraft(draft({ intro: '', lookingFor: '' }), 27).intro);
+  assert.ok(validateDraft(draft({ intro: '', lookingFor: '' }), 27).lookingFor);
+});
+
+test('the saved sections are trimmed, so their stored length is the counted length', () => {
+  const doc = draftToDocument(draft({ intro: '  ' + ABOUT_ME + '  ', lookingFor: '\n' + ABOUT_YOU + '\n' }), { uid: 'u1', name: 'W', pronouns: '' }, 30);
+  assert.equal(doc.intro, ABOUT_ME);
+  assert.equal(doc.lookingFor, ABOUT_YOU);
+  const cut = draftToDocument(draft({ intro: 'x'.repeat(399) + ' y' }), { uid: 'u1', name: 'W', pronouns: '' }, 30);
+  assert.equal(cut.intro, 'x'.repeat(399), 'a cut that ends on a space is trimmed again');
+});
+
+test('older posts with short sections are still read as they are', () => {
+  assert.equal(post({ intro: 'short', lookingFor: 'short' }).intro, 'short');
+  const d = draftFromPost(post({ intro: 'short', lookingFor: 'short' }));
+  assert.ok(validateDraft(d, 27).intro, 'editing one asks for the new minimum');
 });

@@ -581,7 +581,7 @@ service cloud.firestore {
     // re-checks age, blocks and suspensions on the server.
 
     function lookingForIntentions() {
-      return ['dating', 'friendship', 'talk', 'gaming', 'open'];
+      return ['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw'];
     }
 
     function lookingForPath(postId) {
@@ -603,6 +603,11 @@ service cloud.firestore {
               'Andro × Masc', 'Andro × Femme', 'Andro × Any', 'Trans Femme × Masc', 'Trans Femme × Femme', 'Trans Femme × Any', 'All WLW'];
     }
 
+    // "About me" and "About you": at least 100 characters, and stored already trimmed so the count is of real text.
+    function lookingForSection(text) {
+      return text is string && text.size() >= 100 && text.matches('^\\S[\\s\\S]*\\S$');
+    }
+
     function validLookingForBody(data) {
       return validAuthorFields(data)
         && (!('flair' in data) || data.flair in lookingForFlairs())
@@ -612,6 +617,8 @@ service cloud.firestore {
         && data.intention in lookingForIntentions()
         && data.tags is list && data.tags.size() <= 6
         && data.isNsfw is bool
+        // NSFW Connection posts are always mature, so they are always concealed on the board.
+        && (data.intention != 'nsfw' || data.isNsfw == true)
         && (data.isNsfw
               ? (data.contentWarning == null || (data.contentWarning is string && data.contentWarning.size() <= 120))
               : data.contentWarning == null)
@@ -633,6 +640,8 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'title', 'intro', 'lookingFor', 'intention', 'age', 'flair', 'tags', 'isNsfw', 'contentWarning', 'timestamp'])
         && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'intro', 'lookingFor', 'intention', 'age', 'flair', 'seekAgeMin', 'seekAgeMax', 'region', 'tags', 'isNsfw', 'contentWarning', 'requestsPaused', 'timestamp', 'updatedAt'])
         && validLookingForBody(request.resource.data)
+        && lookingForSection(request.resource.data.intro)
+        && lookingForSection(request.resource.data.lookingFor)
         && request.resource.data.timestamp == request.time
         && slowMode('lookingForPost', 60);
 
@@ -646,6 +655,9 @@ service cloud.firestore {
         // An edit must carry an age and a flair; a post from before flairs can still be paused or resumed as it is.
         && (('age' in request.resource.data && 'flair' in request.resource.data)
             || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requestsPaused', 'updatedAt']))
+        // A section the edit changes must meet the minimum; an older, shorter one can stay as it is (pause, resume, retitle).
+        && (request.resource.data.intro == resource.data.intro || lookingForSection(request.resource.data.intro))
+        && (request.resource.data.lookingFor == resource.data.lookingFor || lookingForSection(request.resource.data.lookingFor))
         && request.resource.data.authorId == resource.data.authorId
         && request.resource.data.intention == resource.data.intention
         && request.resource.data.timestamp == resource.data.timestamp
