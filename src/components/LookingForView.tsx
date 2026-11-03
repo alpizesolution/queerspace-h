@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, EyeOff, Flag, MapPin, Pause, Pencil, Plus, ShieldAlert, SlidersHorizontal, Trash2, UserX } from 'lucide-react';
-import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { CheckCircle2, Flag, MapPin, Pause, Pencil, Plus, ShieldAlert, SlidersHorizontal, Trash2, UserX } from 'lucide-react';
+import { MemberAvatar } from './ProfileNav.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { LookingForBody } from './LookingForBody.tsx';
+import { SensitiveCover } from './SensitiveCover.tsx';
 import { ConnectionRequestSheet } from './ConnectionRequestSheet.tsx';
 import { LookingForComposer } from './LookingForComposer.tsx';
 import type { UserPreferences } from '../types.ts';
@@ -51,16 +52,6 @@ const Badge: React.FC<{ children: React.ReactNode; tone?: 'nsfw' | 'soft' }> = (
   <span className={`inline-flex items-center h-6 px-2 rounded-full text-[length:calc(11px_*_var(--fs,1))] font-semibold tracking-wide ${tone === 'nsfw' ? 'bg-danger/15 text-danger border border-danger/30' : 'bg-plum/30 text-lavender border border-lavender/20'}`}>
     {children}
   </span>
-);
-
-/** Soft placeholder lines standing in for hidden text, so nothing sensitive is in the page until it is revealed. */
-const CoverLines: React.FC = () => (
-  <div aria-hidden="true" className="space-y-2 blur-[3px] select-none">
-    <div className="h-4 w-4/5 rounded-full bg-line-strong/60" />
-    <div className="h-3 w-full rounded-full bg-line/70" />
-    <div className="h-3 w-11/12 rounded-full bg-line/70" />
-    <div className="h-3 w-2/3 rounded-full bg-line/70" />
-  </div>
 );
 
 export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, nsfwPreference, onOpenSettings, onBlockMember, onViewRequests }) => {
@@ -199,7 +190,7 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
             return (
               <article key={post.id} className="scroll-mt-[calc(var(--header-h)+0.5rem)] rounded-3xl border border-line bg-gradient-to-b from-raised/60 to-surface p-4 sm:p-5">
                 <header className="flex items-center gap-2.5">
-                  <AnimalAvatar avatar={post.authorAvatar} seed={post.authorId || post.author} className="w-10 h-10" />
+                  <MemberAvatar memberId={post.authorId} avatar={post.authorAvatar} seed={post.authorId || post.author} name={post.author} className="w-10 h-10" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg truncate">
                       {post.author} {post.authorPronouns && <span className="font-normal text-subtle">{post.authorPronouns}</span>}
@@ -247,22 +238,12 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                     onRequest={() => setRequestPost(post)}
                   />
                 ) : (
-                  <div className="mt-3 relative rounded-2xl border border-line bg-ink/40 overflow-hidden">
-                    <div className="absolute inset-0 p-4"><CoverLines /></div>
-                    <div className="relative flex flex-col items-center gap-1.5 bg-surface/60 px-4 py-4 text-center">
-                      <EyeOff className="w-5 h-5 text-lavender" aria-hidden="true" />
-                      <p className="text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg">Sensitive content</p>
-                      {post.contentWarning && <p className="text-[length:calc(12px_*_var(--fs,1))] text-muted [overflow-wrap:anywhere]">{post.contentWarning}</p>}
-                      {presentation === 'blocked' ? (
-                        <>
-                          <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">Hidden by your content setting.</p>
-                          {onOpenSettings && <button type="button" onClick={onOpenSettings} className="btn btn-secondary btn-sm">Change setting</button>}
-                        </>
-                      ) : (
-                        <button type="button" onClick={() => reveal(post)} className="btn btn-secondary btn-sm">Reveal content</button>
-                      )}
-                    </div>
-                  </div>
+                  <SensitiveCover
+                    contentWarning={post.contentWarning}
+                    blocked={presentation === 'blocked'}
+                    onReveal={() => reveal(post)}
+                    onOpenSettings={onOpenSettings}
+                  />
                 )}
               </article>
             );

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Flag, LoaderCircle, MessageCircle, UserRound, UserX } from 'lucide-react';
-import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { MemberAvatar, useOpenProfile } from './ProfileNav.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { ExpandableText } from './ExpandableText.tsx';
 import {
@@ -27,7 +27,7 @@ interface Props {
   initialTab?: 'incoming' | 'sent';
 }
 
-type Target = { kind: 'decline' | 'withdraw' | 'block' | 'report' | 'profile'; request: ConnectionRequest };
+type Target = { kind: 'decline' | 'withdraw' | 'block' | 'report'; request: ConnectionRequest };
 
 const nameOf = (r: ConnectionRequest) => r.partner.displayName || 'Anonymous member';
 
@@ -56,6 +56,7 @@ export const ConnectionRequestsPanel: React.FC<Props> = ({ rev, onChanged, onOpe
   const [target, setTarget] = useState<Target | null>(null);
   const [reason, setReason] = useState<string>(REPORT_REASONS[0]);
   const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(null);
+  const openProfile = useOpenProfile();
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -129,7 +130,7 @@ export const ConnectionRequestsPanel: React.FC<Props> = ({ rev, onChanged, onOpe
   const sendReport = async () => {
     if (!target) return;
     setBusyId(target.request.id);
-    const ok = await reportRequestMember(target.request.memberId, reason);
+    const ok = await reportRequestMember(target.request.memberId, `Connection request: ${reason}`);
     setBusyId(null);
     setTarget(null);
     setNotice(ok ? { text: 'Thanks. Our safety team will review this.', ok: true } : { text: 'Couldn’t send your report. Please try again.', ok: false });
@@ -142,7 +143,7 @@ export const ConnectionRequestsPanel: React.FC<Props> = ({ rev, onChanged, onOpe
     return (
       <li key={request.id} className="rounded-2xl border border-line bg-raised/60 p-3.5">
         <div className="flex items-start gap-3">
-          <AnimalAvatar avatar={request.partner.avatar ?? undefined} seed={request.memberId} className="w-10 h-10" />
+          <MemberAvatar memberId={request.memberId} avatar={request.partner.avatar} seed={request.memberId} name={nameOf(request)} className="w-10 h-10" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg">
               {nameOf(request)} {request.partner.pronouns && <span className="font-normal text-subtle text-[length:calc(13px_*_var(--fs,1))]">{request.partner.pronouns}</span>}
@@ -174,7 +175,7 @@ export const ConnectionRequestsPanel: React.FC<Props> = ({ rev, onChanged, onOpe
               </button>
             </div>
             <div className="mt-1.5 flex items-center gap-1 -ml-2 text-[length:calc(12px_*_var(--fs,1))]">
-              <button type="button" onClick={() => setTarget({ kind: 'profile', request })} className="inline-flex items-center gap-1 h-8 px-2 rounded-full text-subtle hover:text-fg"><UserRound className="w-3.5 h-3.5" /> View profile</button>
+              <button type="button" onClick={() => openProfile?.(request.memberId)} className="inline-flex items-center gap-1 h-8 px-2 rounded-full text-subtle hover:text-fg"><UserRound className="w-3.5 h-3.5" /> View profile</button>
               <button type="button" onClick={() => { setReason(REPORT_REASONS[0]); setTarget({ kind: 'report', request }); }} className="inline-flex items-center gap-1 h-8 px-2 rounded-full text-subtle hover:text-fg"><Flag className="w-3.5 h-3.5" /> Report</button>
               {onBlockMember && <button type="button" onClick={() => setTarget({ kind: 'block', request })} className="inline-flex items-center gap-1 h-8 px-2 rounded-full text-subtle hover:text-danger"><UserX className="w-3.5 h-3.5" /> Block</button>}
             </div>
@@ -266,20 +267,6 @@ export const ConnectionRequestsPanel: React.FC<Props> = ({ rev, onChanged, onOpe
             ))}
           </div>
           <p className="mt-3 text-xs text-subtle">Reports go to our safety team. They are never shown to the other member.</p>
-        </Sheet>
-      )}
-
-      {target?.kind === 'profile' && (
-        <Sheet title="Profile preview" size="sm" onClose={() => setTarget(null)}>
-          <div className="flex items-center gap-3">
-            <AnimalAvatar avatar={target.request.partner.avatar ?? undefined} seed={target.request.memberId} className="w-14 h-14" />
-            <div className="min-w-0">
-              <p className="truncate text-[length:calc(17px_*_var(--fs,1))] font-semibold text-fg">{nameOf(target.request)}</p>
-              {target.request.partner.pronouns && <p className="text-sm text-subtle">{target.request.partner.pronouns}</p>}
-            </div>
-          </div>
-          <p className="mt-3 text-sm leading-relaxed text-fg whitespace-pre-wrap [overflow-wrap:anywhere]">{target.request.partner.about || 'They haven’t added an about-me yet.'}</p>
-          <p className="mt-3 text-xs text-subtle">This is only what they chose to make public.</p>
         </Sheet>
       )}
     </div>

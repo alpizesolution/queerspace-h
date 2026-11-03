@@ -57,7 +57,7 @@ export async function answerConnectionRequest(
   return result.ok ? { ok: true, status: result.data.status, conversationId: result.data.conversationId } : result;
 }
 
-/** Reports the member behind a request to the safety team, through the same Reports tab as every other report. */
+/** Reports a member to the safety team, through the same Reports tab as every other report. The caller says where it came from. */
 export async function reportRequestMember(memberId: string, reason: string): Promise<boolean> {
   if (!db) return false;
   try {
@@ -67,7 +67,7 @@ export async function reportRequestMember(memberId: string, reason: string): Pro
       reporterId: uid,
       targetId: memberId,
       targetType: 'user',
-      reason: `Connection request: ${reason}`.slice(0, 300),
+      reason: reason.slice(0, 300),
       timestamp: serverTimestamp(),
     });
     return true;

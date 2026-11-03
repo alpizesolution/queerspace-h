@@ -7,6 +7,10 @@ import {
   effectiveStatus,
   postAvailability,
   REQUEST_COOLDOWN_MS,
+  withContentionRetry,
+  createKeyedQueue,
+  RETRY_BUDGET_MS,
+  ATTEMPT_ALLOWANCE_MS,
   REQUEST_DAILY_LIMIT,
   REQUEST_DAY_MS,
   REQUEST_MAX_MESSAGE,
@@ -80,7 +84,7 @@ test('every status change runs in a transaction, is checked on the server, and l
     const start = server.indexOf(`async function ${name}(`);
     assert.ok(start > 0, name);
     const body = server.slice(start, server.indexOf('\n  async function', start + 10) > 0 ? server.indexOf('\n  async function', start + 10) : undefined);
-    assert.match(body, /db\.runTransaction/, `${name} is a transaction`);
+    assert.match(body, /once\(db, async tx =>/, `${name} is a transaction`);
     assert.match(body, /event\(tx, db/, `${name} is audited`);
   }
   assert.match(server, /function expire\(/);
@@ -165,8 +169,9 @@ test('an incoming card offers Accept, Decline, View profile, Report and Block; a
 
 test('viewing never answers a request, and nothing about who looked is tracked', () => {
   assert.doesNotMatch(panel + view, /viewed|seenBy|readAt|markSeen|lastViewed/i);
-  const profile = panel.slice(panel.indexOf("target?.kind === 'profile'"));
-  assert.doesNotMatch(profile, /answerConnectionRequest|answer\(/, 'opening a profile preview changes nothing');
+  assert.doesNotMatch(panel, /target\?\.kind === 'profile'/, 'the small preview sheet is gone');
+  assert.match(panel, /openProfile\?\.\(request\.memberId\)/, 'View profile opens the member\'s profile page');
+  assert.doesNotMatch(panel.slice(panel.indexOf('openProfile?.(request.memberId)') - 200, panel.indexOf('openProfile?.(request.memberId)') + 200), /answerConnectionRequest|answer\(/, 'opening a profile changes nothing');
   assert.equal((panel.match(/answerConnectionRequest\(/g) || []).length, 1, 'one place sends answers, and only from explicit buttons');
 });
 
@@ -203,4 +208,133 @@ test('notifications are generic: a banner with no name or message, a badge count
   assert.equal((app.match(/signalsInbox\.requestIds\.length/g) || []).length, 2, 'waiting requests count on the tab badge');
   assert.match(read('src/hooks/useSignalsInbox.ts'), /takeNewIds\(next\.requestIds, seenRequests\)/);
   assert.match(read('src/hooks/useSignalsInbox.ts'), /if \(!first\) requested\.forEach/);
+});
+
+// ------------------------------------------------------------------------------------------ the retry and its clock
+/** A fake clock and sleeper, so the time a retry takes is computed rather than waited for. */
+function fakeTime() {
+  let t = 1_000_000;
+  return { now: () => t, advance: (ms) => { t += ms; }, sleep: async (ms) => { t += ms; } };
+}
+const aborted = () => Object.assign(new Error('10 ABORTED: Transaction lock timeout.'), { code: 10 });
+
+test('the retry budget leaves a wide margin under the 10 second serverless default, and says what it assumes', () => {
+  assert.equal(RETRY_BUDGET_MS, 6000);
+  assert.equal(ATTEMPT_ALLOWANCE_MS, 2500);
+  assert.ok(RETRY_BUDGET_MS <= 6500, 'well under 10 s, with room for the sign-in check and the response');
+  assert.ok(ATTEMPT_ALLOWANCE_MS >= 2100, 'at least the lock wait measured on the emulator (about 2.1 s)');
+  assert.match(server, /roughly 6\.5 s/);
+  assert.match(server, /the production lock wait has not been\s*\n?\s*\/?\*?\s*measured|production lock wait has not been/i);
+});
+
+test('a retry never runs past the budget, even when every attempt takes as long as a real lock wait', async () => {
+  for (const randomValue of [0, 0.5, 1]) {
+    const time = fakeTime();
+    const started = time.now();
+    let attempts = 0;
+    await assert.rejects(withContentionRetry(async () => { attempts += 1; time.advance(2100); throw aborted(); }, { ...time, random: () => randomValue }), /ABORTED/);
+    assert.ok(time.now() - started <= RETRY_BUDGET_MS, `random=${randomValue}: finished at ${time.now() - started} ms, budget ${RETRY_BUDGET_MS}`);
+    assert.ok(attempts >= 1 && attempts <= 3, `random=${randomValue}: ${attempts} attempts`);
+  }
+});
+
+test('quick failures are retried many times inside the budget, with pauses that stay inside their ceiling', async () => {
+  const time = fakeTime();
+  const pauses = [];
+  let calls = 0;
+  const result = await withContentionRetry(async () => { calls += 1; time.advance(40); if (calls < 6) throw aborted(); return 'done'; }, { ...time, sleep: async (ms) => { pauses.push(ms); time.advance(ms); }, random: () => 1 });
+  assert.equal(result, 'done');
+  assert.equal(calls, 6);
+  assert.deepEqual(pauses, [50, 100, 200, 400, 500], 'full jitter at its ceiling: doubling, capped at 500 ms');
+  const low = [];
+  calls = 0;
+  await withContentionRetry(async () => { calls += 1; if (calls < 4) throw aborted(); return 'ok'; }, { ...fakeTime(), sleep: async (ms) => { low.push(ms); }, random: () => 0 });
+  assert.deepEqual(low, [0, 0, 0], 'and it can pause for nothing, so callers spread out instead of moving in step');
+});
+
+test('only retryable failures are retried; anything else is raised at once', async () => {
+  let other = 0;
+  await assert.rejects(withContentionRetry(async () => { other += 1; throw Object.assign(new Error('not_allowed'), { statusCode: 403 }); }, fakeTime()), /not_allowed/);
+  assert.equal(other, 1);
+  for (const code of [4, 14]) {
+    const time = fakeTime();
+    let n = 0;
+    assert.equal(await withContentionRetry(async () => { n += 1; if (n === 1) throw Object.assign(new Error('blip'), { code }); return 'ok'; }, time), 'ok', `code ${code} is a retryable blip`);
+  }
+  let invalid = 0;
+  await assert.rejects(withContentionRetry(async () => { invalid += 1; throw Object.assign(new Error('bad'), { code: 3 }); }, fakeTime()), /bad/);
+  assert.equal(invalid, 1, 'an invalid-argument error is never retried');
+});
+
+test('every transaction is one SDK attempt, so the SDK cannot multiply the wait behind the retry\'s back', () => {
+  assert.match(server, /db\.runTransaction\(update, \{ maxAttempts: 1 \}\)/);
+  assert.equal((server.match(/return once\(db, async tx =>/g) || []).length, 4, 'create, accept, decline and withdraw');
+  assert.doesNotMatch(server, /return db\.runTransaction\(/, 'no transaction is left on the SDK default of 5 attempts');
+});
+
+test('waiting in line and retrying share one budget, and a request that waited too long is told to try again', () => {
+  assert.match(server, /const remaining = RETRY_BUDGET_MS - \(now\(\) - started\);/);
+  assert.match(server, /if \(remaining < ATTEMPT_ALLOWANCE_MS\) throw fail\(503, 'busy'\);/);
+  assert.match(server, /withContentionRetry\(\(\) => run\(db, uid, body\), \{ budgetMs: remaining, now \}\)/);
+  assert.match(read('src/utils/connectionRequests.ts'), /busy: 'This is busy right now/);
+});
+
+test('when retries run out, an action that already took effect answers as a repeat instead of an error', () => {
+  const handlers = server.slice(server.indexOf('async function alreadyDone'), server.indexOf("const actions = {"));
+  assert.match(handlers, /action === 'request-accept' && data\.recipientId === uid && data\.status === 'accepted'/);
+  assert.match(handlers, /action === 'request-decline' && data\.recipientId === uid && data\.status === 'declined'/);
+  assert.match(handlers, /action === 'request-withdraw' && data\.senderId === uid && data\.status === 'withdrawn'/);
+  assert.match(handlers, /signalsIdempotency\//, 'a create whose key was already used answers with its request');
+  assert.match(server, /const done = isRetryable\(error\) \? await alreadyDone\(db, uid, action, body\) : null;/);
+  assert.match(server, /if \(!done\) throw isRetryable\(error\) \? fail\(503, 'busy'\) : error;/, 'anything that has not actually happened is still an error: "busy" for contention, the original for the rest');
+});
+
+// ------------------------------------------------------------------------------------------------- the keyed queue
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+test('tasks with the same key run one at a time, in the order they arrived', async () => {
+  const queue = createKeyedQueue();
+  const log = [];
+  let running = 0;
+  let overlap = 0;
+  const task = (name, ms) => queue.run('author:1', async () => {
+    running += 1; overlap = Math.max(overlap, running);
+    log.push(`start ${name}`);
+    await new Promise((r) => setTimeout(r, ms));
+    log.push(`end ${name}`);
+    running -= 1;
+    return name;
+  });
+  const results = await Promise.all([task('a', 30), task('b', 5), task('c', 1)]);
+  assert.deepEqual(results, ['a', 'b', 'c']);
+  assert.equal(overlap, 1, 'never two at once for one key');
+  assert.deepEqual(log, ['start a', 'end a', 'start b', 'end b', 'start c', 'end c']);
+});
+
+test('different keys do not wait for each other', async () => {
+  const queue = createKeyedQueue();
+  let release;
+  const slow = queue.run('author:1', () => new Promise((resolve) => { release = resolve; }));
+  const fast = await queue.run('author:2', async () => 'fast');
+  assert.equal(fast, 'fast', 'another author is not held up by a slow one');
+  release('slow');
+  assert.equal(await slow, 'slow');
+});
+
+test('a failing task is reported to its caller and never blocks the ones behind it, and the queue tidies up', async () => {
+  const queue = createKeyedQueue();
+  const failed = queue.run('k', async () => { throw new Error('boom'); });
+  const after = queue.run('k', async () => 'still runs');
+  await assert.rejects(failed, /boom/);
+  assert.equal(await after, 'still runs');
+  await tick();
+  await tick();
+  assert.equal(queue.size, 0, 'no key is left behind');
+});
+
+test('every action for one author shares one line: create by the recipient, accept and decline by the author, withdraw by the request\'s author', () => {
+  const key = server.slice(server.indexOf('async function queueKey'), server.indexOf('/** Runs one lifecycle action'));
+  assert.match(key, /action === 'request-create'\) return `author:\$\{body\.recipientId\}`/);
+  assert.match(key, /return data\?\.recipientId \? `author:\$\{data\.recipientId\}` : `request:\$\{body\.requestId\}`/);
+  assert.match(key, /return `author:\$\{uid\}`/);
 });

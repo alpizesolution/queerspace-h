@@ -291,7 +291,7 @@ export const SignalsView: React.FC<{
   if (openPairId) {
     const selectedPair = pairs.find((pair) => pair.id === openPairId);
     if (selectedPair?.status === 'active') {
-      return <SignalsConversation pairId={openPairId} partner={selectedPair.partner} isSoundMuted={isSoundMuted} onBack={() => setOpenPairId(null)} onEnd={() => endPair(openPairId)} />;
+      return <SignalsConversation pairId={openPairId} partnerId={selectedPair.participants?.find((id) => id !== auth?.currentUser?.uid)} partner={selectedPair.partner} isSoundMuted={isSoundMuted} onBack={() => setOpenPairId(null)} onEnd={() => endPair(openPairId)} />;
     }
   }
 

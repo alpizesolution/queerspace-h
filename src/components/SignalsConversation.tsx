@@ -2,7 +2,7 @@ import React, { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffec
 import { ArrowDown, ArrowLeft, Ellipsis, LoaderCircle, MessageCircle, RefreshCw, Reply, Send, X } from 'lucide-react';
 import { auth } from '../lib/firebase.ts';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
-import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { MemberAvatar } from './ProfileNav.tsx';
 import { ConfirmDialog } from './Sheet.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { soundEffects } from '../utils/sound.ts';
@@ -32,6 +32,8 @@ type SignalsConversationProps = {
   partner?: SignalsPartner;
   isSoundMuted?: boolean;
   onBack: () => void;
+  /** The other member's id, so their avatar can open their profile. */
+  partnerId?: string;
   /** Ends this connection with the existing `end` action. Resolves to null on success, or a message to show. */
   onEnd?: () => Promise<string | null>;
 };
@@ -79,7 +81,7 @@ function formatTime(value: string | null): string {
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
-export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, isSoundMuted = false, onBack, onEnd }) => {
+export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, partnerId, isSoundMuted = false, onBack, onEnd }) => {
   const [messages, setMessages] = useState<SignalMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -362,7 +364,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
             <ArrowLeft className="h-5 w-5" />
           </button>
           {isValidAvatar(partner?.avatar)
-            ? <AnimalAvatar avatar={partner?.avatar} seed={pairId} className="h-9 w-9" />
+            ? <MemberAvatar memberId={partnerId} avatar={partner?.avatar} seed={pairId} name={partnerName} className="h-9 w-9" />
             : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-lavender/20 bg-plum/30 text-lavender"><MessageCircle className="h-4 w-4" /></div>}
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg" title={partnerName}>{partnerName}</h1>
