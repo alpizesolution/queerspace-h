@@ -1,5 +1,5 @@
 import React, { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, Ellipsis, LoaderCircle, MessageCircle, RefreshCw, Reply, Send, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, Camera, Ellipsis, ImagePlus, LoaderCircle, MessageCircle, RefreshCw, Reply, Send, X } from 'lucide-react';
 import { auth } from '../lib/firebase.ts';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
 import { MemberAvatar } from './ProfileNav.tsx';
@@ -7,6 +7,10 @@ import { ConfirmDialog } from './Sheet.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { soundEffects } from '../utils/sound.ts';
 import { SwipeToReply } from './SwipeToReply.tsx';
+import { TimedPhotoComposer } from './TimedPhotoComposer.tsx';
+import { TimedPhotoViewer } from './TimedPhotoViewer.tsx';
+import { pickedFileProblem, pickProblemText, photoCard, type PhotoTimer } from '../utils/timedPhoto.ts';
+import { prepareTimedPhoto, sendPhotoProblemText, sendTimedPhoto } from '../services/timedPhotoService.ts';
 import { hasNewIncomingMessage } from '../utils/incomingMessage.ts';
 import { QUICK_REACTIONS } from '../utils/reactions.ts';
 import {
@@ -81,6 +85,29 @@ function formatTime(value: string | null): string {
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
+/**
+ * A timed photo inside a message bubble. Before it is opened the picture is not here at all (there is nothing to blur):
+ * a concealed card shows the timer and an "Open photo" action. Afterwards it only ever says "Photo expired".
+ */
+const PhotoBubble: React.FC<{ photo: NonNullable<SignalMessage['photo']>; clock: number; closedHere: boolean; onOpen: () => void }> = ({ photo, clock, closedHere, onOpen }) => {
+  const card = photoCard(photo, clock, closedHere);
+  if (card.kind === 'expired') return <p className="flex min-h-9 items-center gap-1.5 text-[length:calc(14px_*_var(--fs,1))] italic opacity-70"><Camera className="h-4 w-4" aria-hidden="true" /> Photo expired</p>;
+  if (card.kind === 'openable') {
+    return (
+      <button
+        type="button"
+        onClick={(event) => { event.stopPropagation(); onOpen(); }}
+        className="relative flex h-24 w-44 max-w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-line bg-gradient-to-br from-plum/50 via-surface to-ink text-fg transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60"
+      >
+        <span aria-hidden="true" className="absolute inset-0 backdrop-blur-xl" />
+        <span className="relative flex items-center gap-1.5 text-[length:calc(14px_*_var(--fs,1))] font-semibold"><Camera className="h-4 w-4" aria-hidden="true" /> Open photo</span>
+        <span className="relative rounded-full bg-black/40 px-2 py-0.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold tabular-nums text-white/85">{photo.durationSec}s</span>
+      </button>
+    );
+  }
+  return <p className="flex min-h-9 items-center gap-1.5 text-[length:calc(14px_*_var(--fs,1))]"><Camera className="h-4 w-4" aria-hidden="true" /> {card.label}</p>;
+};
+
 export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, partnerId, isSoundMuted = false, onBack, onEnd }) => {
   const [messages, setMessages] = useState<SignalMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -98,6 +125,14 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [endBusy, setEndBusy] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
+  // Timed photos: the file being prepared to send, and the photo being viewed. Photos closed on this device show as expired.
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoSending, setPhotoSending] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [closedPhotos, setClosedPhotos] = useState<Set<string>>(() => new Set());
+  const [clock, setClock] = useState(() => Date.now());
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -245,6 +280,49 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
   }, [draft]);
+
+  // A photo's expiry is shown from the clock, so keep it fresh while any photo is waiting or open.
+  const hasLivePhoto = messages.some((m) => m.photo && m.photo.status !== 'expired');
+  useEffect(() => {
+    if (!hasLivePhoto) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [hasLivePhoto]);
+
+  const choosePhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const problem = pickedFileProblem(file);
+    if (problem) { setError(pickProblemText(problem)); return; }
+    setError(null);
+    setPhotoError(null);
+    setPhotoFile(file);
+  };
+
+  const sendPhoto = async (timer: PhotoTimer) => {
+    if (!photoFile || photoSending) return;
+    setPhotoSending(true);
+    setPhotoError(null);
+    try {
+      const imageBase64 = await prepareTimedPhoto(photoFile);
+      const result = await sendTimedPhoto({ pairId, messageId: crypto.randomUUID(), timer, imageBase64 });
+      if (!result.ok) {
+        if (result.reason === 'ended') setEnded(true);
+        setPhotoError(sendPhotoProblemText(result.reason));
+        return;
+      }
+      lastOwnSend.current = true;
+      stickToBottom.current = true;
+      if (!soundMutedRef.current) soundEffects.playMessageSent();
+      setMessages((current) => mergeMessages(current, [result.message]));
+      setPhotoFile(null);
+    } catch {
+      setPhotoError('That photo can’t be read. Try another one.');
+    } finally {
+      setPhotoSending(false);
+    }
+  };
 
   /** Sends one pending message to the server. Safe to repeat: the server keeps a single copy per message id. */
   const deliver = async (item: PendingMessage) => {
@@ -458,7 +536,16 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           </div>
                         )}
                         <div className="flex flex-wrap items-end justify-end gap-x-2">
+                          {message.photo ? (
+                            <PhotoBubble
+                              photo={message.photo}
+                              clock={clock}
+                              closedHere={closedPhotos.has(message.id)}
+                              onOpen={() => { setActiveId(null); setViewingPhoto(message.id); }}
+                            />
+                          ) : (
                           <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-[length:calc(15px_*_var(--fs,1))] leading-snug">{message.text}</p>
+                          )}
                           {message.createdAt && <span className={`ml-auto translate-y-px select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
                         </div>
                       </div>
@@ -556,6 +643,10 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 maxLength={1000}
                 className="max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-2xl border border-line bg-raised px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug text-fg outline-none placeholder:text-subtle focus:border-berry/60"
               />
+              <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto} className="hidden" tabIndex={-1} aria-hidden="true" />
+              <button type="button" onClick={() => photoInputRef.current?.click()} onMouseDown={(event) => event.preventDefault()} aria-label="Send a timed photo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-raised text-muted transition hover:text-fg">
+                <ImagePlus className="h-[18px] w-[18px]" />
+              </button>
               <button type="submit" disabled={!draft.trim()} onMouseDown={(event) => event.preventDefault()} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-berry text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
                 <Send className="h-4 w-4" />
               </button>
@@ -563,6 +654,22 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
           </div>
         )}
       </section>
+      {photoFile && (
+        <TimedPhotoComposer file={photoFile} sending={photoSending} error={photoError} onSend={(timer) => void sendPhoto(timer)} onClose={() => setPhotoFile(null)} />
+      )}
+      {viewingPhoto && (
+        <TimedPhotoViewer
+          key={viewingPhoto}
+          pairId={pairId}
+          messageId={viewingPhoto}
+          onDone={(outcome) => {
+            const id = viewingPhoto;
+            setViewingPhoto(null);
+            if (outcome !== 'unavailable') setClosedPhotos((current) => new Set(current).add(id));
+            void loadMessages();
+          }}
+        />
+      )}
       {confirmEnd && (
         <ConfirmDialog
           title="End this conversation?"

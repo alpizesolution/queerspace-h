@@ -82,7 +82,10 @@ test('new Echoes are written without an expiry, and nothing deletes them on a sc
   assert.equal(/where\('expiresAt'/.test(service), false, 'the feed must not filter on expiresAt');
   assert.equal(/where\('createdAt', '>='/.test(service), false, 'the feed has no start date: every stored Echo can be shown');
   assert.equal(fs.existsSync('functions'), false, 'no scheduled cleanup functions');
-  assert.equal(/cron/i.test(fs.readFileSync('vercel.json', 'utf8')), false, 'no cron jobs');
+  // The only scheduled job is the timed-photo cleanup, which touches photo records and nothing else.
+  const crons: { path: string }[] = JSON.parse(fs.readFileSync('vercel.json', 'utf8')).crons ?? [];
+  assert.deepEqual(crons.map((c) => c.path), ['/api/media-cleanup'], 'no cron job but the timed-photo cleanup');
+  assert.equal(/unsaid|echo/i.test(fs.readFileSync('api/media-cleanup.js', 'utf8') + fs.readFileSync('api/_media.js', 'utf8')), false, 'and it never touches Echoes');
   const indexes = JSON.parse(fs.readFileSync('firestore.indexes.json', 'utf8'));
   assert.equal(JSON.stringify(indexes).includes('unsaid'), false);
 });

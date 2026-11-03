@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { createRequestHandlers } from './_requests.js';
 import { profileView } from './_profiles.js';
+import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
 
 const MAX_MESSAGE_LENGTH = 240;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -119,6 +120,7 @@ export function countUnread(messages, otherUid) {
 export const UNREAD_RECOUNT_LIMIT = 100;
 
 const connectionRequests = createRequestHandlers({ touchInbox, acceptedNotification });
+const media = createMediaHandlers();
 
 function idempotencyDocId(uid, key) {
   return createHash('sha256').update(uid + ':' + key).digest('hex');
@@ -177,6 +179,7 @@ export default async function handler(req, res) {
         const messageSnap = Number.isFinite(afterMs)
           ? await messagesRef.where('updatedAt', '>', Timestamp.fromMillis(afterMs - DELTA_OVERLAP_MS)).orderBy('updatedAt', 'asc').limit(100).get()
           : await messagesRef.orderBy('createdAt', 'asc').limit(100).get();
+        const photos = await media.photoViews(db, uid, messageSnap.docs);
         const messages = messageSnap.docs.map(snap => {
           const data = snap.data();
           const reactions = data.reactions && typeof data.reactions === 'object' ? data.reactions : {};
@@ -184,6 +187,8 @@ export default async function handler(req, res) {
             id: snap.id,
             senderId: data.senderId,
             text: data.text,
+            // A timed photo: its timer and state only, never where the image is kept.
+            ...(data.kind === 'photo' ? { kind: 'photo', photo: photos.get(snap.id) ?? { durationSec: data.durationSec, status: 'expired', mine: data.senderId === uid } } : {}),
             createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
             replyTo: data.replyTo && typeof data.replyTo === 'object' ? {
               messageId: data.replyTo.messageId,
@@ -272,6 +277,14 @@ export default async function handler(req, res) {
       return send(res, 200, { invitations });
     }
     const { action, recipientId, invitationId, message, idempotencyKey, convId } = req.body || {};
+
+    // Timed photos: sent and opened through one set of checks, on the server clock. See api/_media.js.
+    if (action === 'send-photo' || action === 'open-photo') {
+      const outcome = action === 'send-photo' ? await media.sendPhoto(db, uid, req.body || {}) : await media.openPhoto(db, uid, req.body || {});
+      // The image is delivered once, in this response, and must never be stored by the browser or a proxy.
+      setNoStoreHeaders(res);
+      return send(res, outcome.status, outcome.body);
+    }
 
     // Connection requests from the Looking For board: sent, accepted, declined and withdrawn through one set of checks.
     if (typeof action === 'string' && action.startsWith('request-')) {

@@ -2290,3 +2290,24 @@ test('PL-03: engaging with the opened post changes the original and creates no c
     assert.equal(replies.size, 1, 'one reply record');
   });
 });
+
+// ------------------------------------------------------------------
+// Signals timed photos: records and messages are server-only
+// ------------------------------------------------------------------
+test('PH-01: no client can read, write or list timed-photo records, and message documents stay closed too', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('signalsMedia/m1').set({ pairId: 'p1', messageId: 'x1', senderId: 'alice', recipientId: 'bob', key: 'm/secret', state: 'unopened' });
+    await ctx.firestore().doc('signalsPairs/p1/messages/x1').set({ senderId: 'alice', kind: 'photo', mediaId: 'm1', durationSec: 3 });
+  });
+  for (const who of ['alice', 'bob', 'carol']) {
+    const fs = testEnv.authenticatedContext(who).firestore();
+    await assertFails(fs.doc('signalsMedia/m1').get());
+    await assertFails(fs.collection('signalsMedia').get());
+    await assertFails(fs.doc('signalsMedia/m1').update({ state: 'viewing' }));
+    await assertFails(fs.doc('signalsMedia/m1').set({ key: 'm/other' }));
+    await assertFails(fs.doc('signalsMedia/m1').delete());
+    await assertFails(fs.doc('signalsPairs/p1/messages/x1').get());
+    await assertFails(fs.doc('signalsPairs/p1/messages/x1').update({ durationSec: 99 }));
+  }
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('signalsMedia/m1').get());
+});

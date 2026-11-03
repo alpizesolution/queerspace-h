@@ -1,4 +1,5 @@
 {
+  "crons": [{ "path": "/api/media-cleanup", "schedule": "0 3 * * *" }],
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "redirects": [
