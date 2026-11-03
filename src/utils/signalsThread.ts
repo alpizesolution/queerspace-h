@@ -3,6 +3,8 @@
  * sent, and reacting before the server has answered. Kept free of React and the network so they can be tested.
  */
 
+import type { PhotoInfo } from './timedPhoto.ts';
+
 export type Reaction = { emoji: string; count: number; userReacted: boolean };
 
 export type ThreadMessage = {
@@ -12,6 +14,9 @@ export type ThreadMessage = {
   createdAt: string | null;
   replyTo?: { messageId: string; senderId: string; text: string } | null;
   reactions?: Reaction[];
+  /** A timed photo: its timer and state. The picture itself is never part of the thread. */
+  kind?: 'photo';
+  photo?: PhotoInfo;
 };
 
 export type PendingStatus = 'sending' | 'failed';
