@@ -1,7 +1,7 @@
 import React, { useId, useState } from 'react';
 import { EyeOff, UserPlus } from 'lucide-react';
 import { keepCardInView, MoreButton, useClampOverflow } from './ExpandableText.tsx';
-import { previewTags, preferredAgeText, type LookingForPost } from '../utils/lookingFor.ts';
+import { previewTags, postDisplayTitle, preferredAgeText, type LookingForPost } from '../utils/lookingFor.ts';
 
 interface Props {
   post: LookingForPost;
@@ -35,7 +35,7 @@ export const LookingForBody: React.FC<Props> = ({ post, mine, canCoverAgain, onC
 
   return (
     <>
-      <h3 className="mt-3 text-[length:calc(16px_*_var(--fs,1))] font-semibold text-fg leading-snug [overflow-wrap:anywhere] line-clamp-2">{post.title}</h3>
+      <h3 className="mt-3 text-[length:calc(16px_*_var(--fs,1))] font-semibold text-fg leading-snug [overflow-wrap:anywhere] line-clamp-2">{postDisplayTitle(post)}</h3>
       <p id={introId} ref={intro.ref} className={`mt-1 text-[length:calc(14px_*_var(--fs,1))] text-muted leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] ${expanded ? '' : 'line-clamp-3'}`}>{post.intro}</p>
 
       <div className="mt-2.5 rounded-xl bg-ink/50 border border-line px-3 py-2">

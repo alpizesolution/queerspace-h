@@ -1276,7 +1276,7 @@ test('N-02: acceptance notifications are readable only by their owner and cannot
 const lfPost = (uid: string, overrides: Record<string, unknown> = {}) => ({
   authorId: uid, authorName: 'Willow', authorPronouns: 'she/her', title: 'Coffee and books?', intro: 'Bookish and quiet.',
   lookingFor: 'Someone to share novels with', intention: 'friendship', tags: ['Books'], isNsfw: false, contentWarning: null,
-  timestamp: now(), ...overrides,
+  age: 30, flair: 'Masc × Femme', timestamp: now(), ...overrides,
 });
 const lfId = (uid: string, intention = 'friendship') => `${uid}_${intention}`;
 
@@ -1366,7 +1366,7 @@ test('LF-05: New posts are limited to one a minute, and a suspended member canno
 });
 
 test('LF-06: Only the author edits a post, and identity, intention and first-posted time never change', async () => {
-  await seedLfPost('alice');
+  await seedLfPost('alice', 'friendship', { age: 30, flair: 'Masc × Femme' });
   const path = `looking_for_posts/${lfId('alice')}`;
   const alice = testEnv.authenticatedContext('alice').firestore();
   await assertSucceeds(alice.doc(path).update({ title: 'Updated', updatedAt: now() }));
@@ -2044,4 +2044,94 @@ test('LF-D5: an empty board is a successful empty answer, not a permission error
   await seedEligibleMember('newcomer');
   const snap: any = await assertSucceeds(FEED_QUERIES(testEnv.authenticatedContext('newcomer').firestore())[0][1].get());
   assert.equal(snap.empty, true);
+});
+
+// ------------------------------------------------------------------
+// Looking For: a required age (from the private birthday) and a flair
+// ------------------------------------------------------------------
+const FLAIRS = ['Masc × Femme', 'Masc × Masc', 'Masc × Any', 'Femme × Masc', 'Femme × Femme', 'Femme × Any', 'Andro × Masc', 'Andro × Femme', 'Andro × Any', 'Trans Femme × Masc', 'Trans Femme × Femme', 'Trans Femme × Any', 'All WLW'];
+const withoutKey = (data: Record<string, unknown>, key: string) => { const copy = { ...data }; delete copy[key]; return copy; };
+
+test('LF-F1: a valid post with an age that matches the private birthday and a listed flair is created, for every flair', async () => {
+  for (const [i, flair] of FLAIRS.entries()) {
+    const uid = `flairer${i}`;
+    await seedEligibleMember(uid);
+    await assertSucceeds(lfCreate(uid, lfPost(uid, { flair })));
+    const stored = (await testEnv.authenticatedContext('bob').firestore().doc(`looking_for_posts/${lfId(uid)}`).get()).data() as any;
+    assert.equal(stored.flair, flair);
+    assert.equal(stored.age, 30);
+    assert.equal(stored.title, 'Coffee and books?', 'the stored title is only what was typed');
+  }
+});
+
+test('LF-F2: a new post without an age, or without a flair, is refused', async () => {
+  await assertFails(lfCreate('alice', withoutKey(lfPost('alice'), 'age')));
+  await assertFails(lfCreate('alice', withoutKey(lfPost('alice'), 'flair')));
+  await assertFails(lfCreate('alice', withoutKey(withoutKey(lfPost('alice'), 'flair'), 'age')));
+});
+
+test('LF-F3: an invented, misspelled or wrongly typed flair is refused', async () => {
+  for (const flair of ['Everyone', 'Masc x Femme', 'masc × femme', 'Femme × Femme ', '', 'All wlw', 5, null, ['All WLW']]) {
+    await assertFails(lfCreate('alice', lfPost('alice', { flair })));
+  }
+});
+
+test('LF-F4: the age must be the account\'s own: a different age, an under-18 age and a non-integer are refused', async () => {
+  await assertFails(lfCreate('alice', lfPost('alice', { age: 25 })), );
+  await assertFails(lfCreate('alice', lfPost('alice', { age: 35 })));
+  await assertFails(lfCreate('alice', lfPost('alice', { age: 17 })));
+  await assertFails(lfCreate('alice', lfPost('alice', { age: 30.5 })));
+  await assertFails(lfCreate('alice', lfPost('alice', { age: '30' })));
+  await assertFails(lfCreate('alice', lfPost('alice', { age: 100 })));
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { age: 30 })));
+});
+
+test('LF-F5: an under-18 account and a member with no birthday on file cannot post at all, whatever age they claim', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc('users/teen/private/settings').set({ birthDate: new Date(Date.now() - 16 * 365.25 * 86400000), createdAt: new Date(), updatedAt: new Date() });
+    await db.doc('users/teen/public/profile').set({ displayName: 'teen', profileComplete: true, updatedAt: new Date() });
+    await db.doc('users/nobday/private/settings').set({ createdAt: new Date(), updatedAt: new Date() });
+    await db.doc('users/nobday/public/profile').set({ displayName: 'nobday', profileComplete: true, updatedAt: new Date() });
+  });
+  await assertFails(lfCreate('teen', lfPost('teen', { age: 16 })));
+  await assertFails(lfCreate('teen', lfPost('teen', { age: 18 })), );
+  await assertFails(lfCreate('nobday', lfPost('nobday', { age: 30 })));
+});
+
+test('LF-F6: nobody can change another member\'s age or flair, and an author cannot swap in a false age on edit', async () => {
+  await seedLfPost('alice', 'friendship', { age: 30, flair: 'Masc × Femme' });
+  const path = `looking_for_posts/${lfId('alice')}`;
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(bob.doc(path).update({ age: 99, updatedAt: now() }));
+  await assertFails(bob.doc(path).update({ flair: 'All WLW', updatedAt: now() }));
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc(path).update({ age: 22, updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ flair: 'Not a flair', updatedAt: now() }));
+  await assertSucceeds(alice.doc(path).update({ flair: 'All WLW', updatedAt: now() }));
+  assert.equal(((await alice.doc(path).get()).data() as any).flair, 'All WLW');
+});
+
+test('LF-F7: posts made before flairs existed stay readable, can be paused and resumed, and need an age and flair to be edited', async () => {
+  await seedEligibleMember('veteran');
+  await seedLfPost('veteran', 'friendship');
+  const path = `looking_for_posts/${lfId('veteran')}`;
+  const old = (await testEnv.authenticatedContext('bob').firestore().doc(path).get()).data() as any;
+  assert.equal(old.flair, undefined);
+  assert.equal(old.age, undefined);
+  const veteran = testEnv.authenticatedContext('veteran').firestore();
+  await assertSucceeds(veteran.doc(path).update({ requestsPaused: true, updatedAt: now() }));
+  await assertSucceeds(veteran.doc(path).update({ requestsPaused: false, updatedAt: now() }));
+  await assertFails(veteran.doc(path).update({ title: 'edited without a flair', updatedAt: now() }));
+  await assertSucceeds(veteran.doc(path).update({ title: 'edited with a flair', age: 30, flair: 'Femme × Any', updatedAt: now() }));
+  const feed = await assertSucceeds(testEnv.authenticatedContext('bob').firestore().collection('looking_for_posts').orderBy('timestamp', 'desc').limit(60).get()) as any;
+  assert.equal(feed.docs.length, 1);
+});
+
+test('LF-F8: adult eligibility and suspension still apply to posting with an age and flair', async () => {
+  await seedEligibleMember('susp');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('suspensions/susp').set({ reason: 'test', at: new Date() }); });
+  await assertFails(lfCreate('susp', lfPost('susp')));
+  await assertFails(lfCreate('alice', lfPost('bob')));
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc(`looking_for_posts/${lfId('alice')}`).set(lfPost('alice')));
 });
