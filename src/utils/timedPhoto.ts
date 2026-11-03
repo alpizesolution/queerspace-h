@@ -86,3 +86,27 @@ export function isCaptureKey(event: { key: string; metaKey?: boolean; shiftKey?:
   if (event.key === 'PrintScreen') return true;
   return Boolean(event.metaKey && event.shiftKey && ['3', '4', '5', 's', 'S'].includes(event.key));
 }
+
+// ------------------------------------------------------------------------------ when a photo cannot be read
+
+export type PhotoReadStage = 'read' | 'decode' | 'draw' | 'encode';
+
+/** Why a chosen photo could not be prepared: which step failed, and the browser's name for the error. Nothing private. */
+export class PhotoReadError extends Error {
+  constructor(public readonly stage: PhotoReadStage, public readonly detail: string) {
+    super(`${stage}:${detail}`);
+    this.name = 'PhotoReadError';
+  }
+}
+
+/** A short, safe name for whatever was thrown, for the message and the console. */
+export const errorLabel = (error: unknown): string => {
+  const name = error && typeof error === 'object' && 'name' in error ? String((error as { name: unknown }).name) : 'Error';
+  return name.replace(/[^A-Za-z0-9_]/g, '').slice(0, 30) || 'Error';
+};
+
+/** The message when a photo cannot be prepared, naming the step so the real cause can be found. */
+export const photoReadProblemText = (error: unknown): string => {
+  const code = error instanceof PhotoReadError ? error.message.slice(0, 60) : `unknown:${errorLabel(error)}`;
+  return `That photo can’t be read on this device (${code}). Try another one.`;
+};

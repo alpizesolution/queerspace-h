@@ -9,8 +9,8 @@ import { soundEffects } from '../utils/sound.ts';
 import { SwipeToReply } from './SwipeToReply.tsx';
 import { TimedPhotoComposer } from './TimedPhotoComposer.tsx';
 import { TimedPhotoViewer } from './TimedPhotoViewer.tsx';
-import { pickedFileProblem, pickProblemText, photoCard, type PhotoTimer } from '../utils/timedPhoto.ts';
-import { prepareTimedPhoto, sendPhotoProblemText, sendTimedPhoto } from '../services/timedPhotoService.ts';
+import { pickedFileProblem, pickProblemText, photoCard, photoReadProblemText, type PhotoTimer } from '../utils/timedPhoto.ts';
+import { copyPickedPhoto, prepareTimedPhoto, sendPhotoProblemText, sendTimedPhoto } from '../services/timedPhotoService.ts';
 import { hasNewIncomingMessage } from '../utils/incomingMessage.ts';
 import { QUICK_REACTIONS } from '../utils/reactions.ts';
 import {
@@ -293,16 +293,25 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     return () => window.clearInterval(timer);
   }, [hasLivePhoto]);
 
-  const choosePhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+  const choosePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input.files?.[0];
     if (!file) return;
     const problem = pickedFileProblem(file);
-    if (problem) { setError(pickProblemText(problem)); return; }
-    setError(null);
-    setPhotoError(null);
-    photoMessageId.current = crypto.randomUUID();
-    setPhotoFile(file);
+    if (problem) { input.value = ''; setError(pickProblemText(problem)); return; }
+    try {
+      // Read it into memory now, before the picker's reference can go stale, and keep only the copy.
+      const copy = await copyPickedPhoto(file);
+      setError(null);
+      setPhotoError(null);
+      photoMessageId.current = crypto.randomUUID();
+      setPhotoFile(copy);
+    } catch (err) {
+      console.warn('[Photo] could not read the chosen file:', err);
+      setError(photoReadProblemText(err));
+    } finally {
+      input.value = '';
+    }
   };
 
   const sendPhoto = async (timer: PhotoTimer) => {
@@ -312,21 +321,28 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     setPhotoSending(true);
     setPhotoError(null);
     try {
-      const imageBase64 = await prepareTimedPhoto(photoFile);
+      let imageBase64: string;
+      try {
+        imageBase64 = await prepareTimedPhoto(photoFile);
+      } catch (err) {
+        // Only a problem with the photo itself is reported as one, and it names the step that failed.
+        console.warn('[Photo] could not prepare the photo:', err);
+        setPhotoError(photoReadProblemText(err));
+        return;
+      }
       const result = await sendTimedPhoto({ pairId, messageId: photoMessageId.current, timer, imageBase64 });
       if (!result.ok) {
         if (result.reason === 'ended') setEnded(true);
         setPhotoError(sendPhotoProblemText(result.reason));
         return;
       }
+      // The photo is sent. Nothing below may report it as a failure.
       lastOwnSend.current = true;
       stickToBottom.current = true;
-      if (!soundMutedRef.current) soundEffects.playMessageSent();
+      try { if (!soundMutedRef.current) soundEffects.playMessageSent(); } catch { /* a sound is never worth an error */ }
       setMessages((current) => mergeMessages(current, [result.message]));
       photoMessageId.current = null;
       setPhotoFile(null);
-    } catch {
-      setPhotoError('That photo can’t be read. Try another one.');
     } finally {
       photoBusy.current = false;
       setPhotoSending(false);
@@ -652,7 +668,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 maxLength={1000}
                 className="max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-2xl border border-line bg-raised px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug text-fg outline-none placeholder:text-subtle focus:border-berry/60"
               />
-              <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto} className="hidden" tabIndex={-1} aria-hidden="true" />
+              <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void choosePhoto(event)} className="hidden" tabIndex={-1} aria-hidden="true" />
               <button type="button" onClick={() => photoInputRef.current?.click()} onMouseDown={(event) => event.preventDefault()} aria-label="Send a timed photo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-raised text-muted transition hover:text-fg">
                 <ImagePlus className="h-[18px] w-[18px]" />
               </button>
