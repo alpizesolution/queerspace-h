@@ -1970,3 +1970,78 @@ test('PS-04: clients cannot read or write reservations to give themselves a name
   await assertFails(dave.doc('pseudonyms/softmuse').get());
   await assertFails(dave.doc('users/dave/public/profile').set(profileBody('SoftMuse')));
 });
+
+// ------------------------------------------------------------------
+// Looking For discovery: a new member who never posted can browse everyone else's posts
+// ------------------------------------------------------------------
+const FEED_QUERIES = (fs: any) => [
+  ['all', fs.collection('looking_for_posts').orderBy('timestamp', 'desc').limit(60)],
+  ['one intention', fs.collection('looking_for_posts').where('intention', '==', 'friendship').orderBy('timestamp', 'desc').limit(60)],
+] as const;
+
+test('LF-D1: a newly registered eligible member with no post of their own sees an established member\'s post, with the exact queries the app runs', async () => {
+  await seedEligibleMember('established');
+  await seedEligibleMember('newcomer', new Date(Date.now() - 19 * 365.25 * 86400000));
+  await assertSucceeds(lfCreate('established', lfPost('established')));
+  const own = testEnv.authenticatedContext('established').firestore();
+  for (const [name, q] of FEED_QUERIES(own)) {
+    const snap: any = await assertSucceeds(q.get());
+    assert.deepEqual(snap.docs.map((d: any) => d.id), [lfId('established')], `the author sees their own post (${name})`);
+  }
+  const newcomer = testEnv.authenticatedContext('newcomer').firestore();
+  for (const [name, q] of FEED_QUERIES(newcomer)) {
+    const snap: any = await assertSucceeds(q.get());
+    assert.deepEqual(snap.docs.map((d: any) => d.id), [lfId('established')], `the newcomer sees it too (${name})`);
+    assert.equal(snap.docs[0].data().authorId, 'established');
+  }
+  const opened = await assertSucceeds(newcomer.doc(`looking_for_posts/${lfId('established')}`).get());
+  assert.equal(opened.data()?.title, 'Coffee and books?', 'and can open it and read its public fields');
+  const json = JSON.stringify(opened.data());
+  for (const secret of ['birthDate', 'blockedPartnerIds', 'exactLocation']) assert.equal(json.includes(secret), false, secret);
+});
+
+test('LF-D2: the newcomer cannot edit or delete the established member\'s post, and cannot post in their name', async () => {
+  await seedEligibleMember('established');
+  await seedEligibleMember('newcomer');
+  await seedLfPost('established');
+  const newcomer = testEnv.authenticatedContext('newcomer').firestore();
+  const path = `looking_for_posts/${lfId('established')}`;
+  await assertFails(newcomer.doc(path).update({ title: 'hijacked', updatedAt: now() }));
+  await assertFails(newcomer.doc(path).delete());
+  await assertFails(lfCreate('newcomer', lfPost('established'), lfId('established')));
+  assert.equal(((await testEnv.authenticatedContext('established').firestore().doc(path).get()).data() as any).title, 't', 'the post is untouched');
+});
+
+test('LF-D3: reading still needs an eligible account: signed-out, minors, incomplete profiles and members with no birthday on file are refused, not shown an empty board', async () => {
+  await seedEligibleMember('established');
+  await seedLfPost('established');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc('users/nobirthday/private/settings').set({ createdAt: new Date(), updatedAt: new Date() });
+    await db.doc('users/nobirthday/public/profile').set({ displayName: 'nb', profileComplete: true, updatedAt: new Date() });
+    await db.doc('users/minor2/private/settings').set({ birthDate: new Date(Date.now() - 16 * 365 * 86400000), createdAt: new Date(), updatedAt: new Date() });
+    await db.doc('users/minor2/public/profile').set({ displayName: 'm', profileComplete: true, updatedAt: new Date() });
+    await db.doc('users/incomplete/private/settings').set({ birthDate: new Date(Date.now() - 30 * 365 * 86400000), createdAt: new Date(), updatedAt: new Date() });
+    await db.doc('users/incomplete/public/profile').set({ displayName: 'i', profileComplete: false, updatedAt: new Date() });
+  });
+  for (const who of ['nobirthday', 'minor2', 'incomplete']) {
+    await assertFails(FEED_QUERIES(testEnv.authenticatedContext(who).firestore())[0][1].get());
+  }
+  await assertFails(FEED_QUERIES(testEnv.unauthenticatedContext().firestore())[0][1].get());
+});
+
+test('LF-D4: a suspended account keeps the existing restrictions: it cannot post or edit, while the board stays readable', async () => {
+  await seedEligibleMember('established');
+  await seedEligibleMember('suspended1');
+  await seedLfPost('suspended1');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('suspensions/suspended1').set({ reason: 'test', at: new Date() }); });
+  const fs = testEnv.authenticatedContext('suspended1').firestore();
+  await assertFails(fs.doc(`looking_for_posts/${lfId('suspended1')}`).update({ title: 'still here', updatedAt: now() }));
+  await assertFails(lfCreate('suspended1', lfPost('suspended1', { intention: 'dating' })));
+});
+
+test('LF-D5: an empty board is a successful empty answer, not a permission error', async () => {
+  await seedEligibleMember('newcomer');
+  const snap: any = await assertSucceeds(FEED_QUERIES(testEnv.authenticatedContext('newcomer').firestore())[0][1].get());
+  assert.equal(snap.empty, true);
+});

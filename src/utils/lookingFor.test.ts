@@ -4,6 +4,9 @@ import {
   activeFilterCount,
   applyLookingForFilters,
   cleanTag,
+  FEED_RETRY_DELAYS_MS,
+  feedErrorReason,
+  feedRetryDelay,
   draftFromPost,
   draftToDocument,
   EMPTY_DRAFT,
@@ -153,4 +156,27 @@ test('a collapsed card previews three interests and says how many are held back'
   assert.deepEqual(previewTags(tags, true), { shown: tags, hidden: 0 });
   assert.deepEqual(previewTags(['a', 'b', 'c'], false), { shown: ['a', 'b', 'c'], hidden: 0 }, 'three fit, so nothing is hidden');
   assert.deepEqual(previewTags([], false), { shown: [], hidden: 0 });
+});
+
+// ----------------------------------------------------------------------------- the board's errors versus its empty answer
+test('a refused read, a network failure and any other failure are told apart; an empty board is not an error at all', () => {
+  assert.equal(feedErrorReason({ code: 'permission-denied' }), 'denied');
+  assert.equal(feedErrorReason({ code: 'firestore/permission-denied' }), 'denied');
+  assert.equal(feedErrorReason({ code: 'unavailable' }), 'failed', 'offline');
+  assert.equal(feedErrorReason({ code: 'deadline-exceeded' }), 'failed');
+  assert.equal(feedErrorReason({ code: 'failed-precondition' }), 'failed', 'e.g. a missing index');
+  assert.equal(feedErrorReason(new Error('boom')), 'failed');
+  assert.equal(feedErrorReason(null), 'failed');
+  assert.equal(applyLookingForFilters([], NO_FILTERS, []).length, 0, 'an empty answer simply has no posts to show');
+});
+
+test('only a refusal for an account that already looks eligible is retried, a few times, with growing pauses', () => {
+  assert.deepEqual([...FEED_RETRY_DELAYS_MS], [1500, 4000, 9000]);
+  assert.equal(feedRetryDelay('denied', true, 0), 1500);
+  assert.equal(feedRetryDelay('denied', true, 1), 4000);
+  assert.equal(feedRetryDelay('denied', true, 2), 9000);
+  assert.equal(feedRetryDelay('denied', true, 3), null, 'it gives up, and the member can still tap Try again');
+  assert.equal(feedRetryDelay('denied', false, 0), null, 'a member who is not eligible is never retried; the screen explains');
+  assert.equal(feedRetryDelay('failed', true, 0), null, 'other failures are not retried on their own');
+  assert.equal(feedRetryDelay(null, true, 0), null);
 });

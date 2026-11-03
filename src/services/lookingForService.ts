@@ -20,7 +20,7 @@ import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/fire
 import type { UserPreferences } from '../types.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { calculateAge } from '../utils/ageEligibility.ts';
-import { isIntention, LIMITS, lookingForPostId, draftToDocument, type LookingForDraft, type LookingForIntention, type LookingForPost } from '../utils/lookingFor.ts';
+import { feedErrorReason, isIntention, LIMITS, lookingForPostId, draftToDocument, type LookingForDraft, type LookingForIntention, type LookingForPost } from '../utils/lookingFor.ts';
 
 /**
  * The Cosmos "Looking For" board, shared through Firestore `looking_for_posts`. Reading and writing is limited to adult
@@ -102,7 +102,7 @@ export function subscribeToLookingFor(
       (snap) => onPosts(snap.docs.flatMap((d) => { const post = toLookingForPost(d.id, d.data()); return post ? [post] : []; }), uid),
       (err) => {
         console.warn('[LookingFor] Feed notice:', err);
-        onError((err as FirestoreError)?.code === 'permission-denied' ? 'denied' : 'failed');
+        onError(feedErrorReason(err));
       }
     );
   });

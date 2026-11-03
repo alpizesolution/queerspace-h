@@ -132,3 +132,26 @@ test('optional empty fields are not run through the content filter, which treats
 test('a request with no introduction is allowed: the optional hello skips the content filter', () => {
   assert.match(read('src/components/ConnectionRequestSheet.tsx'), /text\.trim\(\) \? sanitizeMessageText\(text\.trim\(\)\) : \{ cleanText: '', isBlocked: false \}/);
 });
+
+test('the board asks the same questions of everyone: no filter on the viewer\'s own post, intention, profile or connections', () => {
+  const feed = service.slice(service.indexOf('export function subscribeToLookingFor'), service.indexOf('export type LookingForWriteResult'));
+  assert.match(feed, /query\(base, orderBy\('timestamp', 'desc'\), limit\(LOOKING_FOR_HISTORY\)\)/);
+  assert.match(feed, /query\(base, where\('intention', '==', category\), orderBy\('timestamp', 'desc'\), limit\(LOOKING_FOR_HISTORY\)\)/);
+  assert.doesNotMatch(feed, /where\('authorId'|uid\b.*where\(|blocked|profileComplete/, 'nothing about the viewer narrows the board');
+  assert.match(feed, /onError\(feedErrorReason\(err\)\)/, 'a refusal and any other failure are reported as different things');
+});
+
+test('a refusal is retried for an account that looks eligible, never leaves the new member stuck, and has a Try again', () => {
+  assert.match(board, /const locallyEligible = adult && userPrefs\.profileComplete === true;/);
+  assert.match(board, /\}, \[available, filters\.category, reloadKey\]\);/, 'asking again re-subscribes');
+  assert.match(board, /feedRetryDelay\(loadError, locallyEligible, autoTries\.current\)/);
+  assert.match(board, /locallyEligible && <button[\s\S]*?>Try again<\/button>/, 'the refusal screen offers Try again to an eligible-looking member');
+  assert.match(board, /Couldn’t load posts\. <button[\s\S]*?>Try again<\/button>/, 'a plain failure offers Try again too');
+  assert.match(board, /No posts here yet/, 'an empty board still has its own message');
+});
+
+test('reading the board still needs an eligible adult member, and the rules for writing are unchanged', () => {
+  assert.match(lfRules, /allow read: if isAuthenticated\(\) && isEligibleMember\(request\.auth\.uid\);/);
+  assert.match(lfRules, /allow delete: if isAuthenticated\(\) && \(request\.auth\.uid == resource\.data\.authorId \|\| isAdmin\(\)\);/);
+  assert.match(lfRules, /request\.auth\.uid == resource\.data\.authorId/);
+});
