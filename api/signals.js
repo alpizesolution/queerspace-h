@@ -5,6 +5,7 @@ import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { createRequestHandlers } from './_requests.js';
 import { profileView } from './_profiles.js';
 import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
+import { createPartnerCache, getOnePair, listPairsLegacy, listPairsPage, parsePageLimit, partnerSummaries, shapePair } from './_inbox.js';
 
 const MAX_MESSAGE_LENGTH = 240;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -121,6 +122,8 @@ export const UNREAD_RECOUNT_LIMIT = 100;
 
 const connectionRequests = createRequestHandlers({ touchInbox, acceptedNotification });
 const media = createMediaHandlers();
+/** Other members' pseudonyms and avatars, remembered briefly so a refresh does not read the same profiles again. */
+const partnerCache = createPartnerCache();
 
 function idempotencyDocId(uid, key) {
   return createHash('sha256').update(uid + ':' + key).digest('hex');
@@ -210,45 +213,37 @@ export default async function handler(req, res) {
         return send(res, 200, await profileView(db, uid, memberId));
       }
       if (view === 'pairs') {
-        const pairSnapshots = await Promise.all([
-          db.collection('signalsPairs').where('participants', 'array-contains', uid).limit(100).get(),
-        ]);
-        const pairs = pairSnapshots[0].docs
-          .map(snap => ({ id: snap.id, ...snap.data() }))
-          .filter(pair => Array.isArray(pair.participants)
-            && pair.participants.includes(uid)
-            && ['active', 'ended'].includes(pair.status))
-          .sort((a, b) => {
-            const aTime = a.createdAt?.toMillis?.() || 0;
-            const bTime = b.createdAt?.toMillis?.() || 0;
-            return bTime - aTime;
-          })
-          .map(pair => ({
-            partnerId: pair.participants.find(participant => participant !== uid),
-            id: pair.id,
-            invitationId: pair.invitationId || pair.id,
-            participants: pair.participants,
-            status: pair.status,
-            createdAt: pair.createdAt?.toDate?.().toISOString?.() || null,
-            endedAt: pair.endedAt?.toDate?.().toISOString?.() || null,
-            endedBy: pair.endedBy || null,
-          }));
-        const partnerIds = [...new Set(pairs.map(pair => pair.partnerId).filter(Boolean))];
-        const profiles = new Map(await Promise.all(partnerIds.map(async id => {
-          const snap = await db.doc(`users/${id}/public/profile`).get();
-          return [id, partnerSummary(snap.exists ? snap.data() : null)];
-        })));
+        const param = name => req.query?.[name] || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get(name);
+        // With nothing asked for, the full list, exactly as before. A client that asks for one connection, or for a page
+        // (newest first, `before` being where the last page ended), reads only that.
+        const pairId = param('pairId');
+        const pageLimit = parsePageLimit(param('limit'));
+        let found;
+        let nextCursor;
+        if (pairId) {
+          const one = await getOnePair(db, uid, pairId);
+          found = one ? [one] : [];
+        } else if (pageLimit !== null) {
+          const page = await listPairsPage(db, uid, { limit: pageLimit, before: param('before') });
+          found = page.pairs;
+          nextCursor = page.nextCursor;
+        } else {
+          found = await listPairsLegacy(db, uid);
+        }
+        const shaped = found.map(item => shapePair(item, uid));
+        const profiles = await partnerSummaries(db, shaped.map(pair => pair.partnerId), partnerSummary, partnerCache);
         return send(res, 200, {
-          pairs: pairs.map(({ partnerId, ...pair }) => ({
-            ...pair,
-            partner: profiles.get(partnerId) || partnerSummary(null),
-          })),
+          pairs: shaped.map(({ partnerId, ...pair }) => ({ ...pair, partner: profiles.get(partnerId) || partnerSummary(null) })),
+          ...(nextCursor !== undefined ? { nextCursor } : {}),
         });
       }
-      const [received, sent] = await Promise.all([
-        db.collection('signalsInvitations').where('recipientId', '==', uid).limit(50).get(),
-        db.collection('signalsInvitations').where('senderId', '==', uid).limit(50).get(),
-      ]);
+      // `status=pending` asks for only the invitations still waiting (what the inbox shows), instead of the whole history.
+      const onlyPending = (req.query?.status || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('status')) === 'pending';
+      const invitationsOf = field => {
+        const base = db.collection('signalsInvitations').where(field, '==', uid);
+        return (onlyPending ? base.where('status', '==', 'pending') : base).limit(50).get();
+      };
+      const [received, sent] = await Promise.all([invitationsOf('recipientId'), invitationsOf('senderId')]);
       const byId = new Map();
       for (const snap of [...received.docs, ...sent.docs]) {
         const data = snap.data();
@@ -269,10 +264,7 @@ export default async function handler(req, res) {
       // invitations, the recipient for sent ones), resolved here so clients never read profiles directly.
       const otherId = invite => (invite.direction === 'sent' ? invite.recipientId : invite.senderId);
       const otherIds = [...new Set(sorted.map(otherId).filter(Boolean))];
-      const profiles = new Map(await Promise.all(otherIds.map(async id => {
-        const snap = await db.doc(`users/${id}/public/profile`).get();
-        return [id, partnerSummary(snap.exists ? snap.data() : null)];
-      })));
+      const profiles = await partnerSummaries(db, otherIds, partnerSummary, partnerCache);
       const invitations = sorted.map(invite => ({ ...invite, partner: profiles.get(otherId(invite)) || partnerSummary(null) }));
       return send(res, 200, { invitations });
     }

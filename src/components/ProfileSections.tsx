@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Heart, LoaderCircle, MapPin, MessageCircle } from 'lucide-react';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import { ExpandableText } from './ExpandableText.tsx';
@@ -11,7 +11,8 @@ import { INTENTION_LABELS, postPresentation, revealNeedsDialog, type LookingForP
 import { postsView } from '../utils/profileView.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 import { formatRelativeTime } from '../utils/relativeTime.ts';
-import { fetchMemberCommunityPosts } from '../services/profileViewService.ts';
+import { fetchMemberCommunityPosts, peekMemberPostsFirstPage } from '../services/profileViewService.ts';
+import { PostCardSkeleton } from './Skeleton.tsx';
 import { useOpenPost } from './ProfileNav.tsx';
 import { isPostId } from '../utils/communityPostLink.ts';
 
@@ -33,34 +34,55 @@ export const Section: React.FC<{ title: string; children: React.ReactNode }> = (
  * (with a retry). An empty list is never treated as a failure.
  */
 export const ProfilePosts: React.FC<{ memberId: string }> = ({ memberId }) => {
-  const [posts, setPosts] = useState<CommunityPost[]>([]);
-  const [cursor, setCursor] = useState<QueryDocumentSnapshot | null>(null);
-  const [done, setDone] = useState(true);
-  const [loading, setLoading] = useState(true);
+  // Posts read a moment ago (the profile starts reading them alongside itself) are shown at once, with no skeleton.
+  const remembered = useRef(peekMemberPostsFirstPage(memberId));
+  const [posts, setPosts] = useState<CommunityPost[]>(() => remembered.current?.posts ?? []);
+  const [cursor, setCursor] = useState<QueryDocumentSnapshot | null>(() => remembered.current?.cursor ?? null);
+  const [done, setDone] = useState(() => remembered.current?.done ?? true);
+  const [loading, setLoading] = useState(remembered.current === null);
   const [error, setError] = useState(false);
   const openPost = useOpenPost();
+  /** Which member's posts are current, so an answer for a profile that has been left cannot land on this one. */
+  const current = useRef(memberId);
+  current.current = memberId;
 
   const load = useCallback(async (after: QueryDocumentSnapshot | null) => {
     setLoading(true);
     setError(false);
     const outcome = await fetchMemberCommunityPosts(memberId, after);
+    if (current.current !== memberId) return;
     setLoading(false);
     if (!outcome.ok) {
       setError(true);
       return;
     }
     const { page } = outcome;
-    setPosts((current) => (after ? [...current, ...page.posts] : page.posts));
+    setPosts((existing) => (after ? [...existing, ...page.posts] : page.posts));
     setCursor(page.cursor);
     setDone(page.done);
   }, [memberId]);
 
+  const firstRun = useRef(true);
   useEffect(() => {
+    // The very first run keeps what the memory gave; a different member starts over.
+    if (firstRun.current) {
+      firstRun.current = false;
+      if (remembered.current) return;
+    }
+    const hit = peekMemberPostsFirstPage(memberId);
+    if (hit) {
+      setPosts(hit.posts);
+      setCursor(hit.cursor);
+      setDone(hit.done);
+      setLoading(false);
+      setError(false);
+      return;
+    }
     setPosts([]);
     setCursor(null);
     setDone(true);
     void load(null);
-  }, [load]);
+  }, [load, memberId]);
 
   const canOpen = (id: string) => openPost !== null && isPostId(id);
   const view = postsView({ loading, failed: error, count: posts.length });
@@ -68,13 +90,7 @@ export const ProfilePosts: React.FC<{ memberId: string }> = ({ memberId }) => {
     return (
       <Section title="Posts">
         <div role="status" aria-label="Loading posts" className="space-y-2.5">
-          {[0, 1].map((n) => (
-            <div key={n} className="animate-pulse rounded-2xl border border-line bg-raised/40 p-3.5">
-              <div className="h-4 w-24 rounded-full bg-plum/25" />
-              <div className="mt-3 h-3.5 w-3/4 rounded-full bg-plum/20" />
-              <div className="mt-2 h-3 w-full rounded-full bg-plum/15" />
-            </div>
-          ))}
+          {[0, 1].map((n) => <PostCardSkeleton key={n} />)}
         </div>
       </Section>
     );

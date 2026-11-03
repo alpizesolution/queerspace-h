@@ -189,7 +189,7 @@ test('the Posts section has three separate states, and the retry message is only
 });
 
 test('the posts request reports success and failure separately, with the same query, filters and paging as before', () => {
-  assert.match(service, /settlePostsLoad\(async \(\) =>/);
+  assert.match(service, /settlePostsLoad\(\(\) => within\(\(async \(\) =>/, 'the same outcome handling, now with a time limit');
   assert.match(service, /throw new Error\('database_unavailable'\)/);
   assert.match(service, /where\('authorId', '==', memberId\), orderBy\('timestamp', 'desc'\)/);
   assert.match(service, /limit\(PROFILE_PAGE_SIZE \+ 1\)/);
