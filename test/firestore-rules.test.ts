@@ -2249,3 +2249,44 @@ test('LF-M4: older posts with short sections stay readable and keep working, and
   await assertFails(alice.doc(path).update({ lookingFor: chars(99), updatedAt: now() }));
   await assertSucceeds(alice.doc(path).update({ intro: LF_ME, lookingFor: LF_YOU, updatedAt: now() }));
 });
+
+// ------------------------------------------------------------------
+// Opening one community post from a profile link
+// ------------------------------------------------------------------
+test('PL-01: a signed-in member can read one original post by id, and a signed-out visitor cannot', async () => {
+  await seedCommunityPost('orig1', 'alice', { likes: 3, replyCount: 2 });
+  const doc = await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('community_posts/orig1').get()) as any;
+  assert.equal(doc.exists, true);
+  assert.equal(doc.data().authorId, 'alice');
+  assert.equal(doc.data().likes, 3);
+  assert.equal(doc.data().replyCount, 2);
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('community_posts/orig1').get());
+});
+
+test('PL-02: a deleted post reads as "does not exist", not as an error, and cannot be brought back by a reader', async () => {
+  await seedCommunityPost('gone1', 'alice');
+  await assertSucceeds(testEnv.authenticatedContext('alice').firestore().doc('community_posts/gone1').delete());
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  const doc = await assertSucceeds(bob.doc('community_posts/gone1').get()) as any;
+  assert.equal(doc.exists, false);
+  await assertFails(bob.doc('community_posts/gone1').set(communityPost('alice')));
+});
+
+test('PL-03: engaging with the opened post changes the original and creates no copy and no duplicate record', async () => {
+  await seedCommunityPost('orig2', 'alice');
+  await assertSucceeds(likeAs('bob', 'orig2', 1));
+  await assertFails(likeAs('bob', 'orig2', 1));
+  await seedStamp('bob', 'communityReply', 10);
+  await assertSucceeds(replyAs('bob', 'orig2'));
+  const posts = await assertSucceeds(testEnv.authenticatedContext('carol').firestore().collection('community_posts').get()) as any;
+  assert.deepEqual(posts.docs.map((d: any) => d.id), ['orig2'], 'still exactly one post');
+  const original = (await testEnv.authenticatedContext('carol').firestore().doc('community_posts/orig2').get()).data() as any;
+  assert.equal(original.likes, 1);
+  assert.equal(original.replyCount, 1);
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const likes = await ctx.firestore().collection('community_posts/orig2/likes').get();
+    const replies = await ctx.firestore().collection('community_posts/orig2/replies').get();
+    assert.equal(likes.size, 1, 'one like record');
+    assert.equal(replies.size, 1, 'one reply record');
+  });
+});

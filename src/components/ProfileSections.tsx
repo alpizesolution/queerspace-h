@@ -12,6 +12,11 @@ import { postsView } from '../utils/profileView.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 import { formatRelativeTime } from '../utils/relativeTime.ts';
 import { fetchMemberCommunityPosts } from '../services/profileViewService.ts';
+import { useOpenPost } from './ProfileNav.tsx';
+import { isPostId } from '../utils/communityPostLink.ts';
+
+/** Whether a tap landed on something with its own action (a button or link), which keeps it instead of opening the card. */
+const isInnerControl = (target: EventTarget): boolean => target instanceof Element && target.closest('button, a, input, textarea, select') !== null;
 
 /** A titled, clearly separated block of the profile page. */
 export const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -33,6 +38,7 @@ export const ProfilePosts: React.FC<{ memberId: string }> = ({ memberId }) => {
   const [done, setDone] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const openPost = useOpenPost();
 
   const load = useCallback(async (after: QueryDocumentSnapshot | null) => {
     setLoading(true);
@@ -56,6 +62,7 @@ export const ProfilePosts: React.FC<{ memberId: string }> = ({ memberId }) => {
     void load(null);
   }, [load]);
 
+  const canOpen = (id: string) => openPost !== null && isPostId(id);
   const view = postsView({ loading, failed: error, count: posts.length });
   if (view === 'loading') {
     return (
@@ -94,7 +101,15 @@ export const ProfilePosts: React.FC<{ memberId: string }> = ({ memberId }) => {
       <ul className="space-y-2.5">
         {posts.map((post) => (
           <li key={post.id}>
-            <article className="rounded-2xl border border-line bg-raised/50 p-3.5">
+            {/* The whole card opens the original post; the controls inside it (such as "more") keep their own taps. */}
+            <article
+              role={canOpen(post.id) ? 'link' : undefined}
+              tabIndex={canOpen(post.id) ? 0 : undefined}
+              aria-label={canOpen(post.id) ? `Open post: ${post.title}` : undefined}
+              onClick={(event) => { if (canOpen(post.id) && !isInnerControl(event.target)) openPost?.(post.id); }}
+              onKeyDown={(event) => { if (canOpen(post.id) && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openPost?.(post.id); } }}
+              className={`rounded-2xl border border-line bg-raised/50 p-3.5 ${canOpen(post.id) ? 'cursor-pointer transition-colors hover:border-line-strong hover:bg-raised/70 active:bg-raised/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60' : ''}`}
+            >
               <p className="flex items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">
                 <span className="inline-flex items-center h-5 px-2 rounded-full bg-plum/30 text-lavender text-[length:calc(11px_*_var(--fs,1))] font-semibold">
                   {CATEGORY_EMOJI[post.category] ?? '🌸'} {CATEGORY_LABELS[post.category] ?? post.category}

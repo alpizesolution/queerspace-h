@@ -19,6 +19,7 @@ import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/fire
 import { CommunityPost, CommunityReply, UserPreferences } from '../types.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { checkAdmin } from './adminService.ts';
+import { postLoadFromError, type PostLoad } from '../utils/communityPostLink.ts';
 
 /**
  * Community board shared through Firestore `community_posts`. Like and reply counts
@@ -133,6 +134,40 @@ export function subscribeToCommunity(
     onError,
     'Feed'
   );
+}
+
+/**
+ * One post, live, by its id: the original document in `community_posts`, so its likes, replies and author are the real
+ * ones and every change to them shows here. A deleted or unreadable post is reported as "unavailable", never recreated.
+ */
+export function subscribeToCommunityPost(postId: string, onState: (state: PostLoad<CommunityPost>) => void): () => void {
+  if (!db) {
+    onState({ status: 'failed' });
+    return () => {};
+  }
+  const firestore = db;
+  let cancelled = false;
+  let unsubscribe: (() => void) | null = null;
+  const start = auth?.currentUser ? Promise.resolve(auth.currentUser) : ensureAnonymousAuth();
+  start.then((user) => {
+    if (cancelled) return;
+    if (!user) {
+      onState({ status: 'failed' });
+      return;
+    }
+    unsubscribe = onSnapshot(
+      doc(firestore, 'community_posts', postId),
+      (snap) => onState(snap.exists() ? { status: 'ready', post: toCommunityPost(snap.id, snap.data()) } : { status: 'unavailable' }),
+      (err) => {
+        console.warn('[Community] Post notice:', err);
+        onState(postLoadFromError(err));
+      }
+    );
+  });
+  return () => {
+    cancelled = true;
+    unsubscribe?.();
+  };
 }
 
 /** Live replies for one post, oldest first. */
