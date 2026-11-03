@@ -11,6 +11,9 @@ import {
   INTENTIONS,
   INTENTION_LABELS,
   LIMITS,
+  LOOKING_FOR_FLAIRS,
+  composeTitle,
+  type DraftErrors,
   lookingForPostId,
   validateDraft,
   type LookingForDraft,
@@ -99,11 +102,12 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
     const result = await saveLookingForPost(userPrefs, cleaned);
     setSaving(false);
     if (result === 'ok') onSaved(Boolean(editing) || Boolean(replacesOwn));
-    else if (result === 'denied') setProblem('We couldn’t post this. Make sure your profile is saved, your age (if shown) matches your birthday, and you wait a minute between new posts.');
+    else if (result === 'denied') setProblem('We couldn’t post this. Make sure your profile is saved, your birthday is saved, and you wait a minute between new posts.');
     else setProblem('Couldn’t post. Check your connection and try again.');
   };
 
-  const shown = (key: keyof LookingForDraft) => (submitted ? errors[key] : undefined);
+  const shown = (key: keyof DraftErrors) => (submitted ? errors[key] : undefined);
+  const preview = composeTitle(ownAge, draft.flair, draft.title || 'Your title');
 
   return (
     <Sheet
@@ -139,10 +143,32 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
           {replacesOwn && <p className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">You already have a post for this. Posting will update it.</p>}
         </fieldset>
 
+        <fieldset>
+          <legend className="sr-only">Who you are looking for</legend>
+          <Label hint={ownAge !== null ? `You’ll post as ${ownAge}, from your profile.` : undefined}>Looking for</Label>
+          <div role="radiogroup" aria-label="Looking for flair" className="flex flex-wrap gap-1.5">
+            {LOOKING_FOR_FLAIRS.map((flair) => (
+              <button
+                key={flair}
+                type="button"
+                role="radio"
+                aria-checked={draft.flair === flair}
+                onClick={() => set('flair', flair)}
+                className={`chip !px-2.5 !py-1 text-[length:calc(12px_*_var(--fs,1))] ${draft.flair === flair ? '!bg-fg !text-ink !border-fg' : ''}`}
+              >
+                {flair}
+              </button>
+            ))}
+          </div>
+          {shown('flair') && <p className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">{shown('flair')}</p>}
+          {shown('age') && <p className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">{shown('age')}</p>}
+        </fieldset>
+
         <div>
           <Label htmlFor="lf-title">Title</Label>
-          <input id="lf-title" value={draft.title} onChange={(e) => set('title', e.target.value.slice(0, LIMITS.title))} maxLength={LIMITS.title} placeholder="A short headline" className={`${field} h-11`} />
+          <input id="lf-title" value={draft.title} onChange={(e) => set('title', e.target.value.slice(0, LIMITS.title))} maxLength={LIMITS.title} placeholder="Looking for kasama mag-coffee" className={`${field} h-11`} />
           {shown('title') && <p className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">{shown('title')}</p>}
+          <p aria-live="polite" className="mt-2 rounded-xl border border-line bg-raised/40 px-3 py-2 text-[length:calc(13px_*_var(--fs,1))] font-semibold text-fg leading-snug [overflow-wrap:anywhere]">{preview}</p>
         </div>
 
         <div>
@@ -206,8 +232,6 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
         </div>
 
         <div className="space-y-4 rounded-2xl border border-line bg-raised/40 p-4">
-          <Switch id="lf-show-age" checked={draft.showAge} onChange={(v) => set('showAge', v)} label={ownAge !== null ? `Show my age (${ownAge})` : 'Show my age'} description="Off by default. Your birthday itself is never shown." />
-          {shown('showAge') && <p className="text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">{shown('showAge')}</p>}
           <Switch id="lf-show-photo" checked={draft.showPhoto} onChange={(v) => set('showPhoto', v)} label="Show my avatar" description="Otherwise your post uses a generic avatar." />
         </div>
 

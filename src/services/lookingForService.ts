@@ -20,7 +20,7 @@ import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/fire
 import type { UserPreferences } from '../types.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { calculateAge } from '../utils/ageEligibility.ts';
-import { feedErrorReason, isIntention, LIMITS, lookingForPostId, draftToDocument, type LookingForDraft, type LookingForIntention, type LookingForPost } from '../utils/lookingFor.ts';
+import { feedErrorReason, isFlair, isIntention, LIMITS, lookingForPostId, draftToDocument, type LookingForDraft, type LookingForIntention, type LookingForPost } from '../utils/lookingFor.ts';
 
 /**
  * The Cosmos "Looking For" board, shared through Firestore `looking_for_posts`. Reading and writing is limited to adult
@@ -53,6 +53,7 @@ export function toLookingForPost(id: string, data: Record<string, unknown>): Loo
     lookingFor: String(data.lookingFor ?? '').slice(0, LIMITS.lookingFor),
     intention: data.intention,
     age: age(data.age),
+    flair: isFlair(data.flair) ? data.flair : undefined,
     seekAgeMin: age(data.seekAgeMin),
     seekAgeMax: age(data.seekAgeMax),
     region: typeof data.region === 'string' && data.region ? data.region.slice(0, LIMITS.region) : undefined,
@@ -70,7 +71,7 @@ async function currentUid(): Promise<string | null> {
   return user?.uid ?? null;
 }
 
-/** The member's own age from the birthday saved on this device, or null. Only shown on a post if they choose to. */
+/** The member's own age from the birthday saved on this device, or null. The rules check it against the private birthday on the server. */
 export const ownAgeFrom = (prefs: UserPreferences): number | null => (prefs.birthDate ? calculateAge(prefs.birthDate) : null);
 
 /** Live board, newest first. A category asks the server for just that intention (see firestore.indexes.json). */

@@ -11,6 +11,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { isAdultMember } from './_adult.js';
+import { displayTitle } from './_flair.js';
 
 export const REQUEST_MAX_MESSAGE = 500;
 export const REQUEST_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -440,7 +441,7 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
         memberId: other,
         partner: profileById.get(other) ?? profilePreview(null),
         // A sensitive post's title is never repeated here.
-        post: { status: postAvailability(post), title: post && post.isNsfw !== true && typeof post.title === 'string' ? post.title.slice(0, 90) : null, sensitive: post?.isNsfw === true },
+        post: { status: postAvailability(post), title: post && post.isNsfw !== true && typeof post.title === 'string' ? displayTitle(post).slice(0, 130) : null, sensitive: post?.isNsfw === true },
       };
     };
     return {

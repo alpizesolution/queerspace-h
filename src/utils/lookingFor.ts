@@ -40,6 +40,17 @@ export const LIMITS = {
   maxAge: 99,
 } as const;
 
+/** Who the author hopes to meet, as one pill. The same list is in firestore.rules and api/_flair.js. */
+export const LOOKING_FOR_FLAIRS = [
+  'Masc × Femme', 'Masc × Masc', 'Masc × Any',
+  'Femme × Masc', 'Femme × Femme', 'Femme × Any',
+  'Andro × Masc', 'Andro × Femme', 'Andro × Any',
+  'Trans Femme × Masc', 'Trans Femme × Femme', 'Trans Femme × Any',
+  'All WLW',
+] as const;
+export type LookingForFlair = (typeof LOOKING_FOR_FLAIRS)[number];
+export const isFlair = (value: unknown): value is LookingForFlair => typeof value === 'string' && (LOOKING_FOR_FLAIRS as readonly string[]).includes(value);
+
 export interface LookingForPost {
   id: string;
   authorId: string;
@@ -50,8 +61,10 @@ export interface LookingForPost {
   intro: string;
   lookingFor: string;
   intention: LookingForIntention;
-  /** Only present when the author chose to show it; the rules check it against their private birthday. */
+  /** The author's age, checked by the rules against their private birthday. Posts from before flairs may not have one. */
   age?: number;
+  /** Who they hope to meet. Posts from before flairs may not have one. */
+  flair?: LookingForFlair;
   /** The age range the author hopes to meet, published on purpose. Not the private matching range. */
   seekAgeMin?: number;
   seekAgeMax?: number;
@@ -150,7 +163,7 @@ export interface LookingForDraft {
   intro: string;
   lookingFor: string;
   intention: LookingForIntention | '';
-  showAge: boolean;
+  flair: LookingForFlair | '';
   ageMin: string;
   ageMax: string;
   region: string;
@@ -161,14 +174,14 @@ export interface LookingForDraft {
 }
 
 export const EMPTY_DRAFT: LookingForDraft = {
-  title: '', intro: '', lookingFor: '', intention: '', showAge: false, ageMin: '', ageMax: '',
+  title: '', intro: '', lookingFor: '', intention: '', flair: '', ageMin: '', ageMax: '',
   region: '', tags: [], showPhoto: true, isNsfw: false, contentWarning: '',
 };
 
 export function draftFromPost(post: LookingForPost): LookingForDraft {
   return {
     title: post.title, intro: post.intro, lookingFor: post.lookingFor, intention: post.intention,
-    showAge: post.age !== undefined, ageMin: post.seekAgeMin?.toString() ?? '', ageMax: post.seekAgeMax?.toString() ?? '',
+    flair: post.flair ?? '', ageMin: post.seekAgeMin?.toString() ?? '', ageMax: post.seekAgeMax?.toString() ?? '',
     region: post.region ?? '', tags: post.tags.slice(), showPhoto: Boolean(post.authorAvatar),
     isNsfw: post.isNsfw, contentWarning: post.contentWarning ?? '',
   };
@@ -180,14 +193,28 @@ const toAge = (value: string): number | null => {
   return Number.isInteger(n) ? n : Number.NaN;
 };
 
+export type DraftErrors = Partial<Record<keyof LookingForDraft | 'age', string>>;
+
+/**
+ * The title as the board shows it: "18 [Masc × Femme] Looking for kasama mag-coffee". Built from the structured age and
+ * flair, never typed by the author. A post from before flairs existed has neither, and shows its title as written.
+ */
+export function composeTitle(age: number | null | undefined, flair: string | null | undefined, title: string): string {
+  const text = title.trim();
+  return typeof age === 'number' && Number.isInteger(age) && isFlair(flair) ? `${age} [${flair}] ${text}` : text;
+}
+
+export const postDisplayTitle = (post: Pick<LookingForPost, 'title' | 'age' | 'flair'>): string => composeTitle(post.age, post.flair, post.title);
+
 /** Friendly problems with a draft, by field. An empty object means it can be posted. */
-export function validateDraft(draft: LookingForDraft, ownAge: number | null): Partial<Record<keyof LookingForDraft, string>> {
-  const errors: Partial<Record<keyof LookingForDraft, string>> = {};
+export function validateDraft(draft: LookingForDraft, ownAge: number | null): DraftErrors {
+  const errors: DraftErrors = {};
   if (!draft.title.trim()) errors.title = 'Give your post a title.';
+  if (!isFlair(draft.flair)) errors.flair = 'Choose who you are looking for.';
   if (!draft.intro.trim()) errors.intro = 'Say a little about yourself.';
   if (!draft.lookingFor.trim()) errors.lookingFor = 'Say what you are looking for.';
   if (!isIntention(draft.intention)) errors.intention = 'Choose what kind of connection you want.';
-  if (draft.showAge && (ownAge === null || ownAge < LIMITS.minAge)) errors.showAge = 'Add your birthday in your profile to show your age.';
+  if (ownAge === null || !Number.isInteger(ownAge) || ownAge < LIMITS.minAge || ownAge > LIMITS.maxAge) errors.age = 'Add your birthday in your profile to post.';
   const min = toAge(draft.ageMin);
   const max = toAge(draft.ageMax);
   const inRange = (n: number | null) => n === null || (Number.isInteger(n) && n >= LIMITS.minAge && n <= LIMITS.maxAge);
@@ -226,7 +253,8 @@ export function draftToDocument(
     intro: draft.intro.trim().slice(0, LIMITS.intro),
     lookingFor: draft.lookingFor.trim().slice(0, LIMITS.lookingFor),
     intention: draft.intention,
-    ...(draft.showAge && ownAge !== null ? { age: ownAge } : {}),
+    ...(ownAge !== null ? { age: ownAge } : {}),
+    flair: draft.flair,
     ...(min !== null && !Number.isNaN(min) ? { seekAgeMin: min } : {}),
     ...(max !== null && !Number.isNaN(max) ? { seekAgeMax: max } : {}),
     ...(draft.region.trim() ? { region: draft.region.trim().slice(0, LIMITS.region) } : {}),

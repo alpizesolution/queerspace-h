@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { LOOKING_FOR_FLAIRS as SERVER_FLAIRS, displayTitle } from '../../api/_flair.js';
+import { LOOKING_FOR_FLAIRS as CLIENT_FLAIRS, composeTitle } from '../../src/utils/lookingFor.ts';
 
 const read = (file) => fs.readFileSync(file, 'utf8');
 const cosmos = read('src/components/CommunityFeedView.tsx');
@@ -32,7 +34,7 @@ test('Looking For has the six categories and the filters asked for', () => {
 });
 
 test('the composer has every requested field, and the NSFW toggle with its description', () => {
-  for (const text of ['Title', 'About you', 'What are you looking for?', 'Preferred age range', 'Location', 'Interests', 'Show my age', 'Show my avatar', 'Mark as NSFW', 'Hide mature or sexually suggestive content behind a content warning.', 'Content warning']) {
+  for (const text of ['Title', 'About you', 'What are you looking for?', 'Preferred age range', 'Location', 'Interests', 'Looking for', 'Show my avatar', 'Mark as NSFW', 'Hide mature or sexually suggestive content behind a content warning.', 'Content warning']) {
     assert.ok(composer.includes(text), text);
   }
   assert.match(composer, /Don’t show a location/, 'location is optional and city or province only');
@@ -154,4 +156,41 @@ test('reading the board still needs an eligible adult member, and the rules for 
   assert.match(lfRules, /allow read: if isAuthenticated\(\) && isEligibleMember\(request\.auth\.uid\);/);
   assert.match(lfRules, /allow delete: if isAuthenticated\(\) && \(request\.auth\.uid == resource\.data\.authorId \|\| isAdmin\(\)\);/);
   assert.match(lfRules, /request\.auth\.uid == resource\.data\.authorId/);
+});
+
+test('the flair list is identical in the rules, the server and the app', () => {
+  const inRules = [...rules.slice(rules.indexOf('function lookingForFlairs()'), rules.indexOf('function validLookingForBody')).matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(inRules, [...CLIENT_FLAIRS]);
+  assert.deepEqual([...SERVER_FLAIRS], [...CLIENT_FLAIRS]);
+  assert.equal(CLIENT_FLAIRS.length, 13);
+});
+
+test('the server builds the same display title as the app, and leaves posts without a flair as they are', () => {
+  for (const flair of CLIENT_FLAIRS) {
+    const post = { age: 21, flair, title: 'Looking for kasama mag-coffee' };
+    assert.equal(displayTitle(post), composeTitle(post.age, post.flair, post.title));
+  }
+  assert.equal(displayTitle({ age: 18, flair: 'Masc × Femme', title: 'Looking for kasama mag-coffee' }), '18 [Masc × Femme] Looking for kasama mag-coffee');
+  assert.equal(displayTitle({ title: 'Old post' }), 'Old post');
+  assert.equal(displayTitle({ age: 20, flair: 'bogus', title: 'Old post' }), 'Old post');
+  assert.equal(displayTitle(null), '');
+  assert.match(read('api/_requests.js'), /displayTitle\(post\)\.slice\(0, 130\)/, 'request lists show the generated title');
+});
+
+test('the composer asks for the flair with compact pills, previews the generated title, and no longer lets the age be chosen', () => {
+  assert.match(composer, /role="radiogroup" aria-label="Looking for flair"/);
+  assert.match(composer, /LOOKING_FOR_FLAIRS\.map\(\(flair\) =>/);
+  assert.match(composer, /aria-checked=\{draft\.flair === flair\}/, 'single selection');
+  assert.match(composer, /const preview = composeTitle\(ownAge, draft\.flair, draft\.title \|\| 'Your title'\);/);
+  assert.match(composer, /aria-live="polite"[^>]*>\{preview\}<\/p>/, 'a live preview');
+  assert.doesNotMatch(composer, /showAge|lf-show-age/, 'the age is not a toggle or an input');
+  assert.match(composer, /You’ll post as \$\{ownAge\}, from your profile\./);
+  assert.match(board.length ? read('src/components/LookingForBody.tsx') : '', /postDisplayTitle\(post\)/, 'cards show the generated title');
+});
+
+test('the rules require an age and a flair on a new post, validate both, and still let an older post be paused', () => {
+  assert.match(lfRules, /hasAll\(\['authorId', 'authorName', 'authorPronouns', 'title', 'intro', 'lookingFor', 'intention', 'age', 'flair', 'tags'/);
+  assert.match(lfRules, /!\('flair' in data\) \|\| data\.flair in lookingForFlairs\(\)/);
+  assert.match(lfRules, /lookingForAgeMatches\(data\.age\)/, 'the age is checked against the private birthday');
+  assert.match(lfRules, /affectedKeys\(\)\.hasOnly\(\['requestsPaused', 'updatedAt'\]\)/);
 });

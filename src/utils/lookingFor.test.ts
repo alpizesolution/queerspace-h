@@ -4,6 +4,10 @@ import {
   activeFilterCount,
   applyLookingForFilters,
   cleanTag,
+  composeTitle,
+  isFlair,
+  LOOKING_FOR_FLAIRS,
+  postDisplayTitle,
   FEED_RETRY_DELAYS_MS,
   feedErrorReason,
   feedRetryDelay,
@@ -29,7 +33,7 @@ const post = (over: Partial<LookingForPost> = {}): LookingForPost => ({
 });
 
 const draft = (over: Partial<LookingForDraft> = {}): LookingForDraft => ({
-  ...EMPTY_DRAFT, title: 'Hello', intro: 'About me', lookingFor: 'Someone kind', intention: 'friendship', ...over,
+  ...EMPTY_DRAFT, title: 'Hello', intro: 'About me', lookingFor: 'Someone kind', intention: 'friendship', flair: 'Masc × Femme', ...over,
 });
 
 test('the board filters by category, blocked authors, age, location, interest and mature posts', () => {
@@ -92,30 +96,29 @@ test('a post id is derived from the member and intention', () => {
 });
 
 test('the composer explains what is missing, and accepts a complete draft', () => {
-  assert.deepEqual(validateDraft(draft(), null), {});
-  const empty = validateDraft(EMPTY_DRAFT, null);
-  for (const key of ['title', 'intro', 'lookingFor', 'intention'] as const) assert.ok(empty[key], key);
-  assert.ok(validateDraft(draft({ showAge: true }), null).showAge, 'cannot show an age without a birthday');
-  assert.ok(validateDraft(draft({ showAge: true }), 17).showAge);
-  assert.deepEqual(validateDraft(draft({ showAge: true }), 27), {});
-  assert.ok(validateDraft(draft({ ageMin: '17' }), null).ageMin);
-  assert.ok(validateDraft(draft({ ageMax: '120' }), null).ageMin);
-  assert.ok(validateDraft(draft({ ageMin: '40', ageMax: '25' }), null).ageMin);
-  assert.deepEqual(validateDraft(draft({ ageMin: '24', ageMax: '32' }), null), {});
-  assert.ok(validateDraft(draft({ isNsfw: true, contentWarning: 'x'.repeat(121) }), null).contentWarning);
+  assert.deepEqual(validateDraft(draft(), 27), {});
+  const empty = validateDraft(EMPTY_DRAFT, 27);
+  for (const key of ['title', 'intro', 'lookingFor', 'intention', 'flair'] as const) assert.ok(empty[key], key);
+  assert.ok(validateDraft(draft({ ageMin: '17' }), 27).ageMin);
+  assert.ok(validateDraft(draft({ ageMax: '120' }), 27).ageMin);
+  assert.ok(validateDraft(draft({ ageMin: '40', ageMax: '25' }), 27).ageMin);
+  assert.deepEqual(validateDraft(draft({ ageMin: '24', ageMax: '32' }), 27), {});
+  assert.ok(validateDraft(draft({ isNsfw: true, contentWarning: 'x'.repeat(121) }), 27).contentWarning);
 });
 
 test('the stored document leaves out anything the member did not choose to show', () => {
   const author = { uid: 'u1', name: ' Willow ', pronouns: 'she/her', avatar: 'cat.1.2' };
   const plain = draftToDocument(draft({ showPhoto: false }), author, 30);
-  assert.equal('age' in plain, false, 'age is never stored unless shown');
+  assert.equal(plain.age, 30, 'the age is the trusted account age, always stored');
+  assert.equal(plain.flair, 'Masc × Femme');
+  assert.equal(plain.title, 'Hello', 'the stored title is only what the member typed');
   assert.equal('authorAvatar' in plain, false);
   assert.equal('region' in plain, false);
   assert.equal('seekAgeMin' in plain, false);
   assert.equal(plain.authorName, 'Willow');
   assert.equal(plain.contentWarning, null);
   assert.equal(plain.isNsfw, false);
-  const full = draftToDocument(draft({ showPhoto: true, showAge: true, ageMin: '24', ageMax: '32', region: 'Cebu City', tags: ['#Books', 'books', ' Art '], isNsfw: true, contentWarning: '  Mature themes ' }), author, 30);
+  const full = draftToDocument(draft({ showPhoto: true, ageMin: '24', ageMax: '32', region: 'Cebu City', tags: ['#Books', 'books', ' Art '], isNsfw: true, contentWarning: '  Mature themes ' }), author, 30);
   assert.equal(full.age, 30);
   assert.equal(full.authorAvatar, 'cat.1.2');
   assert.equal(full.seekAgeMin, 24);
@@ -133,11 +136,11 @@ test('the stored document leaves out anything the member did not choose to show'
 test('editing starts from the stored post', () => {
   const stored = post({ age: 28, seekAgeMin: 25, seekAgeMax: 35, region: 'Cebu City', authorAvatar: 'cat.1.2', tags: ['Art'], isNsfw: true, contentWarning: 'Mature' });
   const d = draftFromPost(stored);
-  assert.equal(d.showAge, true);
+  assert.equal(d.flair, '', 'a post from before flairs opens with no flair chosen');
   assert.equal(d.showPhoto, true);
   assert.equal(d.ageMin, '25');
   assert.equal(d.contentWarning, 'Mature');
-  assert.equal(draftFromPost(post()).showAge, false);
+  assert.equal(draftFromPost(post({ flair: 'All WLW' })).flair, 'All WLW');
 });
 
 test('tags are cleaned and bounded, and the age range reads naturally', () => {
@@ -179,4 +182,52 @@ test('only a refusal for an account that already looks eligible is retried, a fe
   assert.equal(feedRetryDelay('denied', false, 0), null, 'a member who is not eligible is never retried; the screen explains');
   assert.equal(feedRetryDelay('failed', true, 0), null, 'other failures are not retried on their own');
   assert.equal(feedRetryDelay(null, true, 0), null);
+});
+
+// ------------------------------------------------------------------------------------- age and flair on a new post
+test('the flair list is exactly the thirteen options, once each, and "×" is the multiplication sign', () => {
+  assert.equal(LOOKING_FOR_FLAIRS.length, 13);
+  assert.equal(new Set(LOOKING_FOR_FLAIRS).size, 13);
+  assert.deepEqual([...LOOKING_FOR_FLAIRS].slice(0, 3), ['Masc × Femme', 'Masc × Masc', 'Masc × Any']);
+  assert.equal(LOOKING_FOR_FLAIRS[12], 'All WLW');
+  for (const flair of LOOKING_FOR_FLAIRS) assert.ok(isFlair(flair));
+  assert.ok(LOOKING_FOR_FLAIRS.slice(0, 12).every((f) => f.includes(' × ')));
+});
+
+test('a post needs an age from the account: missing, under 18 and out-of-range ages are all refused', () => {
+  assert.ok(validateDraft(draft(), null).age, 'missing age');
+  assert.ok(validateDraft(draft(), 17).age, 'under 18');
+  assert.ok(validateDraft(draft(), 0).age);
+  assert.ok(validateDraft(draft(), 18.5).age, 'not an integer');
+  assert.ok(validateDraft(draft(), 100).age);
+  assert.equal(validateDraft(draft(), 18).age, undefined);
+  assert.equal(validateDraft(draft(), 99).age, undefined);
+});
+
+test('a post needs one valid flair: missing and invented ones are refused', () => {
+  assert.ok(validateDraft(draft({ flair: '' }), 27).flair, 'missing');
+  assert.ok(validateDraft(draft({ flair: 'Femme × Femme ' as never }), 27).flair, 'stray space');
+  assert.ok(validateDraft(draft({ flair: 'Masc x Femme' as never }), 27).flair, 'a letter x is not the sign');
+  assert.ok(validateDraft(draft({ flair: 'Everyone' as never }), 27).flair, 'not on the list');
+  assert.equal(isFlair(undefined), false);
+  assert.equal(isFlair(null), false);
+  assert.equal(isFlair(5), false);
+});
+
+test('the title is built from the structured age and flair, and the member types only the rest', () => {
+  assert.equal(composeTitle(18, 'Masc × Femme', 'Looking for kasama mag-coffee'), '18 [Masc × Femme] Looking for kasama mag-coffee');
+  assert.equal(composeTitle(31, 'All WLW', '  spaced  '), '31 [All WLW] spaced');
+  assert.equal(postDisplayTitle(post({ age: 24, flair: 'Trans Femme × Any', title: 'Hi there' })), '24 [Trans Femme × Any] Hi there');
+  const stored = draftToDocument(draft({ title: 'Looking for kasama mag-coffee', flair: 'Masc × Femme' }), { uid: 'u1', name: 'W', pronouns: '' }, 18);
+  assert.equal(stored.title, 'Looking for kasama mag-coffee', 'the prefix is never stored in the title');
+  assert.equal(stored.age, 18);
+  assert.equal(stored.flair, 'Masc × Femme');
+  assert.equal(composeTitle(stored.age as number, stored.flair as string, stored.title as string), '18 [Masc × Femme] Looking for kasama mag-coffee');
+});
+
+test('posts from before flairs still read and show their title unchanged', () => {
+  assert.equal(postDisplayTitle(post({ title: 'Old post' })), 'Old post');
+  assert.equal(postDisplayTitle(post({ title: 'Old post', age: 25 })), 'Old post', 'an age alone adds nothing');
+  assert.equal(postDisplayTitle(post({ title: 'Old post', flair: 'Masc × Femme' })), 'Old post', 'a flair alone adds nothing');
+  assert.equal(composeTitle(18, 'not a flair', 'Old post'), 'Old post');
 });

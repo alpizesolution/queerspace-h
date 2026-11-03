@@ -507,3 +507,16 @@ test('thirty creates split across two instances never duplicate or half-write a 
   assert.equal(waiting, stored, 'the author\'s list matches the stored requests');
   assert.equal((await db.collection('connection_request_locks').get()).size, stored, 'one lock per request, none stray');
 });
+
+test('a request shows the post\'s generated title when it has an age and flair, and the plain title when it does not', { skip }, async () => {
+  const { member, author, post, ask, list } = await setup();
+  const sender = await member();
+  await post({ age: 21, flair: 'Masc × Femme', title: 'Looking for kasama mag-coffee' });
+  await ask(sender);
+  assert.equal((await list(author)).incoming[0].post.title, '21 [Masc × Femme] Looking for kasama mag-coffee');
+  const other = await member();
+  await post({ title: 'Quiet reader' });
+  await ask(other);
+  const titles = (await list(author)).incoming.map((r) => r.post.title);
+  assert.deepEqual(titles, ['Quiet reader', 'Quiet reader'], 'a post from before flairs shows only its title');
+});
