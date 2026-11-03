@@ -30,6 +30,12 @@ export const PHOTOS_PER_MINUTE = 10;
 const PHOTO_TEXT = '📷 Photo';
 
 const fail = (statusCode, code) => Object.assign(new Error(code), { statusCode });
+/** Server-side log of why storage failed: the step and an error code only, so it can be diagnosed without leaking anything. */
+const logMedia = (step, detail) => console.error(`[Media] ${step}${detail ? `: ${detail}` : ''}`);
+const notConfigured = () => {
+  logMedia('R2 is not configured', `missing ${r2Config().missing.join(', ') || 'nothing (store unavailable)'}`);
+  return fail(503, 'media_not_configured');
+};
 const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(value);
 const toMs = value => (typeof value?.toMillis === 'function' ? value.toMillis() : null);
 
@@ -233,11 +239,58 @@ export function createR2Store({ endpoint, bucket, accessKeyId, secretAccessKey, 
   };
 }
 
-/** The store from the server's environment, or null when R2 is not configured (the feature then says it is unavailable). */
+/**
+ * What the server's environment gives R2: the account endpoint, the bucket, and the two access keys. Cloudflare shows the
+ * endpoint with the bucket on the end (https://<account>.r2.cloudflarestorage.com/<bucket>), so when R2_BUCKET is not set
+ * the bucket is read from there. Reports only the NAMES of what is missing, never any value.
+ */
+export function r2Config(env = process.env) {
+  const clean = value => (typeof value === 'string' ? value.trim() : '');
+  let endpoint = clean(env.R2_ENDPOINT);
+  let bucket = clean(env.R2_BUCKET);
+  const missing = [];
+  let origin = '';
+  if (endpoint) {
+    try {
+      const url = new URL(/^https?:\/\//i.test(endpoint) ? endpoint : `https://${endpoint}`);
+      origin = url.origin;
+      const first = url.pathname.split('/').filter(Boolean)[0];
+      if (!bucket && first) bucket = decodeURIComponent(first);
+    } catch {
+      endpoint = '';
+    }
+  }
+  if (!origin) missing.push('R2_ENDPOINT');
+  if (!bucket) missing.push('R2_BUCKET');
+  if (!clean(env.R2_ACCESS_KEY_ID)) missing.push('R2_ACCESS_KEY_ID');
+  if (!clean(env.R2_SECRET_ACCESS_KEY)) missing.push('R2_SECRET_ACCESS_KEY');
+  return { configured: missing.length === 0, missing, endpoint: origin, bucket, accessKeyId: clean(env.R2_ACCESS_KEY_ID), secretAccessKey: clean(env.R2_SECRET_ACCESS_KEY) };
+}
+
+/** The store from the server's environment, or null when R2 is not configured (the feature then says it is not set up). */
 export function storeFromEnv(env = process.env) {
-  const { R2_ENDPOINT: endpoint, R2_BUCKET: bucket, R2_ACCESS_KEY_ID: accessKeyId, R2_SECRET_ACCESS_KEY: secretAccessKey } = env;
-  if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) return null;
-  return createR2Store({ endpoint, bucket, accessKeyId, secretAccessKey });
+  const config = r2Config(env);
+  if (!config.configured) return null;
+  return createR2Store({ endpoint: config.endpoint, bucket: config.bucket, accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey });
+}
+
+/**
+ * Tries the storage the way a photo would use it: write a tiny random object, read it back, delete it. Reports which step
+ * failed and with what code, never a credential or a URL. Used by the protected check on the cleanup endpoint.
+ */
+export async function checkStorage(store, env = process.env) {
+  const config = r2Config(env);
+  if (!store) return { configured: false, missing: config.missing };
+  const key = `check/${randomBytes(12).toString('base64url')}`;
+  const body = Buffer.from('queerspace-storage-check');
+  const steps = { put: 'skipped', get: 'skipped', delete: 'skipped' };
+  const codeOf = error => String(error?.code ?? error?.message ?? 'failed').slice(0, 40);
+  try { await store.put(key, body, 'text/plain'); steps.put = 'ok'; } catch (error) { steps.put = codeOf(error); }
+  if (steps.put === 'ok') {
+    try { steps.get = (await store.get(key)).equals(body) ? 'ok' : 'different'; } catch (error) { steps.get = codeOf(error); }
+    try { await store.delete(key); steps.delete = 'ok'; } catch (error) { steps.delete = codeOf(error); }
+  }
+  return { configured: true, bucketFrom: env.R2_BUCKET ? 'R2_BUCKET' : 'R2_ENDPOINT', ...steps, ok: steps.put === 'ok' && steps.get === 'ok' && steps.delete === 'ok' };
 }
 
 let storeOverride = null;
@@ -337,7 +390,7 @@ export function createMediaHandlers({ getStore = currentStore, now = Date.now } 
       return { status: 200, body: shapeSent(messageRef.id, uid, stored, stored.createdAt?.toDate?.().toISOString?.()) };
     }
     const store = getStore();
-    if (!store) throw fail(503, 'media_unavailable');
+    if (!store) throw notConfigured();
     await queue.run(`photo-rate:${uid}`, () => rateLimit(db, uid, 'signals-photo', PHOTOS_PER_MINUTE, 60_000));
 
     const mediaId = randomUUID();
@@ -351,8 +404,9 @@ export function createMediaHandlers({ getStore = currentStore, now = Date.now } 
     });
     try {
       await store.put(key, clean, image.type);
-    } catch {
-      throw fail(502, 'media_unavailable');
+    } catch (error) {
+      logMedia('R2 upload failed', String(error?.code ?? error?.message ?? 'unknown').slice(0, 60));
+      throw fail(502, 'media_storage_failed');
     }
     const stamp = FieldValue.serverTimestamp();
     try {
@@ -362,9 +416,13 @@ export function createMediaHandlers({ getStore = currentStore, now = Date.now } 
       batch.set(db.doc(`signalsInbox/${otherUid}`), { unread: { [pairId]: FieldValue.increment(1) } }, { merge: true });
       await batch.commit();
     } catch (error) {
-      // A concurrent copy of this same send won: remove this copy's object so nothing is left behind.
+      // Either a concurrent copy of this same send won, or the message could not be saved. Either way this copy's object is
+      // removed now (and by the cleanup if that fails), so nothing is left behind.
       await retire(db, metaRef, { key });
-      if (error?.code !== 6) throw error;
+      if (error?.code !== 6) {
+        logMedia('message could not be saved after upload', String(error?.code ?? error?.message ?? 'unknown').slice(0, 60));
+        throw fail(503, 'photo_not_saved');
+      }
       const stored = (await messageRef.get()).data();
       if (stored?.senderId !== uid || stored.kind !== 'photo') throw fail(409, 'invalid_message');
       return { status: 200, body: shapeSent(messageRef.id, uid, stored, stored.createdAt?.toDate?.().toISOString?.()) };
@@ -397,14 +455,15 @@ export function createMediaHandlers({ getStore = currentStore, now = Date.now } 
       throw fail(410, 'photo_expired');
     }
     const store = getStore();
-    if (!store) throw fail(503, 'media_unavailable');
+    if (!store) throw notConfigured();
     // Fetch before starting the clock, so a storage failure never uses up the one viewing.
     let bytes;
     try {
       bytes = await store.get(meta.key);
     } catch (error) {
       if (error?.code === 'not_found') throw fail(410, 'photo_expired');
-      throw fail(502, 'media_unavailable');
+      logMedia('R2 read failed', String(error?.code ?? error?.message ?? 'unknown').slice(0, 60));
+      throw fail(502, 'media_storage_failed');
     }
     // One viewing window per photo. The first request to get here starts it; any other request, however many and however
     // simultaneous, gets the same end time and can never move it.
@@ -442,7 +501,7 @@ export function createMediaHandlers({ getStore = currentStore, now = Date.now } 
    */
   async function sweep(db, { limit = 50 } = {}) {
     const store = getStore();
-    if (!store) throw fail(503, 'media_unavailable');
+    if (!store) throw notConfigured();
     const due = await db.collection('signalsMedia').where('deleteAfter', '<=', Timestamp.fromMillis(now())).limit(limit).get();
     let deleted = 0;
     let failed = 0;
@@ -462,5 +521,5 @@ export function createMediaHandlers({ getStore = currentStore, now = Date.now } 
     return { due: due.size, deleted, failed };
   }
 
-  return { sendPhoto, openPhoto, photoViews, sweep };
+  return { sendPhoto, openPhoto, photoViews, sweep, currentStore: getStore };
 }

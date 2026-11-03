@@ -133,6 +133,10 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [closedPhotos, setClosedPhotos] = useState<Set<string>>(() => new Set());
   const [clock, setClock] = useState(() => Date.now());
   const photoInputRef = useRef<HTMLInputElement>(null);
+  /** One id per chosen photo, kept across taps and retries, so the server can never make two messages from one photo. */
+  const photoMessageId = useRef<string | null>(null);
+  /** Set the instant a send starts, before any state update, so a quick second tap cannot start another. */
+  const photoBusy = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -297,16 +301,19 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     if (problem) { setError(pickProblemText(problem)); return; }
     setError(null);
     setPhotoError(null);
+    photoMessageId.current = crypto.randomUUID();
     setPhotoFile(file);
   };
 
   const sendPhoto = async (timer: PhotoTimer) => {
-    if (!photoFile || photoSending) return;
+    if (!photoFile || photoBusy.current) return;
+    photoBusy.current = true;
+    photoMessageId.current ??= crypto.randomUUID();
     setPhotoSending(true);
     setPhotoError(null);
     try {
       const imageBase64 = await prepareTimedPhoto(photoFile);
-      const result = await sendTimedPhoto({ pairId, messageId: crypto.randomUUID(), timer, imageBase64 });
+      const result = await sendTimedPhoto({ pairId, messageId: photoMessageId.current, timer, imageBase64 });
       if (!result.ok) {
         if (result.reason === 'ended') setEnded(true);
         setPhotoError(sendPhotoProblemText(result.reason));
@@ -316,10 +323,12 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
       stickToBottom.current = true;
       if (!soundMutedRef.current) soundEffects.playMessageSent();
       setMessages((current) => mergeMessages(current, [result.message]));
+      photoMessageId.current = null;
       setPhotoFile(null);
     } catch {
       setPhotoError('That photo can’t be read. Try another one.');
     } finally {
+      photoBusy.current = false;
       setPhotoSending(false);
     }
   };
@@ -655,7 +664,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
         )}
       </section>
       {photoFile && (
-        <TimedPhotoComposer file={photoFile} sending={photoSending} error={photoError} onSend={(timer) => void sendPhoto(timer)} onClose={() => setPhotoFile(null)} />
+        <TimedPhotoComposer file={photoFile} sending={photoSending} error={photoError} onSend={(timer) => void sendPhoto(timer)} onClose={() => { photoMessageId.current = null; setPhotoFile(null); }} />
       )}
       {viewingPhoto && (
         <TimedPhotoViewer

@@ -52,7 +52,8 @@ export async function prepareTimedPhoto(file: File): Promise<string> {
   }
 }
 
-export type SendPhotoResult = { ok: true; message: ThreadMessage } | { ok: false; reason: 'ended' | 'not_allowed' | 'too_large' | 'invalid' | 'busy' | 'unavailable' | 'failed' };
+export type SendPhotoFailure = 'ended' | 'not_allowed' | 'too_large' | 'invalid' | 'busy' | 'not_configured' | 'storage' | 'not_saved' | 'unavailable' | 'failed';
+export type SendPhotoResult = { ok: true; message: ThreadMessage } | { ok: false; reason: SendPhotoFailure };
 
 export async function sendTimedPhoto(input: { pairId: string; messageId: string; timer: PhotoTimer; imageBase64: string }): Promise<SendPhotoResult> {
   try {
@@ -63,6 +64,10 @@ export async function sendTimedPhoto(input: { pairId: string; messageId: string;
     if (status === 413) return { ok: false, reason: 'too_large' };
     if (status === 400) return { ok: false, reason: 'invalid' };
     if (status === 429) return { ok: false, reason: 'busy' };
+    // Told apart by what the server says, so the message names the real problem instead of one catch-all.
+    if (data.error === 'media_not_configured') return { ok: false, reason: 'not_configured' };
+    if (data.error === 'media_storage_failed') return { ok: false, reason: 'storage' };
+    if (data.error === 'photo_not_saved') return { ok: false, reason: 'not_saved' };
     if (status === 502 || status === 503) return { ok: false, reason: 'unavailable' };
     return { ok: false, reason: 'failed' };
   } catch {
@@ -70,13 +75,16 @@ export async function sendTimedPhoto(input: { pairId: string; messageId: string;
   }
 }
 
-export const sendPhotoProblemText = (reason: Exclude<SendPhotoResult, { ok: true }>['reason']): string =>
+export const sendPhotoProblemText = (reason: SendPhotoFailure): string =>
   ({
     ended: 'This connection has ended.',
     not_allowed: 'You can no longer message this connection.',
     too_large: 'That photo is too large to send.',
     invalid: 'That photo can’t be sent. Try another one.',
     busy: 'You’re sending photos quickly. Wait a moment and try again.',
+    not_configured: 'Photo sending isn’t switched on yet. Please try again later.',
+    storage: 'Couldn’t store the photo. Please try again.',
+    not_saved: 'The photo was stored but the message couldn’t be saved. Please try again.',
     unavailable: 'Photos are unavailable right now. Please try again later.',
     failed: 'Couldn’t send. Check your connection and try again.',
   })[reason];

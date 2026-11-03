@@ -7,16 +7,19 @@ import {
   PHOTO_TIMERS,
   PHOTOS_PER_MINUTE,
   UNOPENED_TTL_MS,
+  checkStorage,
   createR2Store,
   inspectImage,
   isPhotoTimer,
   photoState,
   photoView,
+  r2Config,
   signV4,
   storeFromEnv,
   stripMetadata,
 } from '../../api/_media.js';
-import { EXE, GIF, GPS_MARKER, HTML, SVG, makeJpeg, makePng, makeWebp } from './media-fixtures.js';
+import { EXE, GIF, GPS_MARKER, HTML, SVG, fakeStore, makeJpeg, makePng, makeWebp } from './media-fixtures.js';
+import { startFakeS3 } from './fake-s3-server.js';
 
 const read = (file) => fs.readFileSync(file, 'utf8');
 
@@ -184,4 +187,95 @@ test('the messages view reports a photo\'s state and timer only, and the cleanup
   assert.match(cleanup, /if \(!authorized\(req\)\) return send\(res, 401/);
   assert.match(read('vercel.json'), /"crons": \[\{ "path": "\/api\/media-cleanup", "schedule": "0 3 \* \* \*" \}\]/);
   assert.match(server, /Math\.min\(15 \* 60_000 \* 2 \*\* Math\.min\(attempts, 5\), 6 \* 60 \* 60_000\)/, 'failed deletions are retried with a growing pause');
+});
+
+// ------------------------------------------------------------------------------------ how R2 is configured
+const FULL = { R2_ENDPOINT: 'https://acct.r2.cloudflarestorage.com', R2_BUCKET: 'queerspace', R2_ACCESS_KEY_ID: 'id', R2_SECRET_ACCESS_KEY: 'secret' };
+
+test('configuration says exactly which settings are missing, by name only, and never repeats a value', () => {
+  assert.deepEqual(r2Config({}).missing, ['R2_ENDPOINT', 'R2_BUCKET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY']);
+  assert.deepEqual(r2Config({ ...FULL, R2_SECRET_ACCESS_KEY: '' }).missing, ['R2_SECRET_ACCESS_KEY']);
+  assert.deepEqual(r2Config({ ...FULL, R2_ACCESS_KEY_ID: '   ' }).missing, ['R2_ACCESS_KEY_ID']);
+  assert.equal(r2Config(FULL).configured, true);
+  const json = JSON.stringify(r2Config({ ...FULL, R2_SECRET_ACCESS_KEY: '' }).missing);
+  assert.equal(json.includes('acct.r2') || json.includes('secret') || json.includes('queerspace'), false);
+});
+
+test('the endpoint Cloudflare shows (with the bucket on the end) works even when R2_BUCKET was not set', () => {
+  const env = { R2_ENDPOINT: 'https://ac1a8b53019ffc552a431e9520a9fa2e.r2.cloudflarestorage.com/queerspace', R2_ACCESS_KEY_ID: 'id', R2_SECRET_ACCESS_KEY: 'secret' };
+  const config = r2Config(env);
+  assert.equal(config.configured, true, 'no longer silently switched off');
+  assert.equal(config.bucket, 'queerspace');
+  assert.equal(config.endpoint, 'https://ac1a8b53019ffc552a431e9520a9fa2e.r2.cloudflarestorage.com');
+  assert.ok(storeFromEnv(env));
+  assert.equal(r2Config({ ...env, R2_BUCKET: 'other' }).bucket, 'other', 'an explicit bucket wins');
+  assert.equal(r2Config({ ...env, R2_ENDPOINT: `${env.R2_ENDPOINT}/` }).bucket, 'queerspace', 'a trailing slash is fine');
+  assert.equal(r2Config({ ...env, R2_ENDPOINT: 'acct.r2.cloudflarestorage.com/queerspace' }).configured, true, 'a missing https:// is fine');
+  assert.deepEqual(r2Config({ ...FULL, R2_ENDPOINT: 'http://[bad' }).missing, ['R2_ENDPOINT']);
+});
+
+test('the storage check reports each step by name and code, and never a credential, endpoint or URL', async () => {
+  const store = fakeStore();
+  const ok = await checkStorage(store, FULL);
+  assert.deepEqual([ok.ok, ok.put, ok.get, ok.delete], [true, 'ok', 'ok', 'ok']);
+  assert.equal(store.objects.size, 0, 'the probe object was removed');
+  store.failPut = true;
+  const putFails = await checkStorage(store, FULL);
+  assert.deepEqual([putFails.ok, putFails.put, putFails.get, putFails.delete], [false, 'r2_500', 'skipped', 'skipped']);
+  store.failPut = false;
+  store.failDelete = true;
+  assert.equal((await checkStorage(store, FULL)).delete, 'r2_500');
+  const none = await checkStorage(null, { R2_ENDPOINT: 'https://acct.r2.cloudflarestorage.com' });
+  assert.deepEqual(none, { configured: false, missing: ['R2_BUCKET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'] });
+  for (const result of [ok, putFails, none]) assert.equal(/"secret"|acct\.r2|https?:/.test(JSON.stringify(result)), false, 'no credential value, endpoint or URL');
+});
+
+test('the real R2 client works over real HTTP against a server that rejects a wrong signature or payload', async () => {
+  const s3 = await startFakeS3();
+  try {
+    const store = createR2Store({ endpoint: s3.endpoint, bucket: s3.bucket, accessKeyId: s3.accessKeyId, secretAccessKey: s3.secretAccessKey });
+    const bytes = makeJpeg({ pad: 5000 });
+    await store.put('m/abc-DEF_123', bytes, 'image/jpeg');
+    assert.ok(s3.objects.get('m/abc-DEF_123').body.equals(bytes), 'the exact bytes arrived');
+    assert.equal(s3.objects.get('m/abc-DEF_123').contentType, 'image/jpeg');
+    assert.ok((await store.get('m/abc-DEF_123')).equals(bytes));
+    await assert.rejects(store.get('m/never-stored'), (error) => error.code === 'not_found');
+    await store.delete('m/abc-DEF_123');
+    await store.delete('m/abc-DEF_123');
+    assert.equal(s3.objects.size, 0);
+    assert.ok(s3.requests.length >= 5 && s3.requests.every((r) => r.authorized), 'every request carried a valid signature');
+    const wrongSecret = createR2Store({ endpoint: s3.endpoint, bucket: s3.bucket, accessKeyId: s3.accessKeyId, secretAccessKey: 'wrong-secret' });
+    await assert.rejects(wrongSecret.put('m/x', Buffer.from('x'), 'image/jpeg'), (error) => error.code === 'r2_403');
+    const wrongBucket = createR2Store({ endpoint: s3.endpoint, bucket: 'nope', accessKeyId: s3.accessKeyId, secretAccessKey: s3.secretAccessKey });
+    await assert.rejects(wrongBucket.put('m/x', Buffer.from('x'), 'image/jpeg'), (error) => error.code === 'r2_404');
+    assert.equal(s3.objects.size, 0, 'a rejected request stores nothing');
+  } finally {
+    await s3.close();
+  }
+});
+
+test('failures name their cause on the server and in the app, instead of one catch-all message', () => {
+  const server = read('api/_media.js');
+  assert.match(server, /fail\(503, 'media_not_configured'\)/);
+  assert.match(server, /fail\(502, 'media_storage_failed'\)/);
+  assert.match(server, /fail\(503, 'photo_not_saved'\)/);
+  assert.doesNotMatch(server, /'media_unavailable'/, 'the single catch-all code is gone');
+  assert.match(server, /logMedia\('R2 upload failed'/);
+  assert.match(server, /logMedia\('R2 is not configured', `missing /);
+  const client = read('src/services/timedPhotoService.ts');
+  assert.match(client, /data\.error === 'media_not_configured'\) return \{ ok: false, reason: 'not_configured' \}/);
+  assert.match(client, /data\.error === 'media_storage_failed'\) return \{ ok: false, reason: 'storage' \}/);
+  assert.match(client, /data\.error === 'photo_not_saved'\) return \{ ok: false, reason: 'not_saved' \}/);
+  assert.match(client, /Couldn’t store the photo\. Please try again\./);
+  for (const text of ['R2_', 'secret', 'cloudflarestorage', 'X-Amz']) assert.equal(client.slice(client.indexOf('sendPhotoProblemText')).includes(text), false, text);
+});
+
+test('one chosen photo keeps one message id across taps and retries, and a send cannot start twice', () => {
+  const conversation = read('src/components/SignalsConversation.tsx');
+  assert.match(conversation, /photoMessageId\.current = crypto\.randomUUID\(\);/, 'an id per chosen photo');
+  assert.match(conversation, /sendTimedPhoto\(\{ pairId, messageId: photoMessageId\.current, timer, imageBase64 \}\)/);
+  assert.doesNotMatch(conversation, /sendTimedPhoto\(\{ pairId, messageId: crypto\.randomUUID\(\)/, 'no new id per tap');
+  assert.match(conversation, /if \(!photoFile \|\| photoBusy\.current\) return;\s*photoBusy\.current = true;/, 'a second tap is ignored at once');
+  assert.match(conversation, /photoBusy\.current = false;\s*setPhotoSending\(false\);/, 'the Send button comes back after a failure');
+  assert.match(conversation, /photoMessageId\.current = null;\s*setPhotoFile\(null\);/, 'a new id after a successful send');
 });
