@@ -75,11 +75,11 @@ test('performance: one read per profile, no live listeners, paged posts, a short
   assert.match(sections, /Show more/);
 });
 
-test('public posts come from the existing collection and rules, are hidden when empty, and use the compact preview', () => {
+test('public posts come from the existing collection and rules, say so when there are none, and use the compact preview', () => {
   assert.match(service, /where\('authorId', '==', memberId\), orderBy\('timestamp', 'desc'\)/);
   assert.match(service, /collection\(db, 'community_posts'\)/);
   assert.match(sections, /<ExpandableText text=\{post\.content\}/);
-  assert.match(sections, /if \(!loading && !error && posts\.length === 0\) return null;/);
+  assert.doesNotMatch(sections.slice(0, sections.indexOf('export const ProfileLookingFor')), /posts\.length === 0\) return null;/,'an empty profile is no longer hidden: it says "No public posts yet"');
   const indexes = JSON.parse(read('firestore.indexes.json')).indexes.filter((i) => i.collectionGroup === 'community_posts');
   assert.deepEqual(indexes.map((i) => i.fields.map((f) => `${f.fieldPath}:${f.order}`).join(',')), ['authorId:ASCENDING,timestamp:DESCENDING']);
 });
@@ -173,4 +173,26 @@ test('unknown GET views are refused, and profile lookups are limited per viewer 
   assert.match(profiles, /if \(memberId !== uid\) await counting\.run\(uid, \(\) => rateLimit\(db, uid, 'profile-view', PROFILE_LOOKUPS_PER_MINUTE, 60_000\)\)/, 'own profile is not counted, and one viewer\'s counter updates take turns');
   assert.match(profiles, /const counting = createKeyedQueue\(\);/);
   assert.ok(profiles.indexOf("'profile-view'") < profiles.indexOf('private/settings'), 'the limit is checked before any profile data is read');
+});
+
+test('the Posts section has three separate states, and the retry message is only for a failed request', () => {
+  assert.match(sections, /postsView\(\{ loading, failed: error, count: posts\.length \}\)/);
+  assert.match(sections, /No public posts yet/);
+  assert.match(sections, /Their shared posts will appear here\./);
+  assert.match(sections, /role="status" aria-label="Loading posts"/, 'a loading skeleton');
+  const empty = sections.slice(sections.indexOf("view === 'empty'"), sections.indexOf("view === 'error'"));
+  assert.doesNotMatch(empty, /Try again|Couldn’t load posts/, 'the empty state has no error and no retry');
+  const failed = sections.slice(sections.indexOf("view === 'error'"), sections.indexOf('  return (\n    <Section title="Posts">\n      <ul'));
+  assert.match(failed, /Couldn’t load posts\. <button[^>]*onClick=\{\(\) => void load\(cursor\)\}/, 'the retry is wired to the loader');
+  assert.match(sections, /if \(!outcome\.ok\) \{\s*setError\(true\);/);
+  assert.doesNotMatch(sections, /if \(!page\)/, 'an empty page is no longer mistaken for a failure');
+});
+
+test('the posts request reports success and failure separately, with the same query, filters and paging as before', () => {
+  assert.match(service, /settlePostsLoad\(async \(\) =>/);
+  assert.match(service, /throw new Error\('database_unavailable'\)/);
+  assert.match(service, /where\('authorId', '==', memberId\), orderBy\('timestamp', 'desc'\)/);
+  assert.match(service, /limit\(PROFILE_PAGE_SIZE \+ 1\)/);
+  assert.match(service, /startAfter\(after\)/);
+  assert.match(service, /if \(!outcome\.ok\) console\.warn/, 'only a real failure is logged');
 });

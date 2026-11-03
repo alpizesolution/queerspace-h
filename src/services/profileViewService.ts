@@ -1,7 +1,7 @@
 import { collection, getDocs, limit, orderBy, query, QueryDocumentSnapshot, startAfter, where } from 'firebase/firestore';
 import { auth, db, ensureAnonymousAuth } from '../lib/firebase.ts';
 import type { CommunityPost } from '../types.ts';
-import { PROFILE_CACHE_MS, PROFILE_PAGE_SIZE, parseProfileResponse, profileLink, type ProfileResponse } from '../utils/profileView.ts';
+import { PROFILE_CACHE_MS, PROFILE_PAGE_SIZE, parseProfileResponse, profileLink, settlePostsLoad, type PostsOutcome, type ProfileResponse } from '../utils/profileView.ts';
 import type { LookingForPost } from '../utils/lookingFor.ts';
 import { toCommunityPost } from './communityService.ts';
 import { toLookingForPost } from './lookingForService.ts';
@@ -98,9 +98,9 @@ export interface PostsPage {
 }
 
 /** One page of a member's public Cosmos posts, newest first. Needs the authorId + timestamp index in firestore.indexes.json. */
-export async function fetchMemberCommunityPosts(memberId: string, after: QueryDocumentSnapshot | null = null): Promise<PostsPage | null> {
-  if (!db) return null;
-  try {
+export async function fetchMemberCommunityPosts(memberId: string, after: QueryDocumentSnapshot | null = null): Promise<PostsOutcome<PostsPage>> {
+  const outcome = await settlePostsLoad(async () => {
+    if (!db) throw new Error('database_unavailable');
     await signedIn();
     const base = [where('authorId', '==', memberId), orderBy('timestamp', 'desc')];
     const snap = await getDocs(
@@ -111,11 +111,11 @@ export async function fetchMemberCommunityPosts(memberId: string, after: QueryDo
       posts: docs.map((d) => toCommunityPost(d.id, d.data())),
       cursor: docs.length > 0 ? docs[docs.length - 1] : after,
       done: snap.docs.length <= PROFILE_PAGE_SIZE,
-    };
-  } catch (err) {
-    console.warn('[Profile] Could not load posts:', err);
-    return null;
-  }
+    } satisfies PostsPage;
+  });
+  // A success with no posts is an empty profile and is not logged; only a real failure is.
+  if (!outcome.ok) console.warn('[Profile] Could not load posts:', outcome.reason);
+  return outcome;
 }
 
 /** A member's Looking For posts (at most one per intention, so never many). Adult members only, enforced by the rules. */

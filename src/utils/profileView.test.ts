@@ -4,7 +4,10 @@ import {
   aboutDetails,
   identityLine,
   isMemberId,
+  classifyPostsFailure,
   parseProfileResponse,
+  postsView,
+  settlePostsLoad,
   ownerVisibility,
   profileAction,
   profileCover,
@@ -129,4 +132,51 @@ test('parseProfileResponse refuses answers from a server that does not know the 
   assert.equal(parseProfileResponse({ ...validAnswer(), member: { ...validAnswer().member, interests: 'art' } }), null);
   assert.equal(parseProfileResponse({ ...validAnswer(), member: { ...validAnswer().member, displayName: 4 } }), null);
   assert.equal(parseProfileResponse({ ...validAnswer(), member: { ...validAnswer().member, showsAge: undefined } }), null);
+});
+
+// ------------------------------------------------------------------------------------------- the Posts section's states
+const firestoreError = (code: string) => Object.assign(new Error(code), { code });
+
+test('a request that succeeds with zero posts is a success and an empty profile, never an error', async () => {
+  const outcome = await settlePostsLoad(async () => ({ posts: [], cursor: null, done: true }));
+  assert.equal(outcome.ok, true);
+  assert.equal(postsView({ loading: false, failed: !outcome.ok, count: 0 }), 'empty');
+});
+
+test('a request that succeeds with posts lists them', async () => {
+  const outcome = await settlePostsLoad(async () => ({ posts: [{ id: 'a' }, { id: 'b' }], cursor: null, done: false }));
+  assert.ok(outcome.ok && outcome.page.posts.length === 2);
+  assert.equal(postsView({ loading: false, failed: false, count: 2 }), 'list');
+});
+
+test('a permission-denied read is a failure, not an empty result', async () => {
+  const outcome = await settlePostsLoad(async () => { throw firestoreError('permission-denied'); });
+  assert.deepEqual(outcome, { ok: false, reason: 'permission' });
+  assert.equal(postsView({ loading: false, failed: true, count: 0 }), 'error');
+});
+
+test('a network or request failure is a failure, and so is a missing index or any unexpected error', async () => {
+  assert.deepEqual(await settlePostsLoad(async () => { throw firestoreError('unavailable'); }), { ok: false, reason: 'network' });
+  assert.deepEqual(await settlePostsLoad(async () => { throw firestoreError('deadline-exceeded'); }), { ok: false, reason: 'network' });
+  assert.deepEqual(await settlePostsLoad(async () => { throw firestoreError('failed-precondition'); }), { ok: false, reason: 'failed' }, 'e.g. a missing index');
+  assert.deepEqual(await settlePostsLoad(async () => { throw new Error('boom'); }), { ok: false, reason: 'failed' });
+  assert.equal(classifyPostsFailure(null), 'failed');
+  assert.equal(classifyPostsFailure(undefined), 'failed');
+});
+
+test('retrying after a failure can succeed, and an empty success then shows the empty state instead of the error', async () => {
+  let calls = 0;
+  const request = () => settlePostsLoad(async () => { calls += 1; if (calls === 1) throw firestoreError('unavailable'); return { posts: [], cursor: null, done: true }; });
+  const first = await request();
+  assert.equal(postsView({ loading: false, failed: !first.ok, count: 0 }), 'error');
+  const retry = await request();
+  assert.equal(calls, 2);
+  assert.equal(retry.ok, true);
+  assert.equal(postsView({ loading: false, failed: !retry.ok, count: 0 }), 'empty');
+});
+
+test('the section shows loading while fetching, and keeps listed posts when a later page fails', () => {
+  assert.equal(postsView({ loading: true, failed: false, count: 0 }), 'loading');
+  assert.equal(postsView({ loading: true, failed: false, count: 3 }), 'list');
+  assert.equal(postsView({ loading: false, failed: true, count: 3 }), 'list', 'a failed "show more" does not wipe the posts');
 });
