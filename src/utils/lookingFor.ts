@@ -5,9 +5,12 @@
  */
 import type { NsfwPreference } from './nsfwPreference.ts';
 
-export type LookingForIntention = 'dating' | 'friendship' | 'talk' | 'gaming' | 'open';
+export type LookingForIntention = 'dating' | 'friendship' | 'talk' | 'gaming' | 'open' | 'nsfw';
 
-export const INTENTIONS: readonly LookingForIntention[] = ['dating', 'friendship', 'talk', 'gaming', 'open'];
+export const INTENTIONS: readonly LookingForIntention[] = ['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw'];
+
+/** The intention whose posts are always mature: they are concealed like any NSFW post and cannot be unmarked. */
+export const NSFW_INTENTION: LookingForIntention = 'nsfw';
 
 /** Names in the composer. */
 export const INTENTION_LABELS: Record<LookingForIntention, string> = {
@@ -16,6 +19,7 @@ export const INTENTION_LABELS: Record<LookingForIntention, string> = {
   talk: 'Someone to talk to',
   gaming: 'Gaming buddy',
   open: 'Open to connections',
+  nsfw: 'NSFW Connection',
 };
 
 /** Names on the board's category chips (the same five intentions, plus All). */
@@ -26,12 +30,15 @@ export const LOOKING_FOR_CATEGORIES: { id: 'all' | LookingForIntention; label: s
   { id: 'talk', label: 'Kausap' },
   { id: 'gaming', label: 'Gaming Buddies' },
   { id: 'open', label: 'Open to Connections' },
+  { id: 'nsfw', label: 'NSFW' },
 ];
 
 export const LIMITS = {
   title: 90,
   intro: 400,
   lookingFor: 400,
+  /** The least a member must write, trimmed, in each of "About me" and "About you". Older posts may be shorter. */
+  minSection: 100,
   contentWarning: 120,
   tags: 6,
   tagLength: 20,
@@ -211,8 +218,8 @@ export function validateDraft(draft: LookingForDraft, ownAge: number | null): Dr
   const errors: DraftErrors = {};
   if (!draft.title.trim()) errors.title = 'Give your post a title.';
   if (!isFlair(draft.flair)) errors.flair = 'Choose who you are looking for.';
-  if (!draft.intro.trim()) errors.intro = 'Say a little about yourself.';
-  if (!draft.lookingFor.trim()) errors.lookingFor = 'Say what you are looking for.';
+  if (draft.intro.trim().length < LIMITS.minSection) errors.intro = `Write at least ${LIMITS.minSection} characters about yourself.`;
+  if (draft.lookingFor.trim().length < LIMITS.minSection) errors.lookingFor = `Write at least ${LIMITS.minSection} characters about who you’d like to meet.`;
   if (!isIntention(draft.intention)) errors.intention = 'Choose what kind of connection you want.';
   if (ownAge === null || !Number.isInteger(ownAge) || ownAge < LIMITS.minAge || ownAge > LIMITS.maxAge) errors.age = 'Add your birthday in your profile to post.';
   const min = toAge(draft.ageMin);
@@ -237,6 +244,8 @@ export function draftToDocument(
 ): Record<string, unknown> {
   const min = toAge(draft.ageMin);
   const max = toAge(draft.ageMax);
+  // An NSFW Connection post is always mature, whatever the switch says.
+  const isNsfw = draft.isNsfw || draft.intention === NSFW_INTENTION;
   const seen = new Set<string>();
   const tags = draft.tags.map(cleanTag).filter((tag) => {
     const key = tag.toLowerCase();
@@ -250,8 +259,8 @@ export function draftToDocument(
     authorPronouns: author.pronouns.trim().slice(0, 20),
     ...(draft.showPhoto && author.avatar ? { authorAvatar: author.avatar } : {}),
     title: draft.title.trim().slice(0, LIMITS.title),
-    intro: draft.intro.trim().slice(0, LIMITS.intro),
-    lookingFor: draft.lookingFor.trim().slice(0, LIMITS.lookingFor),
+    intro: draft.intro.trim().slice(0, LIMITS.intro).trim(),
+    lookingFor: draft.lookingFor.trim().slice(0, LIMITS.lookingFor).trim(),
     intention: draft.intention,
     ...(ownAge !== null ? { age: ownAge } : {}),
     flair: draft.flair,
@@ -259,8 +268,8 @@ export function draftToDocument(
     ...(max !== null && !Number.isNaN(max) ? { seekAgeMax: max } : {}),
     ...(draft.region.trim() ? { region: draft.region.trim().slice(0, LIMITS.region) } : {}),
     tags,
-    isNsfw: draft.isNsfw,
-    contentWarning: draft.isNsfw && draft.contentWarning.trim() ? draft.contentWarning.trim().slice(0, LIMITS.contentWarning) : null,
+    isNsfw,
+    contentWarning: isNsfw && draft.contentWarning.trim() ? draft.contentWarning.trim().slice(0, LIMITS.contentWarning) : null,
   };
 }
 

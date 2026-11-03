@@ -161,10 +161,9 @@ export const ProfileLookingFor: React.FC<{
             <li key={post.id}>
               <article className="rounded-2xl border border-line bg-raised/50 p-3.5">
                 <p className="flex items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle min-w-0">
-                  <Badge>{INTENTION_LABELS[post.intention]}</Badge>
+                  {presentation !== 'open' && <Badge>{INTENTION_LABELS[post.intention]}</Badge>}
                   {post.requestsPaused && <span className="shrink-0">Paused</span>}
                   <span className="truncate">
-                    {presentation === 'open' && post.age !== undefined && <>{post.age} · </>}
                     {presentation === 'open' && post.region && <><MapPin className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> {post.region} · </>}
                     {formatRelativeTime(post.timestamp)}
                   </span>

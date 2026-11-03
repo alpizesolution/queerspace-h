@@ -1,7 +1,16 @@
 import React, { useId, useState } from 'react';
 import { EyeOff, UserPlus } from 'lucide-react';
 import { keepCardInView, MoreButton, useClampOverflow } from './ExpandableText.tsx';
-import { previewTags, postDisplayTitle, preferredAgeText, type LookingForPost } from '../utils/lookingFor.ts';
+import { INTENTION_LABELS, previewTags, preferredAgeText, type LookingForPost } from '../utils/lookingFor.ts';
+
+/** The line above a post's title: age, flair and intention. Posts from before flairs simply have fewer pieces. */
+export const PostMeta: React.FC<{ age?: number; flair?: string; intention: LookingForPost['intention'] }> = ({ age, flair, intention }) => (
+  <p className="flex flex-wrap items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))]">
+    {age !== undefined && <span className="font-semibold text-fg">{age}</span>}
+    {flair && <span className="inline-flex h-6 items-center rounded-full border border-lavender/25 bg-plum/30 px-2 font-semibold text-lavender">{flair}</span>}
+    <span className={`inline-flex h-6 items-center rounded-full border px-2 font-semibold ${intention === 'nsfw' ? 'border-danger/30 bg-danger/15 text-danger' : 'border-line bg-raised text-muted'}`}>{INTENTION_LABELS[intention]}</span>
+  </p>
+);
 
 interface Props {
   post: LookingForPost;
@@ -35,13 +44,18 @@ export const LookingForBody: React.FC<Props> = ({ post, mine, canCoverAgain, onC
 
   return (
     <>
-      <h3 className="mt-3 text-[length:calc(16px_*_var(--fs,1))] font-semibold text-fg leading-snug [overflow-wrap:anywhere] line-clamp-2">{postDisplayTitle(post)}</h3>
-      <p id={introId} ref={intro.ref} className={`mt-1 text-[length:calc(14px_*_var(--fs,1))] text-muted leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] ${expanded ? '' : 'line-clamp-3'}`}>{post.intro}</p>
+      <div className="mt-3"><PostMeta age={post.age} flair={post.flair} intention={post.intention} /></div>
+      <h3 className="mt-2 text-[length:calc(16px_*_var(--fs,1))] font-semibold text-fg leading-snug [overflow-wrap:anywhere] line-clamp-2">{post.title}</h3>
 
-      <div className="mt-2.5 rounded-xl bg-ink/50 border border-line px-3 py-2">
-        <p className="text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-[0.12em] text-lavender">Looking for{preferred ? ` · ${preferred}` : ''}</p>
-        <p id={seekId} ref={seek.ref} className={`mt-0.5 text-[length:calc(14px_*_var(--fs,1))] text-fg leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] ${expanded ? '' : 'line-clamp-2'}`}>{post.lookingFor}</p>
-      </div>
+      <section className="mt-3" aria-label="About me">
+        <h4 className="text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-[0.12em] text-lavender">About me</h4>
+        <p id={introId} ref={intro.ref} className={`mt-1 text-[length:calc(14px_*_var(--fs,1))] text-muted leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] ${expanded ? '' : 'line-clamp-3'}`}>{post.intro}</p>
+      </section>
+
+      <section className="mt-4 rounded-xl bg-ink/50 border border-line px-3 py-2.5" aria-label="About you">
+        <h4 className="text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-[0.12em] text-lavender">About you{preferred ? ` · ${preferred}` : ''}</h4>
+        <p id={seekId} ref={seek.ref} className={`mt-1 text-[length:calc(14px_*_var(--fs,1))] text-fg leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] ${expanded ? '' : 'line-clamp-3'}`}>{post.lookingFor}</p>
+      </section>
 
       {shown.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">

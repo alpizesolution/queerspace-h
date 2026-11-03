@@ -1273,9 +1273,11 @@ test('N-02: acceptance notifications are readable only by their owner and cannot
 // ------------------------------------------------------------------
 // Cosmos "Looking For" board (adult connection posts)
 // ------------------------------------------------------------------
+const LF_ME = 'I am a quiet, bookish person who loves cozy cafes, slow weekends, and long talks about nothing in particular. I warm up slowly.';
+const LF_YOU = 'I would like to meet someone kind and curious who enjoys simple dates, good books, and building something real over time.';
 const lfPost = (uid: string, overrides: Record<string, unknown> = {}) => ({
-  authorId: uid, authorName: 'Willow', authorPronouns: 'she/her', title: 'Coffee and books?', intro: 'Bookish and quiet.',
-  lookingFor: 'Someone to share novels with', intention: 'friendship', tags: ['Books'], isNsfw: false, contentWarning: null,
+  authorId: uid, authorName: 'Willow', authorPronouns: 'she/her', title: 'Coffee and books?', intro: LF_ME,
+  lookingFor: LF_YOU, intention: 'friendship', tags: ['Books'], isNsfw: false, contentWarning: null,
   age: 30, flair: 'Masc × Femme', timestamp: now(), ...overrides,
 });
 const lfId = (uid: string, intention = 'friendship') => `${uid}_${intention}`;
@@ -2134,4 +2136,116 @@ test('LF-F8: adult eligibility and suspension still apply to posting with an age
   await assertFails(lfCreate('susp', lfPost('susp')));
   await assertFails(lfCreate('alice', lfPost('bob')));
   await assertFails(testEnv.unauthenticatedContext().firestore().doc(`looking_for_posts/${lfId('alice')}`).set(lfPost('alice')));
+});
+
+// ------------------------------------------------------------------
+// Looking For: NSFW Connection
+// ------------------------------------------------------------------
+test('LF-N1: an eligible adult can post an NSFW Connection, and it is always mature', async () => {
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { intention: 'nsfw', isNsfw: true, contentWarning: 'Mature themes' })));
+  await assertSucceeds(lfCreate('bob', lfPost('bob', { intention: 'nsfw', isNsfw: true })));
+  await assertFails(lfCreate('carol', lfPost('carol', { intention: 'nsfw', isNsfw: false })), );
+  await assertFails(lfCreate('dana', lfPost('dana', { intention: 'nsfw', isNsfw: false, contentWarning: null })));
+  await assertFails(lfCreate('eve', lfPost('eve', { intention: 'nsfw', isNsfw: 'true' })));
+  const stored = (await testEnv.authenticatedContext('bob').firestore().doc(`looking_for_posts/${lfId('alice', 'nsfw')}`).get()).data() as any;
+  assert.equal(stored.intention, 'nsfw');
+  assert.equal(stored.isNsfw, true);
+});
+
+test('LF-N2: the id stays derived from the member and intention, and an NSFW Connection cannot be made under another member\'s id or another intention', async () => {
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'nsfw', isNsfw: true }), lfId('alice', 'dating')));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'nsfw', isNsfw: true }), lfId('bob', 'nsfw')));
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'adult', isNsfw: true }), lfId('alice', 'adult')));
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { intention: 'dating' })));
+  await assertSucceeds(lfCreate('bob', lfPost('bob', { intention: 'nsfw', isNsfw: true })));
+});
+
+test('LF-N3: ineligible accounts can neither post nor read NSFW Connection posts', async () => {
+  await seedLfPost('alice', 'nsfw', { isNsfw: true, age: 30, flair: 'Masc × Femme' });
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc('users/teen2/private/settings').set({ birthDate: new Date(Date.now() - 16 * 365.25 * 86400000), createdAt: new Date(), updatedAt: new Date() });
+    await db.doc('users/teen2/public/profile').set({ displayName: 'teen2', profileComplete: true, updatedAt: new Date() });
+    await db.doc('users/nobday2/private/settings').set({ createdAt: new Date(), updatedAt: new Date() });
+    await db.doc('users/nobday2/public/profile').set({ displayName: 'nobday2', profileComplete: true, updatedAt: new Date() });
+    await db.doc('users/draft2/private/settings').set({ birthDate: new Date(Date.now() - 30 * 365.25 * 86400000), createdAt: new Date(), updatedAt: new Date() });
+    await db.doc('users/draft2/public/profile').set({ displayName: 'draft2', profileComplete: false, updatedAt: new Date() });
+    await db.doc('suspensions/susp2').set({ reason: 'test', at: new Date() });
+  });
+  await seedEligibleMember('susp2');
+  const board = (fs: any) => fs.collection('looking_for_posts').where('intention', '==', 'nsfw').orderBy('timestamp', 'desc').limit(60).get();
+  for (const who of ['teen2', 'nobday2', 'draft2']) {
+    const fs = testEnv.authenticatedContext(who).firestore();
+    await assertFails(board(fs));
+    await assertFails(fs.doc(`looking_for_posts/${lfId('alice', 'nsfw')}`).get());
+    await assertFails(lfCreate(who, lfPost(who, { intention: 'nsfw', isNsfw: true, age: 18 })));
+  }
+  await assertFails(board(testEnv.unauthenticatedContext().firestore()));
+  await assertFails(lfCreate('susp2', lfPost('susp2', { intention: 'nsfw', isNsfw: true })));
+  const eligible: any = await assertSucceeds(board(testEnv.authenticatedContext('bob').firestore()));
+  assert.deepEqual(eligible.docs.map((d: any) => d.id), [lfId('alice', 'nsfw')]);
+});
+
+test('LF-N4: only the author edits or deletes it, and an edit cannot turn the mature mark off', async () => {
+  await seedLfPost('alice', 'nsfw', { isNsfw: true, age: 30, flair: 'Masc × Femme' });
+  const path = `looking_for_posts/${lfId('alice', 'nsfw')}`;
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(bob.doc(path).update({ title: 'Hijack', updatedAt: now() }));
+  await assertFails(bob.doc(path).delete());
+  await assertFails(alice.doc(path).update({ isNsfw: false, contentWarning: null, updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ intention: 'dating', updatedAt: now() }));
+  await assertSucceeds(alice.doc(path).update({ title: 'Edited', updatedAt: now() }));
+  await assertSucceeds(alice.doc(path).update({ requestsPaused: true, updatedAt: now() }));
+  await assertSucceeds(alice.doc(path).delete());
+});
+
+test('LF-N5: posts from the existing intentions are untouched: an NSFW mark is still optional on them', async () => {
+  for (const [i, intention] of ['dating', 'friendship', 'talk', 'gaming', 'open'].entries()) {
+    const uid = ['alice', 'bob', 'carol', 'dana', 'eve'][i];
+    await assertSucceeds(lfCreate(uid, lfPost(uid, { intention, isNsfw: false })));
+  }
+  await assertSucceeds(lfCreate('fay', lfPost('fay', { intention: 'dating', isNsfw: true, contentWarning: null })));
+});
+
+// ------------------------------------------------------------------
+// Looking For: About me / About you minimums (100 trimmed characters)
+// ------------------------------------------------------------------
+const chars = (n: number) => 'a'.repeat(n);
+
+test('LF-M1: a new post needs at least 100 characters in each of About me and About you', async () => {
+  assert.ok(LF_ME.length >= 100 && LF_YOU.length >= 100);
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { intro: chars(100), lookingFor: chars(100) })));
+  await assertFails(lfCreate('bob', lfPost('bob', { intro: chars(99) })));
+  await assertFails(lfCreate('carol', lfPost('carol', { lookingFor: chars(99) })));
+  await assertFails(lfCreate('dana', lfPost('dana', { intro: 'short', lookingFor: 'short' })));
+  await assertFails(lfCreate('eve', lfPost('eve', { intro: '', lookingFor: chars(100) })));
+});
+
+test('LF-M2: padding does not count: the stored text must already be trimmed, so the length is the real length', async () => {
+  await assertFails(lfCreate('alice', lfPost('alice', { intro: '  ' + chars(98) })));
+  await assertFails(lfCreate('bob', lfPost('bob', { lookingFor: chars(98) + '  ' })));
+  await assertFails(lfCreate('carol', lfPost('carol', { intro: ' ' + chars(100) + ' ' })));
+  await assertFails(lfCreate('dana', lfPost('dana', { intro: ' '.repeat(100) })));
+  await assertSucceeds(lfCreate('eve', lfPost('eve', { intro: 'a' + ' '.repeat(98) + 'b' })));
+  await assertSucceeds(lfCreate('fay', lfPost('fay', { intro: chars(50) + '\n' + chars(50) })), );
+});
+
+test('LF-M3: the maximums stay: 400 characters is allowed, 401 is not', async () => {
+  await assertSucceeds(lfCreate('alice', lfPost('alice', { intro: chars(400), lookingFor: chars(400) })));
+  await assertFails(lfCreate('bob', lfPost('bob', { intro: chars(401) })));
+  await assertFails(lfCreate('carol', lfPost('carol', { lookingFor: chars(401) })));
+});
+
+test('LF-M4: older posts with short sections stay readable and keep working, and an edit of a section must meet the minimum', async () => {
+  await seedLfPost('alice', 'friendship', { intro: 'short intro', lookingFor: 'short ask', age: 30, flair: 'Masc × Femme' });
+  const path = `looking_for_posts/${lfId('alice')}`;
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const read = (await testEnv.authenticatedContext('bob').firestore().doc(path).get()).data() as any;
+  assert.equal(read.intro, 'short intro');
+  await assertSucceeds(alice.doc(path).update({ requestsPaused: true, updatedAt: now() }));
+  await assertSucceeds(alice.doc(path).update({ title: 'A new title', updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ intro: 'still short', updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ lookingFor: chars(99), updatedAt: now() }));
+  await assertSucceeds(alice.doc(path).update({ intro: LF_ME, lookingFor: LF_YOU, updatedAt: now() }));
 });
