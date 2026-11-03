@@ -5,7 +5,10 @@ import {
   DEFAULT_PHOTO_TIMER,
   MAX_PICKED_BYTES,
   PHOTO_TIMERS,
+  PhotoReadError,
   SEND_MAX_SIDE,
+  errorLabel,
+  photoReadProblemText,
   fitWithin,
   isCaptureKey,
   isPhotoTimer,
@@ -79,4 +82,22 @@ test('the picture is hidden when the page is hidden, loses focus, or a screensho
   assert.equal(isCaptureKey({ key: 's', metaKey: true, shiftKey: true }), true);
   assert.equal(isCaptureKey({ key: 'a' }), false);
   assert.equal(isCaptureKey({ key: '4' }), false);
+});
+
+test('a photo that cannot be read names the step that failed, and never says more than that', () => {
+  assert.equal(photoReadProblemText(new PhotoReadError('decode', 'TypeError+EncodingError')), 'That photo can’t be read on this device (decode:TypeError+EncodingError). Try another one.');
+  assert.equal(photoReadProblemText(new PhotoReadError('read', 'NotReadableError')), 'That photo can’t be read on this device (read:NotReadableError). Try another one.');
+  assert.equal(photoReadProblemText(new PhotoReadError('encode', 'no_jpeg')), 'That photo can’t be read on this device (encode:no_jpeg). Try another one.');
+  assert.match(photoReadProblemText(new Error('boom')), /\(unknown:Error\)/);
+  assert.match(photoReadProblemText('nonsense'), /\(unknown:/);
+  assert.match(photoReadProblemText(null), /\(unknown:Error\)/);
+});
+
+test('error labels are short, safe names: letters, digits and underscores only', () => {
+  assert.equal(errorLabel(new TypeError('x')), 'TypeError');
+  assert.equal(errorLabel({ name: 'NotReadableError' }), 'NotReadableError');
+  assert.equal(errorLabel({ name: 'Bad<script>Name' }), 'BadscriptName');
+  assert.equal(errorLabel({ name: 'x'.repeat(100) }).length, 30);
+  assert.equal(errorLabel(undefined), 'Error');
+  assert.equal(errorLabel({ name: '' }), 'Error');
 });

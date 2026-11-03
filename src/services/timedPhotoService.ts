@@ -1,5 +1,5 @@
 import { auth } from '../lib/firebase.ts';
-import { fitWithin, SEND_MAX_SIDE, SEND_QUALITY, type PhotoInfo, type PhotoTimer } from '../utils/timedPhoto.ts';
+import { errorLabel, fitWithin, PhotoReadError, SEND_MAX_SIDE, SEND_QUALITY, type PhotoInfo, type PhotoTimer } from '../utils/timedPhoto.ts';
 import type { ThreadMessage } from '../utils/signalsThread.ts';
 
 /**
@@ -30,25 +30,83 @@ async function post<T>(body: Record<string, unknown>): Promise<{ status: number;
   }
 }
 
-/** Reads a chosen photo, redraws it at a sensible size as a JPEG, and returns it as base64. Throws if it cannot be read. */
-export async function prepareTimedPhoto(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+/**
+ * Copies a chosen photo into memory right away. A file handed over by a phone's picker can stop being readable if it is
+ * read later, after the picker has moved on, so the app never keeps the original: it keeps this copy. Throws a
+ * PhotoReadError('read') if the file cannot be read even now.
+ */
+export async function copyPickedPhoto(file: File): Promise<File> {
   try {
-    const { width, height } = fitWithin(bitmap.width, bitmap.height, SEND_MAX_SIDE);
+    const buffer = await file.arrayBuffer();
+    if (!buffer.byteLength) throw new Error('empty');
+    return new File([buffer], file.name || 'photo', { type: file.type });
+  } catch (error) {
+    throw new PhotoReadError('read', errorLabel(error));
+  }
+}
+
+interface Decoded { source: CanvasImageSource; width: number; height: number; release: () => void }
+
+/**
+ * Turns the photo into something that can be drawn, trying the ways browsers differ on, in order: a bitmap that follows the
+ * photo's own rotation, a plain bitmap, then an image element. Gives up only when all of them fail, and says what failed.
+ */
+async function decodePhoto(file: File): Promise<Decoded> {
+  const failures: string[] = [];
+  if (typeof createImageBitmap === 'function') {
+    for (const options of [{ imageOrientation: 'from-image' as const }, undefined]) {
+      try {
+        const bitmap = options ? await createImageBitmap(file, options) : await createImageBitmap(file);
+        if (bitmap.width > 0 && bitmap.height > 0) return { source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close() };
+        bitmap.close();
+        failures.push('empty');
+      } catch (error) {
+        failures.push(errorLabel(error));
+      }
+    }
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) return { source: image, width: image.naturalWidth, height: image.naturalHeight, release: () => {} };
+    failures.push('empty');
+  } catch (error) {
+    failures.push(errorLabel(error));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  throw new PhotoReadError('decode', [...new Set(failures)].join('+').slice(0, 40));
+}
+
+/** Reads a chosen photo, redraws it at a sensible size as a JPEG, and returns it as base64. Throws a PhotoReadError. */
+export async function prepareTimedPhoto(file: File): Promise<string> {
+  const decoded = await decodePhoto(file);
+  try {
+    const { width, height } = fitWithin(decoded.width, decoded.height, SEND_MAX_SIDE);
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext('2d');
-    if (!context) throw new Error('no_canvas');
-    context.drawImage(bitmap, 0, 0, width, height);
+    if (!context) throw new PhotoReadError('draw', 'no_canvas');
+    try {
+      context.drawImage(decoded.source, 0, 0, width, height);
+    } catch (error) {
+      throw new PhotoReadError('draw', errorLabel(error));
+    }
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', SEND_QUALITY));
-    if (!blob) throw new Error('encode_failed');
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    let binary = '';
-    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    return btoa(binary);
+    if (!blob || !blob.size) throw new PhotoReadError('encode', 'no_jpeg');
+    try {
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return btoa(binary);
+    } catch (error) {
+      throw new PhotoReadError('encode', errorLabel(error));
+    }
   } finally {
-    bitmap.close();
+    decoded.release();
   }
 }
 

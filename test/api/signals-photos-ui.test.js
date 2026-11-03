@@ -43,7 +43,12 @@ test('the viewer draws from memory, never gives the picture a URL, hides it when
   assert.match(viewer, /<canvas ref=\{canvasRef\}/);
   assert.doesNotMatch(viewer, /<img|createObjectURL|URL\.createObjectURL|data:image|\.src\s*=/, 'no image element, object URL or data link');
   assert.match(service, /createImageBitmap\(new Blob\(\[bytes\]/);
-  assert.doesNotMatch(service, /createObjectURL|data:image|localStorage|sessionStorage|indexedDB|caches\./, 'nothing is stored on the device');
+  // The received photo never gets a URL. The only temporary link is the sender's own chosen file, in the decoder's last-resort path.
+  const receiving = service.slice(service.indexOf('export async function openTimedPhoto'));
+  assert.doesNotMatch(receiving, /createObjectURL|data:image/, 'the received photo has no URL');
+  assert.equal((service.match(/URL\.createObjectURL/g) || []).length, 1, 'one temporary link, for decoding the sender own photo');
+  assert.ok(service.indexOf('URL.createObjectURL') < service.indexOf('export async function prepareTimedPhoto'), 'and it lives in the sender-side decoder');
+  assert.doesNotMatch(service, /localStorage|sessionStorage|indexedDB|caches\./, 'nothing is stored on the device');
   assert.match(service, /cache: 'no-store'/);
   assert.match(viewer, /document\.addEventListener\('visibilitychange'/);
   assert.match(viewer, /window\.addEventListener\('blur'/);
@@ -79,4 +84,35 @@ test('text messages, replies and reactions still render as before', () => {
   assert.match(conversation, /\{message\.text\}<\/p>/);
   assert.match(conversation, /action: 'send-message'/);
   assert.match(conversation, /aria-label="Send message"/);
+});
+
+test('a chosen photo is copied into memory at once, and only the copy is kept, so a phone picker cannot make it unreadable later', () => {
+  assert.match(service, /export async function copyPickedPhoto\(file: File\): Promise<File>/);
+  assert.match(service, /const buffer = await file\.arrayBuffer\(\);/);
+  assert.match(service, /return new File\(\[buffer\], file\.name \|\| 'photo', \{ type: file\.type \}\);/);
+  assert.match(conversation, /const choosePhoto = async \(event: React\.ChangeEvent<HTMLInputElement>\) => \{/);
+  assert.match(conversation, /const copy = await copyPickedPhoto\(file\);[\s\S]*?setPhotoFile\(copy\);/);
+  assert.doesNotMatch(conversation, /setPhotoFile\(file\)/, 'the original file reference is never kept');
+  assert.match(conversation, /\} finally \{\s*input\.value = '';\s*\}/, 'the picker is reset only after the copy is made');
+});
+
+test('decoding tries every way browsers differ on before giving up, and says which step failed', () => {
+  assert.match(service, /for \(const options of \[\{ imageOrientation: 'from-image' as const \}, undefined\]\)/, 'with, then without, the rotation option');
+  assert.match(service, /await createImageBitmap\(file, options\) : await createImageBitmap\(file\)/);
+  assert.match(service, /const image = new Image\(\);[\s\S]*?await image\.decode\(\);/, 'then an image element');
+  assert.match(service, /throw new PhotoReadError\('decode', /);
+  assert.match(service, /throw new PhotoReadError\('draw', /);
+  assert.match(service, /throw new PhotoReadError\('encode', /);
+  assert.match(service, /URL\.revokeObjectURL\(url\)/, 'the temporary link is released straight away');
+  assert.match(conversation, /setPhotoError\(photoReadProblemText\(err\)\);/);
+  assert.doesNotMatch(conversation, /That photo can’t be read\. Try another one\./, 'no more catch-all wording');
+});
+
+test('only a problem with the photo itself is reported as one: nothing after a successful send can turn into "can\'t be read"', () => {
+  const send = conversation.slice(conversation.indexOf('const sendPhoto = async'), conversation.indexOf('/** Sends one pending message'));
+  assert.match(send, /try \{\s*imageBase64 = await prepareTimedPhoto\(photoFile\);\s*\} catch \(err\) \{[\s\S]*?return;\s*\}/);
+  assert.match(send, /The photo is sent\. Nothing below may report it as a failure\./);
+  assert.match(send, /try \{ if \(!soundMutedRef\.current\) soundEffects\.playMessageSent\(\); \} catch/);
+  const outer = send.slice(send.indexOf('// The photo is sent.'));
+  assert.doesNotMatch(outer.slice(0, outer.indexOf('finally')), /setPhotoError/, 'no error after the send succeeded');
 });
