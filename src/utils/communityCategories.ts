@@ -4,9 +4,12 @@ export const CATEGORIES = [
   { id: 'vents', label: 'Cozy Vents' },
   { id: 'media', label: 'Books & Media' },
   { id: 'friends', label: 'Friend Finder' },
-  { id: 'advice', label: 'Dating & Advice' },
+  { id: 'advice', label: 'Dating' },
   { id: 'general', label: 'General' },
 ];
+
+/** The filter row: the same categories without General, which is still a post category and still shows under All. */
+export const FILTER_CATEGORIES = CATEGORIES.filter((c) => c.id !== 'general');
 
 export const CATEGORY_EMOJI: Record<string, string> = {
   vents: '☁️',

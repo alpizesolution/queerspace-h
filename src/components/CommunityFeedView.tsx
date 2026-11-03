@@ -21,7 +21,8 @@ import {
 import { whileActive } from '../utils/whileActive.ts';
 import { LookingForView } from './LookingForView.tsx';
 import { ExpandableText } from './ExpandableText.tsx';
-import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../utils/communityCategories.ts';
+import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, FILTER_CATEGORIES } from '../utils/communityCategories.ts';
+import { ChipScroller } from './ChipScroller.tsx';
 import { formatRelativeTime } from '../utils/relativeTime.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 
@@ -325,9 +326,9 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const openComposer = () => setShowCreateModal(true);
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-[calc(var(--tabbar-h)+6rem)] desk:pb-16">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <h1 className="text-2xl sm:text-[length:calc(28px_*_var(--fs,1))] font-semibold tracking-tight text-fg">Cosmos</h1>
+    <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-3 sm:pt-8 pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+6rem)] desk:pb-16">
+      <div className="flex items-center justify-between gap-3 mb-2.5 sm:mb-4">
+        <h1 className="text-[length:calc(23px_*_var(--fs,1))] sm:text-[length:calc(28px_*_var(--fs,1))] leading-tight font-semibold tracking-tight text-fg">The COSMOS</h1>
         {section === 'community' && (
           <button onClick={openComposer} className="btn btn-primary btn-sm hidden sm:inline-flex">
             <Plus className="w-4 h-4" />
@@ -336,14 +337,14 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
         )}
       </div>
 
-      <div role="tablist" aria-label="Cosmos sections" className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1 mb-5">
+      <div role="tablist" aria-label="Cosmos sections" className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-0.5 mb-3">
         {([['community', 'Community'], ['lookingFor', 'Looking For']] as const).map(([id, label]) => (
           <button
             key={id}
             role="tab"
             aria-selected={section === id}
             onClick={() => setSection(id)}
-            className={`h-10 rounded-full text-[length:calc(14px_*_var(--fs,1))] font-semibold transition-colors cursor-pointer ${section === id ? 'bg-raised text-fg ring-1 ring-berry/50 shadow-sm shadow-black/30' : 'text-muted hover:text-fg'}`}
+            className={`h-9 rounded-full text-[length:calc(14px_*_var(--fs,1))] font-semibold transition-colors cursor-pointer ${section === id ? 'bg-raised text-fg ring-1 ring-berry/50 shadow-sm shadow-black/30' : 'text-muted hover:text-fg'}`}
           >
             {label}
           </button>
@@ -354,23 +355,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
         <LookingForView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onBlockMember={onBlockMember} onViewRequests={onViewRequests} />
       ) : (
       <>
-      <div
-        role="tablist"
-        aria-label="Categories"
-        className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto scrollbar-none pb-1 mb-5"
-      >
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat.id}
-            role="tab"
-            aria-selected={activeCategory === cat.id}
-            onClick={() => setActiveCategory(cat.id)}
-            className={`chip shrink-0 ${activeCategory === cat.id ? '!bg-fg !text-ink !border-fg' : ''}`}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
+      <ChipScroller items={FILTER_CATEGORIES} active={activeCategory} onSelect={setActiveCategory} label="Categories" bleed className="mb-3" />
 
       {!available ? (
         <p className="card p-5 text-sm text-muted">Cosmos isn't available right now. Please try again later.</p>
