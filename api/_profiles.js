@@ -63,6 +63,19 @@ export function shapeProfile(id, profile) {
   };
 }
 
+/**
+ * When the member joined, as an ISO date, or null. It comes from creation timestamps that already exist and that clients cannot
+ * change: the public profile's createdAt (stamped once by the rules) and the private account record's createdAt (also fixed by
+ * the rules). The earlier of the two is the truer start, since an older profile may have been stamped when it was first edited.
+ * Never the profile's last-updated time. Only this one date leaves the server; nothing else from the private record does.
+ */
+export function memberSinceOf(profile, settings, nowMs = Date.now()) {
+  const candidates = [profile?.createdAt, settings?.createdAt]
+    .map(value => (typeof value?.toMillis === 'function' ? value.toMillis() : null))
+    .filter(ms => Number.isFinite(ms) && ms > 0 && ms <= nowMs + 24 * 60 * 60 * 1000);
+  return candidates.length ? new Date(Math.min(...candidates)).toISOString() : null;
+}
+
 /** How the viewer and the member are connected right now, from records only the two of them can see. */
 export async function relationBetween(db, uid, memberId, nowMs = Date.now()) {
   const [pair, outgoing, incoming] = await Promise.all([
@@ -90,7 +103,7 @@ export async function profileView(db, uid, memberId) {
   const profileSnap = await db.doc(`users/${memberId}/public/profile`).get();
   if (memberId === uid) {
     if (!profileSnap.exists) throw fail(404, 'profile_unavailable');
-    return { self: true, member: shapeProfile(memberId, profileSnap.data()), relation: { state: 'self' }, blocked: null };
+    return { self: true, member: { ...shapeProfile(memberId, profileSnap.data()), memberSince: memberSinceOf(profileSnap.data(), viewerSettings.data()) }, relation: { state: 'self' }, blocked: null };
   }
 
   const blockedByMe = viewerSettings.data()?.blockedPartnerIds;
@@ -108,5 +121,5 @@ export async function profileView(db, uid, memberId) {
   }
   const viewerSuspended = await db.doc(`suspensions/${uid}`).get();
   if (viewerSuspended.exists) throw fail(403, 'account_unavailable');
-  return { self: false, member: shapeProfile(memberId, profileSnap.data()), relation: await relationBetween(db, uid, memberId), blocked: null };
+  return { self: false, member: { ...shapeProfile(memberId, profileSnap.data()), memberSince: memberSinceOf(profileSnap.data(), memberSettings.data()) }, relation: await relationBetween(db, uid, memberId), blocked: null };
 }
