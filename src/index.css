@@ -347,3 +347,24 @@ body {
     transition-duration: 400ms !important;
   }
 }
+
+/* Stardust: a few small sparks that drift out once when Stardust is given. Nothing moves for people who prefer less motion. */
+.stardust-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 9999px;
+  background: var(--color-lavender);
+  pointer-events: none;
+  animation: stardust-spark 600ms ease-out forwards;
+}
+@keyframes stardust-spark {
+  from { opacity: 0.95; transform: translate(0, 0) scale(1); }
+  to { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stardust-spark { animation: none; opacity: 0; }
+}

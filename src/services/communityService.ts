@@ -22,9 +22,9 @@ import { checkAdmin } from './adminService.ts';
 import { postLoadFromError, type PostLoad } from '../utils/communityPostLink.ts';
 
 /**
- * Community board shared through Firestore `community_posts`. Like and reply counts
- * live on the post; firestore.rules only lets them move by one alongside the
- * matching likes/{uid} or replies/{id} doc.
+ * Community board shared through Firestore `community_posts`. The reply count lives on the post; firestore.rules only
+ * lets it move by one alongside the matching replies/{id} doc. Appreciation is Stardust (stardustService.ts): its count
+ * is on the post too, but only /api/stardust can change it.
  */
 
 export const COMMUNITY_HISTORY = 60;
@@ -56,6 +56,8 @@ export function toCommunityPost(id: string, data: Record<string, unknown>): Comm
     content: String(data.content ?? ''),
     timestamp: toMillis(data.timestamp),
     likes: Math.max(0, Number(data.likes) || 0),
+    // Posts not yet moved from likes to Stardust (scripts/migrate-stardust.mjs) still show the appreciation they had.
+    stardustCount: typeof data.stardustCount === 'number' ? Math.max(0, Math.floor(data.stardustCount)) : Math.max(0, Number(data.likes) || 0),
     replyCount: Math.max(0, Number(data.replyCount) || 0),
     replies: [],
     tags: Array.isArray(data.tags) ? data.tags.map(String).slice(0, 4) : [],
@@ -247,24 +249,6 @@ export async function replyToCommunityPost(
   }
 }
 
-/** Likes (or unlikes) a post. Returns false if the server refused, e.g. it was already liked. */
-export async function setCommunityLike(postId: string, liked: boolean): Promise<boolean> {
-  if (!db) return false;
-  try {
-    const uid = await currentUid();
-    if (!uid) return false;
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'community_posts', postId), { likes: increment(liked ? 1 : -1) });
-    const marker = doc(db, 'community_posts', postId, 'likes', uid);
-    if (liked) batch.set(marker, { createdAt: serverTimestamp() });
-    else batch.delete(marker);
-    await batch.commit();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function deleteCommunityPost(postId: string): Promise<boolean> {
   if (!db) return false;
   try {
@@ -311,7 +295,8 @@ export async function adminDeleteCommunityReply(postId: string, replyId: string)
 /**
  * Admin removal of any post. Replies go first (one by one, each with its counter) so none are
  * left orphaned; if any step fails the post is kept and the admin can retry. Likes markers
- * are cleared afterwards, best-effort: they're invisible without the post.
+ * and Stardust reactions are cleared afterwards, best-effort: they're invisible without the post (the author's total drops
+ * at the next reconcile, see docs/stardust.md).
  */
 export async function adminDeleteCommunityPost(postId: string): Promise<boolean> {
   if (!db) return false;
@@ -330,8 +315,10 @@ export async function adminDeleteCommunityPost(postId: string): Promise<boolean>
     return false;
   }
   try {
-    const likes = await getDocs(collection(db, 'community_posts', postId, 'likes'));
-    await Promise.all(likes.docs.map((d) => deleteDoc(d.ref)));
+    for (const sub of ['likes', 'stardust']) {
+      const left = await getDocs(collection(db, 'community_posts', postId, sub));
+      await Promise.all(left.docs.map((d) => deleteDoc(d.ref)));
+    }
   } catch {
     // Leftover like markers are harmless; the post itself is gone.
   }

@@ -60,6 +60,7 @@ export function toLookingForPost(id: string, data: Record<string, unknown>): Loo
     tags: Array.isArray(data.tags) ? data.tags.map(String).slice(0, LIMITS.tags) : [],
     isNsfw: data.isNsfw === true,
     requestsPaused: data.requestsPaused === true,
+    stardustCount: typeof data.stardustCount === 'number' ? Math.max(0, Math.floor(data.stardustCount)) : 0,
     contentWarning: data.isNsfw === true && typeof data.contentWarning === 'string' && data.contentWarning ? data.contentWarning.slice(0, LIMITS.contentWarning) : null,
     timestamp: millis(data.timestamp) ?? Date.now(),
     updatedAt: millis(data.updatedAt),

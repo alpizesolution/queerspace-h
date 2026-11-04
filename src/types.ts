@@ -125,8 +125,11 @@ export interface CommunityPost {
   title: string;
   content: string;
   timestamp: number;
+  /** Legacy like count, kept as history. Appreciation is Stardust now. */
   likes: number;
   userLiked?: boolean;
+  /** Stardust on this post, kept by /api/stardust. */
+  stardustCount: number;
   replyCount?: number;
   replies: CommunityReply[];
   tags: string[];
