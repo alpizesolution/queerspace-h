@@ -1,3 +1,5 @@
+import type { GifInfo } from './utils/gif.ts';
+
 export type ChatMode = 'quick' | 'custom' | 'public' | 'community';
 
 export type Intention = 'friendship' | 'dating' | 'casual' | 'deep_talk' | 'open';
@@ -150,6 +152,9 @@ export interface PublicRoomMessage {
   replyTo?: RoomQuote;
   /** Reaction counts by type id (see ROOM_REACTIONS); missing means none. */
   reactions?: Record<string, number>;
+  /** A GIPHY GIF; `text` is then just "GIF". Only ever set from approved GIPHY addresses. */
+  kind?: 'gif';
+  gif?: GifInfo;
 }
 
 export interface RoomQuote {

@@ -75,9 +75,13 @@ export const GifBubble: React.FC<{ gif: GifInfo; mine: boolean }> = ({ gif }) =>
 };
 
 type Props = {
-  /** The member picked this GIF and confirmed. Called once per opening. */
+  /** The member picked this GIF and confirmed. Called once per confirmation. */
   onSend: (gif: GifInfo) => void;
   onClose: () => void;
+  /** The parent is sending the chosen GIF: the picker stays open, shows "Sending…" and accepts no second tap. */
+  busy?: boolean;
+  /** Why the last send failed, shown in the preview so the member can retry or choose another. */
+  error?: string | null;
 };
 
 const PAGE = 18;
@@ -87,7 +91,7 @@ const SEARCH_DELAY_MS = 350;
  * The GIF picker: trending to begin with, a search box, a grid, and a preview before anything is sent. It talks only to
  * this app's server, which holds the GIPHY key.
  */
-export const GifPicker: React.FC<Props> = ({ onSend, onClose }) => {
+export const GifPicker: React.FC<Props> = ({ onSend, onClose, busy = false, error = null }) => {
   const reduced = usePrefersReducedMotion();
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
@@ -100,6 +104,11 @@ export const GifPicker: React.FC<Props> = ({ onSend, onClose }) => {
   /** Set the instant a send is chosen, so a quick second tap cannot send it twice. */
   const sent = useRef(false);
   const run = useRef(0);
+
+  // When the parent finishes a send that failed, the member may confirm again.
+  useEffect(() => {
+    if (!busy) sent.current = false;
+  }, [busy]);
 
   // What is shown follows the last search typed. A search the member has typed past is cancelled and ignored.
   useEffect(() => {
@@ -155,7 +164,7 @@ export const GifPicker: React.FC<Props> = ({ onSend, onClose }) => {
   };
 
   const confirm = () => {
-    if (!selected || sent.current) return;
+    if (!selected || busy || sent.current) return;
     sent.current = true;
     onSend(selected);
   };
@@ -167,12 +176,13 @@ export const GifPicker: React.FC<Props> = ({ onSend, onClose }) => {
       <Sheet
         title="Send this GIF?"
         size="md"
-        onClose={onClose}
+        onClose={() => { if (!busy) onClose(); }}
         footer={
           <div className="space-y-2">
+            {error && <p role="alert" className="text-center text-[length:calc(12px_*_var(--fs,1))] text-danger">{error}</p>}
             <div className="flex gap-2">
-              <button type="button" onClick={() => setSelected(null)} className="btn btn-secondary flex-1"><ArrowLeft className="h-4 w-4" /> Back</button>
-              <button type="button" onClick={confirm} className="btn btn-primary flex-1">Send GIF</button>
+              <button type="button" onClick={() => setSelected(null)} disabled={busy} className="btn btn-secondary flex-1"><ArrowLeft className="h-4 w-4" /> Back</button>
+              <button type="button" onClick={confirm} disabled={busy} className="btn btn-primary flex-1">{busy ? 'Sending…' : error ? 'Try again' : 'Send GIF'}</button>
             </div>
             {attribution}
           </div>

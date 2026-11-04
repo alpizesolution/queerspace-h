@@ -4,6 +4,8 @@ import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ArrowUp, BadgeCheck, CheckCircle2, Reply, Trash2, Users, X } from 'lucide-react';
 import { ConfirmDialog } from './Sheet.tsx';
 import { SwipeToReply } from './SwipeToReply.tsx';
+import { GifBubble, GifIcon, GifPicker } from './GifPicker.tsx';
+import type { GifInfo } from '../utils/gif.ts';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
@@ -23,6 +25,8 @@ import {
   RoomReactionId,
   setRoomReaction,
   sendPublicRoomMessage,
+  sendRoomGif,
+  roomGifProblemText,
   sendTeamRoomMessage,
   subscribeToPublicRoom,
 } from '../services/publicRoomService.ts';
@@ -66,6 +70,14 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
     isPublicRoomAvailable() ? 'loading' : 'error'
   );
   const [sendError, setSendError] = useState<string | null>(null);
+  // GIFs: the picker, the GIF being sent, and why the last try failed. The picker stays open until the send succeeds.
+  const [gifOpen, setGifOpen] = useState(false);
+  const [gifSending, setGifSending] = useState(false);
+  const [gifError, setGifError] = useState<string | null>(null);
+  /** Set the instant a send starts, before any state update, so a quick second tap cannot start another. */
+  const gifBusy = useRef(false);
+  /** One id per GIF the member picks, kept across retries so a dropped connection never makes two copies. */
+  const gifAttempt = useRef<{ gifId: string; messageId: string } | null>(null);
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastCountRef = useRef(0);
@@ -313,6 +325,27 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
     if (!isSoundMuted) soundEffects.playMessageSent();
   };
 
+  const handleSendGif = async (gif: GifInfo) => {
+    if (gifBusy.current) return;
+    gifBusy.current = true;
+    setGifSending(true);
+    setGifError(null);
+    if (gifAttempt.current?.gifId !== gif.id) gifAttempt.current = { gifId: gif.id, messageId: crypto.randomUUID() };
+    const result = await sendRoomGif(gif.id, gifAttempt.current.messageId);
+    gifBusy.current = false;
+    setGifSending(false);
+    if (result.ok) {
+      gifAttempt.current = null;
+      setGifOpen(false);
+      setReplyingTo(null);
+      if (!isSoundMuted) soundEffects.playMessageSent();
+      return;
+    }
+    // 'gone' means this GIF cannot be sent at all, so the next one starts fresh.
+    if (result.reason === 'gone') gifAttempt.current = null;
+    setGifError(roomGifProblemText(result.reason));
+  };
+
   const chrome = 'var(--header-h) - env(safe-area-inset-top) - var(--tabbar-h)';
 
   return (
@@ -442,7 +475,11 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                       <span className="block text-[length:calc(13px_*_var(--fs,1))] text-fg/75 line-clamp-2 [overflow-wrap:anywhere]">{msg.replyTo.text}</span>
                     </button>
                   )}
-                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                  {msg.kind === 'gif' && msg.gif ? (
+                    <GifBubble gif={msg.gif} mine={msg.isSelf} />
+                  ) : (
+                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                  )}
                 </ReactableBubble>
               </SwipeToReply>
 
@@ -600,6 +637,19 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           autoComplete="off"
           className="flex-1 min-w-0 min-h-11 max-h-[7.5rem] px-4 py-[10px] leading-6 resize-none overflow-y-auto rounded-[22px] bg-surface border border-line text-base sm:text-[length:calc(15px_*_var(--fs,1))] text-fg placeholder:text-subtle focus:outline-none focus:border-berry"
         />
+        {!(teamAvailable && asTeam) && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { setGifError(null); setGifOpen(true); }}
+            disabled={status === 'error'}
+            aria-label="Send a GIF"
+            aria-haspopup="dialog"
+            className="w-11 h-11 shrink-0 rounded-full bg-surface border border-line text-muted hover:text-fg flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <GifIcon className="w-5 h-5" />
+          </button>
+        )}
         <button
           type="submit"
           // Keep focus in the input so the keyboard stays open and the tab bar doesn't
@@ -612,6 +662,15 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           <ArrowUp className="w-5 h-5" strokeWidth={2.5} />
         </button>
       </form>
+
+      {gifOpen && (
+        <GifPicker
+          busy={gifSending}
+          error={gifError}
+          onSend={(gif) => void handleSendGif(gif)}
+          onClose={() => { if (!gifBusy.current) { setGifOpen(false); gifAttempt.current = null; } }}
+        />
+      )}
 
       {pendingDeleteId && (
         <ConfirmDialog

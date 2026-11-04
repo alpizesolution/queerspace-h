@@ -938,6 +938,48 @@ test('T-02: Typing CAN\'T be written once a conversation has ended', async () =>
   );
 });
 
+const roomGif = { id: 'abc123XYZ', url: 'https://media.giphy.com/media/abc123XYZ/giphy.gif', previewUrl: 'https://media.giphy.com/media/abc123XYZ/200w.gif', width: 400, height: 300 };
+
+test('GIF-02: no client, member or admin, can create or edit a room GIF message; a member CAN react, an admin CAN remove it, and listeners see it go', async () => {
+  // Members and the team cannot write GIF fields at all: only the server (Admin SDK) creates GIF messages.
+  await assertFails(stampedAdd('alice', 'public_room_messages', roomMessage('alice', { text: 'GIF', kind: 'gif', gif: roomGif }), 'publicRoom'));
+  await assertFails(stampedAdd('alice', 'public_room_messages', roomMessage('alice', { text: 'GIF', kind: 'gif', gif: { ...roomGif, url: 'https://evil.example/x.gif' } }), 'publicRoom'));
+  await seedAdmin();
+  await assertFails(adminDb().collection('public_room_messages').add({ ...roomMessage('cha', { text: 'GIF', kind: 'gif', gif: roomGif, team: true }), timestamp: now() }));
+
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('public_room_messages/g1').set({ ...roomMessage('alice', { text: 'GIF', kind: 'gif', gif: roomGif }), timestamp: new Date() });
+  });
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(alice.doc('public_room_messages/g1').update({ gif: { ...roomGif, url: 'https://evil.example/x.gif' } }));
+  await assertFails(alice.doc('public_room_messages/g1').update({ kind: 'text' }));
+  await assertFails(alice.doc('public_room_messages/g1').delete());
+  await assertFails(bob.doc('public_room_messages/g1').delete());
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('public_room_messages/g1').get());
+
+  // Reactions still work on a GIF message.
+  const FV = firebase.firestore.FieldValue;
+  const batch = bob.batch();
+  batch.update(bob.doc('public_room_messages/g1'), { heart: FV.increment(1) });
+  batch.set(bob.doc('public_room_messages/g1/reactions/bob'), { type: 'heart', createdAt: now() });
+  await assertSucceeds(batch.commit());
+
+  // Members' live listeners get the GIF, then see it disappear when a moderator removes it.
+  const seen: string[][] = [];
+  let step!: () => void;
+  const next = () => new Promise<void>((resolve) => { step = resolve; });
+  let waiting = next();
+  const stop = bob.collection('public_room_messages').onSnapshot((snap: any) => { seen.push(snap.docs.map((d: any) => d.id)); step?.(); });
+  await waiting;
+  assert.deepEqual(seen[seen.length - 1], ['g1']);
+  waiting = next();
+  await assertSucceeds(adminDb().doc('public_room_messages/g1').delete());
+  await waiting;
+  assert.deepEqual(seen[seen.length - 1], []);
+  stop();
+});
+
 test('RX-01: Room reactions CAN be added once per person, changed only by one counter, and removed', async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await ctx.firestore().doc('public_room_messages/m1').set({ ...roomMessage('alice'), timestamp: new Date() });
