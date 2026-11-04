@@ -241,19 +241,22 @@ export const ProfilePage: React.FC<Props> = ({
               )}
               {member.about && <p className="mt-3 whitespace-pre-wrap text-[length:calc(15px_*_var(--fs,1))] leading-relaxed text-fg [overflow-wrap:anywhere]">{member.about}</p>}
 
-              {joined && (
-                <p className="mt-2 text-[length:calc(12px_*_var(--fs,1))] text-subtle" title={`Member since ${joined.since}`}>
-                  <span aria-hidden="true">✦ </span>Member since {joined.since}<span aria-hidden="true"> · </span><span className="sr-only">, </span>{joined.duration.replace('Member for ', '')}
+              {(joined || stardustTotal !== null) && (
+                // Member since and the Stardust earned share one small line (they wrap on a narrow screen).
+                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">
+                  {joined && (
+                    <span title={`Member since ${joined.since}`}>
+                      <span aria-hidden="true">✦ </span>Member since {joined.since}<span aria-hidden="true"> · </span><span className="sr-only">, </span>{joined.duration.replace('Member for ', '')}
+                    </span>
+                  )}
+                  {joined && stardustTotal !== null && <span aria-hidden="true" className="text-line-strong">·</span>}
+                  {stardustTotal !== null && (
+                    <span className="inline-flex items-center gap-1 text-lavender" aria-label={`${stardustTotal} Stardust earned`}>
+                      <Sparkles className="h-3 w-3" aria-hidden="true" />
+                      <span className="tabular-nums font-semibold">{stardustTotal}</span> Stardust
+                    </span>
+                  )}
                 </p>
-              )}
-
-              {stardustTotal !== null && (
-                <dl className="mt-4 overflow-hidden rounded-2xl border border-line bg-raised/50">
-                  <div className="px-3.5 py-3">
-                    <dd className="flex items-center gap-1.5 text-[length:calc(18px_*_var(--fs,1))] font-semibold leading-none text-lavender"><Sparkles className="h-4 w-4" aria-hidden="true" /><span className="tabular-nums">{stardustTotal}</span></dd>
-                    <dt className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">Stardust</dt>
-                  </div>
-                </dl>
               )}
 
               {isSelf && (
