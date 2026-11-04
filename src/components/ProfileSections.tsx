@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Heart, LoaderCircle, MapPin, MessageCircle } from 'lucide-react';
+import { LoaderCircle, MapPin, MessageCircle } from 'lucide-react';
+import { StardustCount } from './StardustButton.tsx';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import { ExpandableText } from './ExpandableText.tsx';
 import { LookingForBody } from './LookingForBody.tsx';
@@ -135,7 +136,7 @@ export const ProfilePosts: React.FC<{ memberId: string }> = ({ memberId }) => {
               {post.title && <h3 className="mt-2 text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg leading-snug [overflow-wrap:anywhere]">{post.title}</h3>}
               <ExpandableText text={post.content} className="mt-1 text-[length:calc(14px_*_var(--fs,1))] text-muted leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]" />
               <p className="mt-2 flex items-center gap-3 text-[length:calc(12px_*_var(--fs,1))] text-subtle">
-                <span className="inline-flex items-center gap-1"><Heart className="w-3.5 h-3.5" aria-hidden="true" /> {post.likes}<span className="sr-only"> likes</span></span>
+                <StardustCount count={post.stardustCount} />
                 <span className="inline-flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" aria-hidden="true" /> {post.replyCount ?? 0}<span className="sr-only"> replies</span></span>
               </p>
             </article>

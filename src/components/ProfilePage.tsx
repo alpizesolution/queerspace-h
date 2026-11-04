@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, Flag, LoaderCircle, MapPin, MessageCircle, Pencil, Share2, UserPlus, UserX } from 'lucide-react';
+import { ArrowLeft, Check, Flag, LoaderCircle, MapPin, MessageCircle, Pencil, Share2, Sparkles, UserPlus, UserX } from 'lucide-react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ProfileSkeleton } from './Skeleton.tsx';
 import { ConfirmDialog } from './Sheet.tsx';
@@ -7,6 +7,7 @@ import { ConnectionRequestSheet } from './ConnectionRequestSheet.tsx';
 import { ReportMemberSheet } from './ReportMemberSheet.tsx';
 import { ProfileLookingFor, ProfilePosts, Section } from './ProfileSections.tsx';
 import type { UserPreferences } from '../types.ts';
+import { fetchStardustTotal } from '../services/stardustService.ts';
 import { calculateAge } from '../utils/ageEligibility.ts';
 import { INTENTION_LABELS } from '../utils/matching-logic.ts';
 import type { LookingForPost } from '../utils/lookingFor.ts';
@@ -79,6 +80,7 @@ export const ProfilePage: React.FC<Props> = ({
   /** Which load is current, so an answer for a profile the member has already left can never land on this one. */
   const runId = useRef(0);
   const [age, setAge] = useState<number | null>(null);
+  const [stardustTotal, setStardustTotal] = useState<number | null>(null);
   const [lookingFor, setLookingFor] = useState<LookingForPost[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -151,6 +153,15 @@ export const ProfilePage: React.FC<Props> = ({
   const isSelf = data?.self ?? (selfId !== null && memberId === selfId);
   const member = data?.member ?? null;
   const posts = useMemo(() => visibleLookingForPosts(lookingFor, isSelf), [lookingFor, isSelf]);
+  // The member's one Stardust total (Community and Looking For together): a single small document, read only when a profile is shown.
+  const hasMember = member !== null;
+  useEffect(() => {
+    setStardustTotal(null);
+    if (!hasMember) return;
+    let live = true;
+    void fetchStardustTotal(memberId).then((total) => { if (live) setStardustTotal(total); });
+    return () => { live = false; };
+  }, [memberId, hasMember]);
   // The action sees every post (so it can tell "all paused" from "none"); the list below shows only the live ones.
   const action: ProfileAction = data ? profileAction(data, lookingFor) : { kind: 'none' };
   const name = member?.displayName || 'Anonymous member';
@@ -215,6 +226,11 @@ export const ProfilePage: React.FC<Props> = ({
                 <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[length:calc(14px_*_var(--fs,1))] text-muted">
                   {line && <span>{line}</span>}
                   {member.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" aria-hidden="true" /> {member.location}</span>}
+                </p>
+              )}
+              {stardustTotal !== null && (
+                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-lavender/25 bg-lavender/10 px-2.5 py-1 text-[length:calc(13px_*_var(--fs,1))] font-semibold text-lavender">
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> <span className="tabular-nums">{stardustTotal}</span> Stardust
                 </p>
               )}
               {member.about && <p className="mt-3 whitespace-pre-wrap text-[length:calc(15px_*_var(--fs,1))] leading-relaxed text-fg [overflow-wrap:anywhere]">{member.about}</p>}

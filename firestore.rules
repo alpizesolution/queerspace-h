@@ -518,17 +518,8 @@ service cloud.firestore {
         && slowMode('communityPost', 30)
         && !isSuspended();
 
-      // Like: +1 with a new likes/{uid} doc. Unlike: -1 while removing it.
-      allow update: if isAuthenticated()
-        && isEligibleMember(request.auth.uid)
-        && counterMoves('likes', 1)
-        && !exists(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid))
-        && existsAfter(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid));
-      allow update: if isAuthenticated()
-        && isEligibleMember(request.auth.uid)
-        && counterMoves('likes', -1)
-        && exists(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid))
-        && !existsAfter(/databases/$(database)/documents/community_posts/$(postId)/likes/$(request.auth.uid));
+      // Appreciation is Stardust (stardustCount and the stardust/{uid} docs), written only by /api/stardust with the Admin SDK.
+      // No client update may touch stardustCount: every rule below moves exactly one named counter (counterMoves).
       // Reply: +1, written in the same batch as the reply (checked on the reply doc).
       allow update: if isAuthenticated() && isEligibleMember(request.auth.uid) && counterMoves('replyCount', 1) && slowMode('communityReply', 5);
       // Admin removing a reply: -1.
@@ -536,19 +527,20 @@ service cloud.firestore {
 
       allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorId || isAdmin());
 
+      // Legacy likes: kept as history after the move to Stardust (scripts/migrate-stardust.mjs reads them). Nobody can add or
+      // remove one any more; admins can still clear them once the post is gone.
       match /likes/{userId} {
-        // Admins can list likes only so they can clear them once a post is gone (below).
         allow read: if isOwner(userId) || isAdmin();
         allow delete: if isAdmin() && !exists(postPath(postId));
-        allow create: if isOwner(userId)
-          && isEligibleMember(request.auth.uid)
-          && request.resource.data.keys().hasOnly(['createdAt'])
-          && request.resource.data.createdAt == request.time
-          && getAfter(postPath(postId)).data.likes == get(postPath(postId)).data.likes + 1;
-        allow delete: if isOwner(userId)
-          && isEligibleMember(request.auth.uid)
-          && getAfter(postPath(postId)).data.likes == get(postPath(postId)).data.likes - 1;
-        allow update: if false;
+        allow create, update: if false;
+      }
+
+      // Stardust reactions: server-written only. A member can read their own; admins can read and, once the post is gone,
+      // clear them. Who gave Stardust is never visible to other members.
+      match /stardust/{userId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow delete: if isAdmin() && !exists(postPath(postId));
+        allow create, update: if false;
       }
 
       match /replies/{replyId} {
@@ -651,7 +643,9 @@ service cloud.firestore {
         && isEligibleMember(request.auth.uid)
         && !isSuspended()
         && request.resource.data.keys().hasAll(['authorId', 'authorName', 'authorPronouns', 'title', 'intro', 'lookingFor', 'intention', 'tags', 'isNsfw', 'contentWarning', 'timestamp', 'updatedAt'])
-        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'intro', 'lookingFor', 'intention', 'age', 'flair', 'seekAgeMin', 'seekAgeMax', 'region', 'tags', 'isNsfw', 'contentWarning', 'requestsPaused', 'timestamp', 'updatedAt'])
+        // stardustCount is server-managed: it may be present on the post (so an edit still passes), but an edit can never change it.
+        && request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorPronouns', 'authorAvatar', 'title', 'intro', 'lookingFor', 'intention', 'age', 'flair', 'seekAgeMin', 'seekAgeMax', 'region', 'tags', 'isNsfw', 'contentWarning', 'requestsPaused', 'timestamp', 'updatedAt', 'stardustCount'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['stardustCount'])
         // An edit must carry an age and a flair; a post from before flairs can still be paused or resumed as it is.
         && (('age' in request.resource.data && 'flair' in request.resource.data)
             || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requestsPaused', 'updatedAt']))
@@ -665,6 +659,23 @@ service cloud.firestore {
         && validLookingForBody(request.resource.data);
 
       allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorId || isAdmin());
+
+      // Stardust reactions: same shape and rules as on community posts. Written only by /api/stardust.
+      match /stardust/{userId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow delete: if isAdmin() && !exists(/databases/$(database)/documents/looking_for_posts/$(postId));
+        allow create, update: if false;
+      }
+    }
+
+    // ====================================================
+    // 4b. STARDUST TOTALS (SERVER-MANAGED)
+    // ====================================================
+    // One document per author: their single Stardust total across Community and Looking For posts. It shows on public profiles,
+    // so any signed-in member can read it; only /api/stardust (Admin SDK) and the migration script ever write it.
+    match /stardust_totals/{authorId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
     }
 
     // ====================================================

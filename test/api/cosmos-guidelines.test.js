@@ -112,7 +112,7 @@ test('the page is readable at every size: a centered column with side padding, s
 });
 
 test('nothing else changed: posting, Looking For, connection requests and the rules are untouched', () => {
-  for (const kept of ['createCommunityPost', 'subscribeToCommunity', 'setCommunityLike', 'replyToCommunityPost', '<LookingForView', 'onViewRequests']) assert.ok(feed.includes(kept), kept);
+  for (const kept of ['createCommunityPost', 'subscribeToCommunity', 'replyToCommunityPost', '<LookingForView', 'onViewRequests']) assert.ok(feed.includes(kept), kept);
   assert.doesNotMatch(page, /firebase|fetch\(|collection\(|doc\(|api\/|useEffect\([^)]*\bposts\b/, 'the page reads nothing and writes nothing');
   assert.match(read('firestore.rules'), /match \/looking_for_posts\/\{postId\} \{\s*allow read: if isAuthenticated\(\) && isEligibleMember\(request\.auth\.uid\);/);
 });

@@ -282,9 +282,9 @@ test('T-10: Like document creation fails if extra arbitrary fields are passed', 
   );
 });
 
-test('T-11: User CAN like a post for themselves (marker + counter in one batch)', async () => {
+test('T-11: Likes are retired: a client can no longer like a post (Stardust is given through /api/stardust only)', async () => {
   await seedCommunityPost('post1', 'bob');
-  await assertSucceeds(likeAs('alice', 'post1', 1));
+  await assertFails(likeAs('alice', 'post1', 1));
 });
 
 // ------------------------------------------------------------------
@@ -792,11 +792,9 @@ test('C-02: Posting is limited to one every 30 seconds', async () => {
   await assertSucceeds(stampedAdd('alice', 'community_posts', communityPost('alice'), 'communityPost'));
 });
 
-test('C-03: Each person CAN like once and unlike, and counts move by exactly one', async () => {
-  await seedCommunityPost('p1', 'alice');
-  await assertSucceeds(likeAs('bob', 'p1', 1));
+test('C-03: No client can like, unlike or edit a post, and the old like counter cannot be moved', async () => {
+  await seedCommunityPost('p1', 'alice', { likes: 1 });
   await assertFails(likeAs('bob', 'p1', 1));
-  await assertSucceeds(likeAs('bob', 'p1', -1));
   await assertFails(likeAs('bob', 'p1', -1));
   const carol = testEnv.authenticatedContext('carol').firestore();
   await assertFails(carol.doc('community_posts/p1').update({ likes: 50 }));
@@ -2274,21 +2272,161 @@ test('PL-02: a deleted post reads as "does not exist", not as an error, and cann
 
 test('PL-03: engaging with the opened post changes the original and creates no copy and no duplicate record', async () => {
   await seedCommunityPost('orig2', 'alice');
-  await assertSucceeds(likeAs('bob', 'orig2', 1));
-  await assertFails(likeAs('bob', 'orig2', 1));
   await seedStamp('bob', 'communityReply', 10);
   await assertSucceeds(replyAs('bob', 'orig2'));
   const posts = await assertSucceeds(testEnv.authenticatedContext('carol').firestore().collection('community_posts').get()) as any;
   assert.deepEqual(posts.docs.map((d: any) => d.id), ['orig2'], 'still exactly one post');
   const original = (await testEnv.authenticatedContext('carol').firestore().doc('community_posts/orig2').get()).data() as any;
-  assert.equal(original.likes, 1);
   assert.equal(original.replyCount, 1);
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    const likes = await ctx.firestore().collection('community_posts/orig2/likes').get();
     const replies = await ctx.firestore().collection('community_posts/orig2/replies').get();
-    assert.equal(likes.size, 1, 'one like record');
     assert.equal(replies.size, 1, 'one reply record');
   });
+});
+
+// ------------------------------------------------------------------
+// Stardust: reactions and counters are written only by /api/stardust (Admin SDK); rules keep every client out
+// ------------------------------------------------------------------
+const SD_KINDS = [
+  { label: 'community', seed: (author: string) => seedCommunityPost('p1', author), post: (author: string) => 'community_posts/p1' },
+  { label: 'lookingFor', seed: (author: string) => seedLfPost(author, 'friendship'), post: (author: string) => `looking_for_posts/${lfId(author)}` },
+];
+
+for (const kind of SD_KINDS) {
+  test(`SD-01 (${kind.label}): no client can create, change or delete a Stardust reaction, even their own`, async () => {
+    await kind.seed('alice');
+    const path = kind.post('alice');
+    const bob = testEnv.authenticatedContext('bob').firestore();
+    await assertFails(bob.doc(`${path}/stardust/bob`).set({ uid: 'bob', postType: kind.label, createdAt: now() }));
+    await assertFails(bob.doc(`${path}/stardust/alice`).set({ uid: 'alice', postType: kind.label, createdAt: now() }));
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`${path}/stardust/bob`).set({ uid: 'bob', postType: kind.label, createdAt: new Date() });
+    });
+    await assertFails(bob.doc(`${path}/stardust/bob`).update({ postType: 'other' }));
+    await assertFails(bob.doc(`${path}/stardust/bob`).delete());
+  });
+
+  test(`SD-02 (${kind.label}): a reaction is private to the member who gave it`, async () => {
+    await kind.seed('alice');
+    const path = kind.post('alice');
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`${path}/stardust/bob`).set({ uid: 'bob', postType: kind.label, createdAt: new Date() });
+    });
+    await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc(`${path}/stardust/bob`).get());
+    await assertFails(testEnv.authenticatedContext('alice').firestore().doc(`${path}/stardust/bob`).get());
+    await assertFails(testEnv.authenticatedContext('eve').firestore().collection(`${path}/stardust`).get());
+    await assertFails(testEnv.unauthenticatedContext().firestore().doc(`${path}/stardust/bob`).get());
+  });
+
+  test(`SD-03 (${kind.label}): nobody can write stardustCount, by itself or alongside another change`, async () => {
+    await kind.seed('alice');
+    const path = kind.post('alice');
+    const fv = firebase.firestore.FieldValue;
+    for (const uid of ['alice', 'bob']) {
+      const fs = testEnv.authenticatedContext(uid).firestore();
+      await assertFails(fs.doc(path).update({ stardustCount: 500 }));
+      await assertFails(fs.doc(path).update({ stardustCount: fv.increment(1) }));
+    }
+    if (kind.label === 'community') {
+      const bob = testEnv.authenticatedContext('bob').firestore();
+      const batch = bob.batch();
+      batch.update(bob.doc(path), { replyCount: fv.increment(1), stardustCount: 9 });
+      batch.set(bob.doc('rate_limits/bob'), { communityReply: now() }, { merge: true });
+      await assertFails(batch.commit());
+    }
+  });
+}
+
+test('SD-04: a new post cannot be created with a Stardust count, in either section', async () => {
+  await assertFails(stampedAdd('alice', 'community_posts', communityPost('alice', { stardustCount: 50 }), 'communityPost'));
+  await assertFails(lfCreate('alice', lfPost('alice', { stardustCount: 50 })));
+  await assertSucceeds(lfCreate('alice', lfPost('alice')));
+});
+
+test('SD-05: a Looking For author can still edit a post that carries Stardust, but cannot change the count', async () => {
+  await seedLfPost('alice', 'friendship', { age: 30, flair: 'Masc × Femme', stardustCount: 7 });
+  const path = `looking_for_posts/${lfId('alice')}`;
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc(path).update({ title: 'A new title', updatedAt: now() }));
+  await assertSucceeds(alice.doc(path).update({ requestsPaused: true, updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ title: 'Again', stardustCount: 99, updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ stardustCount: 8, updatedAt: now() }));
+  const after = (await testEnv.authenticatedContext('bob').firestore().doc(path).get()).data() as any;
+  assert.equal(after.stardustCount, 7);
+});
+
+test('SD-05b: a Looking For author cannot remove the count or stamp migration/reaction fields on their own post', async () => {
+  await seedLfPost('alice', 'friendship', { age: 30, flair: 'Masc × Femme', stardustCount: 7 });
+  const path = `looking_for_posts/${lfId('alice')}`;
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(alice.doc(path).update({ stardustCount: firebase.firestore.FieldValue.delete(), updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ stardustMigratedAt: now(), updatedAt: now() }));
+  await assertFails(alice.doc(path).update({ stardustCount: firebase.firestore.FieldValue.increment(1), updatedAt: now() }));
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(bob.doc(path).update({ stardustCount: 8 }));
+  await assertFails(bob.doc(path).delete());
+  const after = (await bob.doc(path).get()).data() as any;
+  assert.equal(after.stardustCount, 7);
+  assert.equal(after.stardustMigratedAt, undefined);
+});
+
+test('SD-05c: nobody can stamp a Community post as migrated or change it beyond the reply counter', async () => {
+  await seedCommunityPost('p1', 'alice');
+  for (const uid of ['alice', 'bob']) {
+    const fs = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(fs.doc('community_posts/p1').update({ stardustMigratedAt: now() }));
+    await assertFails(fs.doc('community_posts/p1').update({ stardustCount: firebase.firestore.FieldValue.delete() }));
+  }
+});
+
+test('SD-05d: the reconcile cursor is closed to every client', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('stardust_meta/reconcile').set({ phase: 0, after: null, cycle: 1 });
+  });
+  for (const uid of ['alice', 'bob']) {
+    const fs = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(fs.doc('stardust_meta/reconcile').get());
+    await assertFails(fs.doc('stardust_meta/reconcile').set({ phase: 2, after: 'x', cycle: 99 }));
+    await assertFails(fs.doc('stardust_meta/reconcile').delete());
+  }
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('stardust_meta/reconcile').get());
+});
+
+test('SD-06: profile totals can be read by signed-in members only and written by nobody', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('stardust_totals/alice').set({ total: 12, updatedAt: new Date() });
+  });
+  await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('stardust_totals/alice').get());
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('stardust_totals/alice').get());
+  for (const uid of ['alice', 'bob']) {
+    const fs = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(fs.doc('stardust_totals/alice').set({ total: 9999 }));
+    await assertFails(fs.doc('stardust_totals/alice').update({ total: 9999 }));
+    await assertFails(fs.doc('stardust_totals/alice').delete());
+    await assertFails(fs.doc(`stardust_totals/${uid}`).set({ total: 1 }));
+  }
+});
+
+test('SD-07: an admin can clear reactions only once the post is gone', async () => {
+  await seedCommunityPost('p1', 'alice');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('community_posts/p1/stardust/bob').set({ uid: 'bob', postType: 'community', createdAt: new Date() });
+  });
+  await seedAdmin();
+  await assertFails(adminDb().doc('community_posts/p1/stardust/bob').delete());
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('community_posts/p1').delete(); });
+  await assertFails(testEnv.authenticatedContext('eve').firestore().doc('community_posts/p1/stardust/bob').delete());
+  await assertSucceeds(adminDb().doc('community_posts/p1/stardust/bob').delete());
+});
+
+test('SD-08: legacy likes stay readable history: nobody can add or remove one', async () => {
+  await seedCommunityPost('p1', 'alice', { likes: 1 });
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('community_posts/p1/likes/bob').set({ createdAt: new Date() });
+  });
+  await assertSucceeds(testEnv.authenticatedContext('bob').firestore().doc('community_posts/p1/likes/bob').get());
+  await assertFails(testEnv.authenticatedContext('carol').firestore().doc('community_posts/p1/likes/carol').set({ createdAt: now() }));
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('community_posts/p1/likes/bob').delete());
 });
 
 // ------------------------------------------------------------------

@@ -5,6 +5,8 @@ import { ChipScroller } from './ChipScroller.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { LookingForBody } from './LookingForBody.tsx';
+import { StardustButton } from './StardustButton.tsx';
+import { useStardust } from '../hooks/useStardust.ts';
 import { SensitiveCover } from './SensitiveCover.tsx';
 import { ConnectionRequestSheet } from './ConnectionRequestSheet.tsx';
 import { LookingForComposer } from './LookingForComposer.tsx';
@@ -133,6 +135,13 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
 
   const visible = useMemo(() => applyLookingForFilters(posts, filters, blockedPartnerIds), [posts, filters, blockedPartnerIds]);
   const tags = useMemo(() => popularTags(posts), [posts]);
+  const stardust = useStardust('lookingFor', useMemo(() => visible.map((p) => p.id), [visible]));
+  useEffect(() => {
+    if (!stardust.error) return;
+    setToast({ text: stardust.error, ok: false });
+    stardust.clearError();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stardust.error]);
   const ownPostIds = useMemo(() => posts.filter((p) => p.authorId === uid).map((p) => p.id), [posts, uid]);
   const filterCount = activeFilterCount(filters);
 
@@ -267,6 +276,18 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                     onReveal={() => reveal(post)}
                     onOpenSettings={onOpenSettings}
                   />
+                )}
+
+                {presentation === 'open' && (
+                  <div className="mt-2 -ml-2">
+                    <StardustButton
+                      count={stardust.countFor(post.id, post.stardustCount ?? 0)}
+                      given={Boolean(stardust.given[post.id])}
+                      pending={Boolean(stardust.pending[post.id])}
+                      own={mine}
+                      onToggle={() => void stardust.toggle(post.id, post.stardustCount ?? 0)}
+                    />
+                  </div>
                 )}
               </article>
             );

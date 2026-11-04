@@ -219,14 +219,14 @@ test('each public post card on a profile opens the original post, with its own t
 test('the original post is opened live from community_posts by id, never copied, with the same card and handlers as the feed', () => {
   const sub = communityService.slice(communityService.indexOf('export function subscribeToCommunityPost'), communityService.indexOf('/** Live replies for one post'));
   assert.match(sub, /doc\(firestore, 'community_posts', postId\)/, 'the original document');
-  assert.match(sub, /onSnapshot\(/, 'live, so likes and replies show');
+  assert.match(sub, /onSnapshot\(/, 'live, so Stardust and replies show');
   assert.doesNotMatch(sub, /setDoc|addDoc|updateDoc|writeBatch|deleteDoc|\.set\(/, 'reading only: nothing is created, restored or changed');
   assert.match(sub, /snap\.exists\(\) \? \{ status: 'ready'.* : \{ status: 'unavailable' \}/, 'a deleted post is unavailable, not rebuilt');
   assert.match(sub, /onState\(postLoadFromError\(err\)\)/);
   assert.match(feedView, /subscribeToCommunityPost\(focusPostId, setFocus\)/);
   assert.match(feedView, /const listed = focusMode \? \(focusedPost \? \[focusedPost\] : \[\]\) : filteredPosts;/, 'the same list and card, with one post in it');
   assert.match(feedView, /\{listed\.map\(\(post\) => \{/);
-  assert.match(feedView, /handleLikePost\(post\.id\)/, 'likes go to the original post');
+  assert.match(feedView, /handleStardust\(post\)/, 'Stardust goes to the original post');
   assert.match(feedView, /const isRepliesExpanded = expandedReplies\[post\.id\] \?\? focusMode;/, 'replies are open on a single post');
   assert.match(feedView, /postVisibleTo\(focus\.post, blockedPartnerIds\)/, 'a blocked author\'s post is not shown');
 });

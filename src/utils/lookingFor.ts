@@ -81,6 +81,8 @@ export interface LookingForPost {
   contentWarning: string | null;
   /** The author has paused new connection requests on this post. */
   requestsPaused: boolean;
+  /** Stardust on this post, kept by /api/stardust. A post that has never had any has no field, which reads as 0. */
+  stardustCount?: number;
   timestamp: number;
   updatedAt?: number;
 }

@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowUp, Info, Check, CheckCircle2, Heart, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, ArrowUp, Info, Check, CheckCircle2, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
 import { MemberAvatar } from './ProfileNav.tsx';
+import { StardustButton } from './StardustButton.tsx';
+import { useStardust } from '../hooks/useStardust.ts';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { CommunityPost, CommunityReply, UserPreferences } from '../types.ts';
@@ -14,7 +16,6 @@ import {
   fetchIsCommunityAdmin,
   isCommunityAvailable,
   replyToCommunityPost,
-  setCommunityLike,
   subscribeToCommunity,
   subscribeToCommunityPost,
   subscribeToReplies,
@@ -44,25 +45,6 @@ interface CommunityFeedViewProps {
   /** Show this one post (opened from a member's profile or a link) instead of the feed. */
   focusPostId?: string | null;
   onCloseFocus?: () => void;
-}
-
-// Which posts this device has liked, so the heart shows filled. The server still allows one like per person.
-const LIKED_KEY = 'qs_community_liked';
-
-function loadLiked(): Record<string, boolean> {
-  try {
-    return JSON.parse(localStorage.getItem(LIKED_KEY) || '{}');
-  } catch {
-    return {};
-  }
-}
-
-function saveLiked(map: Record<string, boolean>) {
-  try {
-    localStorage.setItem(LIKED_KEY, JSON.stringify(map));
-  } catch {
-    // Per-device convenience only.
-  }
 }
 
 /** Live replies for one expanded post, plus the reply box. */
@@ -176,7 +158,6 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [feedError, setFeedError] = useState(false);
   const [uid, setUid] = useState<string | null>(null);
-  const [liked, setLiked] = useState<Record<string, boolean>>(loadLiked);
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -259,23 +240,18 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
     setPendingDelete(null);
   };
 
-  const updateLiked = (postId: string, value: boolean) => {
-    setLiked((prev) => {
-      const next = { ...prev };
-      if (value) next[postId] = true;
-      else delete next[postId];
-      saveLiked(next);
-      return next;
-    });
+  const stardust = useStardust('community', useMemo(() => posts.map((p) => p.id), [posts]));
+
+  const handleStardust = async (post: CommunityPost) => {
+    await stardust.toggle(post.id, post.stardustCount);
   };
 
-  const handleLikePost = async (postId: string) => {
-    const wasLiked = Boolean(liked[postId]);
-    updateLiked(postId, !wasLiked);
-    const ok = await setCommunityLike(postId, !wasLiked);
-    // A refused like means this account already liked it on another visit; a refused unlike just reverts.
-    if (!ok) updateLiked(postId, true);
-  };
+  useEffect(() => {
+    if (!stardust.error) return;
+    setToast({ text: stardust.error, ok: false });
+    stardust.clearError();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stardust.error]);
 
   const handleAddTag = (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -428,7 +404,6 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
         <div className="space-y-3">
           {listed.map((post) => {
             const isRepliesExpanded = expandedReplies[post.id] ?? focusMode;
-            const userLiked = Boolean(liked[post.id]);
             const replyCount = post.replyCount ?? 0;
             return (
               <article key={post.id} className="scroll-mt-[calc(var(--header-h)+0.5rem)] rounded-3xl border border-line bg-gradient-to-b from-raised/60 to-surface p-4 sm:p-5">
@@ -475,17 +450,13 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                 )}
 
                 <div className="flex items-center gap-1 mt-3 -ml-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
-                  <button
-                    onClick={() => handleLikePost(post.id)}
-                    aria-pressed={!!userLiked}
-                    aria-label={userLiked ? 'Unlike' : 'Like'}
-                    className={`inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full hover:bg-raised transition-colors cursor-pointer ${
-                      userLiked ? 'text-berry' : 'hover:text-fg'
-                    }`}
-                  >
-                    <Heart className={`w-[18px] h-[18px] ${userLiked ? 'fill-berry' : ''}`} />
-                    {post.likes}
-                  </button>
+                  <StardustButton
+                    count={stardust.countFor(post.id, post.stardustCount)}
+                    given={Boolean(stardust.given[post.id])}
+                    pending={Boolean(stardust.pending[post.id])}
+                    own={Boolean(uid) && post.authorId === uid}
+                    onToggle={() => void handleStardust(post)}
+                  />
                   <button
                     onClick={() => setExpandedReplies({ ...expandedReplies, [post.id]: !isRepliesExpanded })}
                     aria-expanded={!!isRepliesExpanded}

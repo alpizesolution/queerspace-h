@@ -22,7 +22,7 @@ test('Cosmos gets a Community / Looking For switch under the heading, and the co
   assert.match(cosmos, /section === 'lookingFor' && !focusMode \? \(\s*<LookingForView/);
   // Every community category, post action and the composer are still there.
   for (const label of ['All', 'Cozy Vents', 'Books & Media', 'Friend Finder', 'Dating', 'General']) assert.ok(read('src/utils/communityCategories.ts').includes(`label: '${label}'`), label);
-  for (const kept of ['subscribeToCommunity', 'setCommunityLike', 'replyToCommunityPost', 'createCommunityPost', 'adminDeleteCommunityPost', 'subscribeToReplies']) assert.ok(cosmos.includes(kept), kept);
+  for (const kept of ['subscribeToCommunity', 'replyToCommunityPost', 'createCommunityPost', 'adminDeleteCommunityPost', 'subscribeToReplies']) assert.ok(cosmos.includes(kept), kept);
   assert.match(cosmos, /useState<'community' \| 'lookingFor'>\('community'\)/, 'opens on Community');
 });
 
