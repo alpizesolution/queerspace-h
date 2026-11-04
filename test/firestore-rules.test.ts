@@ -2449,3 +2449,20 @@ test('PH-01: no client can read, write or list timed-photo records, and message 
   }
   await assertFails(testEnv.unauthenticatedContext().firestore().doc('signalsMedia/m1').get());
 });
+
+test('GIF-01: no client can create, change, read or delete a GIF message; only the Signals API can', async () => {
+  const gif = { id: 'abc123XYZ', url: 'https://media.giphy.com/media/abc123XYZ/giphy.gif', previewUrl: 'https://media.giphy.com/media/abc123XYZ/200w.gif', width: 400, height: 300 };
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('signalsPairs/p1').set({ participants: ['alice', 'bob'], status: 'active' });
+    await ctx.firestore().doc('signalsPairs/p1/messages/g1').set({ senderId: 'alice', kind: 'gif', text: 'GIF', gif });
+  });
+  for (const who of ['alice', 'bob', 'carol']) {
+    const fs = testEnv.authenticatedContext(who).firestore();
+    await assertFails(fs.doc('signalsPairs/p1/messages/g2').set({ senderId: who, kind: 'gif', text: 'GIF', gif: { ...gif, url: 'https://evil.example/x.gif' } }));
+    await assertFails(fs.doc('signalsPairs/p1/messages/g2').set({ senderId: who, kind: 'gif', text: 'GIF', gif }));
+    await assertFails(fs.doc('signalsPairs/p1/messages/g1').update({ gif: { ...gif, url: 'https://evil.example/x.gif' } }));
+    await assertFails(fs.doc('signalsPairs/p1/messages/g1').delete());
+    await assertFails(fs.doc('signalsPairs/p1/messages/g1').get());
+  }
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('signalsPairs/p1/messages/g1').get());
+});

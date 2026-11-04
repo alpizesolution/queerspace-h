@@ -8,6 +8,8 @@ Add `FIREBASE_SERVICE_ACCOUNT_JSON` as a **server-only** Vercel environment vari
 
 The service account's `project_id` determines the Firebase project used by the API. Confirm it matches `VITE_FIREBASE_PROJECT_ID` before testing. Rotate the credential if it is ever exposed.
 
+Add `GIPHY_API_KEY` as a second **server-only** variable to turn on GIF sharing (see `docs/signals-gifs.md`). It is optional: without it the GIF picker says GIFs are unavailable and nothing else changes.
+
 ## Endpoint
 
 All requests go to `/api/signals` and must include:

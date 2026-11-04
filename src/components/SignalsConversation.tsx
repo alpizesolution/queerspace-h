@@ -9,6 +9,8 @@ import { soundEffects } from '../utils/sound.ts';
 import { SwipeToReply } from './SwipeToReply.tsx';
 import { TimedPhotoComposer } from './TimedPhotoComposer.tsx';
 import { TimedPhotoViewer } from './TimedPhotoViewer.tsx';
+import { GifBubble, GifIcon, GifPicker } from './GifPicker.tsx';
+import { gifSendProblemText, type GifInfo } from '../utils/gif.ts';
 import { pickedFileProblem, pickProblemText, photoCard, photoReadProblemText, type PhotoTimer } from '../utils/timedPhoto.ts';
 import { copyPickedPhoto, prepareTimedPhoto, sendPhotoProblemText, sendTimedPhoto } from '../services/timedPhotoService.ts';
 import { hasNewIncomingMessage } from '../utils/incomingMessage.ts';
@@ -74,7 +76,7 @@ async function request<T>(path: string, body?: Record<string, unknown>): Promise
       account_unavailable: 'Messaging is temporarily unavailable for this account.',
       internal_error: 'Signals is temporarily unavailable. Please try again.',
     };
-    throw new Error(messages[data.error ?? ''] || 'Could not complete that action. Please try again.');
+    throw Object.assign(new Error(messages[data.error ?? ''] || gifSendProblemText(data.error) || 'Could not complete that action. Please try again.'), { code: data.error });
   }
   return data as T;
 }
@@ -131,6 +133,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [photoSending, setPhotoSending] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [gifOpen, setGifOpen] = useState(false);
   const [closedPhotos, setClosedPhotos] = useState<Set<string>>(() => new Set());
   const [clock, setClock] = useState(() => Date.now());
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -360,7 +363,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
         action: 'send-message',
         pairId,
         messageId: item.id,
-        text: item.text,
+        // A GIF goes by its GIPHY id only; the server finds the picture and its address itself.
+        ...(item.gif ? { kind: 'gif', gifId: item.gif.id } : { text: item.text }),
         ...(item.replyTo ? { replyTo: { messageId: item.replyTo.messageId, text: item.replyTo.text, sender: item.replyTo.sender } } : {}),
       });
       setMessages((current) => mergeMessages(current, [result]));
@@ -398,6 +402,31 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     if (!soundMutedRef.current) soundEffects.playMessageSent();
     setPending((list) => [...list, item]);
     setDraft('');
+    setReplyingTo(null);
+    setError(null);
+    enqueue(item);
+  };
+
+  /** Sends the chosen GIF as a message. It shows at once, marked "Sending…", and goes through the same outbox as text. */
+  const sendGif = (gif: GifInfo) => {
+    if (ended) return;
+    const reply = replyingTo;
+    const item: PendingMessage = {
+      id: crypto.randomUUID(),
+      text: 'GIF',
+      gif,
+      replyTo: reply
+        ? { messageId: reply.id, text: reply.text, sender: reply.senderId === userId ? 'self' : 'partner', senderId: reply.senderId }
+        : null,
+      status: 'sending',
+      retryable: true,
+      createdAt: Date.now(),
+    };
+    lastOwnSend.current = true;
+    stickToBottom.current = true;
+    if (!soundMutedRef.current) soundEffects.playMessageSent();
+    setGifOpen(false);
+    setPending((list) => [...list, item]);
     setReplyingTo(null);
     setError(null);
     enqueue(item);
@@ -564,7 +593,9 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           </div>
                         )}
                         <div className="flex flex-wrap items-end justify-end gap-x-2">
-                          {message.photo ? (
+                          {message.kind === 'gif' && message.gif ? (
+                            <GifBubble gif={message.gif} mine={mine} />
+                          ) : message.photo ? (
                             <PhotoBubble
                               photo={message.photo}
                               clock={clock}
@@ -675,6 +706,9 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
               <button type="button" onClick={() => photoInputRef.current?.click()} onMouseDown={(event) => event.preventDefault()} aria-label="Send a timed photo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-raised text-muted transition hover:text-fg">
                 <ImagePlus className="h-[18px] w-[18px]" />
               </button>
+              <button type="button" onClick={() => setGifOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Send a GIF" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-raised text-muted transition hover:text-fg">
+                <GifIcon className="h-[20px] w-[20px]" />
+              </button>
               <button type="submit" disabled={!draft.trim()} onMouseDown={(event) => event.preventDefault()} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-berry text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
                 <Send className="h-4 w-4" />
               </button>
@@ -685,6 +719,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
       {photoFile && (
         <TimedPhotoComposer file={photoFile} sending={photoSending} error={photoError} onSend={(timer) => void sendPhoto(timer)} onClose={() => { photoMessageId.current = null; setPhotoFile(null); }} />
       )}
+      {gifOpen && !ended && <GifPicker onSend={sendGif} onClose={() => setGifOpen(false)} />}
       {viewingPhoto && (
         <TimedPhotoViewer
           key={viewingPhoto}
