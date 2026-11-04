@@ -41,3 +41,22 @@ Clients cannot write to `signalsPairs` at all (rules deny everything), so only t
 The picker shows "Powered by GIPHY". GIPHY's guidelines also ask for their logo where the API is used; swap the text for the
 official "Powered By GIPHY" badge asset if you want to follow that to the letter. With `prefers-reduced-motion`, the picker and
 messages show a still frame, and a tap plays the GIF.
+
+## Galaxy Room
+
+The same picker and the same GIPHY proxy are used in the Galaxy Room (public room). Search and trending are still
+`GET /api/signals?view=gifs`; there is one GIPHY client (`sharedGiphy`) and one `GIPHY_API_KEY`.
+
+Room text messages are written by the app straight to Firestore, but a GIF needs the server to ask GIPHY, so GIFs are sent with
+`POST /api/room { action: 'send-gif', gifId, messageId? }` (`api/room.js`, logic in `api/_room.js`). Nothing else may be in the
+request (no author, link, text or reply quote: `400 invalid_gif`). The server writes the message to `public_room_messages` as
+`{ authorId, authorName, authorPronouns, authorAvatar?, text: 'GIF', kind: 'gif', gif: {...}, timestamp }`, with the identity taken
+from the member's own profile. `firestore.rules` were not loosened: a client still cannot create a message with `kind` or `gif`
+fields, so this endpoint is the only way to make one. Members see GIFs through the existing live feed, can react to them, and a
+moderator removes one with the existing delete, which disappears from every open room.
+
+Safeguards, mirroring the rules for text: an adult member with a completed profile, not suspended (`403 not_allowed` /
+`account_unavailable`), the room slow mode (2 seconds, shared with text through `rate_limits/{uid}.publicRoom`, `429 too_fast`),
+and at most 10 GIFs a minute (`429 rate_limited`). Errors from GIPHY are the same codes as in Signals. Replying to a message
+with a GIF is not supported in the room (the quote check lives in the rules). The picker stays open while a GIF sends and closes
+when it succeeds; a failed send keeps it open with the reason and retries with the same message id, so no copy is made.

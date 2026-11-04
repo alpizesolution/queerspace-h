@@ -217,6 +217,9 @@ export function createGiphy({ fetchImpl = (...args) => fetch(...args), getKey = 
   };
 }
 
+/** The one GIPHY client for the whole API (Signals and Galaxy Room), so its trending cache is shared too. */
+export const sharedGiphy = createGiphy();
+
 /** Shared by the browse view and the send path. */
 export async function limitGifSearches(db, uid) {
   await rateLimit(db, uid, 'signals-gif-search', GIF_SEARCHES_PER_MINUTE, 60_000);

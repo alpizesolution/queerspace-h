@@ -5,10 +5,10 @@ import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { createRequestHandlers } from './_requests.js';
 import { profileView } from './_profiles.js';
 import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
-import { GIF_TEXT, createGiphy, isGifId, limitGifSearches, limitGifSends, parseGifQuery, shapeStoredGif } from './_giphy.js';
+import { GIF_TEXT, sharedGiphy, isGifId, limitGifSearches, limitGifSends, parseGifQuery, shapeStoredGif } from './_giphy.js';
 import { createPartnerCache, getOnePair, listPairsLegacy, listPairsPage, parsePageLimit, partnerSummaries, shapePair } from './_inbox.js';
 
-const giphy = createGiphy();
+const giphy = sharedGiphy;
 
 const MAX_MESSAGE_LENGTH = 240;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;

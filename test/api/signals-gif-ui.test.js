@@ -43,7 +43,7 @@ test('the picker has search, trending first, a grid, loading, empty and error st
 });
 
 test('picking a GIF twice cannot send it twice, and the message shows as sending', () => {
-  assert.match(picker, /if \(!selected \|\| sent\.current\) return;\s*sent\.current = true;/);
+  assert.match(picker, /if \(!selected \|\| busy \|\| sent\.current\) return;\s*sent\.current = true;/);
   assert.match(conversation, /setGifOpen\(false\);\s*setPending\(/, 'the picker closes the moment the send starts');
   assert.match(conversation, /status: 'sending'/);
   assert.match(conversation, /\.\.\.\(item\.gif \? \{ kind: 'gif', gifId: item\.gif\.id \} : \{ text: item\.text \}\)/, 'the app sends the id only, never a link');

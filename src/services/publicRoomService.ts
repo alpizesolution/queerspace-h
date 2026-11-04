@@ -20,6 +20,7 @@ import {
 import { auth, db, ensureAnonymousAuth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { PublicRoomMessage, RoomQuote, UserPreferences } from '../types.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
+import { parseGifInfo, type GifInfo } from '../utils/gif.ts';
 import { isAdminDevice } from '../utils/adminDevice.ts';
 import { TEAM_NAME } from './supportService.ts';
 export { fetchIsCommunityAdmin as fetchIsRoomModerator } from './communityService.ts';
@@ -66,6 +67,8 @@ export function toPublicRoomMessage(id: string, data: Record<string, unknown>, s
     isSelf: Boolean(selfUid) && authorId === selfUid,
     ...(data.team === true ? { team: true } : {}),
     ...(toRoomQuote(data.replyTo) ? { replyTo: toRoomQuote(data.replyTo) } : {}),
+    // A GIF is shown only if its addresses are approved GIPHY ones; otherwise it is the plain text "GIF".
+    ...(data.kind === 'gif' && parseGifInfo(data.gif) ? { kind: 'gif' as const, gif: parseGifInfo(data.gif) as GifInfo } : {}),
     ...(toReactionCounts(data) ? { reactions: toReactionCounts(data) } : {}),
   };
 }
@@ -225,6 +228,56 @@ export async function sendPublicRoomMessage(prefs: UserPreferences, text: string
   } catch (err) {
     console.warn('[PublicRoom] Could not send:', err);
     return (err as FirestoreError)?.code === 'permission-denied' ? 'too-fast' : 'failed';
+  }
+}
+
+export type GifSendResult =
+  | { ok: true }
+  | { ok: false; reason: 'too-fast' | 'not-allowed' | 'gone' | 'unavailable' | 'failed' };
+
+/** Words for a GIF that could not be sent to the room. */
+export function roomGifProblemText(reason: Exclude<GifSendResult, { ok: true }>['reason']): string {
+  switch (reason) {
+    case 'too-fast': return 'Slow down a little, then try again.';
+    case 'not-allowed': return 'You cannot send GIFs right now.';
+    case 'gone': return 'That GIF is no longer available. Pick another one.';
+    case 'unavailable': return 'GIFs are unavailable right now.';
+    default: return "Couldn't send. Check your connection and try again.";
+  }
+}
+
+/**
+ * Sends a GIF to the room by its GIPHY id. The server checks the member, asks GIPHY for the GIF and writes the message, so
+ * no link ever comes from the app. `messageId` is chosen once per GIF the member picks, so a retry makes no second copy. The
+ * message then arrives through the same live feed as every other room message.
+ */
+export async function sendRoomGif(gifId: string, messageId: string): Promise<GifSendResult> {
+  try {
+    const user = auth?.currentUser ?? (await ensureAnonymousAuth());
+    if (!user) return { ok: false, reason: 'failed' };
+    const token = await user.getIdToken();
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 20_000);
+    try {
+      const response = await fetch('/api/room', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send-gif', gifId, messageId }),
+        signal: controller.signal,
+      });
+      if (response.ok) return { ok: true };
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (data.error === 'too_fast' || data.error === 'rate_limited') return { ok: false, reason: 'too-fast' };
+      if (data.error === 'not_allowed' || data.error === 'account_unavailable') return { ok: false, reason: 'not-allowed' };
+      if (data.error === 'gif_not_found' || data.error === 'invalid_gif') return { ok: false, reason: 'gone' };
+      if (data.error === 'gif_not_configured') return { ok: false, reason: 'unavailable' };
+      return { ok: false, reason: 'failed' };
+    } finally {
+      window.clearTimeout(timer);
+    }
+  } catch (err) {
+    console.warn('[PublicRoom] Could not send GIF:', err);
+    return { ok: false, reason: 'failed' };
   }
 }
 
