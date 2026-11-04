@@ -52,8 +52,8 @@ export const PostCardSkeleton: React.FC = () => (
 /** A member's profile while it loads: avatar, name and age line, details, bio, an About card and their posts. */
 export const ProfileSkeleton: React.FC = () => (
   <div role="status" aria-busy="true" aria-label="Loading profile" className="px-4 sm:px-6">
-    <Skeleton className="-mt-12 h-24 w-24 !rounded-full ring-4 ring-ink" />
-    <Skeleton className="mt-3 h-[26px] w-48 max-w-[70%]" />
+    <Skeleton className="-mt-10 h-20 w-20 !rounded-full ring-4 ring-ink" />
+    <Skeleton className="mt-3 h-[24px] w-48 max-w-[70%]" />
     <Skeleton className="mt-2.5 h-3.5 w-40 max-w-[60%]" />
     <div className="mt-4 space-y-2">
       <Skeleton className="h-4 w-full" />

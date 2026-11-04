@@ -14,6 +14,7 @@ import type { LookingForPost } from '../utils/lookingFor.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 import {
   aboutDetails,
+  formatMemberSince,
   identityLine,
   ownerVisibility,
   profileAction,
@@ -166,6 +167,7 @@ export const ProfilePage: React.FC<Props> = ({
   const action: ProfileAction = data ? profileAction(data, lookingFor) : { kind: 'none' };
   const name = member?.displayName || 'Anonymous member';
   const cover = profileCover(member?.avatar, memberId);
+  const joined = formatMemberSince(member?.memberSince);
   const details = member ? aboutDetails(member, intentionLabel(member.intention)) : [];
   const line = member ? identityLine(member, age) : '';
   const showBar = !isSelf && data !== null && action.kind !== 'none';
@@ -198,8 +200,8 @@ export const ProfilePage: React.FC<Props> = ({
       </header>
 
       <div className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto w-full max-w-xl pb-[calc(env(safe-area-inset-bottom)+7.5rem)]">
-          <div className="h-36 w-full sm:mt-4 sm:h-44 sm:overflow-hidden sm:rounded-3xl" style={{ backgroundImage: cover }} aria-hidden="true" />
+        <div className="mx-auto w-full max-w-xl md:max-w-2xl pb-[calc(env(safe-area-inset-bottom)+7.5rem)]">
+          <div className="h-28 w-full sm:mt-4 sm:h-40 sm:overflow-hidden sm:rounded-3xl" style={{ backgroundImage: cover }} aria-hidden="true" />
 
           {load === null ? (
             <ProfileSkeleton />
@@ -220,27 +222,44 @@ export const ProfilePage: React.FC<Props> = ({
             </div>
           ) : member ? (
             <div className="px-4 sm:px-6">
-              <AnimalAvatar avatar={member.avatar ?? undefined} seed={memberId} className="-mt-12 h-24 w-24 ring-4 ring-ink" />
-              <h1 className="mt-3 text-[length:calc(26px_*_var(--fs,1))] font-semibold leading-tight tracking-tight text-fg [overflow-wrap:anywhere]">{name}</h1>
+              <div className="-mt-10 flex items-end justify-between gap-3">
+                <AnimalAvatar avatar={member.avatar ?? undefined} seed={memberId} className="h-20 w-20 shrink-0 ring-4 ring-ink shadow-lg shadow-black/30" />
+                {isSelf && (
+                  <div className="flex items-center gap-2 pb-1">
+                    <button type="button" onClick={onEditProfile} className="btn btn-primary btn-sm"><Pencil className="h-4 w-4" /> Edit profile</button>
+                    <button type="button" onClick={() => void share()} aria-label="Share profile" title="Share profile" className="btn btn-secondary btn-sm !px-3"><Share2 className="h-4 w-4" /></button>
+                  </div>
+                )}
+              </div>
+              <h1 className="mt-3 text-[length:calc(24px_*_var(--fs,1))] font-semibold leading-tight tracking-tight text-fg [overflow-wrap:anywhere]">{name}</h1>
               {(line || member.location) && (
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[length:calc(14px_*_var(--fs,1))] text-muted">
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[length:calc(14px_*_var(--fs,1))] text-muted">
                   {line && <span>{line}</span>}
+                  {line && member.location && <span aria-hidden="true" className="text-line-strong">·</span>}
                   {member.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" aria-hidden="true" /> {member.location}</span>}
-                </p>
-              )}
-              {stardustTotal !== null && (
-                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-lavender/25 bg-lavender/10 px-2.5 py-1 text-[length:calc(13px_*_var(--fs,1))] font-semibold text-lavender">
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> <span className="tabular-nums">{stardustTotal}</span> Stardust
                 </p>
               )}
               {member.about && <p className="mt-3 whitespace-pre-wrap text-[length:calc(15px_*_var(--fs,1))] leading-relaxed text-fg [overflow-wrap:anywhere]">{member.about}</p>}
 
+              {(stardustTotal !== null || joined) && (
+                <dl className={`mt-4 grid divide-x divide-line/60 overflow-hidden rounded-2xl border border-line bg-raised/50 ${stardustTotal !== null && joined ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {stardustTotal !== null && (
+                    <div className="px-3.5 py-3">
+                      <dd className="flex items-center gap-1.5 text-[length:calc(18px_*_var(--fs,1))] font-semibold leading-none text-lavender"><Sparkles className="h-4 w-4" aria-hidden="true" /><span className="tabular-nums">{stardustTotal}</span></dd>
+                      <dt className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">Stardust</dt>
+                    </div>
+                  )}
+                  {joined && (
+                    <div className="px-3.5 py-3">
+                      <dd className="text-[length:calc(18px_*_var(--fs,1))] font-semibold leading-none text-fg" title={`Member since ${joined.since}`}>{joined.short}<span className="sr-only"> (member since {joined.since})</span></dd>
+                      <dt className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">{joined.duration}</dt>
+                    </div>
+                  )}
+                </dl>
+              )}
+
               {isSelf && (
-                <div className="mt-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={onEditProfile} className="btn btn-primary btn-sm"><Pencil className="h-4 w-4" /> Edit profile</button>
-                    <button type="button" onClick={() => void share()} className="btn btn-secondary btn-sm"><Share2 className="h-4 w-4" /> Share profile</button>
-                  </div>
+                <div className="mt-4">
                   <div className="rounded-2xl border border-line bg-raised/50 p-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-[0.14em] text-subtle">What others can see</p>

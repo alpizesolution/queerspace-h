@@ -58,7 +58,7 @@ test('another member\'s profile shows only what they shared, and never a birthda
   assert.equal(m.showsAge, true, 'it says an age may be asked for, but does not contain it');
   const json = JSON.stringify(res.body);
   for (const secret of ['birthDate', 'Secret Street', 'exactLocation', 'blockedPartnerIds', '"age"']) assert.equal(json.includes(secret), false, secret);
-  assert.deepEqual(Object.keys(m).sort(), ['about', 'avatar', 'displayName', 'expression', 'id', 'identity', 'intention', 'interests', 'location', 'orientation', 'pronouns', 'showsAge', 'style', 'vibe']);
+  assert.deepEqual(Object.keys(m).sort(), ['about', 'avatar', 'displayName', 'expression', 'id', 'identity', 'intention', 'interests', 'location', 'memberSince', 'orientation', 'pronouns', 'showsAge', 'style', 'vibe']);
 });
 
 test('location and each identity field follow the member\'s own switches, including older profiles with one switch', { skip }, async () => {
@@ -242,4 +242,29 @@ test('only known GET views are accepted; an unknown one is refused, and the plai
   assert.equal(unknown.body.error, 'invalid_view');
   const plain = await run(signals, viewer, {});
   assert.equal(plain.statusCode, 200, 'no view still lists invitations, as before');
+});
+
+test("member since: the earlier trusted creation date, the same for your own page and a visitor's page, never the last update, and null when unknown", { skip }, async () => {
+  const { db, Timestamp, member, view } = await setup();
+  const viewer = await member();
+  const day = (iso) => Timestamp.fromDate(new Date(iso));
+  // A newer account: both records agree. The profile was edited recently, which must not matter.
+  const fresh = await member({ settings: { createdAt: day('2026-09-10T08:00:00Z') }, profile: { createdAt: day('2026-09-10T08:00:05Z'), updatedAt: day('2026-11-01T00:00:00Z') } });
+  assert.equal((await view(viewer, fresh.uid)).body.member.memberSince, '2026-09-10T08:00:00.000Z', 'the earlier of the two');
+  assert.equal((await view(fresh, fresh.uid)).body.member.memberSince, '2026-09-10T08:00:00.000Z', 'your own page says the same');
+  // An older account whose public profile was only stamped when it was first edited: the private record has the true start.
+  const older = await member({ settings: { createdAt: day('2025-03-02T00:00:00Z') }, profile: { createdAt: day('2026-06-01T00:00:00Z') } });
+  assert.equal((await view(viewer, older.uid)).body.member.memberSince, '2025-03-02T00:00:00.000Z');
+  // One record missing: the other is used. Both missing, or unreadable or future values: nothing, and the page still loads.
+  const onlyProfile = await member({ profile: { createdAt: day('2025-12-24T00:00:00Z') } });
+  assert.equal((await view(viewer, onlyProfile.uid)).body.member.memberSince, '2025-12-24T00:00:00.000Z');
+  const none = await member();
+  assert.equal((await view(viewer, none.uid)).statusCode, 200);
+  assert.equal((await view(viewer, none.uid)).body.member.memberSince, null);
+  const junk = await member({ settings: { createdAt: 'yesterday' }, profile: { createdAt: Timestamp.fromMillis(Date.now() + 400 * 24 * 3600 * 1000) } });
+  assert.equal((await view(viewer, junk.uid)).body.member.memberSince, null);
+  assert.equal((await view(junk, junk.uid)).body.member.memberSince, null);
+  // Only the date leaves the server: nothing else from the private record.
+  const json = JSON.stringify((await view(viewer, older.uid)).body);
+  for (const secret of ['birthDate', 'Secret Street', 'exactLocation']) assert.equal(json.includes(secret), false, secret);
 });

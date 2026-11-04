@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   aboutDetails,
+  formatMemberSince,
   identityLine,
   isMemberId,
   classifyPostsFailure,
@@ -179,4 +180,30 @@ test('the section shows loading while fetching, and keeps listed posts when a la
   assert.equal(postsView({ loading: true, failed: false, count: 0 }), 'loading');
   assert.equal(postsView({ loading: true, failed: false, count: 3 }), 'list');
   assert.equal(postsView({ loading: false, failed: true, count: 3 }), 'list', 'a failed "show more" does not wipe the posts');
+});
+
+test('formatMemberSince: a friendly date and a duration that follow the clock', () => {
+  const now = Date.UTC(2026, 10, 4, 12);
+  assert.deepEqual(formatMemberSince('2025-11-02T00:00:00.000Z', now), { since: 'November 2025', short: 'Nov 2025', duration: 'Member for 1 year' });
+  assert.equal(formatMemberSince('2025-11-05T00:00:00.000Z', now)?.duration, 'Member for 11 months', 'not yet a whole year');
+  assert.equal(formatMemberSince('2023-01-15T00:00:00.000Z', now)?.duration, 'Member for 3 years');
+  assert.equal(formatMemberSince('2026-09-30T00:00:00.000Z', now)?.duration, 'Member for 1 month');
+  assert.equal(formatMemberSince('2026-10-20T00:00:00.000Z', now)?.duration, 'New member');
+  assert.equal(formatMemberSince('2026-11-04T08:00:00.000Z', now)?.duration, 'New member', 'joined today');
+  // The same date reads differently as time passes.
+  assert.equal(formatMemberSince('2025-11-02T00:00:00.000Z', Date.UTC(2027, 10, 4))?.duration, 'Member for 2 years');
+});
+
+test('formatMemberSince: a missing, unreadable, future or implausibly old date shows nothing instead of a wrong claim', () => {
+  const now = Date.UTC(2026, 10, 4);
+  for (const bad of [null, undefined, '', 'yesterday', 'not-a-date', '2026-12-30T00:00:00.000Z', '1999-01-01T00:00:00.000Z', 12345 as unknown as string]) assert.equal(formatMemberSince(bad, now), null, String(bad));
+  assert.ok(formatMemberSince('2026-11-05T00:00:00.000Z', now), 'a few hours ahead (clock skew) is tolerated');
+});
+
+test('parseProfileResponse accepts older answers without memberSince, and rejects a malformed one', () => {
+  const answer = validAnswer();
+  assert.ok(parseProfileResponse(answer), 'an older server sends no memberSince');
+  assert.ok(parseProfileResponse({ ...answer, member: { ...answer.member, memberSince: '2025-11-02T00:00:00.000Z' } }));
+  assert.ok(parseProfileResponse({ ...answer, member: { ...answer.member, memberSince: null } }));
+  assert.equal(parseProfileResponse({ ...answer, member: { ...answer.member, memberSince: 20251102 } }), null);
 });

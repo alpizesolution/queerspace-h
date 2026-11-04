@@ -24,6 +24,8 @@ export interface MemberProfile {
   expression: string[];
   /** Whether an age may be asked for (connected members only); the age itself is a separate, trusted request. */
   showsAge: boolean;
+  /** When the member joined (ISO date), from the server's trusted timestamps. Absent from older answers, null when unknown. */
+  memberSince?: string | null;
 }
 
 export type RelationState = 'self' | 'none' | 'request_sent' | 'request_received' | 'declined' | 'connected';
@@ -91,6 +93,28 @@ export function aboutDetails(member: MemberProfile, intentionLabel: string | nul
   return rows;
 }
 
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/**
+ * How long someone has been a member, from the date the server gave. Always worked out from `now`, so it stays right as time
+ * passes. Returns null for a missing, unreadable, future or implausibly old date, so the page simply shows nothing instead of
+ * a wrong claim.
+ */
+export function formatMemberSince(iso: string | null | undefined, now: number = Date.now()): { since: string; short: string; duration: string } | null {
+  if (typeof iso !== 'string') return null;
+  const joined = new Date(iso);
+  const ms = joined.getTime();
+  if (!Number.isFinite(ms) || ms > now + 24 * 60 * 60 * 1000 || joined.getUTCFullYear() < 2020) return null;
+  const current = new Date(now);
+  let months = (current.getUTCFullYear() - joined.getUTCFullYear()) * 12 + (current.getUTCMonth() - joined.getUTCMonth());
+  if (current.getUTCDate() < joined.getUTCDate()) months -= 1;
+  months = Math.max(0, months);
+  const years = Math.floor(months / 12);
+  const duration = years >= 1 ? `Member for ${years} ${years === 1 ? 'year' : 'years'}` : months >= 1 ? `Member for ${months} ${months === 1 ? 'month' : 'months'}` : 'New member';
+  const month = MONTHS[joined.getUTCMonth()];
+  return { since: `${month} ${joined.getUTCFullYear()}`, short: `${month.slice(0, 3)} ${joined.getUTCFullYear()}`, duration };
+}
+
 /** What an owner has chosen to show, for the "visible to others" summary on their own page. */
 export function ownerVisibility(prefs: Pick<UserPreferences, 'showAgeOnProfile' | 'showLocationOnProfile' | 'showSexualOrientationOnProfile' | 'showGenderIdentityOnProfile' | 'showGenderExpressionOnProfile'>): { label: string; shown: boolean; hint: string }[] {
   const identityShared = [prefs.showSexualOrientationOnProfile, prefs.showGenderIdentityOnProfile, prefs.showGenderExpressionOnProfile].filter(Boolean).length;
@@ -144,6 +168,7 @@ export function parseProfileResponse(data: unknown): ProfileResponse | null {
   if (!Array.isArray(member.interests) || !member.interests.every((v) => typeof v === 'string')) return null;
   if (!Array.isArray(member.expression) || !member.expression.every((v) => typeof v === 'string')) return null;
   if (typeof member.showsAge !== 'boolean') return null;
+  if (member.memberSince !== undefined && !isStringOrNull(member.memberSince)) return null;
   return raw as unknown as ProfileResponse;
 }
 
