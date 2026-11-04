@@ -3,6 +3,7 @@
  * sent, and reacting before the server has answered. Kept free of React and the network so they can be tested.
  */
 
+import { parseGifInfo, type GifInfo } from './gif.ts';
 import type { PhotoInfo } from './timedPhoto.ts';
 
 export type Reaction = { emoji: string; count: number; userReacted: boolean };
@@ -15,8 +16,10 @@ export type ThreadMessage = {
   replyTo?: { messageId: string; senderId: string; text: string } | null;
   reactions?: Reaction[];
   /** A timed photo: its timer and state. The picture itself is never part of the thread. */
-  kind?: 'photo';
+  kind?: 'photo' | 'gif';
   photo?: PhotoInfo;
+  /** A GIPHY GIF: the approved addresses and size. Sent by id; the server supplies the rest. */
+  gif?: GifInfo;
 };
 
 export type PendingStatus = 'sending' | 'failed';
@@ -25,6 +28,8 @@ export type PendingStatus = 'sending' | 'failed';
 export type PendingMessage = {
   id: string;
   text: string;
+  /** Set for a GIF: it is sent by this GIF's id and shown as the GIF while it sends. */
+  gif?: GifInfo;
   replyTo: { messageId: string; text: string; sender: 'self' | 'partner'; senderId: string } | null;
   status: PendingStatus;
   /** Why it failed, in words for the member. */
@@ -39,11 +44,24 @@ export type ShownMessage = ThreadMessage & { pending?: PendingMessage };
 const timeOf = (m: { createdAt: string | null }) => (m.createdAt ? Date.parse(m.createdAt) : Number.POSITIVE_INFINITY);
 
 /**
+ * A GIF message is shown only if its picture addresses are approved GIPHY ones. Otherwise it is treated as plain text
+ * ("GIF"), so a wrong record can never make the app load another site's image.
+ */
+export function checkedGif(message: ThreadMessage): ThreadMessage {
+  if (message.kind !== 'gif') return message;
+  const gif = parseGifInfo(message.gif);
+  if (gif) return { ...message, gif };
+  const { kind: _kind, gif: _gif, ...rest } = message;
+  return rest;
+}
+
+/**
  * Folds messages from the server into the list: a message already shown is replaced in place (a reaction changed),
  * a new one is placed by its time. Nothing is ever dropped, so a slow or out-of-order poll cannot remove a message.
  */
-export function mergeMessages(current: ThreadMessage[], incoming: ThreadMessage[]): ThreadMessage[] {
-  if (!incoming.length) return current;
+export function mergeMessages(current: ThreadMessage[], received: ThreadMessage[]): ThreadMessage[] {
+  if (!received.length) return current;
+  const incoming = received.map(checkedGif);
   const next = current.slice();
   const index = new Map(next.map((m, i) => [m.id, i]));
   let changed = false;
@@ -72,6 +90,7 @@ export function visibleThread(server: ThreadMessage[], pending: PendingMessage[]
       id: p.id,
       senderId: selfId,
       text: p.text,
+      ...(p.gif ? { kind: 'gif' as const, gif: p.gif } : {}),
       createdAt: new Date(p.createdAt).toISOString(),
       replyTo: p.replyTo ? { messageId: p.replyTo.messageId, senderId: p.replyTo.senderId, text: p.replyTo.text } : null,
       reactions: [],
@@ -110,6 +129,7 @@ export function describeSendFailure(error: unknown): { message: string; retryabl
   const lower = text.toLowerCase();
   if (lower.includes('ended')) return { message: 'This connection has ended.', retryable: false };
   if (lower.includes('no longer message')) return { message: text, retryable: false };
+  if (lower.includes('no longer available')) return { message: text, retryable: false };
   if (lower.includes('temporarily unavailable for this account')) return { message: text, retryable: false };
   if (error instanceof DOMException && error.name === 'AbortError') {
     return { message: 'This is taking too long. Check your connection and try again.', retryable: true };

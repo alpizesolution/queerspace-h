@@ -5,7 +5,10 @@ import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { createRequestHandlers } from './_requests.js';
 import { profileView } from './_profiles.js';
 import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
+import { GIF_TEXT, createGiphy, isGifId, limitGifSearches, limitGifSends, parseGifQuery, shapeStoredGif } from './_giphy.js';
 import { createPartnerCache, getOnePair, listPairsLegacy, listPairsPage, parsePageLimit, partnerSummaries, shapePair } from './_inbox.js';
+
+const giphy = createGiphy();
 
 const MAX_MESSAGE_LENGTH = 240;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -149,7 +152,16 @@ export default async function handler(req, res) {
       const view = req.query?.view || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('view');
       // No view means the invitations list, as always. A view this server does not know is an error, never that list, so a
       // newer app talking to an older server (or a typo) cannot be mistaken for a real answer.
-      if (view && !['messages', 'pairs', 'requests', 'profile'].includes(view)) return send(res, 400, { error: 'invalid_view' });
+      if (view && !['messages', 'pairs', 'requests', 'profile', 'gifs'].includes(view)) return send(res, 400, { error: 'invalid_view' });
+      if (view === 'gifs') {
+        // GIF search and trending for the picker. The key stays here; a suspended member gets nothing.
+        if ((await db.doc(`suspensions/${uid}`).get()).exists) return send(res, 403, { error: 'account_unavailable' });
+        const param = name => req.query?.[name] ?? new URL(req.url || '/api/signals', 'http://localhost').searchParams.get(name);
+        const query = parseGifQuery({ q: param('q'), limit: param('limit'), offset: param('offset') });
+        await limitGifSearches(db, uid);
+        res.setHeader('Cache-Control', 'private, no-store');
+        return send(res, 200, await giphy.browse(query));
+      }
       if (view === 'messages') {
         const pairId = req.query?.pairId || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('pairId');
         if (!safeId(pairId)) return send(res, 400, { error: 'invalid_request' });
@@ -192,6 +204,8 @@ export default async function handler(req, res) {
             text: data.text,
             // A timed photo: its timer and state only, never where the image is kept.
             ...(data.kind === 'photo' ? { kind: 'photo', photo: photos.get(snap.id) ?? { durationSec: data.durationSec, status: 'expired', mine: data.senderId === uid } } : {}),
+            // A GIF: only the approved GIPHY addresses saved with it. A record that fails the check is shown as plain text.
+            ...(data.kind === 'gif' && shapeStoredGif(data.gif) ? { kind: 'gif', gif: shapeStoredGif(data.gif) } : {}),
             createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
             replyTo: data.replyTo && typeof data.replyTo === 'object' ? {
               messageId: data.replyTo.messageId,
@@ -399,7 +413,16 @@ export default async function handler(req, res) {
 
     if (action === 'send-message') {
       const pairId = req.body?.pairId;
-      const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      const kind = req.body?.kind;
+      if (kind !== undefined && kind !== 'text' && kind !== 'gif') return send(res, 400, { error: 'invalid_message' });
+      const isGif = kind === 'gif';
+      // A GIF is sent by its GIPHY id alone. A link, or anything else about the GIF, is never taken from the app.
+      const gifId = req.body?.gifId;
+      if (isGif && (!isGifId(gifId) || ['gif', 'url', 'gifUrl', 'text'].some(field => req.body[field] !== undefined))) {
+        return send(res, 400, { error: 'invalid_gif' });
+      }
+      if (!isGif && req.body?.gifId !== undefined) return send(res, 400, { error: 'invalid_message' });
+      const text = isGif ? GIF_TEXT : typeof req.body?.text === 'string' ? req.body.text.trim() : '';
       const replyToInput = req.body?.replyTo;
       // The app picks the message id up front, so a retry after a dropped connection can't create a second copy.
       const requestedId = req.body?.messageId;
@@ -436,23 +459,38 @@ export default async function handler(req, res) {
       }
       const messageRef = pairRef.collection('messages').doc(requestedId ?? randomUUID());
       const stamp = FieldValue.serverTimestamp();
+      const replyBody = stored => (stored?.replyTo ? { ...stored.replyTo, senderId: stored.replyTo.sender === 'self' ? uid : otherUid } : null);
+      let gif = null;
+      if (isGif) {
+        // Only after the pair, block and suspension checks above, so nobody can spend GIPHY quota without being allowed to send.
+        const earlier = requestedId ? await messageRef.get() : null;
+        if (earlier?.exists) {
+          const prior = earlier.data();
+          const priorGif = shapeStoredGif(prior.gif);
+          if (prior.senderId !== uid || prior.kind !== 'gif' || !priorGif) return send(res, 409, { error: 'invalid_message' });
+          return send(res, 200, { id: messageRef.id, senderId: uid, text: GIF_TEXT, kind: 'gif', gif: priorGif, replyTo: replyBody(prior), reactions: [], createdAt: prior.createdAt?.toDate?.().toISOString?.() || new Date().toISOString() });
+        }
+        await limitGifSends(db, uid);
+        gif = await giphy.byId(gifId);
+      }
       try {
         // The message and the recipient's unread counter commit together. A retried send fails on create(), so the
         // whole batch is rejected and the counter is never incremented twice for one message.
         const batch = db.batch();
-        batch.create(messageRef, { senderId: uid, text, ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
+        batch.create(messageRef, { senderId: uid, text, ...(gif ? { kind: 'gif', gif } : {}), ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
         batch.set(db.doc(`signalsInbox/${otherUid}`), { unread: { [pairId]: FieldValue.increment(1) } }, { merge: true });
         await batch.commit();
       } catch (error) {
         // ALREADY_EXISTS: this exact send already went through (a retry). Answer with what was stored, never a copy.
         if (error?.code !== 6) throw error;
         const stored = (await messageRef.get()).data();
-        if (stored?.senderId !== uid) return send(res, 409, { error: 'invalid_message' });
+        if (stored?.senderId !== uid || (isGif && stored.kind !== 'gif')) return send(res, 409, { error: 'invalid_message' });
         return send(res, 200, {
           id: messageRef.id,
           senderId: uid,
           text: stored.text,
-          replyTo: stored.replyTo ? { ...stored.replyTo, senderId: stored.replyTo.sender === 'self' ? uid : otherUid } : null,
+          ...(stored.kind === 'gif' && shapeStoredGif(stored.gif) ? { kind: 'gif', gif: shapeStoredGif(stored.gif) } : {}),
+          replyTo: replyBody(stored),
           reactions: [],
           createdAt: stored.createdAt?.toDate?.().toISOString?.() || new Date().toISOString(),
         });
@@ -461,6 +499,7 @@ export default async function handler(req, res) {
         id: messageRef.id,
         senderId: uid,
         text,
+        ...(gif ? { kind: 'gif', gif } : {}),
         replyTo: replyTo ? { ...replyTo, senderId: replyTo.sender === 'self' ? uid : otherUid } : null,
         reactions: [],
         createdAt: new Date().toISOString(),
