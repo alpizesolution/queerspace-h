@@ -241,20 +241,18 @@ export const ProfilePage: React.FC<Props> = ({
               )}
               {member.about && <p className="mt-3 whitespace-pre-wrap text-[length:calc(15px_*_var(--fs,1))] leading-relaxed text-fg [overflow-wrap:anywhere]">{member.about}</p>}
 
-              {(stardustTotal !== null || joined) && (
-                <dl className={`mt-4 grid divide-x divide-line/60 overflow-hidden rounded-2xl border border-line bg-raised/50 ${stardustTotal !== null && joined ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  {stardustTotal !== null && (
-                    <div className="px-3.5 py-3">
-                      <dd className="flex items-center gap-1.5 text-[length:calc(18px_*_var(--fs,1))] font-semibold leading-none text-lavender"><Sparkles className="h-4 w-4" aria-hidden="true" /><span className="tabular-nums">{stardustTotal}</span></dd>
-                      <dt className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">Stardust</dt>
-                    </div>
-                  )}
-                  {joined && (
-                    <div className="px-3.5 py-3">
-                      <dd className="text-[length:calc(18px_*_var(--fs,1))] font-semibold leading-none text-fg" title={`Member since ${joined.since}`}>{joined.short}<span className="sr-only"> (member since {joined.since})</span></dd>
-                      <dt className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">{joined.duration}</dt>
-                    </div>
-                  )}
+              {joined && (
+                <p className="mt-2 text-[length:calc(12px_*_var(--fs,1))] text-subtle" title={`Member since ${joined.since}`}>
+                  <span aria-hidden="true">✦ </span>Member since {joined.since}<span aria-hidden="true"> · </span><span className="sr-only">, </span>{joined.duration.replace('Member for ', '')}
+                </p>
+              )}
+
+              {stardustTotal !== null && (
+                <dl className="mt-4 overflow-hidden rounded-2xl border border-line bg-raised/50">
+                  <div className="px-3.5 py-3">
+                    <dd className="flex items-center gap-1.5 text-[length:calc(18px_*_var(--fs,1))] font-semibold leading-none text-lavender"><Sparkles className="h-4 w-4" aria-hidden="true" /><span className="tabular-nums">{stardustTotal}</span></dd>
+                    <dt className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">Stardust</dt>
+                  </div>
                 </dl>
               )}
 
