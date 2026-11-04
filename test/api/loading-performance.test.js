@@ -100,7 +100,7 @@ test('remembered profile data is only what the server already allowed, only for 
   assert.match(profileService, /export function peekMemberProfile\(memberId: string, now: number = Date\.now\(\)\)/);
   assert.match(profileService, /now - hit\.at < PROFILE_CACHE_MS/);
   assert.match(profileService, /if \(isOwn\(memberId\)\) return null;/, 'your own posts are always read fresh');
-  assert.match(profileService, /else if \(after === null && !isOwn\(memberId\)\) postsCache\.set/);
+  assert.match(profileService, /else if \(after === null && !isOwn\(memberId\) && outcome\.page\.posts\.length > 0\) postsCache\.set/, 'an empty answer is never remembered');
   assert.match(profileService, /if \(!isOwn\(memberId\)\) lookingForCache\.set/);
   assert.doesNotMatch(profileService, /allowStale|stale/i, 'a stale profile is never shown, so a changed privacy choice or a block takes effect');
   assert.match(profileService, /postsCache\.clear\(\);\s*lookingForCache\.clear\(\);/, 'cleared with the profile cache');
