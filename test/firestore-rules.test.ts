@@ -980,6 +980,38 @@ test('GIF-02: no client, member or admin, can create or edit a room GIF message;
   stop();
 });
 
+test('AR-01: only an admin can allow another birthday try; only that member can use it up; nobody can list them', async () => {
+  await seedAdmin();
+  const cha = adminDb();
+  const ana = testEnv.authenticatedContext('ana').firestore();
+  const ben = testEnv.authenticatedContext('ben').firestore();
+  const grant = (extra: Record<string, unknown> = {}) => ({ clearedBy: 'cha', clearedAt: now(), reportId: 'r1', ...extra });
+
+  // Members, even the locked one, cannot give themselves (or anyone) another try.
+  await assertFails(ana.doc('age_review_clearances/ana').set(grant({ clearedBy: 'ana' })));
+  await assertFails(ben.doc('age_review_clearances/ana').set(grant({ clearedBy: 'ben' })));
+  // An admin who is not signed in with Google is not an admin.
+  await assertFails(testEnv.authenticatedContext('cha').firestore().doc('age_review_clearances/ana').set(grant()));
+  // The admin grant must be signed with their own id and the server time, and carry nothing extra.
+  await assertFails(cha.doc('age_review_clearances/ana').set(grant({ clearedBy: 'someone-else' })));
+  await assertFails(cha.doc('age_review_clearances/ana').set(grant({ clearedAt: new Date() })));
+  await assertFails(cha.doc('age_review_clearances/ana').set(grant({ birthDate: '2000-01-01' })));
+  await assertSucceeds(cha.doc('age_review_clearances/ana').set(grant()));
+
+  // Only the member it is for (and the admin) can see it; no one can list them.
+  await assertSucceeds(ana.doc('age_review_clearances/ana').get());
+  await assertFails(ben.doc('age_review_clearances/ana').get());
+  await assertFails(cha.collection('age_review_clearances').get());
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('age_review_clearances/ana').get());
+
+  // The member cannot edit it, another member cannot use it up, and the member can.
+  await assertFails(ana.doc('age_review_clearances/ana').update({ clearedBy: 'ana' }));
+  await assertFails(ben.doc('age_review_clearances/ana').delete());
+  await assertSucceeds(ana.doc('age_review_clearances/ana').delete());
+  // Used up: it is gone, so a second birthday failure locks them again until an admin allows another try.
+  assert.equal((await assertSucceeds(ana.doc('age_review_clearances/ana').get())).exists, false);
+});
+
 test('RX-01: Room reactions CAN be added once per person, changed only by one counter, and removed', async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await ctx.firestore().doc('public_room_messages/m1').set({ ...roomMessage('alice'), timestamp: new Date() });
