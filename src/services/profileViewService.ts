@@ -168,7 +168,9 @@ export function fetchMemberCommunityPosts(memberId: string, after: QueryDocument
     })()));
     // A success with no posts is an empty profile and is not logged; only a real failure is.
     if (!outcome.ok) console.warn('[Profile] Could not load posts:', outcome.reason);
-    else if (after === null && !isOwn(memberId)) postsCache.set(memberId, { at: Date.now(), page: outcome.page });
+    // An empty answer is never remembered: it is the one answer that goes wrong the moment the member posts, and a profile
+    // that says "No public posts yet" for a minute after that is simply false. Asking again costs one cheap read.
+    else if (after === null && !isOwn(memberId) && outcome.page.posts.length > 0) postsCache.set(memberId, { at: Date.now(), page: outcome.page });
     return outcome;
   })();
   if (after !== null) return load;
