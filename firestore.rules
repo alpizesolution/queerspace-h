@@ -719,6 +719,21 @@ service cloud.firestore {
       allow update: if isAdminStatusChange(reportStatuses());
     }
 
+    // An admin lets a member whose birthday locked them out (an age-review report) try the birthday step once more. It only
+    // brings the form back: access still depends on a saved adult birthday (isAgeEligible), which the member's own device
+    // writes and the rules check. The member consumes the clearance (deletes it) the moment it is used, so one clearance is
+    // one retry. Nobody lists them.
+    match /age_review_clearances/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['clearedBy', 'clearedAt'])
+        && request.resource.data.keys().hasOnly(['clearedBy', 'clearedAt', 'reportId'])
+        && request.resource.data.clearedBy == request.auth.uid
+        && request.resource.data.clearedAt == request.time
+        && (!('reportId' in request.resource.data) || (request.resource.data.reportId is string && request.resource.data.reportId.size() <= 128));
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
     // ====================================================
     // 5b. ECHOES / UNSAID WALL (anonymous; stays until the author deletes it or moderation removes it)
     // ====================================================

@@ -4,6 +4,7 @@ import { deleteInboxItem, loadDisplayName, setInboxStatus } from '../services/ad
 import type { AdminReport, AdminSuggestion, ReportStatus, SuggestionStatus } from '../services/adminInboxService.ts';
 import { liftSuspension, loadSuspensions, suspendUser, type Suspension } from '../services/suspensionService.ts';
 import { needsCrisisSupport } from '../services/unsaidService.ts';
+import { grantAgeReviewClearance } from '../services/ageReviewService.ts';
 import { isAgeReview } from '../utils/ageReview.ts';
 import { AgeReviewHelp, AgeReviewTag } from './AgeReviewMarks.tsx';
 
@@ -317,6 +318,17 @@ export const ReportsPage: React.FC<PageProps<AdminReport> & { onOpenSupport: (ui
       },
     });
 
+  const confirmAllowRetry = (r: AdminReport) =>
+    onConfirm({
+      title: 'Allow another try?',
+      message: 'The birthday form comes back for this member, once. Their birthday still can’t be checked here, and access only opens if they enter an adult birthday. This report is marked resolved.',
+      confirmLabel: 'Allow another try',
+      run: async () => {
+        if (!(await grantAgeReviewClearance(r.targetId, r.id))) throw new Error('Could not allow another try');
+        await setInboxStatus('reports', r.id, 'resolved');
+      },
+    });
+
   const setStatus = (r: AdminReport, to: ReportStatus) => run(() => setInboxStatus('reports', r.id, to));
 
   return (
@@ -367,7 +379,7 @@ export const ReportsPage: React.FC<PageProps<AdminReport> & { onOpenSupport: (ui
                 <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-1 font-mono break-all">
                   {r.targetType === 'user' ? 'user' : 'id'}: {r.targetId}
                 </p>
-                {r.targetType === 'user' && isAgeReview(r.reason) && <AgeReviewHelp onOpenSupport={() => onOpenSupport(r.targetId)} />}
+                {r.targetType === 'user' && isAgeReview(r.reason) && <AgeReviewHelp onOpenSupport={() => onOpenSupport(r.targetId)} onAllow={() => confirmAllowRetry(r)} />}
                 <div className="flex flex-wrap gap-2 mt-3">
                   {r.status === 'open' && (
                     <button onClick={() => setStatus(r, 'reviewing')} className="btn btn-secondary btn-sm">

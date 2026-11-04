@@ -37,7 +37,7 @@ import { SuspendedNotice } from './components/SuspendedNotice.tsx';
 import { CheckCircle2, RadioTower } from 'lucide-react';
 import { AgeEligibilityGate } from './components/AgeEligibilityGate.tsx';
 import { calculateAge, isAdultBirthDate } from './utils/ageEligibility.ts';
-import { submitAgeEligibilityReview } from './services/ageReviewService.ts';
+import { submitAgeEligibilityReview, watchAgeReviewClearance } from './services/ageReviewService.ts';
 
 import { AppearanceSettingsModal } from './components/AppearanceSettingsModal.tsx';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
@@ -228,6 +228,18 @@ export default function App() {
   const [ageGateOpen, setAgeGateOpen] = useState(() => !isAdultBirthDate(userPrefs.birthDate));
   const [ageRestricted, setAgeRestricted] = useState(() => getStorageItem('queerspace_age_restricted') === 'true');
   const [ageReviewSubmitted, setAgeReviewSubmitted] = useState(() => getStorageItem('queerspace_age_review_requested') === 'true');
+
+  // A locked member waits for the team: when an admin allows another try, the birthday form comes back (once).
+  useEffect(() => {
+    if (!ageRestricted) return;
+    return watchAgeReviewClearance(() => {
+      setAgeRestricted(false);
+      setAgeReviewSubmitted(false);
+      setStorageItem('queerspace_age_restricted', 'false');
+      setStorageItem('queerspace_age_review_requested', 'false');
+      setAgeGateOpen(true);
+    });
+  }, [ageRestricted]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
