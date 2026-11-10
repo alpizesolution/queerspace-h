@@ -3,31 +3,42 @@ import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import { cleanup, render } from '@testing-library/react';
-import { ReactionIcon, REACTION_ICON_PX } from './ReactionIcons.tsx';
+import { ReactionIcon, REACTION_ICON_PX, CRY_OUTLINE_SRC } from './ReactionIcons.tsx';
 import { UNSAID_REACTIONS } from '../services/unsaidService.ts';
 
 afterEach(cleanup);
 
-test('every one of the six reactions renders an SVG icon of the same size, hidden from screen readers', () => {
+const DRAWN = UNSAID_REACTIONS.filter((t) => t !== 'cry');
+
+test('every one of the six reactions renders an icon of the same 20px size, hidden from screen readers', () => {
   for (const type of UNSAID_REACTIONS) {
     const { container, unmount } = render(<ReactionIcon type={type} />);
-    const svg = container.firstElementChild as SVGElement;
-    assert.equal(svg.tagName.toLowerCase(), 'svg', `${type} is an SVG`);
-    assert.equal(svg.getAttribute('aria-hidden'), 'true', `${type} is decorative`);
-    assert.equal(svg.getAttribute('focusable'), 'false');
-    assert.equal(svg.getAttribute('width'), String(REACTION_ICON_PX), `${type} width`);
-    assert.equal(svg.getAttribute('height'), String(REACTION_ICON_PX), `${type} height`);
+    const icon = container.firstElementChild as HTMLElement | SVGElement;
+    assert.ok(icon, `${type} renders`);
+    assert.equal(icon.getAttribute('aria-hidden'), 'true', `${type} is decorative`);
+    if (type === 'cry') {
+      const span = icon as HTMLElement;
+      assert.equal(span.tagName, 'SPAN');
+      assert.equal(span.style.width, `${REACTION_ICON_PX}px`);
+      assert.equal(span.style.height, `${REACTION_ICON_PX}px`);
+    } else {
+      assert.equal(icon.tagName.toLowerCase(), 'svg', `${type} is an SVG`);
+      assert.equal(icon.getAttribute('focusable'), 'false');
+      assert.equal(icon.getAttribute('width'), String(REACTION_ICON_PX), `${type} width`);
+      assert.equal(icon.getAttribute('height'), String(REACTION_ICON_PX), `${type} height`);
+    }
     unmount();
   }
 });
 
-test('every icon is thin monochrome line art: stroke in the current colour, nothing filled, nothing coloured', () => {
-  for (const type of UNSAID_REACTIONS) {
+test('the five drawn icons are thin monochrome line art: stroke in the current colour, nothing filled, nothing coloured', () => {
+  for (const type of DRAWN) {
     const { container, unmount } = render(<ReactionIcon type={type} />);
     const svg = container.querySelector('svg')!;
     assert.equal(svg.getAttribute('fill'), 'none', `${type}: unfilled`);
     assert.equal(svg.getAttribute('stroke'), 'currentColor', `${type}: takes the button colour (muted, accent, light or dark)`);
     assert.equal(svg.getAttribute('stroke-linecap'), 'round');
+    assert.equal(svg.getAttribute('stroke-width'), '1.5', `${type}: one thin weight`);
     const shapes = svg.querySelectorAll('path, circle, rect');
     assert.ok(shapes.length > 0, `${type}: has a drawing`);
     for (const shape of shapes) {
@@ -38,30 +49,20 @@ test('every icon is thin monochrome line art: stroke in the current colour, noth
   }
 });
 
-test('the line weight is thin and even: 1.5 in the 24-unit icons, and Crygago\'s is scaled to match at 20px', () => {
-  const weightAt20 = (type: (typeof UNSAID_REACTIONS)[number]) => {
-    const { container, unmount } = render(<ReactionIcon type={type} />);
-    const svg = container.querySelector('svg')!;
-    const box = Number(svg.getAttribute('viewBox')!.split(' ')[2]);
-    const px = (Number(svg.getAttribute('stroke-width')) * REACTION_ICON_PX) / box;
-    unmount();
-    return px;
-  };
-  for (const type of UNSAID_REACTIONS) {
-    const px = weightAt20(type);
-    assert.ok(px >= 1 && px <= 1.35, `${type}: about 1.0-1.3px on screen (is ${px.toFixed(2)})`);
-  }
-});
-
-test('Crygago is drawn in the original artwork\'s 96x96 space, with its face, brows and hands', () => {
+test('Crygago is the supplied line art, painted through a mask in the current colour (so it is muted, accent, light or dark like the rest)', () => {
   const { container } = render(<ReactionIcon type="cry" />);
-  const svg = container.querySelector('svg')!;
-  assert.equal(svg.getAttribute('viewBox'), '0 0 96 96');
-  assert.ok(svg.querySelectorAll('path').length >= 4);
+  const span = container.firstElementChild as HTMLElement;
+  assert.equal(CRY_OUTLINE_SRC, '/emoji/cry-outline.png');
+  assert.match(span.getAttribute('style') ?? '', /cry-outline\.png/);
+  assert.ok(span.className.split(' ').includes('bg-current'), 'filled with the current colour, shaped by the mask');
   assert.equal(container.querySelector('img'), null, 'not the colour image');
+  assert.equal(container.querySelector('svg'), null, 'not a re-drawing');
 });
 
-test('a class passed in is applied, so the icon can be placed without changing it', () => {
-  const { container } = render(<ReactionIcon type="same" className="extra" />);
-  assert.ok(container.querySelector('svg')!.getAttribute('class')!.includes('extra'));
+test('a class passed in is applied to every kind of icon', () => {
+  for (const type of ['same', 'cry'] as const) {
+    const { container, unmount } = render(<ReactionIcon type={type} className="extra" />);
+    assert.ok((container.firstElementChild as Element).getAttribute('class')!.includes('extra'), type);
+    unmount();
+  }
 });

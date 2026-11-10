@@ -17,19 +17,26 @@ test('the six reactions keep their identity: same ids, order and meaning, and Cr
   assert.ok(fs.existsSync('public/emoji/cry.webp'), 'the original Crygago is still there');
 });
 
-test('no colourful emoji glyph or image is drawn: every reaction is a line-art SVG icon', () => {
+test('no colourful emoji glyph or colour image is drawn in the row: every reaction is a one-colour line-art icon', () => {
   assert.match(row, /<ReactionIcon type=\{type\} \/>/);
   assert.doesNotMatch(row, /\{emoji\}|<img\b/, 'neither an emoji glyph nor the colour image is rendered in the row');
   assert.match(view, /import \{ ReactionIcon \} from '\.\/ReactionIcons\.tsx'/);
-  assert.doesNotMatch(icons, /<img\b|maskImage|url\(/, 'no raster is used for any icon');
+  assert.doesNotMatch(icons, /<img\b/, 'no <img>: nothing keeps its own colours');
 });
 
-test('Crygago is traced over its own artwork, in the artwork\'s 96x96 coordinates, not replaced by a generic icon', () => {
-  const cry = icons.slice(icons.indexOf('  cry: {'), icons.indexOf('export const ReactionIcon'));
-  assert.match(cry, /viewBox: '0 0 96 96'/, 'the artwork\'s own coordinate space');
-  assert.match(icons, /traced over the custom artwork \(public\/emoji\/cry\.webp, 96x96\)/);
-  assert.ok((cry.match(/<path /g) || []).length >= 4, 'face, brows, hands and fingers');
-  assert.ok(!fs.existsSync('public/emoji/cry-outline.png'), 'no leftover raster outline');
+test('Crygago is the supplied line art, made into a one-colour mask, not a re-drawing or a generic icon', () => {
+  assert.match(icons, /CRY_OUTLINE_SRC = '\/emoji\/cry-outline\.png'/);
+  assert.match(icons, /maskImage: mask/);
+  assert.match(icons, /bg-current/, 'painted in the button\'s colour, so it follows state and theme');
+  assert.ok(fs.existsSync('scripts/assets/cry-lineart-source.png'), 'the supplied artwork is kept');
+  assert.ok(fs.existsSync('scripts/make-cry-mask.py'), 'the mask can be regenerated from it');
+  assert.match(read('scripts/make-cry-mask.py'), /cry-lineart-source\.png/);
+  assert.ok(fs.existsSync('public/emoji/cry.webp'), 'the original colour artwork is untouched');
+  // The mask is single-colour line art: an RGBA PNG (shape in the alpha channel) with a transparent margin.
+  const png = fs.readFileSync('public/emoji/cry-outline.png');
+  assert.equal(png.subarray(1, 4).toString(), 'PNG');
+  assert.equal(png[25], 6, 'RGBA');
+  assert.ok(png.length < 40_000, 'a small asset');
 });
 
 test('colours follow the theme: muted lavender-gray at rest, accent lavender when chosen, transparent at all times', () => {
@@ -67,7 +74,7 @@ test('it stays accessible: a label with the count, pressed state, keyboard focus
   assert.match(row, /aria-label=\{`\$\{label\}, \$\{post\[type\]\}`\}/);
   assert.match(row, /focus-visible:ring-2 focus-visible:ring-berry\/60/);
   assert.match(row, /<button\b/, 'real buttons, so Enter and Space work');
-  assert.equal((icons.match(/aria-hidden="true"/g) || []).length, 1, 'the one SVG every icon uses is decorative');
+  assert.equal((icons.match(/aria-hidden="true"/g) || []).length, 2, 'both the SVG and the Crygago mask are decorative');
 });
 
 test('hover and press scale the drawing, one pop plays on the chosen reaction, and reduced motion switches it off', () => {

@@ -6,13 +6,13 @@ import type { UnsaidReaction } from '../services/unsaidService.ts';
  * order and meaning of every reaction are unchanged (see REACTIONS in UnsaidView.tsx). One thin stroke in currentColor, no
  * fills, so the colour comes from the button (muted at rest, accent when chosen, and both follow the light/dark theme).
  *
- *   hugs 🫂   same 🤍   felt 🥺   strong 💪   proud 🌈   cry 😭 (Crygago)
+ *   hugs 🫂   same 🤍   felt 🥺   strong 💪   proud 🌈 are drawn here as SVG; cry 😭 (Crygago) uses the supplied line art (below).
  */
 export const REACTION_ICON_PX = 20;
 
 type Drawing = { viewBox: string; strokeWidth: number; paths: React.ReactNode };
 
-const DRAWINGS: Record<UnsaidReaction, Drawing> = {
+const DRAWINGS: Record<Exclude<UnsaidReaction, 'cry'>, Drawing> = {
   // Two people holding each other: heads, shoulders, arms wrapping round the back.
   hugs: {
     viewBox: '0 0 24 24',
@@ -75,24 +75,38 @@ const DRAWINGS: Record<UnsaidReaction, Drawing> = {
       </>
     ),
   },
-  // Crygago, traced over the custom artwork (public/emoji/cry.webp, 96x96): the round face, the worried brows, both hands
-  // over the eyes. Drawn in the artwork's own coordinates; the weight is tuned so it still reads at 20px.
-  cry: {
-    viewBox: '0 0 96 96',
-    strokeWidth: 5,
-    paths: (
-      <>
-        <path d="M12 76A44 44 0 1 1 84 72" />
-        <path d="M16 36C22 29 32 25 46 25" />
-        <path d="M64 24C72 24 80 28 85 34" />
-        <path d="M24 90C16 74 18 56 30 47C35 43 41 44 44 48C49 41 57 38 64 41C70 37 78 40 80 46L84 70" />
-        <path d="M54 52L53 68M65 49L65 66" />
-      </>
-    ),
-  },
 };
 
+/**
+ * Crygago: the line art the team supplied (scripts/assets/cry-lineart-source.png), turned into a one-colour mask
+ * (public/emoji/cry-outline.png, made by scripts/make-cry-mask.py). It is painted in the button's current colour, so it is
+ * muted at rest, accent when chosen and follows the theme, exactly like the drawn icons. The original colour artwork,
+ * public/emoji/cry.webp, is left as it was.
+ */
+export const CRY_OUTLINE_SRC = '/emoji/cry-outline.png';
+
 export const ReactionIcon: React.FC<{ type: UnsaidReaction; className?: string }> = ({ type, className = '' }) => {
+  if (type === 'cry') {
+    const mask = `url(${CRY_OUTLINE_SRC})`;
+    return (
+      <span
+        aria-hidden="true"
+        className={`block shrink-0 bg-current ${className}`}
+        style={{
+          width: REACTION_ICON_PX,
+          height: REACTION_ICON_PX,
+          WebkitMaskImage: mask,
+          maskImage: mask,
+          WebkitMaskSize: 'contain',
+          maskSize: 'contain',
+          WebkitMaskRepeat: 'no-repeat',
+          maskRepeat: 'no-repeat',
+          WebkitMaskPosition: 'center',
+          maskPosition: 'center',
+        }}
+      />
+    );
+  }
   const { viewBox, strokeWidth, paths } = DRAWINGS[type];
   return (
     <svg
