@@ -59,31 +59,26 @@ test('a Looking For card previews: three-line intro, short Looking for summary, 
   assert.match(footer, /\{!mine && \(post\.requestsPaused[\s\S]*onClick=\{onRequest\}/);
   assert.match(footer, /Send Signal/);
   assert.doesNotMatch(footer.slice(footer.indexOf('{!mine'), footer.indexOf("Send Signal")), /expanded/, 'the action never depends on the open state');
-  assert.match(board, /<Badge>\{INTENTION_LABELS\[post\.intention\]\}<\/Badge>/, 'the intention is a badge');
+  assert.match(body, /INTENTION_LABELS\[intention\]/, 'the intention shows in the card meta line');
+  assert.match(board, /\{post\.isNsfw && <Badge tone="nsfw">NSFW<\/Badge>\}/, 'NSFW posts carry their badge');
   assert.match(board, /formatRelativeTime\(post\.timestamp\)/);
 });
 
-test('mature posts: the details control exists only on an open post, so expanding can never reveal anything', () => {
-  const start = board.search(/\)\s*:\s*\(\s*<SensitiveCover/);
-  assert.ok(start > 0);
-  const covered = board.slice(start, board.indexOf('</article>', start));
-  for (const leak of ['LookingForBody', 'ExpandableText', 'View details', 'Read more', 'post.intro', 'post.lookingFor', 'post.title', 'post.tags']) {
-    assert.equal(covered.includes(leak), false, `${leak} must not appear in the covered branch`);
-  }
-  assert.match(board, /presentation === 'open' \? \(\s*<LookingForBody/, 'the body is only mounted for an open post');
-  assert.match(covered, /onReveal=\{\(\) => reveal\(post\)\}/, 'reveal is its own separate action');
-  assert.match(read('src/components/SensitiveCover.tsx'), /Reveal content/);
+test('every board post mounts its real content, so the details control works the same for NSFW posts', () => {
+  assert.equal(board.includes('SensitiveCover'), false, 'no cover on the board');
+  assert.match(board, /<LookingForBody\s+post=\{post\}/);
   assert.equal(body.includes('Reveal content'), false, 'the details control has no reveal in it');
-  assert.equal(body.includes('nsfwPreference'), false, 'the preference logic stays in one place');
+  assert.equal(body.includes('nsfwPreference'), false, 'the preference logic stays out of the card body');
+  // Profile pages keep their cover, and mount the body only for an open post.
+  const profile = read('src/components/ProfileSections.tsx');
+  assert.match(profile, /presentation === 'open' \? \(\s*<LookingForBody/);
+  assert.match(profile, /SensitiveCover/);
 });
 
-test('previews never carry hidden text elsewhere: no titles, snippets or labels built from concealed fields', () => {
-  const start = board.search(/\)\s*:\s*\(\s*<SensitiveCover/);
-  const covered = board.slice(start, board.indexOf('</article>', start));
+test('previews never carry hidden text in labels, titles or data attributes', () => {
   assert.equal(/aria-label=\{[^}]*post\.(title|intro|lookingFor)/.test(board), false);
   assert.equal(/title=\{[^}]*post\.(title|intro|lookingFor)/.test(board), false);
-  assert.equal(/\bdata-[a-z-]+=\{[^}]*post\.(title|intro|lookingFor)/.test(board), false);
-  assert.ok(covered.length > 0);
+  assert.equal(/data-[a-z-]+=\{[^}]*post\.(title|intro|lookingFor)/.test(board), false);
 });
 
 test('the preview components fetch nothing: they work from the post already on screen', () => {

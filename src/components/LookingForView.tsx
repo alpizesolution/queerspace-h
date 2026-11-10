@@ -7,7 +7,6 @@ import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { LookingForBody } from './LookingForBody.tsx';
 import { StardustButton } from './StardustButton.tsx';
 import { useStardust } from '../hooks/useStardust.ts';
-import { SensitiveCover } from './SensitiveCover.tsx';
 import { ConnectionRequestSheet } from './ConnectionRequestSheet.tsx';
 import { LookingForComposer } from './LookingForComposer.tsx';
 import type { UserPreferences } from '../types.ts';
@@ -15,7 +14,7 @@ import { sanitizeMessageText } from '../utils/matching-logic.ts';
 import { formatRelativeTime } from '../utils/relativeTime.ts';
 import { isAdultBirthDate } from '../utils/ageEligibility.ts';
 import { PHILIPPINE_REGIONS_AND_LOCATIONS } from '../utils/philippines-locations.ts';
-import { NSFW_PREFERENCE_OPTIONS, type NsfwPreference } from '../utils/nsfwPreference.ts';
+import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 import {
   activeFilterCount,
   applyLookingForFilters,
@@ -24,8 +23,6 @@ import {
   LOOKING_FOR_CATEGORIES,
   NO_FILTERS,
   popularTags,
-  postPresentation,
-  revealNeedsDialog,
   type LookingForFilters,
   type LookingForPost,
 } from '../utils/lookingFor.ts';
@@ -58,15 +55,12 @@ const Badge: React.FC<{ children: React.ReactNode; tone?: 'nsfw' | 'soft' }> = (
   </span>
 );
 
-export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, nsfwPreference, onOpenSettings, onBlockMember, onViewRequests }) => {
+export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, onBlockMember, onViewRequests }) => {
   const [filters, setFilters] = useState<LookingForFilters>(NO_FILTERS);
   const [posts, setPosts] = useState<LookingForPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<'denied' | 'failed' | null>(null);
   const [uid, setUid] = useState<string | null>(null);
-  /** Posts the member has chosen to reveal in this visit. Never stored, never automatic. */
-  const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
-  const [confirmReveal, setConfirmReveal] = useState<LookingForPost | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [composer, setComposer] = useState<{ editing: LookingForPost | null } | null>(null);
   const [requestPost, setRequestPost] = useState<LookingForPost | null>(null);
@@ -145,12 +139,6 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
   const ownPostIds = useMemo(() => posts.filter((p) => p.authorId === uid).map((p) => p.id), [posts, uid]);
   const filterCount = activeFilterCount(filters);
 
-  const reveal = (post: LookingForPost) => {
-    if (nsfwPreference === 'hide') return;
-    if (revealNeedsDialog(nsfwPreference)) setConfirmReveal(post);
-    else setRevealed((prev) => new Set(prev).add(post.id));
-  };
-
   const doDelete = async () => {
     if (!deletePost || busy) return;
     setBusy(true);
@@ -218,8 +206,7 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
         <div className="space-y-3">
           {visible.map((post) => {
             const mine = post.authorId === uid;
-            // Members always see their own posts open (so they can find, edit and delete them); the NSFW badge stays on.
-            const presentation = mine ? 'open' : postPresentation(post, nsfwPreference, revealed.has(post.id));
+            // Every post shows in full. An NSFW post is only labelled with its badge; there is no cover to reveal.
             return (
               <article key={post.id} className="scroll-mt-[calc(var(--header-h)+0.5rem)] rounded-3xl border border-line bg-gradient-to-b from-raised/60 to-surface p-4 sm:p-5">
                 <header className="flex items-center gap-2.5">
@@ -229,10 +216,9 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                       {post.author} {post.authorPronouns && <span className="font-normal text-subtle">{post.authorPronouns}</span>}
                     </p>
                     <p className="mt-0.5 flex items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle min-w-0">
-                      {presentation !== 'open' && <Badge>{INTENTION_LABELS[post.intention]}</Badge>}
                       {post.requestsPaused && <span className="shrink-0 text-subtle">Paused</span>}
                       <span className="truncate">
-                        {presentation === 'open' && post.region && <><MapPin className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> {post.region} · </>}
+                        {post.region && <><MapPin className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> {post.region} · </>}
                         {formatRelativeTime(post.timestamp)}
                       </span>
                     </p>
@@ -261,32 +247,23 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                   </div>
                 </header>
 
-                {presentation === 'open' ? (
-                  <LookingForBody
-                    post={post}
-                    mine={mine}
-                    canCoverAgain={post.isNsfw && !mine && nsfwPreference !== 'hide'}
-                    onCoverAgain={() => setRevealed((prev) => { const next = new Set(prev); next.delete(post.id); return next; })}
-                    onRequest={() => setRequestPost(post)}
-                    stardust={(
-                      <StardustButton
-                        variant="compact"
-                        count={stardust.countFor(post.id, post.stardustCount ?? 0)}
-                        given={Boolean(stardust.given[post.id])}
-                        pending={Boolean(stardust.pending[post.id])}
-                        own={mine}
-                        onToggle={() => void stardust.toggle(post.id, post.stardustCount ?? 0)}
-                      />
-                    )}
-                  />
-                ) : (
-                  <SensitiveCover
-                    contentWarning={post.contentWarning}
-                    blocked={presentation === 'blocked'}
-                    onReveal={() => reveal(post)}
-                    onOpenSettings={onOpenSettings}
-                  />
-                )}
+                <LookingForBody
+                  post={post}
+                  mine={mine}
+                  canCoverAgain={false}
+                  onCoverAgain={() => {}}
+                  onRequest={() => setRequestPost(post)}
+                  stardust={(
+                    <StardustButton
+                      variant="compact"
+                      count={stardust.countFor(post.id, post.stardustCount ?? 0)}
+                      given={Boolean(stardust.given[post.id])}
+                      pending={Boolean(stardust.pending[post.id])}
+                      own={mine}
+                      onToggle={() => void stardust.toggle(post.id, post.stardustCount ?? 0)}
+                    />
+                  )}
+                />
               </article>
             );
           })}
@@ -341,11 +318,11 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
             <div>
               <p className="text-[length:calc(13px_*_var(--fs,1))] font-semibold text-fg mb-1.5">Mature posts</p>
               <div role="radiogroup" aria-label="Mature posts" className="grid grid-cols-2 gap-1 rounded-full border border-line bg-ink p-1">
-                {([['any', 'Follow my setting'], ['hide', 'Leave out']] as const).map(([id, label]) => (
+                {([['any', 'Show'], ['hide', 'Leave out']] as const).map(([id, label]) => (
                   <button key={id} type="button" role="radio" aria-checked={filters.mature === id} onClick={() => setFilter('mature', id)} className={`h-9 rounded-full text-[length:calc(13px_*_var(--fs,1))] font-semibold transition-colors cursor-pointer ${filters.mature === id ? 'bg-berry text-ink' : 'text-muted hover:text-fg'}`}>{label}</button>
                 ))}
               </div>
-              <p className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">Currently: {NSFW_PREFERENCE_OPTIONS.find((o) => o.id === nsfwPreference)?.label}. Change it in Settings.</p>
+              <p className="mt-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">Mature posts show in full with their NSFW badge. “Leave out” hides them from the board.</p>
             </div>
           </div>
         </Sheet>
@@ -368,16 +345,6 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
       {requestPost && <ConnectionRequestSheet post={requestPost} onClose={() => setRequestPost(null)} onViewRequests={onViewRequests} />}
       {reportPost && <ReportSheet post={reportPost} onClose={() => setReportPost(null)} onDone={(ok) => { setReportPost(null); setToast(ok ? { text: 'Thanks. Our safety team will review this post.', ok: true } : { text: 'Couldn’t send your report. Please try again.', ok: false }); }} />}
 
-      {confirmReveal && (
-        <ConfirmDialog
-          title="Show sensitive content?"
-          message={confirmReveal.contentWarning ? `The author added a warning: “${confirmReveal.contentWarning}”. This post is marked NSFW. Only continue if you are comfortable.` : 'This post is marked NSFW and may contain mature themes. Only continue if you are comfortable.'}
-          confirmLabel="Show this post"
-          cancelLabel="Keep it hidden"
-          onCancel={() => setConfirmReveal(null)}
-          onConfirm={() => { setRevealed((prev) => new Set(prev).add(confirmReveal.id)); setConfirmReveal(null); }}
-        />
-      )}
       {deletePost && (
         <ConfirmDialog title="Delete this post?" message="Your post will be removed for everyone. This can’t be undone." confirmLabel={busy ? 'Deleting…' : 'Delete post'} tone="danger" busy={busy} onConfirm={doDelete} onCancel={() => { if (!busy) setDeletePost(null); }} />
       )}

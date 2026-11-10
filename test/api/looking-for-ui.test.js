@@ -43,28 +43,23 @@ test('the composer has every requested field, and the NSFW toggle with its descr
   assert.equal((composer.match(/<form/g) || []).length, 1, 'no nested forms');
 });
 
-test('a covered post puts none of its sensitive text on the page', () => {
-  const start = board.search(/\)\s*:\s*\(\s*<SensitiveCover/);
-  assert.ok(start > 0, 'the covered branch exists');
-  const covered = board.slice(start, board.indexOf('</article>', start));
-  assert.ok(covered.includes('SensitiveCover'), 'the shared cover stands in for the text');
-  for (const field of ['post.title', 'post.intro', 'post.lookingFor', 'post.tags', 'post.region']) assert.equal(covered.includes(field), false, `${field} must not render while covered`);
-  assert.match(read('src/components/SensitiveCover.tsx'), /Sensitive content/);
-  assert.match(covered, /onReveal=\{\(\) => reveal\(post\)\}/);
-  assert.match(read('src/components/SensitiveCover.tsx'), /Reveal content/);
-  assert.match(read('src/components/SensitiveCover.tsx'), /aria-hidden="true" className="space-y-2 blur/);
+test('Looking For posts show in full: an NSFW post is only labelled with its badge, with no cover, blur or reveal', () => {
+  for (const gone of ['SensitiveCover', 'Reveal content', 'Sensitive content', 'EyeOff', 'revealed', 'setRevealed', 'confirmReveal', 'Show sensitive content', 'postPresentation', 'revealNeedsDialog']) {
+    assert.equal(board.includes(gone), false, `the board has no ${gone}`);
+  }
+  assert.match(board, /<LookingForBody\s+post=\{post\}/, 'every post mounts its real content');
+  assert.match(board, /canCoverAgain=\{false\}/, 'no "Hide again" on the board');
+  assert.match(board, /\{post\.isNsfw && <Badge tone="nsfw">NSFW<\/Badge>\}/, 'the badge is shown only for NSFW posts');
+  assert.equal((board.match(/<Badge tone="nsfw">/g) || []).length, 1);
 });
 
-test('content is only ever revealed by an explicit action on that one post', () => {
-  assert.match(board, /useState<Set<string>>\(\(\) => new Set\(\)\)/, 'starts with nothing revealed, and is not stored');
-  assert.doesNotMatch(board, /localStorage|sessionStorage/, 'reveals are not remembered between visits');
-  const adds = [...board.matchAll(/setRevealed\(/g)].length;
-  assert.equal(adds, 3, 'reveal, confirm and hide-again are the only places that change it');
-  // None of them live in an effect or an observer, so scrolling can never reveal anything.
-  assert.doesNotMatch(board, /IntersectionObserver|onScroll|useEffect\([^)]*setRevealed/);
-  assert.match(board, /if \(nsfwPreference === 'hide'\) return;/, '"always hide" has no way in');
-  assert.match(board, /revealNeedsDialog\(nsfwPreference\)/);
-  assert.match(board, /Show sensitive content\?/);
+test('the cover still exists for the other places that use it (profile pages), unchanged', () => {
+  const profile = read('src/components/ProfileSections.tsx');
+  assert.match(profile, /SensitiveCover/);
+  assert.match(profile, /if \(nsfwPreference === 'hide'\) return;/);
+  assert.match(read('src/components/SensitiveCover.tsx'), /Reveal content/);
+  assert.match(read('src/components/SensitiveCover.tsx'), /aria-hidden="true" className="space-y-2 blur/);
+  assert.match(read('src/utils/lookingFor.ts'), /export function postPresentation/);
 });
 
 test('the content setting is in Settings, defaults to Always hide, and is stored on the device', () => {
@@ -231,10 +226,9 @@ test('a published post shows meta, then the title, then About me, then About you
   assert.match(body, /\{post\.intro\}/);
   assert.match(body, /\{post\.lookingFor\}/);
   assert.match(body, /INTENTION_LABELS\[intention\]/);
-  for (const file of ['LookingForView', 'ProfileSections']) {
-    const view = read(`src/components/${file}.tsx`);
-    assert.match(view, /presentation !== 'open' && <Badge>\{INTENTION_LABELS\[post\.intention\]\}<\/Badge>/, `${file}: no repeated intention once the post is open`);
-  }
+  // Profile pages still cover mature posts, and repeat the intention only while one is covered; the board is always open.
+  assert.match(read('src/components/ProfileSections.tsx'), /presentation !== 'open' && <Badge>\{INTENTION_LABELS\[post\.intention\]\}<\/Badge>/);
+  assert.equal(read('src/components/LookingForView.tsx').includes('presentation'), false, 'the board has one open presentation');
 });
 
 test('the rules require 100 trimmed characters in both sections on a new post, and only on a section an edit changes', () => {
