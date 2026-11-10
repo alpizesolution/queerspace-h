@@ -1,5 +1,5 @@
 import React, { useId, useState } from 'react';
-import { EyeOff, UserPlus } from 'lucide-react';
+import { EyeOff, SatelliteDish } from 'lucide-react';
 import { keepCardInView, MoreButton, useClampOverflow } from './ExpandableText.tsx';
 import { INTENTION_LABELS, previewTags, preferredAgeText, type LookingForPost } from '../utils/lookingFor.ts';
 
@@ -19,14 +19,16 @@ interface Props {
   canCoverAgain: boolean;
   onCoverAgain: () => void;
   onRequest: () => void;
+  /** Where the card puts its Stardust control: the same row as the actions, so it takes no extra height. Optional. */
+  stardust?: React.ReactNode;
 }
 
 /**
- * The open content of a connection card: a short preview with the Send Connection Request action always in reach, and "View details"
+ * The open content of a connection card: a short preview with the Send Signal action (the connection request) always in reach, and "View details"
  * for the rest. It is only ever rendered for a post that is already open, so a concealed mature post has no details
  * control and nothing here can reveal it. Which cards are expanded is this component's own state, one card at a time.
  */
-export const LookingForBody: React.FC<Props> = ({ post, mine, canCoverAgain, onCoverAgain, onRequest }) => {
+export const LookingForBody: React.FC<Props> = ({ post, mine, canCoverAgain, onCoverAgain, onRequest, stardust }) => {
   const [expanded, setExpanded] = useState(false);
   const introId = useId();
   const seekId = useId();
@@ -65,14 +67,27 @@ export const LookingForBody: React.FC<Props> = ({ post, mine, canCoverAgain, onC
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {hasMore || expanded ? (
-          <MoreButton expanded={expanded} controls={`${introId} ${seekId}`} onClick={toggle} more="View details" />
-        ) : <span />}
+        {/* Stardust (quiet, left) and the details link share the row with the Signal button (right). */}
+        {(stardust || hasMore || expanded) && (
+          <div className={`flex min-w-0 flex-wrap items-center gap-x-1 -ml-2 ${stardust ? '[&>button[aria-expanded]]:mt-0' : ''}`}>
+            {stardust}
+            {hasMore || expanded ? (
+              <MoreButton expanded={expanded} controls={`${introId} ${seekId}`} onClick={toggle} more="View details" />
+            ) : null}
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {canCoverAgain && <button type="button" onClick={onCoverAgain} className="btn btn-ghost btn-sm"><EyeOff className="w-4 h-4" /> Hide again</button>}
           {!mine && (post.requestsPaused
             ? <button type="button" disabled className="btn btn-secondary btn-sm" title="This member is not taking new requests right now">Requests paused</button>
-            : <button type="button" onClick={onRequest} className="btn btn-primary btn-sm"><UserPlus className="w-4 h-4" /> Send Connection Request</button>)}
+            : (
+              // The connection request, under a shorter name: "Signal" on a phone, "Send Signal" from 640px.
+              <button type="button" onClick={onRequest} aria-label="Send connection signal" title="Send a connection signal to this member" className="btn btn-primary btn-sm !gap-1.5 !px-3">
+                <SatelliteDish className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span className="sm:hidden" aria-hidden="true">Signal</span>
+                <span className="hidden sm:inline" aria-hidden="true">Send Signal</span>
+              </button>
+            ))}
         </div>
       </div>
     </>

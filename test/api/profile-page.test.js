@@ -35,7 +35,7 @@ test('owner-only controls exist only on the owner\'s own page', () => {
 
 test('contact only ever goes through the existing request flow, about a live Looking For post', () => {
   assert.match(page, /<ConnectionRequestSheet post=\{requestPost\}/);
-  assert.match(page, /Send Connection Request/);
+  assert.match(page, /Send Signal/);
   assert.doesNotMatch(page + sections + service, /request-create|action: 'create'|send-message|signalsPairs|connection_requests/, 'the page cannot create contact itself');
   assert.match(page, /onOpenConversation\(action\.conversationId\)/, 'a conversation only opens once it already exists');
   assert.match(read('src/utils/profileView.ts'), /if \(posts\.length === 0\) return \{ kind: 'unavailable' \}/);

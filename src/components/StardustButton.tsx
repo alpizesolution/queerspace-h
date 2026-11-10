@@ -7,6 +7,11 @@ interface Props {
   pending?: boolean;
   /** The member's own post: the count is shown, and there is nothing to give. */
   own?: boolean;
+  /**
+   * "compact" is the quiet upvote-style look used on Looking For cards: a small sparkle, "Stardust" and the count, on a
+   * transparent background with no pill or border. Community keeps the default. The behaviour is identical.
+   */
+  variant?: 'default' | 'compact';
   onToggle: () => void;
 }
 
@@ -15,7 +20,7 @@ const SPARKS = [
 ];
 
 /** Appreciation for a Cosmos post, the same on Community and Looking For. Compact, keyboard-reachable, one tap to give or take back. */
-export const StardustButton: React.FC<Props> = ({ count, given, pending = false, own = false, onToggle }) => {
+export const StardustButton: React.FC<Props> = ({ count, given, pending = false, own = false, variant = 'default', onToggle }) => {
   const [burst, setBurst] = useState(false);
   const previous = useRef(given);
 
@@ -28,6 +33,45 @@ export const StardustButton: React.FC<Props> = ({ count, given, pending = false,
     const timer = setTimeout(() => setBurst(false), 700);
     return () => clearTimeout(timer);
   }, [given]);
+
+  if (variant === 'compact') {
+    if (own) {
+      return (
+        <span className="inline-flex shrink-0 items-center gap-1 h-9 px-2 text-[length:calc(13px_*_var(--fs,1))] font-medium text-[var(--reaction-rest)]" title="Stardust on your post">
+          <Sparkles className="w-4 h-4" aria-hidden="true" />
+          <span>Stardust</span>
+          <span aria-hidden="true">·</span>
+          <span className="tabular-nums">{count}</span>
+          <span className="sr-only"> on your post</span>
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={pending}
+        aria-pressed={given}
+        aria-busy={pending}
+        aria-label={given ? `Given. Remove your Stardust. ${count} Stardust` : `Give Stardust. ${count} Stardust`}
+        title={given ? 'You gave Stardust. Tap to take it back.' : 'Give Stardust to show you appreciate this post'}
+        // Transparent, no border or pill: muted lavender at rest, a subtle lavender accent once given.
+        className={`relative inline-flex shrink-0 items-center gap-1 h-9 px-2 rounded-full bg-transparent text-[length:calc(13px_*_var(--fs,1))] font-medium whitespace-nowrap transition-colors cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lavender/60 ${
+          given ? 'text-lavender' : 'text-[var(--reaction-rest)] hover:text-lavender'
+        } ${pending ? 'opacity-70' : ''}`}
+      >
+        <span className="relative inline-flex">
+          <Sparkles className={`w-4 h-4 ${given ? 'fill-lavender/25' : ''}`} aria-hidden="true" />
+          {burst && SPARKS.map((spark, i) => (
+            <span key={i} aria-hidden="true" className="stardust-spark" style={{ ['--sx' as string]: `${spark.x}px`, ['--sy' as string]: `${spark.y}px` }} />
+          ))}
+        </span>
+        <span>Stardust</span>
+        <span aria-hidden="true">·</span>
+        <span className="tabular-nums">{count}</span>
+      </button>
+    );
+  }
 
   if (own) {
     return (

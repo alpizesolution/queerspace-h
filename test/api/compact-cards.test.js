@@ -49,7 +49,7 @@ test('the Community card shows avatar, name, category badge, relative time, titl
   for (const kept of ['handleStardust', 'setExpandedReplies', 'handleShare', 'aria-label={`${replyCount} replies`}']) assert.ok(community.includes(kept), kept);
 });
 
-test('a Looking For card previews: three-line intro, short Looking for summary, three interests, Send Connection Request in reach', () => {
+test('a Looking For card previews: three-line intro, short Looking for summary, three interests, Send Signal in reach', () => {
   assert.match(body, /line-clamp-3/);
   assert.match(body, /line-clamp-2/);
   assert.match(body, /previewTags\(post\.tags, expanded\)/);
@@ -57,8 +57,8 @@ test('a Looking For card previews: three-line intro, short Looking for summary, 
   // Send Signal sits in the footer row, outside anything that depends on the expanded state.
   const footer = body.slice(body.indexOf('<div className="mt-3 flex flex-wrap items-center gap-2">'));
   assert.match(footer, /\{!mine && \(post\.requestsPaused[\s\S]*onClick=\{onRequest\}/);
-  assert.match(footer, /Send Connection Request/);
-  assert.doesNotMatch(footer.slice(footer.indexOf('{!mine'), footer.indexOf('Send Connection Request')), /expanded/, 'the action never depends on the open state');
+  assert.match(footer, /Send Signal/);
+  assert.doesNotMatch(footer.slice(footer.indexOf('{!mine'), footer.indexOf("Send Signal")), /expanded/, 'the action never depends on the open state');
   assert.match(board, /<Badge>\{INTENTION_LABELS\[post\.intention\]\}<\/Badge>/, 'the intention is a badge');
   assert.match(board, /formatRelativeTime\(post\.timestamp\)/);
 });

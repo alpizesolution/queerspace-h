@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, Flag, LoaderCircle, MapPin, MessageCircle, Pencil, Share2, Sparkles, UserPlus, UserX } from 'lucide-react';
+import { ArrowLeft, Check, Flag, LoaderCircle, MapPin, MessageCircle, Pencil, SatelliteDish, Share2, Sparkles, UserX } from 'lucide-react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ProfileSkeleton } from './Skeleton.tsx';
 import { ConfirmDialog } from './Sheet.tsx';
@@ -319,7 +319,7 @@ export const ProfilePage: React.FC<Props> = ({
       {showBar && (
         <div className="absolute inset-x-0 bottom-0 z-10 border-t border-line bg-ink/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
           <div className="mx-auto max-w-xl">
-            {action.kind === 'request' && <button type="button" onClick={() => setRequestPost(action.post)} className="btn btn-primary w-full"><UserPlus className="h-4 w-4" /> Send Connection Request</button>}
+            {action.kind === 'request' && <button type="button" onClick={() => setRequestPost(action.post)} aria-label="Send connection signal" className="btn btn-primary w-full"><SatelliteDish className="h-4 w-4" aria-hidden="true" /> Send Signal</button>}
             {action.kind === 'open_conversation' && <button type="button" onClick={() => onOpenConversation(action.conversationId)} className="btn btn-primary w-full"><MessageCircle className="h-4 w-4" /> Open conversation</button>}
             {action.kind === 'respond' && <button type="button" onClick={onOpenRequests} className="btn btn-primary w-full">Respond to their request</button>}
             {action.kind === 'pending' && (

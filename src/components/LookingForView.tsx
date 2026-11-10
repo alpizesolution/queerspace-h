@@ -268,6 +268,16 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                     canCoverAgain={post.isNsfw && !mine && nsfwPreference !== 'hide'}
                     onCoverAgain={() => setRevealed((prev) => { const next = new Set(prev); next.delete(post.id); return next; })}
                     onRequest={() => setRequestPost(post)}
+                    stardust={(
+                      <StardustButton
+                        variant="compact"
+                        count={stardust.countFor(post.id, post.stardustCount ?? 0)}
+                        given={Boolean(stardust.given[post.id])}
+                        pending={Boolean(stardust.pending[post.id])}
+                        own={mine}
+                        onToggle={() => void stardust.toggle(post.id, post.stardustCount ?? 0)}
+                      />
+                    )}
                   />
                 ) : (
                   <SensitiveCover
@@ -276,18 +286,6 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                     onReveal={() => reveal(post)}
                     onOpenSettings={onOpenSettings}
                   />
-                )}
-
-                {presentation === 'open' && (
-                  <div className="mt-2 -ml-2">
-                    <StardustButton
-                      count={stardust.countFor(post.id, post.stardustCount ?? 0)}
-                      given={Boolean(stardust.given[post.id])}
-                      pending={Boolean(stardust.pending[post.id])}
-                      own={mine}
-                      onToggle={() => void stardust.toggle(post.id, post.stardustCount ?? 0)}
-                    />
-                  </div>
                 )}
               </article>
             );
