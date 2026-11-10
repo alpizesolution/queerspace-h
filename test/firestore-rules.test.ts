@@ -1290,6 +1290,31 @@ test('EC-08: the rules list the same eight categories and the same four reply ca
   assert.deepEqual([...list('unsaidReplyKinds')].sort(), [...REPLY_KINDS].sort());
 });
 
+test('EC-09: an Echo CAN carry no mood, one mood or two, but never a third, a repeat, an unknown mood or a malformed list', async () => {
+  await assertSucceeds(echoAs('alice', 'm-none', 'vent'));
+  await assertSucceeds(echoAs('bob', 'm-one', 'wins', { post: { moodTags: ['hopeful'] } }));
+  await assertSucceeds(echoAs('carol', 'm-two', 'advice', { post: { moodTags: ['in-love', 'feeling-myself'] } }));
+  const reader = testEnv.authenticatedContext('erin').firestore();
+  assert.deepEqual((await assertSucceeds(reader.doc('unsaid/m-two').get())).data()!.moodTags, ['in-love', 'feeling-myself']);
+  assert.ok(!('moodTags' in (await assertSucceeds(reader.doc('unsaid/m-none').get())).data()!), 'an Echo without a mood has no field');
+  await assertFails(echoAs('dana', 'm-three', 'vent', { post: { moodTags: ['happy', 'silly', 'chill'] } }));
+  await assertFails(echoAs('dave', 'm-repeat', 'vent', { post: { moodTags: ['happy', 'happy'] } }));
+  await assertFails(echoAs('eve', 'm-unknown', 'vent', { post: { moodTags: ['furious'] } }));
+  await assertFails(echoAs('ivy', 'm-empty', 'vent', { post: { moodTags: [] } }));
+  await assertFails(echoAs('fay', 'm-string', 'vent', { post: { moodTags: 'happy' } }));
+  await assertFails(echoAs('gus', 'm-mixed', 'vent', { post: { moodTags: ['happy', 7] } }));
+  // A mood is not a category: it does not unlock replies.
+  await assertFails(echoAs('hal', 'm-reply', 'vent', { post: { moodTags: ['happy'], replyCount: 0 } }));
+});
+
+test('EC-10: the rules list the same 24 moods as the app', async () => {
+  const rules = fs.readFileSync('./firestore.rules', 'utf8');
+  const listed = [...(rules.match(/function unsaidMoods\(\) \{\s*return \[([^\]]+)\]/)?.[1].matchAll(/'([a-z-]+)'/g) ?? [])].map((m) => m[1]);
+  const { MOOD_IDS } = await import('../src/utils/echoMoods.ts');
+  assert.equal(MOOD_IDS.length, 24);
+  assert.deepEqual([...listed].sort(), [...MOOD_IDS].sort());
+});
+
 test('RX-01: Room reactions CAN be added once per person, changed only by one counter, and removed', async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await ctx.firestore().doc('public_room_messages/m1').set({ ...roomMessage('alice'), timestamp: new Date() });

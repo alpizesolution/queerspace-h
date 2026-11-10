@@ -46,7 +46,7 @@ const REPLY = ['advice', 'wins', 'gratitude', 'daydreams'];
 const LABEL: Record<string, string> = { confession: 'Confession', vent: 'Vent', unsent: 'Unsent Letter', advice: 'Need Advice', thoughts: 'Random Thought', wins: 'Little Win', gratitude: 'Gratitude', daydreams: 'Daydream' };
 
 const echo = (kind: (typeof ALL)[number], over: Partial<UnsaidPost> = {}): UnsaidPost => ({
-  id: `p-${kind}`, kind, text: `A ${kind} echo`, createdAt: Date.now() - 60_000, replyCount: 0, expiresAt: null, hugs: 0, same: 0, felt: 0, strong: 0, proud: 0, cry: 0, flags: 0, ...over,
+  id: `p-${kind}`, kind, text: `A ${kind} echo`, createdAt: Date.now() - 60_000, replyCount: 0, moodTags: [], expiresAt: null, hugs: 0, same: 0, felt: 0, strong: 0, proud: 0, cry: 0, flags: 0, ...over,
 });
 const reply = (id: string, text: string, at = 1000): UnsaidReply => ({ id, text, createdAt: at });
 const sleep = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -166,7 +166,7 @@ test('the composer groups the eight categories, says whether replies are on, and
   fireEvent.click(within(picker).getByRole('radio', { name: /Daydream/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Let it out' }));
   await waitFor(() => assert.equal(calls.post.length, 1));
-  assert.deepEqual(calls.post[0], ['daydreams', 'My daydream is a small house by the sea']);
+  assert.deepEqual(calls.post[0], ['daydreams', 'My daydream is a small house by the sea', []]);
 });
 
 test('the category pieces render on their own: tag, filter, picker', () => {

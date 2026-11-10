@@ -769,6 +769,12 @@ service cloud.firestore {
       return ['advice', 'wins', 'gratitude', 'daydreams'];
     }
 
+    // Optional mood tags on an Echo (metadata, not categories). Keep in step with MOODS in src/utils/echoMoods.ts.
+    function unsaidMoods() {
+      return ['vulnerable', 'melancholic', 'overwhelmed', 'healing', 'lonely', 'reflective', 'hopeful', 'happy', 'grateful', 'growing', 'loved', 'proud',
+              'in-love', 'crushing', 'missing-someone', 'dreaming', 'connected', 'longing', 'daydreaming', 'confused', 'silly', 'chill', 'excited', 'feeling-myself'];
+    }
+
     function unsaidReplyPath(postId, replyId) {
       return /databases/$(database)/documents/unsaid/$(postId)/replies/$(replyId);
     }
@@ -789,11 +795,19 @@ service cloud.firestore {
       allow create: if isAuthenticated()
         && isEligibleMember(request.auth.uid)
         && request.resource.data.keys().hasAll(['kind', 'text', 'createdAt', 'hugs', 'same', 'flags'])
-        && request.resource.data.keys().hasOnly(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags', 'replyCount'])
+        && request.resource.data.keys().hasOnly(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags', 'replyCount', 'moodTags'])
         && request.resource.data.kind in unsaidKinds()
         // Only a category that takes replies may carry a reply counter, and it starts at zero.
         && (!('replyCount' in request.resource.data)
             || (request.resource.data.replyCount == 0 && request.resource.data.kind in unsaidReplyKinds()))
+        // Mood tags are optional: one or two, all from the approved list, never the same one twice.
+        && (!('moodTags' in request.resource.data)
+            || (request.resource.data.moodTags is list
+                && request.resource.data.moodTags.size() >= 1
+                && request.resource.data.moodTags.size() <= 2
+                && request.resource.data.moodTags.hasOnly(unsaidMoods())
+                && (request.resource.data.moodTags.size() == 1
+                    || request.resource.data.moodTags[0] != request.resource.data.moodTags[1])))
         && request.resource.data.text is string
         && request.resource.data.text.size() >= 1
         && request.resource.data.text.size() <= 500

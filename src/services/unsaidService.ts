@@ -43,6 +43,7 @@ export type UnsaidReaction = (typeof UNSAID_REACTIONS)[number];
 // The eight categories (three groups) and which take replies live in utils/echoKinds.ts; re-exported here so existing imports work.
 export { UNSAID_KINDS, UNSAID_REPLY_KINDS, UNSAID_REPLY_MAX_LENGTH, UNSAID_REPLY_SLOW_MODE_SECONDS, kindAllowsReplies, toUnsaidKind, type UnsaidKind } from '../utils/echoKinds.ts';
 import { UNSAID_REPLY_MAX_LENGTH, kindAllowsReplies, toUnsaidKind, unseenReplies, type UnsaidKind } from '../utils/echoKinds.ts';
+import { toMoodTags, type MoodId } from '../utils/echoMoods.ts';
 
 export interface UnsaidPost {
   id: string;
@@ -51,6 +52,8 @@ export interface UnsaidPost {
   createdAt: number;
   /** Replies, for the categories that take them (Need Advice and Uplift); 0 for everything else, including older posts. */
   replyCount: number;
+  /** Optional mood tags (0 to 2); empty for older Echoes and for any Echo posted without one. */
+  moodTags: MoodId[];
   /** Only on Echoes posted before they became permanent; null means the Echo stays until deleted or removed. */
   expiresAt: number | null;
   hugs: number;
@@ -156,6 +159,7 @@ export function toUnsaidPost(id: string, data: Record<string, unknown>): UnsaidP
     text: String(data.text ?? ''),
     createdAt: toMillis(data.createdAt),
     replyCount: Math.max(0, Math.floor(Number(data.replyCount) || 0)),
+    moodTags: toMoodTags(data.moodTags),
     expiresAt: toMillisOrNull(data.expiresAt),
     hugs: Number(data.hugs) || 0,
     same: Number(data.same) || 0,
@@ -254,7 +258,7 @@ export async function loadOlderUnsaid(before: number): Promise<{ posts: UnsaidPo
 /** Seconds between Unsaid posts; must match slowMode('unsaid', …) in firestore.rules. */
 export const UNSAID_SLOW_MODE_SECONDS = 60;
 
-export async function postUnsaid(kind: UnsaidKind, text: string): Promise<'posted' | 'too-fast' | 'failed'> {
+export async function postUnsaid(kind: UnsaidKind, text: string, moodTags: readonly string[] = []): Promise<'posted' | 'too-fast' | 'failed'> {
   const checked = validateUnsaidText(text);
   if (!checked.ok || !db) return 'failed';
   try {
@@ -263,6 +267,7 @@ export async function postUnsaid(kind: UnsaidKind, text: string): Promise<'poste
     const postRef = doc(collection(db, 'unsaid'));
     const batch = writeBatch(db);
     const takesReplies = kindAllowsReplies(kind);
+    const moods = toMoodTags(moodTags);
     batch.set(postRef, {
       kind,
       text: checked.text,
@@ -272,6 +277,8 @@ export async function postUnsaid(kind: UnsaidKind, text: string): Promise<'poste
       flags: 0,
       // Only the categories that take replies carry a reply counter; everything else is exactly what it always was.
       ...(takesReplies ? { replyCount: 0 } : {}),
+      // Optional mood tags: only written when chosen, so Echoes without a mood are exactly what they were.
+      ...(moods.length ? { moodTags: moods } : {}),
     });
     // Ownership stays private (only the author can read it). For a category with replies it also remembers the kind and how many
     // replies the author has already seen, which is how they are told about new ones without anyone learning who they are.

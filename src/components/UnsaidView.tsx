@@ -5,6 +5,7 @@ import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { CrisisSupportCard } from './CrisisSupportCard.tsx';
 import { ReactionIcon } from './ReactionIcons.tsx';
 import { EchoFilterBar, EchoKindPicker, EchoKindTag, echoCardClass, emptyEchoTitle } from './EchoCategories.tsx';
+import { MoodPicker, MoodPills } from './EchoMoods.tsx';
 import { UnsaidReplies } from './UnsaidReplies.tsx';
 import {
   deleteUnsaid,
@@ -84,6 +85,7 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
   const [myIds, setMyIds] = useState<Set<string>>(new Set());
   const [reacted, setReacted] = useState<Record<string, UnsaidReaction>>(loadReacted);
   const [kind, setKind] = useState<UnsaidKind>('vent');
+  const [moods, setMoods] = useState<string[]>([]);
   const [filter, setFilter] = useState<EchoFilter>('all');
   /** Posts whose replies are open. */
   const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
@@ -177,10 +179,11 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
       return;
     }
     setPosting(true);
-    const result = await postUnsaid(kind, checked.text);
+    const result = await postUnsaid(kind, checked.text, moods);
     setPosting(false);
     if (result === 'posted') {
       setDraft('');
+      setMoods([]);
       setComposeError(null);
       setComposeOpen(false);
       setAnonInfoOpen(false);
@@ -313,6 +316,7 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
                     <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg/90 leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
                       {post.text}
                     </p>
+                    <MoodPills moods={post.moodTags} className="mt-2" />
                     <div className="flex flex-wrap items-center gap-y-0.5 mt-2 -ml-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
                       <div className="flex flex-wrap items-center gap-1 max-[340px]:gap-0">
                         {REACTIONS.map(({ type, label }) => {
@@ -433,6 +437,7 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
               aria-label="Write something unsaid"
               className="input text-base sm:text-[length:calc(15px_*_var(--fs,1))] resize-none"
             />
+            <MoodPicker value={moods} onChange={setMoods} />
             {showCrisis && <CrisisSupportCard message="You're not alone, and you matter." />}
             <div>
               <div className="flex items-center gap-1.5">
