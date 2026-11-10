@@ -111,11 +111,13 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       // Only stamps of "now" can be written, so the clock can't be wound back.
       allow create, update: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['publicRoom', 'unsaid', 'suggestion', 'communityPost', 'communityReply', 'support', 'lookingForPost'])
+        && request.resource.data.keys().hasOnly(['publicRoom', 'unsaid', 'unsaidReply', 'suggestion', 'communityPost', 'communityReply', 'support', 'lookingForPost'])
         && (!('publicRoom' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
             || request.resource.data.publicRoom == request.time)
         && (!('unsaid' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
             || request.resource.data.unsaid == request.time)
+        && (!('unsaidReply' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
+            || request.resource.data.unsaidReply == request.time)
         && (!('suggestion' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
             || request.resource.data.suggestion == request.time)
         && (!('communityPost' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
@@ -755,14 +757,43 @@ service cloud.firestore {
         && request.resource.data[field] == resource.data.get(field, 0) + 1;
     }
 
+    // The eight Echoes categories (Release: confession, vent, unsent. Connect: advice, thoughts. Uplift: wins, gratitude,
+    // daydreams). Keep in step with UNSAID_KINDS in src/utils/echoKinds.ts; a test checks that they match.
+    function unsaidKinds() {
+      return ['confession', 'vent', 'unsent', 'advice', 'thoughts', 'wins', 'gratitude', 'daydreams'];
+    }
+
+    // Replies exist ONLY for Need Advice and the three Uplift categories. Confession, Vent, Unsent Letters and Random Thoughts
+    // are reactions only: no rule below lets a reply, or a reply counter, exist on them, whatever the app shows.
+    function unsaidReplyKinds() {
+      return ['advice', 'wins', 'gratitude', 'daydreams'];
+    }
+
+    function unsaidReplyPath(postId, replyId) {
+      return /databases/$(database)/documents/unsaid/$(postId)/replies/$(replyId);
+    }
+
+    // Who wrote a reply, readable only by that member. The reply itself carries no author, like a post.
+    function unsaidReplyOwnerPath(replyId) {
+      return /databases/$(database)/documents/unsaid_reply_owners/$(replyId);
+    }
+
+    // A reply id is a Firestore auto id (letters, digits, - and _).
+    function validReplyId(id) {
+      return id is string && id.matches('^[A-Za-z0-9_-]{8,64}$');
+    }
+
     match /unsaid/{postId} {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated()
         && isEligibleMember(request.auth.uid)
         && request.resource.data.keys().hasAll(['kind', 'text', 'createdAt', 'hugs', 'same', 'flags'])
-        && request.resource.data.keys().hasOnly(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags'])
-        && request.resource.data.kind in ['vent', 'confession']
+        && request.resource.data.keys().hasOnly(['kind', 'text', 'createdAt', 'expiresAt', 'hugs', 'same', 'flags', 'replyCount'])
+        && request.resource.data.kind in unsaidKinds()
+        // Only a category that takes replies may carry a reply counter, and it starts at zero.
+        && (!('replyCount' in request.resource.data)
+            || (request.resource.data.replyCount == 0 && request.resource.data.kind in unsaidReplyKinds()))
         && request.resource.data.text is string
         && request.resource.data.text.size() >= 1
         && request.resource.data.text.size() <= 500
@@ -801,8 +832,63 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flags'])
         && request.resource.data.flags == 0;
 
+      // A reply (Need Advice and Uplift only): replyCount +1, in the same batch as the reply itself, its private owner record and
+      // the member's slow-mode stamp. `lastReply` names the reply, so the counter cannot move without a real, new reply.
+      allow update: if isAuthenticated()
+        && isEligibleMember(request.auth.uid)
+        && !isSuspended()
+        && resource.data.kind in unsaidReplyKinds()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replyCount', 'lastReply'])
+        && request.resource.data.replyCount == resource.data.get('replyCount', 0) + 1
+        && validReplyId(request.resource.data.lastReply)
+        && !exists(unsaidReplyPath(postId, request.resource.data.lastReply))
+        && existsAfter(unsaidReplyPath(postId, request.resource.data.lastReply))
+        && getAfter(unsaidReplyOwnerPath(request.resource.data.lastReply)).data.authorId == request.auth.uid
+        && slowMode('unsaidReply', 5);
+
+      // Taking a reply back: replyCount -1, in the same batch that deletes that reply and its owner record. Only the member who
+      // wrote it (the owner record says so) can do this, or a moderator.
+      allow update: if isAuthenticated()
+        && resource.data.kind in unsaidReplyKinds()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replyCount', 'lastReply'])
+        && resource.data.get('replyCount', 0) > 0
+        && request.resource.data.replyCount == resource.data.get('replyCount', 0) - 1
+        && validReplyId(request.resource.data.lastReply)
+        && exists(unsaidReplyPath(postId, request.resource.data.lastReply))
+        && !existsAfter(unsaidReplyPath(postId, request.resource.data.lastReply))
+        && (isAdmin()
+            || (get(unsaidReplyOwnerPath(request.resource.data.lastReply)).data.authorId == request.auth.uid
+                && !existsAfter(unsaidReplyOwnerPath(request.resource.data.lastReply))));
+
       allow delete: if isAuthenticated()
         && (get(unsaidOwnerPath(postId)).data.authorId == request.auth.uid || isAdmin());
+
+      // Replies: Need Advice and the Uplift categories only. Anyone signed in can read them; each one is anonymous.
+      match /replies/{replyId} {
+        allow read: if isAuthenticated();
+
+        // Created only together with the post's counter going up by one (checked by the post rule above, which also requires an
+        // adult member who is not suspended and the slow-mode stamp), so everything a reply needs is enforced there and here.
+        allow create: if isAuthenticated()
+          && validReplyId(replyId)
+          && get(unsaidPath(postId)).data.kind in unsaidReplyKinds()
+          && request.resource.data.keys().hasAll(['text', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['text', 'createdAt'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 300
+          && request.resource.data.createdAt == request.time
+          && getAfter(unsaidPath(postId)).data.get('replyCount', 0) == get(unsaidPath(postId)).data.get('replyCount', 0) + 1
+          && getAfter(unsaidPath(postId)).data.lastReply == replyId
+          && getAfter(unsaidReplyOwnerPath(replyId)).data.authorId == request.auth.uid;
+
+        // Deleted only together with the counter going down by one (whose rule says who may: the author of the reply, or a moderator).
+        allow delete: if isAuthenticated()
+          && getAfter(unsaidPath(postId)).data.get('replyCount', 0) == get(unsaidPath(postId)).data.get('replyCount', 0) - 1
+          && getAfter(unsaidPath(postId)).data.lastReply == replyId;
+
+        allow update: if false;
+      }
 
       match /reactions/{userId} {
         allow read: if isOwner(userId);
@@ -829,10 +915,14 @@ service cloud.firestore {
     match /unsaid_owners/{postId} {
       allow read: if isAuthenticated() && resource.data.authorId == request.auth.uid;
 
-      // Only for a brand-new post, created in the same batch.
+      // Only for a brand-new post, created in the same batch. A post that takes replies also records its kind (which must be the
+      // post's own) and a "replies seen" counter at zero; that is how its author is told about new replies, privately.
       allow create: if isAuthenticated()
-        && request.resource.data.keys().hasOnly(['authorId'])
+        && request.resource.data.keys().hasAll(['authorId'])
+        && request.resource.data.keys().hasOnly(['authorId', 'kind', 'seenReplies'])
         && request.resource.data.authorId == request.auth.uid
+        && (!('kind' in request.resource.data) || request.resource.data.kind == getAfter(unsaidPath(postId)).data.kind)
+        && (!('seenReplies' in request.resource.data) || request.resource.data.seenReplies == 0)
         && !exists(unsaidPath(postId))
         && existsAfter(unsaidPath(postId));
 
@@ -840,6 +930,35 @@ service cloud.firestore {
       allow delete: if isAuthenticated()
         && (resource.data.authorId == request.auth.uid || isAdmin())
         && !existsAfter(unsaidPath(postId));
+
+      // The author marking replies as seen. Nothing else about the record can change, and it cannot exceed the real count.
+      allow update: if isAuthenticated()
+        && resource.data.authorId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenReplies'])
+        && request.resource.data.seenReplies is int
+        && request.resource.data.seenReplies >= 0
+        && request.resource.data.seenReplies <= get(unsaidPath(postId)).data.get('replyCount', 0);
+    }
+
+    // Who wrote each reply, private to that member, exactly like unsaid_owners for posts. Not even the post's author can read it,
+    // so a reply can never be traced to a person. Created with its reply, deleted with it.
+    match /unsaid_reply_owners/{replyId} {
+      allow read: if isAuthenticated() && resource.data.authorId == request.auth.uid;
+
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['authorId', 'postId'])
+        && request.resource.data.keys().hasOnly(['authorId', 'postId'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.postId is string
+        && validReplyId(replyId)
+        && !exists(unsaidReplyOwnerPath(replyId))
+        && existsAfter(unsaidReplyPath(request.resource.data.postId, replyId));
+
+      // A moderator can clean the record up when removing a reply, but still cannot read it.
+      allow delete: if isAuthenticated()
+        && (resource.data.authorId == request.auth.uid || isAdmin())
+        && !existsAfter(unsaidReplyPath(resource.data.postId, replyId));
+
       allow update: if false;
     }
 

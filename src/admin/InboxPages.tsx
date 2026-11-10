@@ -245,6 +245,7 @@ export function isUrgentReport(r: AdminReport, reportsAboutTarget: number): bool
 }
 
 function describeTarget(r: AdminReport, names: Record<string, string | null>): string {
+  if (r.reason.startsWith('Unsaid reply:')) return 'Echo reply';
   if (r.reason.startsWith('Unsaid:')) return 'Unsaid post';
   if (r.targetType === 'user') return names[r.targetId] ? `User “${names[r.targetId]}”` : 'User';
   if (r.targetType === 'message') return 'Message';
@@ -375,7 +376,7 @@ export const ReportsPage: React.FC<PageProps<AdminReport> & { onOpenSupport: (ui
                     {formatAgo(r.createdAt)} · {absolute(r.createdAt)}
                   </span>
                 </div>
-                <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg">{r.reason.replace(/^Unsaid:\s*/, '')}</p>
+                <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg">{r.reason.replace(/^Unsaid( reply)?:\s*/, '')}</p>
                 <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-1 font-mono break-all">
                   {r.targetType === 'user' ? 'user' : 'id'}: {r.targetId}
                 </p>

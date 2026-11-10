@@ -1012,6 +1012,284 @@ test('AR-01: only an admin can allow another birthday try; only that member can 
   assert.equal((await assertSucceeds(ana.doc('age_review_clearances/ana').get())).exists, false);
 });
 
+// ------------------------------------------------------------------
+// Echoes: eight categories, and replies only where they belong
+// ------------------------------------------------------------------
+const REACTION_ONLY_KINDS = ['confession', 'vent', 'unsent', 'thoughts'];
+const REPLY_KINDS = ['advice', 'wins', 'gratitude', 'daydreams'];
+const ALL_KINDS = [...REACTION_ONLY_KINDS, ...REPLY_KINDS];
+const takesReplies = (kind: string) => REPLY_KINDS.includes(kind);
+
+/** An Echo written the way the app writes it: replies carry a counter, and their owner record remembers the kind. */
+function echoAs(uid: string, id: string, kind: string, over: { post?: Record<string, unknown>; owner?: Record<string, unknown> } = {}) {
+  const fs = testEnv.authenticatedContext(uid).firestore();
+  const batch = fs.batch();
+  batch.set(fs.doc(`unsaid/${id}`), {
+    kind, text: 'an anonymous echo', createdAt: firebase.firestore.FieldValue.serverTimestamp(), hugs: 0, same: 0, flags: 0,
+    ...(takesReplies(kind) ? { replyCount: 0 } : {}), ...over.post,
+  });
+  batch.set(fs.doc(`unsaid_owners/${id}`), takesReplies(kind) ? { authorId: uid, kind, seenReplies: 0, ...over.owner } : { authorId: uid, ...over.owner });
+  batch.set(fs.doc(`rate_limits/${uid}`), { unsaid: now() }, { merge: true });
+  return batch.commit();
+}
+
+/** An Echo that already exists (written with the rules off), as the app would have stored it. */
+async function seedEcho(id: string, author: string, kind: string, replyCount = 0) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc(`unsaid/${id}`).set({ kind, text: 'seeded', createdAt: new Date(), hugs: 0, same: 0, flags: 0, ...(takesReplies(kind) ? { replyCount } : {}) });
+    await ctx.firestore().doc(`unsaid_owners/${id}`).set(takesReplies(kind) ? { authorId: author, kind, seenReplies: 0 } : { authorId: author });
+  });
+}
+
+const replyBatch = (uid: string, postId: string, replyId: string, text = 'You can do this!') => {
+  const fs = testEnv.authenticatedContext(uid).firestore();
+  const b = fs.batch();
+  b.set(fs.doc(`unsaid/${postId}/replies/${replyId}`), { text, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  b.set(fs.doc(`unsaid_reply_owners/${replyId}`), { authorId: uid, postId });
+  b.update(fs.doc(`unsaid/${postId}`), { replyCount: firebase.firestore.FieldValue.increment(1), lastReply: replyId });
+  b.set(fs.doc(`rate_limits/${uid}`), { unsaidReply: now() }, { merge: true });
+  return { fs, batch: b };
+};
+const replyAsFull = (uid: string, postId: string, replyId: string, text?: string) => replyBatch(uid, postId, replyId, text).batch.commit();
+
+const deleteReplyBatch = (ctxDb: any, postId: string, replyId: string) => {
+  const b = ctxDb.batch();
+  b.delete(ctxDb.doc(`unsaid/${postId}/replies/${replyId}`));
+  b.delete(ctxDb.doc(`unsaid_reply_owners/${replyId}`));
+  b.update(ctxDb.doc(`unsaid/${postId}`), { replyCount: firebase.firestore.FieldValue.increment(-1), lastReply: replyId });
+  return b;
+};
+
+/** A reply that already exists on a post (rules off), with its owner record and the counter moved to match. */
+async function seedReply(postId: string, replyId: string, author: string) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const fs = ctx.firestore();
+    const post = await fs.doc(`unsaid/${postId}`).get();
+    await fs.doc(`unsaid/${postId}/replies/${replyId}`).set({ text: 'seeded reply', createdAt: new Date() });
+    await fs.doc(`unsaid_reply_owners/${replyId}`).set({ authorId: author, postId });
+    await fs.doc(`unsaid/${postId}`).update({ replyCount: (post.data()!?.replyCount ?? 0) + 1 });
+  });
+}
+
+test('EC-01: all eight categories CAN be published anonymously, and only those eight', async () => {
+  const authors = ['alice', 'bob', 'carol', 'cha', 'dana', 'dave', 'eve', 'ivy'];
+  for (const [i, kind] of ALL_KINDS.entries()) await assertSucceeds(echoAs(authors[i], `e-${kind}`, kind));
+  const reader = testEnv.authenticatedContext('erin').firestore();
+  for (const kind of ALL_KINDS) {
+    const snap = await assertSucceeds(reader.doc(`unsaid/e-${kind}`).get());
+    assert.equal(snap.data()!.kind, kind);
+    assert.ok(!('authorId' in snap.data()!), `${kind}: the public post leaks no author`);
+    assert.equal('replyCount' in snap.data()!, takesReplies(kind), `${kind}: only categories that take replies carry a reply counter`);
+  }
+  // Anything else is refused: an unknown kind, an author field, and a reply counter on a reactions-only category.
+  await assertFails(echoAs('fay', 'e-rant', 'rant'));
+  await assertFails(echoAs('fay', 'e-leak', 'wins', { post: { authorId: 'fay' } }));
+  for (const kind of REACTION_ONLY_KINDS) await assertFails(echoAs('fay', `e-bad-${kind}`, kind, { post: { replyCount: 0 } }));
+  // A reply counter must start at zero, and the owner record cannot lie about the kind or pre-set what the author has seen.
+  await assertFails(echoAs('fay', 'e-count', 'wins', { post: { replyCount: 5 } }));
+  await assertFails(echoAs('fay', 'e-kindlie', 'wins', { owner: { kind: 'vent' } }));
+  await assertFails(echoAs('fay', 'e-seen', 'wins', { owner: { seenReplies: 3 } }));
+});
+
+test('EC-02: replies CAN be posted on Need Advice, Little Wins, Gratitude and Daydreams, in order, with the count going up', async () => {
+  const repliers = ['bob', 'carol', 'cha', 'dana'];
+  for (const [i, kind] of REPLY_KINDS.entries()) {
+    await seedEcho(`r-${kind}`, 'alice', kind);
+    await assertSucceeds(replyAsFull(repliers[i], `r-${kind}`, `reply-${kind}-0001`, `A kind word on ${kind}`));
+    const reader = testEnv.authenticatedContext('erin').firestore();
+    const post = await assertSucceeds(reader.doc(`unsaid/r-${kind}`).get());
+    assert.equal(post.data()!.replyCount, 1, `${kind}: the counter went up`);
+    const replies = await assertSucceeds(reader.collection(`unsaid/r-${kind}/replies`).orderBy('createdAt', 'asc').get());
+    assert.equal(replies.size, 1);
+    assert.deepEqual(Object.keys(replies.docs[0].data()!).sort(), ['createdAt', 'text'], `${kind}: a reply is just text and a time, so it is anonymous`);
+  }
+  // Several replies, one after another (past the 5 second slow mode), stay in order.
+  await seedStamp('bob', 'unsaidReply', 10);
+  await assertSucceeds(replyAsFull('bob', 'r-advice', 'reply-advice-0002', 'Second reply'));
+  const post = await assertSucceeds(testEnv.authenticatedContext('erin').firestore().doc('unsaid/r-advice').get());
+  assert.equal(post.data()!.replyCount, 2);
+});
+
+test('EC-03: replies are REFUSED on Confession, Vent, Unsent Letters and Random Thoughts, whatever the client tries', async () => {
+  let n = 0;
+  for (const kind of REACTION_ONLY_KINDS) {
+    const id = `n-${kind}`;
+    await seedEcho(id, 'alice', kind);
+    const replier = ['bob', 'carol', 'cha', 'dana'][n++];
+    // The full, correctly formed reply batch is refused...
+    await assertFails(replyAsFull(replier, id, `reply-${kind}-0001`));
+    // ...the reply on its own, with no counter change, is refused...
+    const fs = testEnv.authenticatedContext(replier).firestore();
+    await assertFails(fs.doc(`unsaid/${id}/replies/reply-${kind}-0002`).set({ text: 'sneaky', createdAt: now() }));
+    // ...and so is a reply counter appearing on the post (alone, or with a reply).
+    await assertFails(fs.doc(`unsaid/${id}`).update({ replyCount: 1, lastReply: `reply-${kind}-0003` }));
+    // The owner record of a reply that cannot exist is refused too.
+    await assertFails(fs.doc('unsaid_reply_owners/reply-' + kind + '-0004').set({ authorId: replier, postId: id }));
+    const snap = await assertSucceeds(testEnv.authenticatedContext('erin').firestore().doc(`unsaid/${id}`).get());
+    assert.ok(!('replyCount' in snap.data()!), `${kind}: still no reply counter`);
+    // Reactions still work on it.
+    await assertSucceeds(reactAs('erin', id, 'hugs'));
+  }
+  // Even a post of a reactions-only kind that someone forced a reply counter onto (rules off) cannot take a reply.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('unsaid/n-confession').update({ replyCount: 0 }); });
+  await seedStamp('bob', 'unsaidReply', 60);
+  await assertFails(replyAsFull('bob', 'n-confession', 'reply-forced-0001'));
+});
+
+test('EC-04: unauthorized replies are refused: not signed in, not an adult member, suspended, too fast, forged counter, wrong owner', async () => {
+  await seedEcho('a1', 'alice', 'advice');
+  // Not signed in; not an eligible member (no adult birthday / profile on file).
+  const anon = testEnv.unauthenticatedContext().firestore();
+  await assertFails(anon.doc('unsaid/a1/replies/reply-anon-0001').set({ text: 'hi', createdAt: now() }));
+  await assertFails(replyAsFull('zed', 'a1', 'reply-zed-00001'));
+  // Suspended members cannot reply.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('suspensions/bob').set({ source: 'admin', reason: 'x', createdAt: new Date() }); });
+  await assertFails(replyAsFull('bob', 'a1', 'reply-bob-00001'));
+
+  // A counter that moves without a reply, by two, or with the wrong reply id.
+  const carol = testEnv.authenticatedContext('carol').firestore();
+  const inflate = carol.batch();
+  inflate.update(carol.doc('unsaid/a1'), { replyCount: firebase.firestore.FieldValue.increment(1), lastReply: 'reply-fake-0001' });
+  inflate.set(carol.doc('rate_limits/carol'), { unsaidReply: now() }, { merge: true });
+  await assertFails(inflate.commit());
+  const byTwo = replyBatch('carol', 'a1', 'reply-two-00001');
+  byTwo.batch.update(byTwo.fs.doc('unsaid/a1'), { replyCount: firebase.firestore.FieldValue.increment(1) });
+  await assertFails(byTwo.batch.commit());
+  const wrongId = carol.batch();
+  wrongId.set(carol.doc('unsaid/a1/replies/reply-real-00001'), { text: 'x', createdAt: now() });
+  wrongId.set(carol.doc('unsaid_reply_owners/reply-real-00001'), { authorId: 'carol', postId: 'a1' });
+  wrongId.update(carol.doc('unsaid/a1'), { replyCount: firebase.firestore.FieldValue.increment(1), lastReply: 'reply-other-0001' });
+  wrongId.set(carol.doc('rate_limits/carol'), { unsaidReply: now() }, { merge: true });
+  await assertFails(wrongId.commit());
+
+  // An owner record in someone else's name; a reply with extra fields, a client-chosen time, no text or too much text.
+  const forged = replyBatch('carol', 'a1', 'reply-forge-0001');
+  forged.batch.set(forged.fs.doc('unsaid_reply_owners/reply-forge-0001'), { authorId: 'bob', postId: 'a1' });
+  await assertFails(forged.batch.commit());
+  for (const [i, bad] of [{ text: 'x', createdAt: now(), authorId: 'carol' }, { text: 'x', createdAt: new Date() }, { createdAt: now() }, { text: '', createdAt: now() }, { text: 'x'.repeat(301), createdAt: now() }].entries()) {
+    const id = `reply-bad-${String(i).padStart(5, '0')}`;
+    const b = carol.batch();
+    b.set(carol.doc(`unsaid/a1/replies/${id}`), bad);
+    b.set(carol.doc(`unsaid_reply_owners/${id}`), { authorId: 'carol', postId: 'a1' });
+    b.update(carol.doc('unsaid/a1'), { replyCount: firebase.firestore.FieldValue.increment(1), lastReply: id });
+    b.set(carol.doc('rate_limits/carol'), { unsaidReply: now() }, { merge: true });
+    await assertFails(b.commit());
+  }
+
+  // Slow mode: a second reply within five seconds is refused; later it is fine. And a reply cannot be edited afterwards.
+  await assertSucceeds(replyAsFull('dana', 'a1', 'reply-dana-00001'));
+  await assertFails(replyAsFull('dana', 'a1', 'reply-dana-00002'));
+  await seedStamp('dana', 'unsaidReply', 10);
+  await assertSucceeds(replyAsFull('dana', 'a1', 'reply-dana-00003'));
+  await assertFails(testEnv.authenticatedContext('dana').firestore().doc('unsaid/a1/replies/reply-dana-00001').update({ text: 'edited' }));
+  const post = await assertSucceeds(testEnv.authenticatedContext('erin').firestore().doc('unsaid/a1').get());
+  assert.equal(post.data()!.replyCount, 2, 'only the two real replies were counted');
+});
+
+test('EC-05: members CAN delete their own replies and posts, nobody else can, and the counter follows', async () => {
+  await seedEcho('w1', 'alice', 'wins');
+  await seedReply('w1', 'reply-bob-00001', 'bob');
+  await seedReply('w1', 'reply-carol-0001', 'carol');
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  const carol = testEnv.authenticatedContext('carol').firestore();
+  // Someone else's reply, and the post's own author, cannot delete a reply that is not theirs.
+  await assertFails(deleteReplyBatch(carol, 'w1', 'reply-bob-00001').commit());
+  await assertFails(deleteReplyBatch(testEnv.authenticatedContext('alice').firestore(), 'w1', 'reply-bob-00001').commit());
+  // Leaving the owner record alone does not help a stranger: a reply cannot be deleted and the counter lowered by anyone but its writer.
+  for (const stranger of [carol, testEnv.authenticatedContext('alice').firestore()]) {
+    const sneaky = stranger.batch();
+    sneaky.delete(stranger.doc('unsaid/w1/replies/reply-bob-00001'));
+    sneaky.update(stranger.doc('unsaid/w1'), { replyCount: firebase.firestore.FieldValue.increment(-1), lastReply: 'reply-bob-00001' });
+    await assertFails(sneaky.commit());
+  }
+  // The counter cannot be lowered without really deleting a reply of one's own, or at all by a stranger.
+  await assertFails(bob.doc('unsaid/w1').update({ replyCount: firebase.firestore.FieldValue.increment(-1), lastReply: 'reply-carol-0001' }));
+  await assertFails(carol.doc('unsaid/w1').update({ replyCount: firebase.firestore.FieldValue.increment(-1), lastReply: 'reply-carol-0001' }));
+  // The reply alone, with no counter change, cannot be deleted.
+  await assertFails(bob.doc('unsaid/w1/replies/reply-bob-00001').delete());
+  // The author of a reply deletes it: the reply, its owner record and one off the counter, together.
+  await assertSucceeds(deleteReplyBatch(bob, 'w1', 'reply-bob-00001').commit());
+  assert.equal((await assertSucceeds(bob.doc('unsaid/w1').get())).data()!.replyCount, 1);
+  assert.equal((await assertSucceeds(bob.doc('unsaid/w1/replies/reply-bob-00001').get())).exists, false);
+  // A moderator can remove any reply, but still cannot read who wrote it.
+  await seedAdmin();
+  const cha = adminDb();
+  await assertFails(cha.doc('unsaid_reply_owners/reply-carol-0001').get());
+  await assertSucceeds(deleteReplyBatch(cha, 'w1', 'reply-carol-0001').commit());
+  assert.equal((await assertSucceeds(bob.doc('unsaid/w1').get())).data()!.replyCount, 0);
+  // The author deletes their own post (with its owner record), as before.
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const del = alice.batch();
+  del.delete(alice.doc('unsaid/w1'));
+  del.delete(alice.doc('unsaid_owners/w1'));
+  await assertSucceeds(del.commit());
+});
+
+test('EC-06: a reply\'s author stays private, and an author can mark the replies they have seen (and nothing else)', async () => {
+  await seedEcho('d1', 'alice', 'daydreams');
+  await seedReply('d1', 'reply-bob-00001', 'bob');
+  await seedReply('d1', 'reply-carol-0001', 'carol');
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  // Only a reply's own writer can read its owner record: not another member, and not the post's author.
+  await assertSucceeds(bob.doc('unsaid_reply_owners/reply-bob-00001').get());
+  await assertFails(alice.doc('unsaid_reply_owners/reply-bob-00001').get());
+  await assertFails(testEnv.authenticatedContext('erin').firestore().collection('unsaid_reply_owners').get());
+  await assertFails(alice.collection('unsaid_reply_owners').where('postId', '==', 'd1').get());
+  await assertSucceeds(bob.collection('unsaid_reply_owners').where('authorId', '==', 'bob').where('postId', '==', 'd1').get());
+  // Nobody can claim an existing reply.
+  await assertFails(testEnv.authenticatedContext('erin').firestore().doc('unsaid_reply_owners/reply-bob-00001').set({ authorId: 'erin', postId: 'd1' }));
+
+  // The post's author can list their own posts and mark replies as seen, up to the real count.
+  await assertSucceeds(alice.collection('unsaid_owners').where('authorId', '==', 'alice').get());
+  await assertSucceeds(alice.doc('unsaid_owners/d1').update({ seenReplies: 2 }));
+  await assertFails(alice.doc('unsaid_owners/d1').update({ seenReplies: 3 }));
+  await assertFails(alice.doc('unsaid_owners/d1').update({ seenReplies: -1 }));
+  await assertFails(alice.doc('unsaid_owners/d1').update({ authorId: 'bob' }));
+  await assertFails(alice.doc('unsaid_owners/d1').update({ seenReplies: 1, kind: 'vent' }));
+  // Nobody else can touch that record.
+  await assertFails(bob.doc('unsaid_owners/d1').update({ seenReplies: 1 }));
+});
+
+test('EC-07: existing Echoes and reactions are untouched: old posts read, react, flag and delete as before, and new kinds react too', async () => {
+  // An Echo written before the new categories existed: a vent with no reply counter, and an owner record with only the author.
+  await seedUnsaid('old1', 'alice');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('unsaid/old2').set({ kind: 'confession', text: 'old', createdAt: new Date(), expiresAt: new Date(Date.now() + 48 * HOUR), hugs: 1, same: 0, flags: 0 }); await ctx.firestore().doc('unsaid_owners/old2').set({ authorId: 'alice' }); });
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  assert.equal((await assertSucceeds(bob.doc('unsaid/old1').get())).data()!.kind, 'vent');
+  assert.equal((await assertSucceeds(bob.doc('unsaid/old2').get())).data()!.hugs, 1);
+  await assertSucceeds(reactAs('bob', 'old1', 'felt'));
+  await assertSucceeds(reactAs('carol', 'old2', 'hugs'));
+  // Flagging still works, on old and new kinds.
+  await seedEcho('new1', 'dana', 'advice');
+  for (const [uid, id] of [['bob', 'old1'], ['carol', 'new1']] as const) {
+    const fs = testEnv.authenticatedContext(uid).firestore();
+    const b = fs.batch();
+    b.update(fs.doc(`unsaid/${id}`), { flags: firebase.firestore.FieldValue.increment(1) });
+    b.set(fs.doc(`unsaid/${id}/flags/${uid}`), { createdAt: now() });
+    await assertSucceeds(b.commit());
+  }
+  // Reactions work on every new category, including those that take replies (whose counter must not get in the way).
+  let i = 0;
+  for (const kind of ['unsent', 'thoughts', 'wins', 'gratitude', 'daydreams']) {
+    await seedEcho(`k-${kind}`, 'dana', kind);
+    await assertSucceeds(reactAs(['erin', 'fay', 'gail', 'hana', 'jo'][i++], `k-${kind}`, 'hugs'));
+  }
+  // The author of an old post can still delete it.
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const del = alice.batch();
+  del.delete(alice.doc('unsaid/old2'));
+  del.delete(alice.doc('unsaid_owners/old2'));
+  await assertSucceeds(del.commit());
+});
+
+test('EC-08: the rules list the same eight categories and the same four reply categories as the app', async () => {
+  const rules = fs.readFileSync('./firestore.rules', 'utf8');
+  const list = (name: string) => [...(rules.match(new RegExp(`function ${name}\\(\\) \\{\\s*return \\[([^\\]]+)\\]`))?.[1].matchAll(/'([a-z]+)'/g) ?? [])].map((m) => m[1]);
+  assert.deepEqual([...list('unsaidKinds')].sort(), [...ALL_KINDS].sort());
+  assert.deepEqual([...list('unsaidReplyKinds')].sort(), [...REPLY_KINDS].sort());
+});
+
 test('RX-01: Room reactions CAN be added once per person, changed only by one counter, and removed', async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await ctx.firestore().doc('public_room_messages/m1').set({ ...roomMessage('alice'), timestamp: new Date() });

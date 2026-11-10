@@ -53,6 +53,8 @@ import { countUnreadSupport } from '../services/supportService.ts';
 import { deleteCommunityPost, subscribeToCommunity } from '../services/communityService.ts';
 import type { CommunityPost } from '../types.ts';
 import { whileActive } from '../utils/whileActive.ts';
+import { kindInfo, toUnsaidKind } from '../utils/echoKinds.ts';
+import { echoTagClass } from '../components/EchoCategories.tsx';
 
 type Tab = 'overview' | 'support' | 'room' | 'suggestions' | 'reports' | 'moderation' | 'updates';
 
@@ -638,8 +640,8 @@ const ModerationTab: React.FC<{ onConfirm: (c: PendingConfirm) => void }> = ({ o
             {unsaid.map((p) => (
               <li key={p.id} className="card p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={`tag ${p.kind === 'confession' ? '!text-lavender' : '!text-berry'}`}>
-                    {p.kind === 'confession' ? 'Confession' : 'Vent'}
+                  <span className={`tag ${echoTagClass(toUnsaidKind(p.kind))}`}>
+                    {kindInfo(p.kind).emoji} {kindInfo(p.kind).label}
                   </span>
                   <span className={`text-[length:calc(12px_*_var(--fs,1))] ${p.flags >= 3 ? 'text-danger' : 'text-subtle'}`}>
                     {p.flags} {p.flags === 1 ? 'flag' : 'flags'}

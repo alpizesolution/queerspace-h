@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Flag, Info, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, Flag, Info, MessageCircle, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { CrisisSupportCard } from './CrisisSupportCard.tsx';
 import { ReactionIcon } from './ReactionIcons.tsx';
+import { EchoFilterBar, EchoKindPicker, EchoKindTag, echoCardClass, emptyEchoTitle } from './EchoCategories.tsx';
+import { UnsaidReplies } from './UnsaidReplies.tsx';
 import {
   deleteUnsaid,
   flagUnsaid,
@@ -17,7 +19,7 @@ import {
   reactToUnsaid,
   subscribeToUnsaid,
   UNSAID_MAX_LENGTH,
-  UNSAID_KINDS,
+  UNSAID_REPORT_REASONS,
   UnsaidKind,
   UnsaidPost,
   UnsaidReaction,
@@ -25,20 +27,17 @@ import {
 } from '../services/unsaidService.ts';
 import { fetchIsCommunityAdmin } from '../services/communityService.ts';
 import { whileActive } from '../utils/whileActive.ts';
+import { kindAllowsReplies, kindInfo, matchesEchoFilter, type EchoFilter } from '../utils/echoKinds.ts';
 
 const REACTED_KEY = 'qs_unsaid_reacted';
-const REPORT_REASONS = ['Harassment or hate', 'Names or exposes someone', 'Spam or selling', 'Something else'];
 
-const PLACEHOLDERS: Record<UnsaidKind, string> = {
-  vent: "What's weighing on you?",
-  confession: 'The thing you never said out loud…',
-};
-
-const FILTERS: { id: 'all' | UnsaidKind; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'vent', label: 'Vents' },
-  { id: 'confession', label: 'Confessions' },
-];
+/** What App tells Echoes about replies to the member's own posts (see hooks/useEchoReplyNotices.ts). */
+export interface EchoReplyNotices {
+  /** Replies the member has not seen yet, per post of theirs. */
+  unseenByPost: Record<string, number>;
+  /** The member looked at a post's replies. */
+  markSeen: (postId: string, replyCount: number) => void;
+}
 
 /**
  * The six reactions. `type` (stored) and the order never change. `emoji` is what each one means; it is drawn as line art by
@@ -69,7 +68,7 @@ function saveReacted(map: Record<string, UnsaidReaction>) {
   }
 }
 
-export const UnsaidView: React.FC = () => {
+export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ replyNotices }) => {
   /** The reaction just chosen ("postId:type"), so only that one plays the small pop. */
   const [popped, setPopped] = useState<string | null>(null);
   const [posts, setPosts] = useState<UnsaidPost[]>([]);
@@ -84,7 +83,9 @@ export const UnsaidView: React.FC = () => {
   const [myIds, setMyIds] = useState<Set<string>>(new Set());
   const [reacted, setReacted] = useState<Record<string, UnsaidReaction>>(loadReacted);
   const [kind, setKind] = useState<UnsaidKind>('vent');
-  const [filter, setFilter] = useState<'all' | UnsaidKind>('all');
+  const [filter, setFilter] = useState<EchoFilter>('all');
+  /** Posts whose replies are open. */
+  const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
   // The draft lives here, not in the sheet, so dismissing the composer by accident keeps what was typed.
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
@@ -222,15 +223,22 @@ export const UnsaidView: React.FC = () => {
   };
 
   const visible = mergeUnsaidPages(posts, older).filter(
-    (p) => !reportedIds.has(p.id) && !removedIds.has(p.id) && (filter === 'all' || p.kind === filter)
+    (p) => !reportedIds.has(p.id) && !removedIds.has(p.id) && matchesEchoFilter(p.kind, filter)
   );
+
+  const toggleThread = (postId: string) =>
+    setOpenThreads((current) => {
+      const next = new Set(current);
+      if (!next.delete(postId)) next.add(postId);
+      return next;
+    });
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-[calc(var(--tabbar-h)+6rem)] desk:pb-16">
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-[length:calc(28px_*_var(--fs,1))] font-semibold tracking-tight text-fg">Echoes</h1>
-          <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-0.5">Vent or confess anonymously.</p>
+          <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-0.5">Release, connect and uplift, anonymously.</p>
         </div>
         {available && (
           <button onClick={() => setComposeOpen(true)} className="btn btn-primary btn-sm hidden sm:inline-flex shrink-0">
@@ -244,23 +252,7 @@ export const UnsaidView: React.FC = () => {
         <p className="card p-5 text-sm text-muted">Echoes isn't available right now. Please try again later.</p>
       ) : (
         <>
-          <div
-            role="tablist"
-            aria-label="Filter posts"
-            className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto scrollbar-none pb-1 mb-4"
-          >
-            {FILTERS.map(({ id, label }) => (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={filter === id}
-                onClick={() => setFilter(id)}
-                className={`chip shrink-0 ${filter === id ? '!bg-fg !text-ink !border-fg' : ''}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <EchoFilterBar filter={filter} onChange={setFilter} />
 
           {loading ? (
             <div className="space-y-2.5" aria-hidden="true">
@@ -272,10 +264,8 @@ export const UnsaidView: React.FC = () => {
             <p className="text-center text-sm text-muted py-12">Couldn't load the wall. Please try again soon.</p>
           ) : visible.length === 0 ? (
             <div className="text-center py-14 px-6">
-              <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">
-                {filter === 'confession' ? 'No confessions yet' : filter === 'vent' ? 'No vents yet' : "It's quiet here"}
-              </p>
-              <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1 mb-5">Be the first to let something out.</p>
+              <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">{emptyEchoTitle(filter)}</p>
+              <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1 mb-5">Be the first to share something.</p>
               <button onClick={() => setComposeOpen(true)} className="btn btn-secondary btn-sm">
                 Write an Echo
               </button>
@@ -288,15 +278,9 @@ export const UnsaidView: React.FC = () => {
                 return (
                   <li
                     key={post.id}
-                    className={`relative overflow-hidden rounded-2xl border px-3.5 py-3 sm:px-4 anim-fade ${
-                      post.kind === 'confession'
-                        ? 'border-lavender/20 bg-gradient-to-br from-lavender/[0.09] via-surface to-surface'
-                        : 'border-berry/20 bg-gradient-to-br from-berry/[0.09] via-surface to-surface'
-                    }`}
+                    className={`relative overflow-hidden rounded-2xl border px-3.5 py-3 sm:px-4 anim-fade ${echoCardClass(post.kind)}`}
                   >
-                    <span className={`tag mb-1.5 ${post.kind === 'confession' ? '!text-lavender' : '!text-berry'}`}>
-                      {post.kind === 'confession' ? '🌙 Confession' : '☁️ Vent'}
-                    </span>
+                    <EchoKindTag kind={post.kind} className="mb-1.5" />
                     <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg/90 leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
                       {post.text}
                     </p>
@@ -346,6 +330,36 @@ export const UnsaidView: React.FC = () => {
                         )}
                       </div>
                     </div>
+
+                    {/* Replies exist only for Need Advice and the Uplift categories. The other four never show a Reply control
+                        (and firestore.rules refuses a reply to them regardless). */}
+                    {kindAllowsReplies(post.kind) && (
+                      <div className="mt-0.5 -ml-2 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleThread(post.id)}
+                          aria-expanded={openThreads.has(post.id)}
+                          aria-label={post.replyCount > 0 ? `${post.replyCount} ${post.replyCount === 1 ? 'reply' : 'replies'}. ${openThreads.has(post.id) ? 'Hide' : 'Show'} replies` : 'Reply'}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[length:calc(13px_*_var(--fs,1))] font-medium text-[var(--reaction-rest)] transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60 cursor-pointer"
+                        >
+                          <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                          <span>{post.replyCount > 0 ? `${post.replyCount} ${post.replyCount === 1 ? 'reply' : 'replies'}` : 'Reply'}</span>
+                        </button>
+                        {mine && (replyNotices?.unseenByPost[post.id] ?? 0) > 0 && (
+                          <span className="inline-flex h-5 items-center rounded-full bg-berry px-2 text-[length:calc(11px_*_var(--fs,1))] font-bold text-ink" aria-label={`${replyNotices!.unseenByPost[post.id]} new ${replyNotices!.unseenByPost[post.id] === 1 ? 'reply' : 'replies'}`}>
+                            {replyNotices!.unseenByPost[post.id]} new
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {kindAllowsReplies(post.kind) && openThreads.has(post.id) && (
+                      <UnsaidReplies
+                        post={post}
+                        isAdmin={isAdmin}
+                        onViewed={mine ? (count) => replyNotices?.markSeen(post.id, count) : undefined}
+                        onToast={setToast}
+                      />
+                    )}
                   </li>
                 );
               })}
@@ -377,21 +391,7 @@ export const UnsaidView: React.FC = () => {
           }
         >
           <form id="qs-new-echo" onSubmit={handlePost} className="flex flex-col gap-3 text-fg">
-            <div className="flex gap-2" role="radiogroup" aria-label="Post type">
-              {UNSAID_KINDS.map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="radio"
-                  aria-checked={kind === id}
-                  aria-pressed={kind === id}
-                  onClick={() => setKind(id)}
-                  className="chip"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <EchoKindPicker value={kind} onChange={setKind} />
             <textarea
               rows={5}
               maxLength={UNSAID_MAX_LENGTH}
@@ -400,7 +400,7 @@ export const UnsaidView: React.FC = () => {
                 setDraft(e.target.value);
                 setComposeError(null);
               }}
-              placeholder={PLACEHOLDERS[kind]}
+              placeholder={kindInfo(kind).placeholder}
               aria-label="Write something unsaid"
               className="input text-base sm:text-[length:calc(15px_*_var(--fs,1))] resize-none"
             />
@@ -423,7 +423,7 @@ export const UnsaidView: React.FC = () => {
               </div>
               {anonInfoOpen && (
                 <p className="mt-1 text-[length:calc(12px_*_var(--fs,1))] leading-relaxed text-muted">
-                  No names, no replies. Nobody can see who wrote an echo; only you can tell which ones are yours, and you can delete yours any time.
+                  No names. Nobody can see who wrote an echo or a reply; only you can tell which ones are yours, and you can delete them any time. Need Advice, Little Wins, Gratitude and Daydreams take replies; the rest are reactions only.
                 </p>
               )}
             </div>
@@ -435,7 +435,7 @@ export const UnsaidView: React.FC = () => {
         <Sheet title="Report this post" onClose={() => setReportingId(null)} size="sm">
           <p className="mb-3">It's hidden for you right away. Posts with several reports are hidden for everyone.</p>
           <div className="flex flex-col gap-2">
-            {REPORT_REASONS.map((reason) => (
+            {UNSAID_REPORT_REASONS.map((reason) => (
               <button key={reason} onClick={() => handleReport(reason)} className="btn btn-secondary justify-start">
                 {reason}
               </button>
