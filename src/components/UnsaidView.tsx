@@ -3,6 +3,7 @@ import { CheckCircle2, Flag, Info, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { CrisisSupportCard } from './CrisisSupportCard.tsx';
+import { ReactionIcon } from './ReactionIcons.tsx';
 import {
   deleteUnsaid,
   flagUnsaid,
@@ -39,7 +40,10 @@ const FILTERS: { id: 'all' | UnsaidKind; label: string }[] = [
   { id: 'confession', label: 'Confessions' },
 ];
 
-/** `img` swaps the emoji for a custom image from public/emoji. */
+/**
+ * The six reactions. `type` (stored) and the order never change. `emoji` is what each one means; it is drawn as line art by
+ * ReactionIcon (ReactionIcons.tsx). `img` is Crygago's original artwork in public/emoji, which its line-art is made from.
+ */
 const REACTIONS: { type: UnsaidReaction; emoji: string; label: string; img?: string }[] = [
   { type: 'hugs', emoji: '🫂', label: 'Sending a hug' },
   { type: 'same', emoji: '🤍', label: 'Same here' },
@@ -297,8 +301,8 @@ export const UnsaidView: React.FC = () => {
                       {post.text}
                     </p>
                     <div className="flex flex-wrap items-center gap-y-0.5 mt-2 -ml-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
-                      <div className="flex flex-wrap items-center gap-1">
-                        {REACTIONS.map(({ type, emoji, label, img }) => {
+                      <div className="flex flex-wrap items-center gap-1 max-[340px]:gap-0">
+                        {REACTIONS.map(({ type, label }) => {
                           const active = myReaction === type;
                           return (
                             <button
@@ -308,18 +312,14 @@ export const UnsaidView: React.FC = () => {
                               aria-pressed={active}
                               aria-label={`${label}, ${post[type]}`}
                               title={label}
-                              // Transparent and borderless at rest; the chosen one gets only a faint outline. The emoji itself
-                              // (or the custom image) is never restyled: hover and press just scale it a little.
-                              className={`group inline-flex items-center gap-1 h-8 min-w-8 justify-center px-1.5 rounded-full bg-transparent transition-shadow cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60 disabled:cursor-default disabled:opacity-40 ${
-                                active ? 'ring-1 ring-inset ring-lavender/35' : ''
+                              // Monochrome line art on a transparent button: muted lavender-gray at rest, the accent lavender
+                              // (with a faint outline) when chosen. Hover and press just scale the drawing a little.
+                              className={`group inline-flex items-center gap-1 h-8 min-w-8 justify-center px-1.5 max-[340px]:px-1 rounded-full bg-transparent transition-shadow cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60 disabled:cursor-default disabled:opacity-40 ${
+                                active ? 'text-lavender ring-1 ring-inset ring-lavender/35' : 'text-[var(--reaction-rest)]'
                               }`}
                             >
                               <span className={`inline-flex items-center justify-center transition-transform duration-150 ease-out group-enabled:group-hover:scale-110 group-enabled:group-active:scale-90 ${popped === `${post.id}:${type}` ? 'reaction-pop' : ''}`}>
-                                {img ? (
-                                  <img src={img} alt="" aria-hidden="true" width={20} height={20} className="w-5 h-5" />
-                                ) : (
-                                  <span aria-hidden="true" className="text-[length:calc(19px_*_var(--fs,1))] leading-none">{emoji}</span>
-                                )}
+                                <ReactionIcon type={type} />
                               </span>
                               {post[type] > 0 && <span className={`text-[length:calc(11px_*_var(--fs,1))] tabular-nums ${active ? 'text-lavender' : 'text-subtle'}`}>{post[type]}</span>}
                             </button>

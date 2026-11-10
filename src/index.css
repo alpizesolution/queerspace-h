@@ -63,12 +63,15 @@ html[data-fontsize='large'] { --fs: 1.2; }
 
 :root {
   color-scheme: dark;
+  /* The Echoes reaction icons at rest (muted lavender-gray). Chosen reactions use --color-lavender, which also follows the theme. */
+  --reaction-rest: #a99db3;
   --header-h: 3.5rem;
   --tabbar-h: calc(3.5rem + env(safe-area-inset-bottom));
 }
 
 html[data-theme='light'] {
   color-scheme: light;
+  --reaction-rest: #85778f;
   --color-ink: #fbf9fc;
   --color-surface: #ffffff;
   --color-raised: #f2edf6;
