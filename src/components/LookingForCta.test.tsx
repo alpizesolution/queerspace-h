@@ -2,6 +2,7 @@ import '../../test/dom-setup.ts';
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
+import fs from 'node:fs';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { StardustButton } from './StardustButton.tsx';
 import { LookingForBody } from './LookingForBody.tsx';
@@ -68,7 +69,20 @@ test('compact Stardust on your own post shows the count and offers nothing to gi
   assert.match(document.body.textContent ?? '', /Stardust·5/);
 });
 
-test('the default look is untouched, so Community keeps "Give Stardust" and its pill', () => {
+test('Community Posts and Looking For both use the compact Stardust, and nothing but the look changed on Community', () => {
+  const read = (file: string) => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+  const community = read('src/components/CommunityFeedView.tsx');
+  const lookingFor = read('src/components/LookingForView.tsx');
+  assert.match(community, /<StardustButton\s+variant="compact"/);
+  assert.match(lookingFor, /<StardustButton\s+variant="compact"/);
+  // Same behaviour as before: the same count, state, own-post rule and handler.
+  assert.match(community, /count=\{stardust\.countFor\(post\.id, post\.stardustCount\)\}/);
+  assert.match(community, /own=\{Boolean\(uid\) && post\.authorId === uid\}/);
+  assert.match(community, /onToggle=\{\(\) => void handleStardust\(post\)\}/);
+  assert.match(community, /useStardust\('community'/);
+});
+
+test('the original look is still available (the default variant), with "Give Stardust" and its pill', () => {
   const { rerender } = render(<StardustButton count={3} given={false} onToggle={noop} />);
   assert.match(screen.getByRole('button').textContent ?? '', /Give Stardust/);
   assert.ok(screen.getByRole('button').className.includes('border'), 'the default still has its border classes');

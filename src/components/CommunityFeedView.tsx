@@ -451,6 +451,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
 
                 <div className="flex items-center gap-1 mt-3 -ml-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
                   <StardustButton
+                    variant="compact"
                     count={stardust.countFor(post.id, post.stardustCount)}
                     given={Boolean(stardust.given[post.id])}
                     pending={Boolean(stardust.pending[post.id])}
