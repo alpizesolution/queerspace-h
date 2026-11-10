@@ -27,6 +27,7 @@ import {
 } from '../services/unsaidService.ts';
 import { fetchIsCommunityAdmin } from '../services/communityService.ts';
 import { whileActive } from '../utils/whileActive.ts';
+import { dailyEchoPrompt } from '../utils/dailyEchoPrompt.ts';
 import { kindAllowsReplies, kindInfo, matchesEchoFilter, type EchoFilter } from '../utils/echoKinds.ts';
 
 const REACTED_KEY = 'qs_unsaid_reacted';
@@ -100,6 +101,8 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
   const [isAdmin, setIsAdmin] = useState(false);
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // Same for every member until midnight in Manila; `now` ticks, so it rolls over without a reload.
+  const todaysPrompt = dailyEchoPrompt(now);
 
   const available = isUnsaidAvailable();
 
@@ -146,6 +149,24 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
   }, [toast]);
 
   const showCrisis = needsCrisisSupport(draft);
+
+  // Today's Echo prompt is optional inspiration. The ordinary buttons always open a blank composer,
+  // so a prompt that was inserted earlier and never edited is cleared; anything the member typed is kept.
+  const insertedPrompt = useRef<string | null>(null);
+  const openBlank = () => {
+    if (insertedPrompt.current !== null && draft === insertedPrompt.current) setDraft('');
+    insertedPrompt.current = null;
+    setComposeOpen(true);
+  };
+  const openWithPrompt = () => {
+    // A draft in progress is never overwritten by the prompt.
+    if (!draft.trim()) {
+      setDraft(todaysPrompt.text + '\n\n');
+      insertedPrompt.current = todaysPrompt.text + '\n\n';
+    }
+    setComposeError(null);
+    setComposeOpen(true);
+  };
 
   const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,7 +262,7 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
           <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-0.5">Release, connect and uplift, anonymously.</p>
         </div>
         {available && (
-          <button onClick={() => setComposeOpen(true)} className="btn btn-primary btn-sm hidden sm:inline-flex shrink-0">
+          <button onClick={openBlank} className="btn btn-primary btn-sm hidden sm:inline-flex shrink-0">
             <Plus className="w-4 h-4" />
             Write an Echo
           </button>
@@ -252,6 +273,14 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
         <p className="card p-5 text-sm text-muted">Echoes isn't available right now. Please try again later.</p>
       ) : (
         <>
+          <section className="card p-4 mb-3" aria-label="Today's Echo">
+            <p className="text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-wide text-subtle">Today's Echo</p>
+            <p className="mt-1 text-[length:calc(15px_*_var(--fs,1))] leading-snug text-fg" data-testid="daily-echo-prompt">{todaysPrompt.text}</p>
+            <button type="button" onClick={openWithPrompt} className="btn btn-secondary btn-sm mt-3">
+              Write an Echo
+            </button>
+          </section>
+
           <EchoFilterBar filter={filter} onChange={setFilter} />
 
           {loading ? (
@@ -266,7 +295,7 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
             <div className="text-center py-14 px-6">
               <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">{emptyEchoTitle(filter)}</p>
               <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-1 mb-5">Be the first to share something.</p>
-              <button onClick={() => setComposeOpen(true)} className="btn btn-secondary btn-sm">
+              <button onClick={openBlank} className="btn btn-secondary btn-sm">
                 Write an Echo
               </button>
             </div>
@@ -376,7 +405,7 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
             </div>
           )}
 
-          <FloatingAddButton onClick={() => setComposeOpen(true)} label="Write an Echo" />
+          <FloatingAddButton onClick={openBlank} label="Write an Echo" />
         </>
       )}
 
