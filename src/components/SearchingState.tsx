@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Heart, Shield, RefreshCw } from 'lucide-react';
 import { UserPreferences } from '../types.ts';
 import { ageRangeFromPrefs, joinLiveMatchQueue, LiveMatch, queueMatchFields } from '../services/liveMatchService.ts';
 import { startSearchAttempt } from '../utils/search-attempt.ts';
+import { pickSeekEmptyMessage } from '../utils/seekEmptyMessage.ts';
 
 interface SearchingStateProps {
   mode: 'quick' | 'custom';
@@ -51,6 +52,8 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
 
   const handleKeepSearching = () => setAttempt((n) => n + 1);
   const stopped = searchTimedOut || Boolean(error);
+  // One message each time the empty state appears; it stays the same while it is on screen, however often this re-renders.
+  const emptyMessage = useMemo(() => pickSeekEmptyMessage(), [searchTimedOut]);
 
   const progress = Math.min(secondsElapsed / SEARCH_WINDOW_S, 1) * 100;
 
@@ -82,7 +85,7 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
           {error
             ? error
             : searchTimedOut
-            ? 'Try again in a moment, or drop by Galaxy.'
+            ? emptyMessage
             : (
               <>
                 Chatting as <span className="text-fg font-medium">{prefs.displayName}</span> ({prefs.pronouns})
