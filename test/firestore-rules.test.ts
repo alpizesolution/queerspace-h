@@ -1302,9 +1302,9 @@ test('EC-09: an Echo CAN carry no mood, one mood or two, but never a third, a re
   await assertFails(echoAs('eve', 'm-unknown', 'vent', { post: { moodTags: ['furious'] } }));
   await assertFails(echoAs('ivy', 'm-empty', 'vent', { post: { moodTags: [] } }));
   await assertFails(echoAs('fay', 'm-string', 'vent', { post: { moodTags: 'happy' } }));
-  await assertFails(echoAs('gus', 'm-mixed', 'vent', { post: { moodTags: ['happy', 7] } }));
+  await assertFails(echoAs('gail', 'm-mixed', 'vent', { post: { moodTags: ['happy', 7] } }));
   // A mood is not a category: it does not unlock replies.
-  await assertFails(echoAs('hal', 'm-reply', 'vent', { post: { moodTags: ['happy'], replyCount: 0 } }));
+  await assertFails(echoAs('hana', 'm-reply', 'vent', { post: { moodTags: ['happy'], replyCount: 0 } }));
 });
 
 test('EC-10: the rules list the same 24 moods as the app', async () => {
@@ -1313,6 +1313,164 @@ test('EC-10: the rules list the same 24 moods as the app', async () => {
   const { MOOD_IDS } = await import('../src/utils/echoMoods.ts');
   assert.equal(MOOD_IDS.length, 24);
   assert.deepEqual([...listed].sort(), [...MOOD_IDS].sort());
+});
+
+// ---------------------------------------------------------------------------------------------------- Echo notifications
+const FVn = () => firebase.firestore.FieldValue.serverTimestamp();
+async function replyTime(postId: string, replyId: string) {
+  let t: unknown;
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { t = (await ctx.firestore().doc(`unsaid/${postId}/replies/${replyId}`).get()).data()!.createdAt; });
+  return t;
+}
+/** Writes echo_notifications/{owner}/items/{id} as `uid`, the way the app does. */
+const notifyAs = (uid: string, id: string, data: Record<string, unknown>, owner: string = uid) =>
+  testEnv.authenticatedContext(uid).firestore().doc(`echo_notifications/${owner}/items/${id}`).set({ read: false, createdAt: FVn(), ...data });
+async function replyNote(uid: string, postId: string, replyId: string, kind: string, over: Record<string, unknown> = {}, id = `reply_${replyId}`, owner = uid) {
+  return notifyAs(uid, id, { type: 'reply', postId, kind, replyId, preview: 'You can do it', eventAt: await replyTime(postId, replyId), ...over }, owner);
+}
+async function addReactions(postId: string, counts: Record<string, number>) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc(`unsaid/${postId}`).update(counts); });
+}
+
+test('EN-01: the author CAN record a reply notification on each of the four reply categories, and only they can read it', async () => {
+  for (const kind of REPLY_KINDS) {
+    await seedEcho(`n-${kind}`, 'alice', kind);
+    await seedReply(`n-${kind}`, `reply-bob-${kind}`, 'bob');
+    await assertSucceeds(replyNote('alice', `n-${kind}`, `reply-bob-${kind}`, kind));
+  }
+  const mine = await assertSucceeds(testEnv.authenticatedContext('alice').firestore().collection('echo_notifications/alice/items').get());
+  assert.equal(mine.size, 4);
+  for (const stranger of ['bob', 'carol']) {
+    await assertFails(testEnv.authenticatedContext(stranger).firestore().collection('echo_notifications/alice/items').get());
+    await assertFails(testEnv.authenticatedContext(stranger).firestore().doc('echo_notifications/alice/items/reply_reply-bob-wins').get());
+  }
+  await assertFails(testEnv.unauthenticatedContext().firestore().collection('echo_notifications/alice/items').get());
+  // Nothing in a notification names the replier or reactor.
+  for (const d of mine.docs) assert.deepEqual(Object.keys(d.data()).sort(), ['createdAt', 'eventAt', 'kind', 'postId', 'preview', 'read', 'replyId', 'type'], 'only event fields: no author, replier or reactor id');
+});
+
+test('EN-02: there is NO reply notification on a category that takes no replies, whatever is claimed', async () => {
+  for (const kind of REACTION_ONLY_KINDS) {
+    await seedEcho(`x-${kind}`, 'alice', kind);
+    // Even with a reply document forced in with the rules off, the category cannot be notified.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`unsaid/x-${kind}/replies/reply-forced-${kind}`).set({ text: 'forced', createdAt: new Date() });
+      await ctx.firestore().doc(`unsaid_reply_owners/reply-forced-${kind}`).set({ authorId: 'bob', postId: `x-${kind}` });
+    });
+    await assertFails(replyNote('alice', `x-${kind}`, `reply-forced-${kind}`, kind));
+  }
+});
+
+test('EN-03: NO self-notification: a reply the author wrote themselves never notifies them', async () => {
+  await seedEcho('self1', 'alice', 'advice');
+  await seedReply('self1', 'reply-alice-self1', 'alice');
+  await assertFails(replyNote('alice', 'self1', 'reply-alice-self1', 'advice'));
+});
+
+test('EN-04: notifications CANNOT be forged: not into another list, not by a non-author, not for made-up events', async () => {
+  await seedEcho('f1', 'alice', 'advice');
+  await seedReply('f1', 'reply-bob-forge1', 'bob');
+  // Bob (or anyone) writing into Alice's list.
+  await assertFails(replyNote('bob', 'f1', 'reply-bob-forge1', 'advice', {}, 'reply_reply-bob-forge1', 'alice'));
+  // Bob writing into his own list about an Echo that is not his.
+  await assertFails(replyNote('bob', 'f1', 'reply-bob-forge1', 'advice'));
+  // The real author, but: a reply that does not exist, a wrong category, a wrong time, a wrong id, extra fields, already read.
+  await assertFails(notifyAs('alice', 'reply_reply-nope-0001', { type: 'reply', postId: 'f1', kind: 'advice', replyId: 'reply-nope-0001', preview: 'x', eventAt: new Date() }));
+  await assertFails(replyNote('alice', 'f1', 'reply-bob-forge1', 'wins'));
+  await assertFails(replyNote('alice', 'f1', 'reply-bob-forge1', 'advice', { eventAt: new Date(0) }));
+  await assertFails(replyNote('alice', 'f1', 'reply-bob-forge1', 'advice', {}, 'reply_somethingelse'));
+  await assertFails(replyNote('alice', 'f1', 'reply-bob-forge1', 'advice', { actorId: 'bob' }));
+  await assertFails(replyNote('alice', 'f1', 'reply-bob-forge1', 'advice', { read: true }));
+  await assertFails(replyNote('alice', 'f1', 'reply-bob-forge1', 'advice', { preview: 'x'.repeat(200) }));
+  await assertFails(replyNote('alice', 'f1', 'reply-bob-forge1', 'advice', { createdAt: new Date(0) }));
+  // An Echo that does not exist.
+  await assertFails(notifyAs('alice', 'reply_reply-bob-forge1', { type: 'reply', postId: 'ghost', kind: 'advice', replyId: 'reply-bob-forge1', preview: 'x', eventAt: new Date() }));
+  // And the genuine one still works.
+  await assertSucceeds(replyNote('alice', 'f1', 'reply-bob-forge1', 'advice'));
+});
+
+test('EN-05: one event, one notification: a second record for the same reply is refused, even after it was read', async () => {
+  await seedEcho('d1', 'alice', 'wins');
+  await seedReply('d1', 'reply-bob-dupe01', 'bob');
+  await assertSucceeds(replyNote('alice', 'd1', 'reply-bob-dupe01', 'wins'));
+  await assertFails(replyNote('alice', 'd1', 'reply-bob-dupe01', 'wins'));
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc('echo_notifications/alice/items/reply_reply-bob-dupe01').update({ read: true }));
+  await assertFails(replyNote('alice', 'd1', 'reply-bob-dupe01', 'wins'));
+  assert.equal((await assertSucceeds(alice.collection('echo_notifications/alice/items').get())).size, 1);
+});
+
+test('EN-06: read state: the owner CAN mark one read, only that field and only to read; nobody can delete or edit anything else', async () => {
+  await seedEcho('r1', 'alice', 'gratitude');
+  await seedReply('r1', 'reply-bob-read01', 'bob');
+  await assertSucceeds(replyNote('alice', 'r1', 'reply-bob-read01', 'gratitude'));
+  const ref = 'echo_notifications/alice/items/reply_reply-bob-read01';
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc(ref).update({ read: true }));
+  await assertFails(alice.doc(ref).update({ preview: 'changed' }));
+  await assertFails(alice.doc(ref).update({ read: true, preview: 'changed' }));
+  await assertFails(alice.doc(ref).update({ postId: 'other' }));
+  await assertSucceeds(alice.doc(ref).update({ read: true }));
+  await assertFails(alice.doc(ref).update({ read: false }));
+  await assertFails(alice.doc(ref).delete());
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc(ref).delete());
+});
+
+test('EN-07: a milestone CAN be recorded once the reactions really reach it, for any category, and never before or with a wrong id', async () => {
+  await seedEcho('m1', 'alice', 'vent');
+  const note = (threshold: number, over: Record<string, unknown> = {}, id = `milestone_m1_${threshold}`, uid = 'alice') =>
+    notifyAs(uid, id, { type: 'milestone', postId: 'm1', kind: 'vent', threshold, ...over });
+  await assertFails(note(10)); // no reactions yet
+  await addReactions('m1', { hugs: 4, felt: 3, cry: 2 });
+  await assertFails(note(10)); // 9 so far
+  await addReactions('m1', { same: 1 });
+  await assertSucceeds(note(10));
+  await assertFails(note(10)); // once only
+  await assertFails(note(25)); // not reached
+  await assertFails(note(11, {}, 'milestone_m1_11')); // not an approved threshold
+  await assertFails(note(10, {}, 'milestone_m1_25')); // the id must match
+  await assertFails(note(25, { preview: 'x' })); // nothing but a milestone's own fields
+  await assertFails(note(10, {}, 'milestone_m1_10', 'bob')); // not the author
+  await assertFails(notifyAs('bob', 'milestone_m1_10', { type: 'milestone', postId: 'm1', kind: 'vent', threshold: 10 }, 'alice'));
+  await addReactions('m1', { hugs: 44 }); // 50 in all
+  await assertSucceeds(note(25));
+  await assertSucceeds(note(50));
+  await assertFails(note(100));
+});
+
+test('EN-08: deleted Echoes and replies: nothing can be recorded for them, and what was recorded stays readable', async () => {
+  await seedEcho('g1', 'alice', 'daydreams');
+  await seedReply('g1', 'reply-bob-gone001', 'bob');
+  await seedReply('g1', 'reply-bob-gone002', 'bob');
+  await assertSucceeds(replyNote('alice', 'g1', 'reply-bob-gone001', 'daydreams'));
+  const t2 = await replyTime('g1', 'reply-bob-gone002');
+  // The second reply is deleted before the author's device records it.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('unsaid/g1/replies/reply-bob-gone002').delete();
+    await ctx.firestore().doc('unsaid_reply_owners/reply-bob-gone002').delete();
+  });
+  await assertFails(notifyAs('alice', 'reply_reply-bob-gone002', { type: 'reply', postId: 'g1', kind: 'daydreams', replyId: 'reply-bob-gone002', preview: 'x', eventAt: t2 }));
+  // The Echo itself is deleted: the earlier notification is still the author's to read, and no new one can be made.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('unsaid/g1').delete(); });
+  await assertSucceeds(testEnv.authenticatedContext('alice').firestore().doc('echo_notifications/alice/items/reply_reply-bob-gone001').get());
+  await assertFails(notifyAs('alice', 'milestone_g1_10', { type: 'milestone', postId: 'g1', kind: 'daydreams', threshold: 10 }));
+});
+
+test('EN-09: preferences are private, only two true/false switches', async () => {
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  await assertSucceeds(alice.doc('echo_notifications/alice').set({ replies: false, milestones: true }));
+  assert.equal((await assertSucceeds(alice.doc('echo_notifications/alice').get())).data()!.replies, false);
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('echo_notifications/alice').get());
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('echo_notifications/alice').set({ replies: true, milestones: true }));
+  await assertFails(alice.doc('echo_notifications/alice').set({ replies: 'yes', milestones: true }));
+  await assertFails(alice.doc('echo_notifications/alice').set({ replies: true, milestones: true, comfort: true }));
+  await assertFails(alice.doc('echo_notifications/alice').set({ replies: true }));
+});
+
+test('EN-10: Signals stays server-only: the Signals inbox is still unreadable by others and unwritable by its owner', async () => {
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('signalsInbox/alice').get());
+  await assertFails(testEnv.authenticatedContext('alice').firestore().doc('signalsInbox/alice').set({ rev: 1 }));
+  await assertFails(testEnv.authenticatedContext('alice').firestore().doc('echo_notifications/alice/items/signal_x').set({ read: false, createdAt: FVn(), type: 'signal', postId: 'x', kind: 'vent' }));
 });
 
 test('RX-01: Room reactions CAN be added once per person, changed only by one counter, and removed', async () => {

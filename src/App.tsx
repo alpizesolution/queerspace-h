@@ -45,6 +45,7 @@ import { FONT_SIZE_CHOSEN_KEY, FONT_SIZE_KEY, FontSize, isPhoneDevice, resolveFo
 import { loadNsfwPreference, saveNsfwPreference, type NsfwPreference } from './utils/nsfwPreference.ts';
 import { useSignalsInbox } from './hooks/useSignalsInbox.ts';
 import { useEchoReplyNotices } from './hooks/useEchoReplyNotices.ts';
+import { useEchoNotifications } from './hooks/useEchoNotifications.ts';
 import { useUnreadUpdates } from './hooks/useUnreadUpdates.ts';
 import { WhatsNewSheet } from './components/WhatsNewSheet.tsx';
 
@@ -317,8 +318,11 @@ export default function App() {
 
   // Replies to the member's own Echoes (Need Advice and Uplift): a badge on the Echoes tab, a "new" tag on the post, and a toast.
   // Replies are anonymous, so the notice never says who. On the Echoes screen itself the post already shows it.
+  // The Echo Notifications list (replies and milestones); its unread count is the Echoes tab's badge.
+  const echoNotifs = useEchoNotifications(isFirebaseConfigured && !ageGateOpen && !ageRestricted);
   const echoNotices = useEchoReplyNotices(isFirebaseConfigured && !ageGateOpen && !ageRestricted, (notice) => {
     if (notice.kind === 'new' && currentViewRef.current === 'unsaid') return;
+    if (!echoNotifs.prefs.replies) return;
     showToast(
       notice.kind === 'summary'
         ? `You have ${notice.count} new ${notice.count === 1 ? 'reply' : 'replies'} on your echoes.`
@@ -602,7 +606,7 @@ export default function App() {
           hasSupportReply={hasSupportReply}
           hasUnreadUpdates={hasUnreadUpdates}
           profile={userPrefs}
-          badges={{ signals: signalsInbox.pendingIds.length + signalsInbox.acceptedUnread.length + signalsInbox.requestIds.length, unsaid: echoNotices.unseenTotal }}
+          badges={{ signals: signalsInbox.pendingIds.length + signalsInbox.acceptedUnread.length + signalsInbox.requestIds.length, unsaid: echoNotifs.unread }}
         />
       )}
 
@@ -659,7 +663,7 @@ export default function App() {
           />
         )}
 
-        {currentView === 'unsaid' && <UnsaidView replyNotices={echoNotices} />}
+        {currentView === 'unsaid' && <UnsaidView replyNotices={echoNotices} notifications={echoNotifs} />}
 
         {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={() => setSettingsOpen(true)} onBlockMember={handleBlockMember} onViewRequests={() => { setSignalsStartSection('requests'); handleNavigate('signals'); }} focusPostId={focusPostId} onCloseFocus={closePost} />}
 
@@ -677,7 +681,7 @@ export default function App() {
         />
       )}
 
-      {showChrome && <BottomNavigation currentView={currentView} onNavigate={handleNavigate} badges={{ signals: signalsInbox.pendingIds.length + signalsInbox.acceptedUnread.length + signalsInbox.requestIds.length, unsaid: echoNotices.unseenTotal }} />}
+      {showChrome && <BottomNavigation currentView={currentView} onNavigate={handleNavigate} badges={{ signals: signalsInbox.pendingIds.length + signalsInbox.acceptedUnread.length + signalsInbox.requestIds.length, unsaid: echoNotifs.unread }} />}
 
       {setupModalOpen && (
         <MatchSetupModal

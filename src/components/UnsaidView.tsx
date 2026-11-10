@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Flag, Info, MessageCircle, Plus, Trash2 } from 'lucide-react';
+import { Bell, CheckCircle2, Flag, Info, MessageCircle, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
 import { CrisisSupportCard } from './CrisisSupportCard.tsx';
 import { ReactionIcon } from './ReactionIcons.tsx';
 import { EchoFilterBar, EchoKindPicker, EchoKindTag, echoCardClass, emptyEchoTitle } from './EchoCategories.tsx';
 import { MoodPicker, MoodPills } from './EchoMoods.tsx';
+import { EchoNotificationsSheet } from './EchoNotificationsSheet.tsx';
+import type { EchoNotificationsApi } from '../hooks/useEchoNotifications.ts';
+import { fetchUnsaidPost, type EchoNotification } from '../services/echoNotificationService.ts';
 import { UnsaidReplies } from './UnsaidReplies.tsx';
 import {
   deleteUnsaid,
@@ -70,7 +73,7 @@ function saveReacted(map: Record<string, UnsaidReaction>) {
   }
 }
 
-export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ replyNotices }) => {
+export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices; notifications?: EchoNotificationsApi }> = ({ replyNotices, notifications }) => {
   /** The reaction just chosen ("postId:type"), so only that one plays the small pop. */
   const [popped, setPopped] = useState<string | null>(null);
   const [posts, setPosts] = useState<UnsaidPost[]>([]);
@@ -85,6 +88,8 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
   const [myIds, setMyIds] = useState<Set<string>>(new Set());
   const [reacted, setReacted] = useState<Record<string, UnsaidReaction>>(loadReacted);
   const [kind, setKind] = useState<UnsaidKind>('vent');
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [moods, setMoods] = useState<string[]>([]);
   const [filter, setFilter] = useState<EchoFilter>('all');
   /** Posts whose replies are open. */
@@ -250,6 +255,31 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
     (p) => !reportedIds.has(p.id) && !removedIds.has(p.id) && matchesEchoFilter(p.kind, filter)
   );
 
+  // Opening an Echo from a notification: show it (fetching it if it is older than what is on screen), open its replies, mark the
+  // notification read. An Echo that has since been deleted says so, and the notification is still marked read.
+  const openNotification = async (n: EchoNotification) => {
+    notifications?.markRead(n.id);
+    setNotifOpen(false);
+    setFilter('all');
+    if (!mergeUnsaidPages(posts, older).some((p) => p.id === n.postId)) {
+      const post = await fetchUnsaidPost(n.postId);
+      if (!post) {
+        setToast({ text: 'That Echo is no longer available.', ok: false });
+        return;
+      }
+      setOlder((current) => mergeUnsaidPages(current, [post]));
+      setRemovedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(post.id);
+        return next;
+      });
+    }
+    if (n.type === 'reply') setOpenThreads((current) => new Set(current).add(n.postId));
+    setHighlightId(n.postId);
+    setTimeout(() => document.getElementById(`echo-${n.postId}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'center' }), 60);
+    setTimeout(() => setHighlightId(null), 2500);
+  };
+
   const toggleThread = (postId: string) =>
     setOpenThreads((current) => {
       const next = new Set(current);
@@ -265,10 +295,27 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
           <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-0.5">Release, connect and uplift, anonymously.</p>
         </div>
         {available && (
-          <button onClick={openBlank} className="btn btn-primary btn-sm hidden sm:inline-flex shrink-0">
-            <Plus className="w-4 h-4" />
-            Write an Echo
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {notifications && (
+              <button
+                type="button"
+                onClick={() => setNotifOpen(true)}
+                aria-label={notifications.unread > 0 ? `Echo notifications, ${notifications.unread} unread` : 'Echo notifications'}
+                className="icon-btn relative w-9 h-9 text-muted"
+              >
+                <Bell className="w-5 h-5" />
+                {notifications.unread > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-berry px-1 text-[length:calc(10px_*_var(--fs,1))] font-bold text-ink" aria-hidden="true">
+                    {notifications.unread > 9 ? '9+' : notifications.unread}
+                  </span>
+                )}
+              </button>
+            )}
+            <button onClick={openBlank} className="btn btn-primary btn-sm hidden sm:inline-flex">
+              <Plus className="w-4 h-4" />
+              Write an Echo
+            </button>
+          </div>
         )}
       </div>
 
@@ -310,7 +357,8 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
                 return (
                   <li
                     key={post.id}
-                    className={`relative overflow-hidden rounded-2xl border px-3.5 py-3 sm:px-4 anim-fade ${echoCardClass(post.kind)}`}
+                    id={`echo-${post.id}`}
+                    className={`relative overflow-hidden rounded-2xl border px-3.5 py-3 sm:px-4 anim-fade ${echoCardClass(post.kind)}${highlightId === post.id ? ' ring-2 ring-lavender/60' : ''}`}
                   >
                     <EchoKindTag kind={post.kind} className="mb-1.5" />
                     <p className="text-[length:calc(15px_*_var(--fs,1))] text-fg/90 leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
@@ -389,7 +437,7 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
                       <UnsaidReplies
                         post={post}
                         isAdmin={isAdmin}
-                        onViewed={mine ? (count) => replyNotices?.markSeen(post.id, count) : undefined}
+                        onViewed={mine ? (count) => { replyNotices?.markSeen(post.id, count); notifications?.markPostRead(post.id); } : undefined}
                         onToast={setToast}
                       />
                     )}
@@ -411,6 +459,23 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices }> = ({ repl
 
           <FloatingAddButton onClick={openBlank} label="Write an Echo" />
         </>
+      )}
+
+      {notifOpen && notifications && (
+        <EchoNotificationsSheet
+          items={notifications.items}
+          unread={notifications.unread}
+          loaded={notifications.loaded}
+          hasMore={notifications.hasMore}
+          loadingMore={notifications.loadingMore}
+          prefs={notifications.prefs}
+          onClose={() => setNotifOpen(false)}
+          onOpen={openNotification}
+          onMarkRead={notifications.markRead}
+          onMarkAll={notifications.markAllRead}
+          onLoadMore={notifications.loadMore}
+          onPrefs={notifications.setPrefs}
+        />
       )}
 
       {composeOpen && (

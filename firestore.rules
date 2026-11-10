@@ -977,6 +977,75 @@ service cloud.firestore {
     }
 
     // ====================================================
+    // 5c. ECHO NOTIFICATIONS (private to the author of an Echo)
+    // ====================================================
+    // echo_notifications/{uid}            the member's two on/off settings (replies, milestones).
+    // echo_notifications/{uid}/items/{id} one notification each. Only that member can read them, and only that member's own
+    // device creates them (it is the one device that knows which Echoes are theirs): each is checked against the real data, so
+    // it cannot be made up. Its id comes from the event, so one event can only ever have one notification. Nothing in it names
+    // a replier or a reactor. Not deletable, which also keeps an event from being announced twice.
+
+    function reactionTotalOf(p) {
+      return p.get('hugs', 0) + p.get('same', 0) + p.get('felt', 0) + p.get('strong', 0) + p.get('proud', 0) + p.get('cry', 0);
+    }
+
+    match /echo_notifications/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['replies', 'milestones'])
+        && request.resource.data.keys().hasOnly(['replies', 'milestones'])
+        && request.resource.data.replies is bool
+        && request.resource.data.milestones is bool;
+
+      match /items/{notificationId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId)
+          && isEligibleMember(userId)
+          && request.resource.data.keys().hasAll(['type', 'postId', 'kind', 'createdAt', 'read'])
+          && request.resource.data.keys().hasOnly(['type', 'postId', 'kind', 'replyId', 'preview', 'eventAt', 'threshold', 'createdAt', 'read'])
+          && request.resource.data.read == false
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.postId is string
+          && request.resource.data.postId.matches('^[A-Za-z0-9_-]{1,64}$')
+          // It is about one of the writer's own Echoes, and says that Echo's real category.
+          && exists(unsaidPath(request.resource.data.postId))
+          && get(unsaidOwnerPath(request.resource.data.postId)).data.authorId == userId
+          && request.resource.data.kind == get(unsaidPath(request.resource.data.postId)).data.kind
+          && (
+            // A reply: only on a category that takes replies, a reply that exists, not one the writer wrote themselves.
+            (request.resource.data.type == 'reply'
+              && request.resource.data.keys().hasAll(['replyId', 'preview', 'eventAt'])
+              && !('threshold' in request.resource.data)
+              && request.resource.data.kind in unsaidReplyKinds()
+              && validReplyId(request.resource.data.replyId)
+              && notificationId == 'reply_' + request.resource.data.replyId
+              && exists(unsaidReplyPath(request.resource.data.postId, request.resource.data.replyId))
+              && get(unsaidReplyPath(request.resource.data.postId, request.resource.data.replyId)).data.createdAt == request.resource.data.eventAt
+              && get(unsaidReplyOwnerPath(request.resource.data.replyId)).data.authorId != userId
+              && request.resource.data.preview is string
+              && request.resource.data.preview.size() <= 90)
+            // A milestone: total reactions really have reached 10, 25, 50 or 100.
+            || (request.resource.data.type == 'milestone'
+              && request.resource.data.keys().hasAll(['threshold'])
+              && !('replyId' in request.resource.data)
+              && !('preview' in request.resource.data)
+              && !('eventAt' in request.resource.data)
+              && request.resource.data.threshold in [10, 25, 50, 100]
+              && notificationId == 'milestone_' + request.resource.data.postId + '_' + string(request.resource.data.threshold)
+              && reactionTotalOf(get(unsaidPath(request.resource.data.postId)).data) >= request.resource.data.threshold)
+          );
+
+        // Reading one: only the read flag, only to true.
+        allow update: if isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+          && request.resource.data.read == true;
+
+        allow delete: if false;
+      }
+    }
+
+    // ====================================================
     // 6. SUGGESTIONS & FEEDBACK
     // ====================================================
     // Write-only for users; admins read them on the /admin page.

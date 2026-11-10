@@ -63,3 +63,19 @@ These are in-app notifications, like Signals. There is no push, so an author see
 - Deleting a post leaves its replies and their private owner records behind, unreachable from the app (a post's subcollections are not cascaded, as with reactions and flags today).
 - An author with more than 90 reply-category posts is only notified about the first 90 (3 queries of 30).
 - Replies stop at the first 100 per thread.
+
+## Echo Notifications
+
+A bell in the Echoes header opens a private list of what happened on your own Echoes: **new replies** (Need Advice, Little Win,
+Gratitude, Daydream only) and **reaction milestones** (total reactions reaching 10, 25, 50 or 100, announced once each, only the
+highest reached). "Comfort received" does not exist because there is no Send Comfort in the app.
+
+- Stored at `echo_notifications/{uid}/items/{id}` (readable and updatable, read flag only, by that member alone) plus
+  `echo_notifications/{uid}` for two on/off settings. No server code, no index.
+- Your own device notices what is new on your Echoes (it is the only place that knows which are yours) and records the
+  notification. The rules verify each one against the real data: the Echo is yours, the reply or the counters really exist, a reply
+  you wrote yourself never counts, the id is derived from the event (so one event is one notification) and the time is the server's.
+- Nothing in a notification, or any public document, says who replied or reacted. No browser or device push is used, so no Echo
+  text appears outside the app.
+- Opening a notification marks it read and brings up that Echo (fetching it if it is older than the page on screen); a deleted
+  Echo says so. Reading the replies on an Echo also marks its reply notifications read.
