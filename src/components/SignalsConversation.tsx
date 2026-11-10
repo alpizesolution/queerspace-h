@@ -2,6 +2,7 @@ import React, { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffec
 import { ArrowDown, ArrowLeft, Camera, Ellipsis, ImagePlus, LoaderCircle, MessageCircle, RefreshCw, Reply, Send, X } from 'lucide-react';
 import { auth } from '../lib/firebase.ts';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
+import { useComposerFocus } from '../hooks/useComposerFocus.ts';
 import { MemberAvatar } from './ProfileNav.tsx';
 import { ConfirmDialog } from './Sheet.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
@@ -258,6 +259,16 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     stickToBottom.current = true;
     setHasUnseen(false);
   }, []);
+
+  // Swiping or tapping Reply: focus the message box, keep the latest message in view, and offer a one-tap fallback if the browser
+  // will not raise the keyboard on its own (see hooks/useComposerFocus.ts).
+  const composerFocus = useComposerFocus(textareaRef, {
+    coarsePointer: Boolean(coarsePointer),
+    afterFocus: () => {
+      if (stickToBottom.current) scrollToBottom(false);
+      textareaRef.current?.scrollIntoView?.({ block: 'nearest' });
+    },
+  }) ;
 
   // Chime when the other member's message arrives (the list is polled); existing history stays silent.
   useEffect(() => {
@@ -573,7 +584,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                       <SwipeToReply
                         disabled={ended || unsent}
                         className="max-w-full"
-                        onReply={() => { setReplyingTo(message); setActiveId(null); textareaRef.current?.focus(); }}
+                        onReply={() => { setReplyingTo(message); setActiveId(null); composerFocus.requestFocus(); }}
                       >
                       <div
                         role="button"
@@ -636,7 +647,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           ))}
                           {open && !ended && (
                             <>
-                              <button type="button" onClick={() => { setReplyingTo(message); setActiveId(null); textareaRef.current?.focus(); }} aria-label="Reply to message" className="flex h-8 items-center gap-1 rounded-full px-2 text-[length:calc(11px_*_var(--fs,1))] text-muted transition hover:bg-raised hover:text-fg">
+                              <button type="button" onClick={() => { setReplyingTo(message); setActiveId(null); composerFocus.requestFocus(); }} aria-label="Reply to message" className="flex h-8 items-center gap-1 rounded-full px-2 text-[length:calc(11px_*_var(--fs,1))] text-muted transition hover:bg-raised hover:text-fg">
                                 <Reply className="h-3.5 w-3.5" /> Reply
                               </button>
                               {QUICK_REACTIONS.map((emoji) => {
@@ -682,6 +693,11 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 <div className="min-w-0 flex-1">
                   <p className="text-[length:calc(10px_*_var(--fs,1))] font-semibold text-muted">Replying to {replyingTo.senderId === userId ? 'yourself' : partnerName}</p>
                   <p className="truncate text-xs text-fg">{replyingTo.text}</p>
+                  {composerFocus.needsTap && (
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={composerFocus.tapToType} className="mt-0.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold text-berry underline underline-offset-2">
+                      Tap to type your reply
+                    </button>
+                  )}
                 </div>
                 <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancel reply" className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:text-fg"><X className="h-4 w-4" /></button>
               </div>
@@ -692,9 +708,9 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 ref={textareaRef}
                 id="signals-message"
                 value={draft}
-                onChange={(event) => setDraft(event.target.value.slice(0, 1000))}
+                onChange={(event) => { setDraft(event.target.value.slice(0, 1000)); composerFocus.dismissHint(); }}
                 onFocus={() => setComposerFocused(true)}
-                onBlur={() => setComposerFocused(false)}
+                onBlur={() => { setComposerFocused(false); composerFocus.dismissHint(); }}
                 onKeyDown={handleComposerKey}
                 enterKeyHint={coarsePointer ? 'enter' : 'send'}
                 placeholder="Write a message…"

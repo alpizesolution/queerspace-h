@@ -7,6 +7,7 @@ import { SwipeToReply } from './SwipeToReply.tsx';
 import { GifBubble, GifIcon, GifPicker } from './GifPicker.tsx';
 import type { GifInfo } from '../utils/gif.ts';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
+import { useComposerFocus } from '../hooks/useComposerFocus.ts';
 import { PublicRoomMessage, UserPreferences } from '../types.ts';
 import { formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
 import { soundEffects } from '../utils/sound.ts';
@@ -183,11 +184,21 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
     setPendingDeleteId(null);
   };
 
+  // Swiping or tapping Reply: focus the message box, keep the latest message in view, and offer a one-tap fallback if the browser
+  // will not raise the keyboard on its own (see hooks/useComposerFocus.ts).
+  const composerFocus = useComposerFocus(inputRef, {
+    coarsePointer,
+    afterFocus: () => {
+      if (stickToBottomRef.current) scrollToBottom(false);
+      inputRef.current?.scrollIntoView?.({ block: 'nearest' });
+    },
+  });
+
   const startReply = (msg: PublicRoomMessage) => {
     setReplyingTo(msg);
     // Admins on this device answer as the team; everyone else replies as themselves.
     if (teamAvailable) setAsTeam(true);
-    inputRef.current?.focus();
+    composerFocus.requestFocus();
   };
 
   const jumpTo = (id: string) => {
@@ -593,6 +604,11 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
               Replying to {replyingTo.isSelf ? 'your message' : replyingTo.author}{teamAvailable && asTeam ? ` as ${TEAM_NAME}` : ''}
             </p>
             <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted truncate">{replyingTo.text}</p>
+            {composerFocus.needsTap && (
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={composerFocus.tapToType} className="mt-0.5 text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry underline underline-offset-2">
+                Tap to type your reply
+              </button>
+            )}
           </div>
           <button
             type="button"
@@ -616,7 +632,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
             if (wrapperRef.current) setSpacerHeight(wrapperRef.current.getBoundingClientRect().height);
             setComposerFocused(true);
           }}
-          onBlur={() => setComposerFocused(false)}
+          onBlur={() => { setComposerFocused(false); composerFocus.dismissHint(); }}
           onKeyDown={(e) => {
             // Phones: Enter is a new line (the send button sends). Desktop: Enter sends, Shift+Enter is a new line.
             if (e.key === 'Enter' && !e.shiftKey && !coarsePointer && !e.nativeEvent.isComposing) {
@@ -626,6 +642,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           }}
           onChange={(e) => {
             setInputText(e.target.value);
+            composerFocus.dismissHint();
             if (sendError) setSendError(null);
           }}
           maxLength={1000}

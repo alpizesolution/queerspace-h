@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --experimental-test-module-mocks --test src/utils/*.test.ts src/services/*.test.ts src/hooks/*.test.ts src/components/*.test.tsx src/admin/*.test.ts test/api/*.test.js",
+    "test": "tsx --experimental-test-module-mocks --test src/utils/*.test.ts src/services/*.test.ts src/hooks/*.test.ts src/hooks/*.test.tsx src/components/*.test.tsx src/admin/*.test.ts test/api/*.test.js",
     "test:emulator": "node scripts/run-emulator-tests.mjs"
   },
   "dependencies": {

@@ -23,6 +23,7 @@ import { MatchCelebration } from './MatchCelebration.tsx';
 import { auth } from '../lib/firebase.ts';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
+import { useComposerFocus } from '../hooks/useComposerFocus.ts';
 import { ChatMessage, PartnerProfile, PartnerStatus, UserPreferences } from '../types.ts';
 import { ICEBREAKER_PROMPTS } from '../utils/mock-partners.ts';
 import { INTENTION_LABELS, formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
@@ -283,6 +284,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (stickToBottomRef.current) scrollToBottom(false);
   }, [viewportHeight, scrollToBottom]);
 
+  // Swiping a message to reply: focus the composer, and keep the latest message and the composer in view once the "Replying to"
+  // bar has taken its room. If the browser refuses to raise the keyboard, the bar becomes a one-tap "Tap to type".
+  const composerFocus = useComposerFocus(inputRef, {
+    coarsePointer,
+    afterFocus: () => {
+      if (stickToBottomRef.current) scrollToBottom(false);
+      inputRef.current?.scrollIntoView?.({ block: 'nearest' });
+    },
+  });
+
   const handleSendMessage = async (textToSend?: string) => {
     // The ref closes the gap before isSending re-renders (double tap, or Enter plus a tap).
     if (isSending || sendingRef.current) return;
@@ -391,7 +402,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const startReply = (msg: ChatMessage) => {
     setReplyingTo(msg);
     setActiveMessageId(null);
-    inputRef.current?.focus();
+    composerFocus.requestFocus();
   };
 
   const jumpToMessage = (id: string) => {
@@ -766,6 +777,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   Replying to {replyingTo.sender === 'user' ? 'yourself' : partner.displayName}
                 </p>
                 <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted truncate">{replyingTo.text}</p>
+                {composerFocus.needsTap && (
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={composerFocus.tapToType} className="mt-0.5 text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry underline underline-offset-2">
+                    Tap to type your reply
+                  </button>
+                )}
               </div>
               <button
                 type="button"
@@ -814,7 +830,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
               onChange={(e) => {
                 setInputText(e.target.value);
                 typingSenderRef.current?.input(e.target.value.trim().length > 0);
+                composerFocus.dismissHint();
               }}
+              onBlur={composerFocus.dismissHint}
               onKeyDown={handleKeyDown}
               placeholder="Message"
               aria-label={`Message ${partner.displayName}`}
