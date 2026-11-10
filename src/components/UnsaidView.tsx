@@ -66,6 +66,8 @@ function saveReacted(map: Record<string, UnsaidReaction>) {
 }
 
 export const UnsaidView: React.FC = () => {
+  /** The reaction just chosen ("postId:type"), so only that one plays the small pop. */
+  const [popped, setPopped] = useState<string | null>(null);
   const [posts, setPosts] = useState<UnsaidPost[]>([]);
   // Older pages (loaded on request) and where the next one starts. Echoes stay until deleted or removed.
   const [older, setOlder] = useState<UnsaidPost[]>([]);
@@ -167,6 +169,7 @@ export const UnsaidView: React.FC = () => {
 
   const handleReact = async (postId: string, type: UnsaidReaction) => {
     if (reacted[postId]) return;
+    setPopped(`${postId}:${type}`);
     const next = { ...reacted, [postId]: type };
     setReacted(next);
     saveReacted(next);
@@ -294,7 +297,7 @@ export const UnsaidView: React.FC = () => {
                       {post.text}
                     </p>
                     <div className="flex flex-wrap items-center gap-y-0.5 mt-2 -ml-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
-                      <div className="flex flex-wrap items-center gap-0.5">
+                      <div className="flex flex-wrap items-center gap-1">
                         {REACTIONS.map(({ type, emoji, label, img }) => {
                           const active = myReaction === type;
                           return (
@@ -305,16 +308,20 @@ export const UnsaidView: React.FC = () => {
                               aria-pressed={active}
                               aria-label={`${label}, ${post[type]}`}
                               title={label}
-                              className={`inline-flex items-center gap-1 h-8 min-w-8 justify-center px-1.5 rounded-full transition-colors cursor-pointer disabled:cursor-default disabled:opacity-40 ${
-                                active ? 'bg-plum/40 text-fg' : 'hover:bg-raised hover:text-fg'
+                              // Transparent and borderless at rest; the chosen one gets only a faint outline. The emoji itself
+                              // (or the custom image) is never restyled: hover and press just scale it a little.
+                              className={`group inline-flex items-center gap-1 h-8 min-w-8 justify-center px-1.5 rounded-full bg-transparent transition-shadow cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60 disabled:cursor-default disabled:opacity-40 ${
+                                active ? 'ring-1 ring-inset ring-lavender/35' : ''
                               }`}
                             >
-                              {img ? (
-                                <img src={img} alt="" aria-hidden="true" width={20} height={20} className="w-5 h-5" />
-                              ) : (
-                                <span aria-hidden="true" className="text-[length:calc(17px_*_var(--fs,1))] leading-none">{emoji}</span>
-                              )}
-                              {post[type] > 0 && <span className="text-subtle">{post[type]}</span>}
+                              <span className={`inline-flex items-center justify-center transition-transform duration-150 ease-out group-enabled:group-hover:scale-110 group-enabled:group-active:scale-90 ${popped === `${post.id}:${type}` ? 'reaction-pop' : ''}`}>
+                                {img ? (
+                                  <img src={img} alt="" aria-hidden="true" width={20} height={20} className="w-5 h-5" />
+                                ) : (
+                                  <span aria-hidden="true" className="text-[length:calc(19px_*_var(--fs,1))] leading-none">{emoji}</span>
+                                )}
+                              </span>
+                              {post[type] > 0 && <span className={`text-[length:calc(11px_*_var(--fs,1))] tabular-nums ${active ? 'text-lavender' : 'text-subtle'}`}>{post[type]}</span>}
                             </button>
                           );
                         })}
