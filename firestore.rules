@@ -305,6 +305,86 @@ service cloud.firestore {
         && (!(request.auth.uid in after) || after[request.auth.uid] == request.time);
     }
 
+    // Comfort Cards in Seek chat: a card message carries kind 'card', the card's id and, as its text, that card's approved question.
+    // The rules hold the list, so nobody can send a card with words of their own. Keep it identical to COMFORT_CARDS in
+    // api/_cards.js and src/utils/comfortCards.ts (a test checks that).
+    function comfortCardQuestions() {
+      return {
+        "soft-01": "What is something small that made you smile today?",
+        "soft-02": "What is your favorite way to spend a slow, cozy evening?",
+        "soft-03": "What song makes you feel instantly warm?",
+        "soft-04": "What is a comfort food that feels like a hug?",
+        "soft-05": "What is the nicest compliment you have ever received?",
+        "soft-06": "What does your perfect lazy Sunday look like?",
+        "soft-07": "Which little everyday thing are you most grateful for lately?",
+        "soft-08": "What is a scent that takes you somewhere happy?",
+        "soft-09": "If you could send a warm hug to anyone right now, who would it be?",
+        "soft-10": "What is your favorite kind of weather, and why?",
+        "soft-11": "What small ritual makes your mornings better?",
+        "soft-12": "What is something kind someone did for you that you still remember?",
+        "know-01": "What are three things you could talk about for hours?",
+        "know-02": "What is something you are really proud of that you rarely mention?",
+        "know-03": "What do people usually get wrong about you at first?",
+        "know-04": "What is a skill you would love to learn this year?",
+        "know-05": "Are you a morning person, a night owl, or somewhere in between?",
+        "know-06": "What was your favorite thing to do as a kid?",
+        "know-07": "What is a hobby that makes you lose track of time?",
+        "know-08": "Which book, show or game do you recommend to everyone?",
+        "know-09": "What is a place you would love to visit one day?",
+        "know-10": "What does a really good day look like for you?",
+        "know-11": "What is something on your bucket list?",
+        "know-12": "What are you looking forward to right now?",
+        "deep-01": "What is something you have outgrown that you are glad to leave behind?",
+        "deep-02": "When do you feel most like yourself?",
+        "deep-03": "What is something you are still learning to accept about yourself?",
+        "deep-04": "What is a lesson that took you a long time to learn?",
+        "deep-05": "What does feeling safe with someone mean to you?",
+        "deep-06": "What is a fear you have faced, even a little?",
+        "deep-07": "What would you tell your younger self if you could?",
+        "deep-08": "What does home mean to you?",
+        "deep-09": "What is something you wish more people asked you about?",
+        "deep-10": "How have you changed in the last few years?",
+        "deep-11": "What makes a friendship feel real to you?",
+        "deep-12": "What is one thing you hope never changes about you?",
+        "love-01": "What does a love that feels safe and calm look like to you?",
+        "love-02": "What is your idea of a perfect low-key date?",
+        "love-03": "What is a green flag you always look for?",
+        "love-04": "What is the smallest gesture that makes you feel cared for?",
+        "love-05": "What do you love most about sapphic stories, songs or films?",
+        "love-06": "How do you like to show someone you care?",
+        "love-07": "What is your love language, and how did you find out?",
+        "love-08": "What is something you want more of in your relationships?",
+        "love-09": "What is a sweet memory of connecting with another woman?",
+        "love-10": "What makes a connection feel like it could grow into something?",
+        "love-11": "What does being seen and accepted by someone mean to you?",
+        "love-12": "What is your favorite thing about the sapphic community?",
+        "fun-01": "If your life had a theme song, what would it be?",
+        "fun-02": "What is your most harmless unpopular opinion?",
+        "fun-03": "Which fictional character do you secretly relate to?",
+        "fun-04": "If you could have any superpower for a day, what would you pick?",
+        "fun-05": "What is the most oddly specific thing that comforts you?",
+        "fun-06": "What is your go-to karaoke song?",
+        "fun-07": "Would you rather live by the sea or in the mountains?",
+        "fun-08": "What is your current little obsession?",
+        "fun-09": "What would your dream pet be called?",
+        "fun-10": "If you opened a cafe, what would it be called and what would be on the menu?",
+        "fun-11": "What is the best piece of random advice you have ever got?",
+        "fun-12": "If you could instantly master one thing, what would it be?",
+        "comfort-01": "What do you do when everything feels like too much?",
+        "comfort-02": "What is one thing that always helps you feel calmer?",
+        "comfort-03": "What is something you are working through right now, if you want to share?",
+        "comfort-04": "What would feel like a kind thing to hear today?",
+        "comfort-05": "What is one thing you are proud of yourself for this week?",
+        "comfort-06": "Who or what makes you feel less alone?",
+        "comfort-07": "What is a gentle thing you can do for yourself today?",
+        "comfort-08": "What helps you through a tough day?",
+        "comfort-09": "What is something you need less of in your life right now?",
+        "comfort-10": "What is one small win you could celebrate today?",
+        "comfort-11": "What is something you forgive yourself for?",
+        "comfort-12": "What would you like someone to remind you of right now?"
+      };
+    }
+
     match /conversations/{convId} {
       // Admins can count conversations, but never read their messages.
       allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
@@ -343,8 +423,14 @@ service cloud.firestore {
           && isEligibleMember(request.auth.uid)
           && !isSuspended()
           && request.resource.data.keys().hasAll(['senderId', 'text', 'timestamp'])
-          && request.resource.data.keys().hasOnly(['senderId', 'text', 'timestamp', 'replyTo'])
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'timestamp', 'replyTo', 'kind', 'cardId'])
           && request.resource.data.senderId == request.auth.uid
+          // A Comfort Card: kind 'card', a card id on the list, and exactly that card's question as the text. Nothing else carries them.
+          && (!('kind' in request.resource.data)
+              || (request.resource.data.kind == 'card'
+                  && request.resource.data.keys().hasAll(['cardId'])
+                  && comfortCardQuestions().get(request.resource.data.cardId, null) == request.resource.data.text))
+          && (!('cardId' in request.resource.data) || request.resource.data.get('kind', null) == 'card')
           && (!('replyTo' in request.resource.data) || isValidReplyQuote(request.resource.data.replyTo))
           && request.resource.data.text is string
           && request.resource.data.text.size() >= 1

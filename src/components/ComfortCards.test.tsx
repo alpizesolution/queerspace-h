@@ -126,3 +126,22 @@ test('GIF, photo and text sending are untouched', () => {
   assert.match(convo, /<GifPicker onSend=\{sendGif\}/);
   assert.match(convo, /aria-label="Send a timed photo"/);
 });
+
+// ---- wiring in Seek chat (the anonymous live chat)
+const chat = read('src/components/ChatView.tsx');
+
+test('Seek chat has the Comfort Cards button and picker, and sends a card by id through the chat service', () => {
+  assert.match(chat, /aria-label="Comfort Cards"/);
+  assert.match(chat, /title="Comfort Cards"/);
+  assert.match(chat, /onClick=\{\(\) => setCardsOpen\(true\)\}/);
+  assert.match(chat, /\{cardsOpen && !partnerLeft && <ComfortCardPicker onSend=\{handleSendCard\}/);
+  assert.match(chat, /card\.question,[\s\S]{0,260}wasTyping,\s*card\.id/, 'by id, through the same service as text');
+  assert.match(chat, /onAnswer=\{\(\) => startReply\(msg\)\}/, 'an answer is an ordinary reply');
+  assert.match(chat, /canAnswer=\{!partnerLeft\}/);
+});
+
+test('Seek chat text sending, reactions and the emoji picker are untouched', () => {
+  assert.match(chat, /aria-label="Emoji"/);
+  assert.match(chat, /handleSendMessage\(\)/);
+  assert.match(chat, /aria-label="Send message"/);
+});

@@ -24,6 +24,8 @@ import { auth } from '../lib/firebase.ts';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
 import { useComposerFocus } from '../hooks/useComposerFocus.ts';
+import { ComfortCardBubble, ComfortCardPicker, ComfortCardsIcon } from './ComfortCards.tsx';
+import type { ComfortCard } from '../utils/comfortCards.ts';
 import { ChatMessage, PartnerProfile, PartnerStatus, UserPreferences } from '../types.ts';
 import { ICEBREAKER_PROMPTS } from '../utils/mock-partners.ts';
 import { INTENTION_LABELS, formatChatTime, sanitizeMessageText } from '../utils/matching-logic.ts';
@@ -127,6 +129,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [isCloudActive, setIsCloudActive] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
   const [partnerLeft, setPartnerLeft] = useState(false);
+  const [cardsOpen, setCardsOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -357,6 +360,41 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       setInputError(partnerLeft ? `${partner.displayName} has left the chat.` : 'Still connecting…');
       setTimeout(() => setInputError(null), 3500);
+    } finally {
+      sendingRef.current = false;
+      setIsSending(false);
+    }
+  };
+
+  /** Sends a Comfort Card: the same path as a message (sound, reply quote, typing stamp), by the card's id. */
+  const handleSendCard = async (card: ComfortCard) => {
+    if (isSending || sendingRef.current) return;
+    if (!(isCloudActive && cloudConvId) || partnerLeft) {
+      setCardsOpen(false);
+      setInputError(partnerLeft ? `${partner.displayName} has left the chat.` : 'Still connecting…');
+      setTimeout(() => setInputError(null), 3500);
+      return;
+    }
+    sendingRef.current = true;
+    setIsSending(true);
+    setCardsOpen(false);
+    try {
+      if (!isSoundMuted) soundEffects.playMessageSent();
+      const quoted = replyingTo;
+      setReplyingTo(null);
+      const wasTyping = typingSenderRef.current?.isActive() ?? false;
+      typingSenderRef.current?.reset();
+      const res = await sendCloudMessage(
+        cloudConvId,
+        card.question,
+        quoted ? { id: quoted.id, text: quoted.text, senderId: quoted.sender === 'user' ? auth?.currentUser?.uid ?? '' : partner.id } : undefined,
+        wasTyping,
+        card.id
+      );
+      if (!res.success) {
+        setInputError(res.error || 'Cloud send failed.');
+        setTimeout(() => setInputError(null), 3500);
+      }
     } finally {
       sendingRef.current = false;
       setIsSending(false);
@@ -651,7 +689,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         <span className="block text-[length:calc(13px_*_var(--fs,1))] text-fg/75 line-clamp-2 [overflow-wrap:anywhere]">{msg.replyTo.text}</span>
                       </button>
                     )}
-                    <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{msg.text}</p>
+                    {msg.card ? (
+                      <ComfortCardBubble
+                        card={{ category: msg.card.category as ComfortCard['category'], question: msg.text }}
+                        canAnswer={!partnerLeft}
+                        onAnswer={() => startReply(msg)}
+                      />
+                    ) : (
+                      <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{msg.text}</p>
+                    )}
                   </div>
                 </SwipeToReply>
 
@@ -822,6 +868,18 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <Smile className="w-[22px] h-[22px]" />
             </button>
 
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setCardsOpen(true)}
+              className="icon-btn w-11 h-11 text-lavender"
+              aria-label="Comfort Cards"
+              title="Comfort Cards"
+              aria-haspopup="dialog"
+            >
+              <ComfortCardsIcon className="w-[22px] h-[22px]" />
+            </button>
+
             <textarea
               ref={inputRef}
               rows={1}
@@ -877,6 +935,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
         </Sheet>
       )}
+
+      {cardsOpen && !partnerLeft && <ComfortCardPicker onSend={handleSendCard} onClose={() => setCardsOpen(false)} />}
 
       {celebrating && (
         <MatchCelebration

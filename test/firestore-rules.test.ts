@@ -247,6 +247,47 @@ test('T-17: Replies quote a short snippet; padded or oversized quotes are reject
   await assertFails(alice.doc('conversations/conv_reply/messages/r4').set(reply('m1')));
 });
 
+test('CC-01: Seek chat CAN carry a Comfort Card only with a listed id and exactly its approved question; nothing else can claim to be one', async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc('conversations/conv_cards').set({ participants: ['alice', 'bob'], createdAt: new Date(), updatedAt: new Date(), status: 'active' });
+  });
+  const { cardById } = await import('../src/utils/comfortCards.ts');
+  const card = cardById('love-02')!;
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  const msg = (over: Record<string, unknown> = {}) => ({ senderId: 'alice', text: card.question, timestamp: new Date(), kind: 'card', cardId: card.id, ...over });
+  const at = (id: string) => `conversations/conv_cards/messages/${id}`;
+  // The genuine card, with and without a reply quote, from either person.
+  await assertSucceeds(alice.doc(at('c1')).set(msg()));
+  await assertSucceeds(alice.doc(at('c2')).set(msg({ replyTo: { id: 'c1', text: card.question, senderId: 'alice' } })));
+  await assertSucceeds(bob.doc(at('c3')).set(msg({ senderId: 'bob' })));
+  // Words of one's own, another card's words, an unknown or missing id, a wrong kind, extra fields.
+  await assertFails(alice.doc(at('x1')).set(msg({ text: 'my own words' })));
+  await assertFails(alice.doc(at('x2')).set(msg({ text: cardById('soft-01')!.question })));
+  await assertFails(alice.doc(at('x3')).set(msg({ cardId: 'not-a-card' })));
+  await assertFails(alice.doc(at('x4')).set({ senderId: 'alice', text: card.question, timestamp: new Date(), kind: 'card' }));
+  await assertFails(alice.doc(at('x5')).set(msg({ kind: 'gif' })));
+  await assertFails(alice.doc(at('x6')).set(msg({ cardId: 7 })));
+  await assertFails(alice.doc(at('x7')).set(msg({ extra: true })));
+  await assertFails(alice.doc(at('x8')).set({ senderId: 'alice', text: card.question, timestamp: new Date(), cardId: card.id })); // a card id without kind
+  // Not as someone else, not by a non-participant, and not into an ended conversation.
+  await assertFails(alice.doc(at('x9')).set(msg({ senderId: 'bob' })));
+  await assertFails(testEnv.authenticatedContext('charlie').firestore().doc(at('x10')).set(msg({ senderId: 'charlie' })));
+  // Ordinary messages are unchanged.
+  await assertSucceeds(alice.doc(at('p1')).set({ senderId: 'alice', text: 'Hello Bob!', timestamp: new Date() }));
+  await assertFails(alice.doc(at('p2')).set({ senderId: 'alice', text: 'Hello Bob!', timestamp: new Date(), kind: 'text' }));
+  // Cards are immutable like any message.
+  await assertFails(alice.doc(at('c1')).update({ text: 'edited' }));
+});
+
+test('CC-02: the rules list the same Comfort Card questions as the app and the server', async () => {
+  const rules = fs.readFileSync('./firestore.rules', 'utf8');
+  const block = rules.match(/function comfortCardQuestions\(\) \{\s*return \{([\s\S]*?)\};\s*\}/)![1];
+  const listed = [...block.matchAll(/"([a-z]+-\d+)":\s*("(?:[^"\\]|\\.)*"),?/g)].map((m) => [m[1], JSON.parse(m[2])]);
+  const { COMFORT_CARDS } = await import('../src/utils/comfortCards.ts');
+  assert.deepEqual(listed, COMFORT_CARDS.map((c) => [c.id, c.question]));
+});
+
 test('T-16: Conversation creation FAILS if caller is not listed in participants', async () => {
   const alice = testEnv.authenticatedContext('alice');
   // Alice tries to create a conversation between Bob and Charlie

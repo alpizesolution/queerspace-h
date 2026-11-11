@@ -98,6 +98,8 @@ export interface ChatMessage {
   reactions?: MessageReaction[];
   /** The message this one answers, as a short quote. */
   replyTo?: ReplyQuote;
+  /** A Comfort Card: the card's id and category. Its text is always the approved question for that id. */
+  card?: { id: string; category: string };
 }
 
 export interface ReplyQuote {

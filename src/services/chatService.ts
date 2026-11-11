@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured } from '../lib/firebase.ts';
 import { ChatMessage, ReplyQuote } from '../types.ts';
+import { cardById, parseCard } from '../utils/comfortCards.ts';
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
 
 /** Newest messages a 1-on-1 chat loads and keeps live. */
@@ -168,14 +169,20 @@ export async function sendCloudMessage(
   text: string,
   replyTo?: { id: string; text: string; senderId: string },
   /** I was showing as typing: clear it in the same write that bumps updatedAt. */
-  clearTyping = false
+  clearTyping = false,
+  /** A Comfort Card: sent by its id, with the approved question as the text (the text given is ignored). */
+  cardId?: string
 ): Promise<{ success: boolean; error?: string }> {
   const currentUser = auth?.currentUser;
   if (!isFirebaseConfigured || !db || !currentUser) {
     return { success: false, error: 'Firebase is not configured or user is offline.' };
   }
 
-  const cleanResult = sanitizeMessageText(text);
+  const card = cardId !== undefined ? cardById(cardId) : null;
+  if (cardId !== undefined && !card) return { success: false, error: 'That card isn’t available.' };
+
+  // A card's words are the approved ones, never anything the caller supplies, so there is nothing to filter.
+  const cleanResult = card ? { isBlocked: false, cleanText: card.question, warning: undefined } : sanitizeMessageText(text);
   if (cleanResult.isBlocked) {
     return { success: false, error: cleanResult.warning || 'Message contains blocked content.' };
   }
@@ -192,17 +199,20 @@ export async function sendCloudMessage(
       text: trimmed,
       timestamp: serverTimestamp(),
     };
-    if (replyTo) {
-      const quote = { id: replyTo.id, text: replyTo.text.slice(0, REPLY_QUOTE_MAX_LENGTH), senderId: replyTo.senderId };
+    const quote = replyTo ? { id: replyTo.id, text: replyTo.text.slice(0, REPLY_QUOTE_MAX_LENGTH), senderId: replyTo.senderId } : null;
+    // Newest form first. Rules published before replies, or before cards, refuse the extra fields; the message is still delivered
+    // in the plainest form they accept (a card then arrives as its question, as ordinary text).
+    const attempts: Array<Record<string, unknown>> = [];
+    if (card) attempts.push({ ...message, kind: 'card', cardId: card.id, ...(quote ? { replyTo: quote } : {}) });
+    if (quote) attempts.push({ ...message, replyTo: quote });
+    attempts.push(message);
+    for (let i = 0; i < attempts.length; i++) {
       try {
-        await addDoc(messagesRef, { ...message, replyTo: quote });
+        await addDoc(messagesRef, attempts[i]);
+        break;
       } catch (err) {
-        // Rules published before replies existed refuse the quote; still deliver the message.
-        if ((err as FirestoreError)?.code !== 'permission-denied') throw err;
-        await addDoc(messagesRef, message);
+        if ((err as FirestoreError)?.code !== 'permission-denied' || i === attempts.length - 1) throw err;
       }
-    } else {
-      await addDoc(messagesRef, message);
     }
 
     // Update conversation updatedAt timestamp
@@ -260,7 +270,11 @@ export function subscribeToCloudMessages(
           return {
             id: docSnap.id,
             sender: isMe ? 'user' : 'partner',
-            text: data.text || '',
+            // A card shows the approved words for its id, whatever text is stored; one that is not on the list is plain text.
+            ...(() => {
+              const shown = data.kind === 'card' ? parseCard({ id: data.cardId }) : null;
+              return shown ? { text: shown.question, card: { id: shown.id, category: shown.category } } : { text: data.text || '' };
+            })(),
             timestamp: ts,
             status: 'delivered',
             replyTo: toReplyQuote(data.replyTo, currentUser.uid),
