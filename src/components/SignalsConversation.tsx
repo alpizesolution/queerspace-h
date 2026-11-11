@@ -726,7 +726,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
             <button type="button" onClick={onBack} className="ml-2 font-semibold text-berry underline underline-offset-4">Back to Signals</button>
           </div>
         ) : (
-          <div className="shrink-0 border-t border-line bg-ink px-3 pb-2 pt-2">
+          <div className="shrink-0 border-t border-line bg-ink px-3 pb-1 pt-2">
             {replyingTo && (
               <div className="mb-1.5 flex items-center gap-2 rounded-xl border border-line bg-raised/70 px-3 py-1.5">
                 <Reply className="h-4 w-4 shrink-0 text-lavender" />
@@ -742,35 +742,39 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancel reply" className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:text-fg"><X className="h-4 w-4" /></button>
               </div>
             )}
-            <form onSubmit={sendMessage} className="flex items-end gap-1.5 sm:gap-2">
-              <label className="sr-only" htmlFor="signals-message">Your message</label>
-              <textarea
-                ref={textareaRef}
-                id="signals-message"
-                value={draft}
-                onChange={(event) => { setDraft(event.target.value.slice(0, 1000)); composerFocus.dismissHint(); }}
-                onFocus={() => setComposerFocused(true)}
-                onBlur={() => { setComposerFocused(false); composerFocus.dismissHint(); }}
-                onKeyDown={handleComposerKey}
-                enterKeyHint={coarsePointer ? 'enter' : 'send'}
-                placeholder="Write a message…"
-                rows={1}
-                maxLength={1000}
-                className="max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-2xl border border-line bg-raised px-3.5 py-2 text-[length:calc(15px_*_var(--fs,1))] leading-snug text-fg outline-none placeholder:text-subtle focus:border-berry/60"
-              />
-              <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void choosePhoto(event)} className="hidden" tabIndex={-1} aria-hidden="true" />
-              <button type="button" onClick={() => photoInputRef.current?.click()} onMouseDown={(event) => event.preventDefault()} aria-label="Send a timed photo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-raised text-muted transition hover:text-fg">
-                <ImagePlus className="h-[18px] w-[18px]" />
-              </button>
-              <button type="button" onClick={() => setGifOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Send a GIF" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-raised text-muted transition hover:text-fg">
-                <GifIcon className="h-[20px] w-[20px]" />
-              </button>
-              <button type="button" onClick={() => setCardsOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Comfort Cards" title="Comfort Cards" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-lavender/30 bg-raised text-lavender transition hover:brightness-125">
-                <ComfortCardsIcon className="h-[18px] w-[18px]" />
-              </button>
-              <button type="submit" disabled={!draft.trim()} onMouseDown={(event) => event.preventDefault()} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-berry text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
-                <Send className="h-4 w-4" />
-              </button>
+            <form onSubmit={sendMessage} className="flex flex-col gap-0.5">
+              <div className="flex items-end gap-2">
+                <label className="sr-only" htmlFor="signals-message">Your message</label>
+                <textarea
+                  ref={textareaRef}
+                  id="signals-message"
+                  value={draft}
+                  onChange={(event) => { setDraft(event.target.value.slice(0, 1000)); composerFocus.dismissHint(); }}
+                  onFocus={() => setComposerFocused(true)}
+                  onBlur={() => { setComposerFocused(false); composerFocus.dismissHint(); }}
+                  onKeyDown={handleComposerKey}
+                  enterKeyHint={coarsePointer ? 'enter' : 'send'}
+                  placeholder="Message..."
+                  rows={1}
+                  maxLength={1000}
+                  className="block max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-[1.25rem] border border-line bg-raised px-4 py-[9px] text-[length:calc(15px_*_var(--fs,1))] leading-snug text-fg outline-none placeholder:text-subtle focus:border-berry/60"
+                />
+                <button type="submit" disabled={!draft.trim()} onMouseDown={(event) => event.preventDefault()} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-berry text-ink transition hover:brightness-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg disabled:cursor-not-allowed disabled:opacity-40">
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="-ml-1.5 flex flex-nowrap items-center gap-0.5" role="group" aria-label="Attachments">
+                <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void choosePhoto(event)} className="hidden" tabIndex={-1} aria-hidden="true" />
+                <button type="button" onClick={() => photoInputRef.current?.click()} onMouseDown={(event) => event.preventDefault()} aria-label="Send a timed photo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-raised hover:text-fg active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
+                  <ImagePlus className="h-5 w-5" />
+                </button>
+                <button type="button" onClick={() => setGifOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Send a GIF" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-raised hover:text-fg active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
+                  <GifIcon className="h-5 w-5" />
+                </button>
+                <button type="button" onClick={() => setCardsOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Comfort Cards" title="Comfort Cards" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lavender transition hover:bg-raised hover:brightness-125 active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
+                  <ComfortCardsIcon className="h-5 w-5" />
+                </button>
+              </div>
             </form>
           </div>
         )}

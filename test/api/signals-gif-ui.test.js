@@ -22,7 +22,7 @@ function sourceFiles(dir, found = []) {
 
 test('the composer has a compact GIF icon button beside the photo button, not a text button', () => {
   assert.match(conversation, /aria-label="Send a GIF"/);
-  assert.match(conversation, /<GifIcon className="h-\[20px\] w-\[20px\]" \/>/);
+  assert.match(conversation, /<GifIcon className="h-5 w-5" \/>/);
   assert.match(conversation, /\{gifOpen && !ended && <GifPicker onSend=\{sendGif\} onClose=\{\(\) => setGifOpen\(false\)\} \/>\}/, 'no picker once the connection has ended');
   assert.doesNotMatch(conversation, />\s*GIF\s*<\/button>/, 'no large text button');
 });

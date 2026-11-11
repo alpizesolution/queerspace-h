@@ -159,7 +159,7 @@ test('the Comfort Cards button sits beside the photo and GIF buttons with a labe
   assert.ok(photo > 0 && gif > photo && cards > gif, 'photo, GIF, then Comfort Cards');
   assert.match(convo, /title="Comfort Cards"/);
   assert.match(convo, /onClick=\{\(\) => setCardsOpen\(true\)\}/);
-  assert.match(convo, /h-10 w-10 shrink-0 items-center justify-center rounded-full border border-lavender\/30/, 'same size as its neighbours, with a lavender accent');
+  assert.match(convo, /h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lavender/, 'same size as its neighbours, with a lavender accent');
   assert.match(convo, /\{cardsOpen && !ended && <ComfortCardPicker onSend=\{sendCard\}/);
 });
 
