@@ -366,6 +366,42 @@ body {
 .anim-flash { animation: qs-flash 1.2s ease-out; }
 .anim-ping { animation: qs-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
 
+/*
+ * The Seek searching heart: a small continuous shake (left and right, with a slight tilt) and a soft pulse. Plain transform keyframes
+ * (translate3d, rotate, scale) on a wrapper span, so Safari on iPhone runs it on the GPU. The class is only on the heart while a search is
+ * running and comes off the instant it stops. iOS Safari needs no -webkit- prefix for any of this.
+ */
+@keyframes qs-heart-vibe {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  12.5% { transform: translate3d(-1.5px, 0, 0) rotate(-5deg) scale(1.05); }
+  25% { transform: translate3d(1.5px, 0, 0) rotate(5deg) scale(1.08); }
+  37.5% { transform: translate3d(-1.5px, 0, 0) rotate(-4deg) scale(1.05); }
+  50% { transform: translate3d(1px, 0, 0) rotate(4deg) scale(1); }
+  62.5% { transform: translate3d(-1px, 0, 0) rotate(-3deg) scale(1.05); }
+  75% { transform: translate3d(1px, 0, 0) rotate(3deg) scale(1.08); }
+  87.5% { transform: translate3d(-0.5px, 0, 0) rotate(-2deg) scale(1.03); }
+}
+@keyframes qs-heart-calm {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+.anim-heart-vibe {
+  display: inline-flex;
+  transform-origin: 50% 50%;
+  animation: qs-heart-vibe 1.2s ease-in-out infinite;
+}
+/*
+ * The page-wide reduced-motion rule above cuts every animation to one 0.01 ms run, which is also what stops this heart on an iPhone with
+ * Reduce Motion on. For people who prefer less motion the heart gets a slow, gentle pulse instead of the shake: no sideways movement, no tilt.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .anim-heart-vibe.anim-heart-vibe {
+    animation-name: qs-heart-calm !important;
+    animation-duration: 2.4s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
 @keyframes qs-drawer {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }

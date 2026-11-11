@@ -65,7 +65,9 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
             </>
           )}
           <span className="relative w-20 h-20 rounded-full bg-raised border border-line flex items-center justify-center">
-            <Heart className={`w-8 h-8 ${stopped ? 'text-subtle' : 'text-berry fill-berry/30'}`} />
+            <span className={stopped ? 'inline-flex' : 'anim-heart-vibe'} data-testid="seek-heart">
+              <Heart className={`w-8 h-8 ${stopped ? 'text-subtle' : 'text-berry fill-berry/30'}`} />
+            </span>
           </span>
         </div>
 
