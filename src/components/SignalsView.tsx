@@ -104,12 +104,16 @@ export const SignalsView: React.FC<{
   isSoundMuted?: boolean;
   /** A connection to open as soon as the list has loaded (from a notification). */
   requestedPairId?: string | null;
+  /** The conversation that was open when the member left Signals, so coming back returns to it. */
+  initialPairId?: string | null;
+  /** Which conversation is open and whether it is on screen (App uses this to hide its header on a phone). */
+  onConversationState?: (state: { openPairId: string | null; visible: boolean }) => void;
   onRequestedPairHandled?: () => void;
   /** Which area to open first: the usual inbox, or Requests (from a Looking For shortcut or a request banner). */
   initialSection?: 'inbox' | 'requests';
   onInitialSectionHandled?: () => void;
   onBlockMember?: (memberId: string) => void;
-}> = ({ inbox, isSoundMuted = false, requestedPairId = null, onRequestedPairHandled, initialSection = 'inbox', onInitialSectionHandled, onBlockMember }) => {
+}> = ({ inbox, isSoundMuted = false, requestedPairId = null, initialPairId = null, onConversationState, onRequestedPairHandled, initialSection = 'inbox', onInitialSectionHandled, onBlockMember }) => {
   const [section, setSection] = useState<'inbox' | 'requests'>(initialSection);
   useEffect(() => {
     onInitialSectionHandled?.();
@@ -132,7 +136,7 @@ export const SignalsView: React.FC<{
   const moreBusy = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [openPairId, setOpenPairId] = useState<string | null>(null);
+  const [openPairId, setOpenPairId] = useState<string | null>(initialPairId);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [selectedInvitationId, setSelectedInvitationId] = useState<string | null>(null);
   const [invitationError, setInvitationError] = useState<string | null>(null);
@@ -336,6 +340,13 @@ export const SignalsView: React.FC<{
     scrolledToRequests.current = true;
     invitationsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [loading, pendingReceived.length]);
+
+  // Tell App which conversation is open and whether it is actually showing, so it can hide its own header on a phone.
+  const conversationVisible = Boolean(openPairId && pairs.find((pair) => pair.id === openPairId)?.status === 'active');
+  useEffect(() => {
+    onConversationState?.({ openPairId, visible: conversationVisible });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openPairId, conversationVisible]);
 
   if (openPairId) {
     const selectedPair = pairs.find((pair) => pair.id === openPairId);

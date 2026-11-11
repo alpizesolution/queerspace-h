@@ -45,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
-  <header className="sticky top-0 z-40 bg-ink/85 backdrop-blur-xl border-b border-line pt-safe">
+  <header data-app-header className="sticky top-0 z-40 bg-ink/85 backdrop-blur-xl border-b border-line pt-safe">
     <div className="max-w-6xl mx-auto px-3 sm:px-6 h-[var(--header-h)] flex items-center gap-2 sm:gap-3">
       <button
         onClick={() => onNavigate('home')}

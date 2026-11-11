@@ -162,6 +162,9 @@ export default function App() {
   // A request this member sent was accepted: one banner per acceptance, and the connection to open from it.
   const [acceptedAlert, setAcceptedAlert] = useState<{ pairId: string; name: string | null } | null>(null);
   const [signalsOpenPairId, setSignalsOpenPairId] = useState<string | null>(null);
+  // The Signals conversation that is open (kept when the member visits another section) and whether it is on screen.
+  const [signalsResumePairId, setSignalsResumePairId] = useState<string | null>(null);
+  const [signalsChatVisible, setSignalsChatVisible] = useState(false);
   // A new connection request: one generic banner (no name, no message), and where Signals should open.
   const [requestAlert, setRequestAlert] = useState(false);
   const [signalsStartSection, setSignalsStartSection] = useState<'inbox' | 'requests'>('inbox');
@@ -513,6 +516,8 @@ export default function App() {
   return (
     <ProfileNavProvider value={profileNav}>
     <div
+      // In a Signals conversation on a phone the app header is hidden (index.css reads this); the conversation has its own.
+      data-signals-chat={currentView === 'signals' && signalsChatVisible ? 'open' : undefined}
       className={`min-h-[100dvh] flex flex-col bg-ink text-fg relative ${
         showChrome && currentView !== 'public' ? 'pb-[var(--tabbar-h)]' : ''
       }`}
@@ -667,7 +672,7 @@ export default function App() {
 
         {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={() => setSettingsOpen(true)} onBlockMember={handleBlockMember} onViewRequests={() => { setSignalsStartSection('requests'); handleNavigate('signals'); }} focusPostId={focusPostId} onCloseFocus={closePost} />}
 
-        {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} requestedPairId={signalsOpenPairId} onRequestedPairHandled={() => setSignalsOpenPairId(null)} initialSection={signalsStartSection} onInitialSectionHandled={() => setSignalsStartSection('inbox')} onBlockMember={handleBlockMember} />}
+        {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} initialPairId={signalsResumePairId} onConversationState={({ openPairId, visible }) => { setSignalsResumePairId(openPairId); setSignalsChatVisible(visible); }} requestedPairId={signalsOpenPairId} onRequestedPairHandled={() => setSignalsOpenPairId(null)} initialSection={signalsStartSection} onInitialSectionHandled={() => setSignalsStartSection('inbox')} onBlockMember={handleBlockMember} />}
       </main>
 
       {showChrome && currentView !== 'public' && (

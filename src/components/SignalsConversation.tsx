@@ -171,7 +171,9 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const coarsePointer = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
   // On phones the keyboard overlays the page (iOS), so lift the conversation to the visible area while typing.
   const lifted = coarsePointer && composerFocused && viewportHeight !== null;
-  const chrome = 'var(--header-h) - env(safe-area-inset-top) - var(--tabbar-h)';
+  // What the conversation gives up to the rest of the page: the app header and top safe area (none when the header is hidden on a
+  // phone, see index.css) and the bottom tab bar.
+  const chrome = 'var(--chat-top-chrome) - var(--tabbar-h)';
 
   const loadMessages = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -535,7 +537,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
             : { height: `calc(${viewportHeight ? `${viewportHeight}px` : '100dvh'} - ${chrome})` }
         }
       >
-        <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3 py-2">
+        <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-3 pb-2" style={{ paddingTop: 'calc(0.5rem + var(--chat-safe-top, 0px))' }}>
           <button type="button" onClick={onBack} aria-label="Back to Signals" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-fg">
             <ArrowLeft className="h-5 w-5" />
           </button>

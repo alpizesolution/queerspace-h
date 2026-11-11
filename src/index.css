@@ -70,6 +70,9 @@ html[data-fontsize='large'] { --fs: 1.2; }
   --echo-uplift: #f0c987;
   --header-h: 3.5rem;
   --tabbar-h: calc(3.5rem + env(safe-area-inset-bottom));
+  /* What sits above a Signals conversation: the app header and the top safe area, or nothing when the header is hidden (below). */
+  --chat-top-chrome: calc(var(--header-h) + env(safe-area-inset-top));
+  --chat-safe-top: 0px;
 }
 
 html[data-theme='light'] {
@@ -356,6 +359,21 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--color-line-strong);
   border-radius: 9999px;
+}
+
+/*
+ * Inside a Signals conversation on a phone or tablet the app header is hidden: the conversation has its own header (back, avatar,
+ * name, actions), so the screen gets that height back. The bottom tab bar stays. The conversation then clears the top safe area
+ * itself. On a desktop nothing changes. (Same "not a desktop" test as the tab-bar rule below.)
+ */
+@media (max-width: 1023px), (pointer: coarse) and (max-width: 1439px), (pointer: none) and (max-width: 1439px) {
+  [data-signals-chat='open'] [data-app-header] {
+    display: none;
+  }
+  [data-signals-chat='open'] {
+    --chat-top-chrome: 0px;
+    --chat-safe-top: env(safe-area-inset-top);
+  }
 }
 
 /* Hide the tab bar while typing on phones and tablets so the keyboard never stacks on top of it. */
