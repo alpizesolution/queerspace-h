@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Heart, Shield, RefreshCw } from 'lucide-react';
 import { UserPreferences } from '../types.ts';
 import { ageRangeFromPrefs, joinLiveMatchQueue, LiveMatch, queueMatchFields } from '../services/liveMatchService.ts';
 import { startSearchAttempt } from '../utils/search-attempt.ts';
-import { pickSeekEmptyMessage } from '../utils/seekEmptyMessage.ts';
 
 interface SearchingStateProps {
   mode: 'quick' | 'custom';
@@ -52,8 +51,6 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
 
   const handleKeepSearching = () => setAttempt((n) => n + 1);
   const stopped = searchTimedOut || Boolean(error);
-  // One message each time the empty state appears; it stays the same while it is on screen, however often this re-renders.
-  const emptyMessage = useMemo(() => pickSeekEmptyMessage(), [searchTimedOut]);
 
   const progress = Math.min(secondsElapsed / SEARCH_WINDOW_S, 1) * 100;
 
@@ -76,7 +73,7 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
           {error
             ? "Couldn't connect"
             : searchTimedOut
-            ? "No one's around yet"
+            ? "The stars haven't crossed paths yet."
             : mode === 'quick'
               ? 'Finding Your Star…'
               : 'Exploring the Stars…'}
@@ -85,7 +82,7 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
           {error
             ? error
             : searchTimedOut
-            ? emptyMessage
+            ? 'Your next connection might be just around the corner.'
             : (
               <>
                 Chatting as <span className="text-fg font-medium">{prefs.displayName}</span> ({prefs.pronouns})
@@ -110,7 +107,7 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
           {stopped && (
             <button onClick={handleKeepSearching} className="btn btn-primary w-full">
               <RefreshCw className="w-4 h-4" />
-              Try again
+              {searchTimedOut && !error ? 'Explore again' : 'Try again'}
             </button>
           )}
           <button onClick={onCancel} className="btn btn-ghost w-full">
@@ -118,7 +115,7 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
           </button>
         </div>
 
-        <p className="mt-6 flex items-center justify-center gap-1.5 text-[length:calc(13px_*_var(--fs,1))] text-subtle">
+        <p className="mt-6 flex items-center justify-center gap-1.5 text-[length:calc(13px_*_var(--fs,1))] text-subtle [html[data-theme='light']_&]:text-muted">
           <Shield className="w-3.5 h-3.5" />
           Anonymous and protected
         </p>
