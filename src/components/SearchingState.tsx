@@ -78,8 +78,8 @@ export const SearchingState: React.FC<SearchingStateProps> = ({
             : searchTimedOut
             ? "No one's around yet"
             : mode === 'quick'
-              ? 'Finding someone…'
-              : 'Finding your match…'}
+              ? 'Finding Your Star…'
+              : 'Exploring the Stars…'}
         </h1>
         <p className="mt-2 text-[length:calc(15px_*_var(--fs,1))] text-muted">
           {error

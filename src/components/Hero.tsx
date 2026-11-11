@@ -43,12 +43,12 @@ export const Hero: React.FC<HeroProps> = ({
 
           <div className="mt-5 sm:mt-7 flex flex-col sm:flex-row gap-2.5">
             <button onClick={onStartChat} className="btn btn-primary h-12 px-7 text-[length:calc(15px_*_var(--fs,1))] w-full sm:w-auto">
-              Find Your Someone
+              Find Your Star
               <ArrowRight className="w-4 h-4" />
             </button>
             <button onClick={onCustomMatch} className="btn btn-ghost h-12 w-full sm:w-auto">
               <SlidersHorizontal className="w-4 h-4" />
-              Custom match
+              Customize Your Journey
             </button>
           </div>
           <p className="mt-4 text-[length:calc(12px_*_var(--fs,1))] sm:text-[length:calc(13px_*_var(--fs,1))] text-subtle text-center sm:text-left">

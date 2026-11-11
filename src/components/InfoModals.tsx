@@ -62,7 +62,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: 'How does 1-on-1 chat work?',
     a: (
       <>
-        Tap <Strong>Find Your Someone</Strong> and we'll pair you with someone who's online right now.
+        Tap <Strong>Find Your Star</Strong> and we'll pair you with another star who's online right now.
         Swipe a message right to reply to it, or tap it to react. Chats end when either of you leaves, and
         nothing is kept afterwards.
       </>

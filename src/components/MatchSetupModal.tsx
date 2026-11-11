@@ -143,7 +143,7 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
             </p>
           )}
           <button type="button" onClick={handleSubmit} className="btn btn-primary w-full h-12 text-[length:calc(15px_*_var(--fs,1))]">
-            {isCustom ? 'Find my match' : 'Start chatting'}
+            {isCustom ? 'Find Your Star' : 'Start chatting'}
             <ArrowRight className="w-4 h-4" />
           </button>
         </>

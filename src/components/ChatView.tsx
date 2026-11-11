@@ -519,8 +519,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <button
             onClick={() => setShowSkipConfirm(true)}
             className="icon-btn"
-            aria-label="Skip to next match"
-            title="Next match"
+            aria-label="Skip to the next star"
+            title="Next star"
           >
             <SkipForward className="w-5 h-5" />
           </button>
@@ -785,7 +785,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <p className="text-[length:calc(14px_*_var(--fs,1))] text-muted mb-3">{partner.displayName} left the chat.</p>
           <div className="flex flex-col sm:flex-row gap-2 sm:justify-center">
             <button onClick={onNextMatch} className="btn btn-primary">
-              Find someone new
+              Find a new star
             </button>
             <button onClick={onLeaveChat} className="btn btn-ghost">
               Back to home
@@ -948,7 +948,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       {showSkipConfirm && (
         <ConfirmDialog
-          title="Skip to someone new?"
+          title="Skip to a new star?"
           message={<>Your chat with {partner.displayName} will end and be cleared.</>}
           confirmLabel="Skip"
           onCancel={() => setShowSkipConfirm(false)}

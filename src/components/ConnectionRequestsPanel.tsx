@@ -228,7 +228,7 @@ export const ConnectionRequestsPanel: React.FC<Props> = ({ rev, onChanged, onOpe
         <div className="px-4 py-12 text-center">
           <p className="text-[length:calc(15px_*_var(--fs,1))] font-medium text-fg">{tab === 'incoming' ? 'No requests yet' : 'You haven’t sent any requests'}</p>
           <p className="mt-1 text-[length:calc(13px_*_var(--fs,1))] text-muted">
-            {tab === 'incoming' ? 'When someone is interested in your Looking For post, their request appears here.' : 'Find someone in Cosmos → Looking For and send a connection request.'}
+            {tab === 'incoming' ? 'When someone is interested in your Looking For post, their request appears here.' : 'Find your star in Cosmos → Looking For and send a connection request.'}
           </p>
         </div>
       ) : (
