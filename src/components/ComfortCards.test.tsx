@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import React from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { ComfortCardBubble, ComfortCardPicker } from './ComfortCards.tsx';
-import { CARD_CATEGORIES, cardsInCategory, type ComfortCard } from '../utils/comfortCards.ts';
+import { CARD_CATEGORIES, COMFORT_CARDS, cardsInCategory, type ComfortCard } from '../utils/comfortCards.ts';
 
 afterEach(cleanup);
 
@@ -16,70 +16,120 @@ const picker = () => {
   return { sent, closed: () => closed };
 };
 
-test('the picker opens on the first category with all six categories to browse', () => {
+const labels = CARD_CATEGORIES.map((c) => c.label);
+const pressed = () => screen.queryAllByRole('button', { pressed: true }).filter((b) => b.id.startsWith('card-'));
+
+test('the picker opens on the first category, with the tagline, the featured icebreaker and all six categories', () => {
   picker();
   assert.ok(screen.getByRole('dialog'));
+  assert.ok(screen.getByText(/Little questions, meaningful connections\./));
+  const featured = screen.getByRole('region', { name: 'Daily icebreaker' });
+  assert.ok(within(featured).getByText('Daily icebreaker'));
+  assert.ok(within(featured).getByRole('heading', { name: 'Let’s make a little connection.' }));
+  assert.ok(within(featured).getByRole('button', { name: /Shuffle question/ }));
   const tabs = screen.getAllByRole('tab');
-  assert.deepEqual(tabs.map((t) => t.textContent), CARD_CATEGORIES.map((c) => c.label));
+  assert.deepEqual(tabs.map((t) => t.textContent?.replace(/^\p{Extended_Pictographic}️?/u, '')), labels);
   assert.equal(tabs[0].getAttribute('aria-selected'), 'true');
   assert.equal(within(screen.getByRole('list')).getAllByRole('listitem').length, cardsInCategory('soft').length);
+  assert.equal(screen.queryByRole('button', { name: /Send this card/ }), null, 'no Send action until something is chosen');
 });
 
-test('browsing: choosing a category shows its questions', () => {
+test('every category can be opened and shows exactly its own questions', () => {
   picker();
-  fireEvent.click(screen.getByRole('tab', { name: 'Comfort Corner' }));
-  const first = cardsInCategory('comfort')[0];
-  assert.ok(screen.getByText(first.question));
-  assert.equal(screen.queryByText(cardsInCategory('soft')[0].question), null);
+  for (const c of CARD_CATEGORIES) {
+    fireEvent.click(screen.getByRole('tab', { name: c.label }));
+    assert.equal(screen.getByRole('tab', { name: c.label }).getAttribute('aria-selected'), 'true');
+    assert.equal(screen.getAllByRole('tab').filter((t) => t.getAttribute('aria-selected') === 'true').length, 1, 'one selected category');
+    const shown = within(screen.getByRole('list', { name: `${c.label} questions` })).getAllByRole('listitem').map((li) => li.textContent);
+    assert.deepEqual(shown, cardsInCategory(c.id).map((q) => q.question));
+  }
 });
 
-test('choosing a question previews it first; nothing is sent until Send card', () => {
+test('choosing a question marks it, shows the Send action, and sends nothing yet', () => {
   const { sent } = picker();
-  const card = cardsInCategory('deep')[2];
   fireEvent.click(screen.getByRole('tab', { name: 'Deep Talks' }));
+  const card = cardsInCategory('deep')[2];
   fireEvent.click(screen.getByText(card.question));
-  const preview = screen.getByTestId('card-preview');
-  assert.ok(within(preview).getByText(card.question));
-  assert.ok(within(preview).getByText('Deep Talks'));
+  assert.deepEqual(pressed().map((b) => b.id), [`card-${card.id}`]);
+  assert.ok(screen.getByRole('button', { name: 'Send this card ✨' }));
   assert.equal(sent.length, 0);
-  fireEvent.click(screen.getByRole('button', { name: 'Send card' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Send this card ✨' }));
   assert.deepEqual(sent.map((c) => c.id), [card.id]);
 });
 
-test('Cancel in the preview goes back to browsing without sending', () => {
+test('the choice can be changed before sending: only the latest is chosen and sent', () => {
+  const { sent } = picker();
+  const [first, second] = cardsInCategory('soft');
+  fireEvent.click(screen.getByText(first.question));
+  fireEvent.click(screen.getByText(second.question));
+  assert.deepEqual(pressed().map((b) => b.id), [`card-${second.id}`]);
+  // Even across categories.
+  fireEvent.click(screen.getByRole('tab', { name: 'Random & Fun' }));
+  const third = cardsInCategory('fun')[4];
+  fireEvent.click(screen.getByText(third.question));
+  fireEvent.click(screen.getByRole('tab', { name: 'Soft & Sweet' }));
+  assert.equal(pressed().length, 0, 'the earlier choice is no longer in this list');
+  fireEvent.click(screen.getByRole('button', { name: 'Send this card ✨' }));
+  assert.deepEqual(sent.map((c) => c.id), [third.id]);
+});
+
+test('Cancel clears the choice and the Send action, and the list stays', () => {
   const { sent } = picker();
   fireEvent.click(screen.getByText(cardsInCategory('soft')[0].question));
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  assert.equal(screen.queryByTestId('card-preview'), null);
+  assert.equal(pressed().length, 0);
+  assert.equal(screen.queryByRole('button', { name: /Send this card/ }), null);
   assert.ok(screen.getByRole('tablist'));
   assert.equal(sent.length, 0);
 });
 
 test('closing the picker sends nothing', () => {
   const { sent, closed } = picker();
+  fireEvent.click(screen.getByText(cardsInCategory('soft')[0].question));
   fireEvent.click(screen.getByRole('button', { name: /close/i }));
   assert.equal(closed(), 1);
   assert.equal(sent.length, 0);
 });
 
-test('Random question previews a real card, and another random one is a different card', () => {
+test('Shuffle question chooses a real random card from anywhere, opens its category, shows Send, and never repeats the one chosen', () => {
   const { sent } = picker();
-  fireEvent.click(screen.getByRole('button', { name: /Random question/ }));
-  const preview = screen.getByTestId('card-preview');
-  const first = screen.getAllByText(/\?$/)[0].textContent;
-  assert.ok(first);
-  fireEvent.click(within(preview).getByRole('button', { name: /Another random one/ }));
-  assert.notEqual(screen.getAllByText(/\?$/)[0].textContent, first);
-  assert.equal(sent.length, 0);
+  const shuffle = () => fireEvent.click(screen.getByRole('button', { name: /Shuffle question/ }));
+  let previous = '';
+  const seenCategories = new Set<string>();
+  for (let i = 0; i < 40; i++) {
+    shuffle();
+    const chosen = pressed();
+    assert.equal(chosen.length, 1, 'exactly one question is chosen and visible');
+    const id = chosen[0].id.replace('card-', '');
+    assert.ok(COMFORT_CARDS.some((c) => c.id === id));
+    assert.notEqual(id, previous, 'a different card each time');
+    previous = id;
+    const category = COMFORT_CARDS.find((c) => c.id === id)!.category;
+    seenCategories.add(category);
+    assert.equal(screen.getByRole('tab', { selected: true }).textContent?.endsWith(CARD_CATEGORIES.find((c) => c.id === category)!.label), true, 'its category is open');
+    assert.ok(screen.getByRole('button', { name: 'Send this card ✨' }));
+  }
+  assert.ok(seenCategories.size > 1, 'random picks reach more than one category');
+  assert.equal(sent.length, 0, 'shuffling never sends');
 });
 
-test('a double tap on Send card sends once', () => {
+test('a double tap on Send this card sends once', () => {
   const { sent } = picker();
   fireEvent.click(screen.getByText(cardsInCategory('soft')[0].question));
-  const send = screen.getByRole('button', { name: 'Send card' });
+  const send = screen.getByRole('button', { name: 'Send this card ✨' });
   fireEvent.click(send);
   fireEvent.click(send);
   assert.equal(sent.length, 1);
+});
+
+test('long questions are never clipped: the text wraps, with no truncation or line clamp in the list', () => {
+  const src = fs.readFileSync('src/components/ComfortCards.tsx', 'utf8');
+  const list = src.slice(src.indexOf('<ul aria-label'), src.indexOf('</ul>'));
+  assert.doesNotMatch(list, /truncate|line-clamp|text-ellipsis|whitespace-nowrap/);
+  assert.match(list, /\[overflow-wrap:anywhere\]/);
+  // And nothing in the picker can push the page sideways, and the list scrolls on its own.
+  assert.match(src, /flex min-w-0 flex-col gap-3/);
+  assert.match(src, /max-h-\[40dvh\]/);
 });
 
 test('the card in a conversation shows its category and question, and Answer is offered to either person', () => {
