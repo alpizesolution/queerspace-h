@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { QuotaNotice } from './components/QuotaNotice.tsx';
 import './index.css';
 import { hideSplash } from './utils/splash.ts';
+import { auth } from './lib/firebase.ts';
 import { unlockAudioOnFirstTap } from './utils/sound.ts';
 import { installQuotaWatch } from './utils/quotaGuard.ts';
 import { captureAcquisitionSource } from './utils/acquisition.ts';
@@ -45,6 +46,10 @@ createRoot(document.getElementById('root')!).render(
   </ErrorBoundary>
 );
 
-// Admins skip the brand moment; everyone else sees it for a beat after the app renders.
-requestAnimationFrame(() => hideSplash(isAdminRoute ? 0 : undefined));
+// Admins skip the brand moment. Everyone else sees the splash for at least 3 seconds, and for as long as it takes Firebase to restore
+// the saved sign-in (authStateReady settles for signed-in and signed-out visitors alike; it does not wait for the network) and React
+// to draw its first frame.
+const authRestored = typeof auth?.authStateReady === 'function' ? auth.authStateReady() : Promise.resolve();
+const firstFrame = new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+void hideSplash(isAdminRoute ? { minMs: 0, ready: firstFrame } : { ready: Promise.all([authRestored, firstFrame]) });
 unlockAudioOnFirstTap();

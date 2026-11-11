@@ -73,28 +73,34 @@
       #splash {
         position: fixed; inset: 0; z-index: 9999;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
+        box-sizing: border-box; overflow: hidden; overscroll-behavior: none; touch-action: none;
+        -webkit-user-select: none; user-select: none; text-align: center;
+        /* Keep everything clear of the notch, Dynamic Island, home indicator and rounded corners. */
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
         background: radial-gradient(60% 45% at 50% 42%, rgba(124, 58, 110, 0.18), transparent 70%), var(--color-ink, #120b17);
         transition: opacity 450ms ease, transform 450ms ease;
       }
+      /* Nothing behind the splash can scroll while it is up. */
+      html:has(#splash), body:has(#splash) { overflow: hidden; }
       #splash.splash-out { opacity: 0; transform: scale(1.04); pointer-events: none; }
       #splash .splash-logo {
-        width: 96px; height: 96px; border-radius: 50%;
+        width: clamp(72px, 16vmin, 112px); height: auto; aspect-ratio: 1; border-radius: 50%; flex: none;
         box-shadow: 0 0 0 1px rgba(224, 123, 184, 0.25), 0 0 48px rgba(224, 123, 184, 0.28);
         animation: splash-logo 900ms cubic-bezier(0.16, 1, 0.3, 1) both, splash-glow 2.4s ease-in-out 900ms infinite;
       }
       #splash .splash-name {
-        margin-top: 22px; font-family: "Playfair Display", Georgia, serif; font-weight: 600;
-        font-size: 24px; letter-spacing: 0.04em; color: var(--color-fg, #f7f0f6);
+        margin-top: clamp(14px, 3vmin, 26px); font-family: "Playfair Display", Georgia, serif; font-weight: 600;
+        font-size: clamp(20px, 3vmin + 12px, 32px); letter-spacing: 0.04em; white-space: nowrap; max-width: 100%; color: var(--color-fg, #f7f0f6);
         animation: splash-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) 250ms both;
       }
       #splash .splash-name span { color: #e07bb8; margin-left: 0.28em; }
       #splash .splash-tag {
-        margin-top: 8px; font-family: "Plus Jakarta Sans", system-ui, sans-serif; font-size: 13px;
+        margin-top: 8px; font-family: "Plus Jakarta Sans", system-ui, sans-serif; font-size: clamp(12px, 1.6vmin + 6px, 15px); padding: 0 16px;
         letter-spacing: 0.02em; color: var(--color-muted, rgba(247, 240, 246, 0.55));
         animation: splash-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) 450ms both;
       }
       #splash .splash-bar {
-        position: absolute; bottom: calc(56px + env(safe-area-inset-bottom)); width: 112px; height: 2px;
+        position: absolute; bottom: calc(clamp(32px, 8vmin, 64px) + env(safe-area-inset-bottom)); width: 112px; height: 2px;
         border-radius: 2px; overflow: hidden; background: rgba(247, 240, 246, 0.1);
         animation: splash-rise 500ms ease 600ms both;
       }
@@ -109,6 +115,10 @@
       }
       @keyframes splash-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
       @keyframes splash-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+      /* A very short screen (a phone on its side): the bar joins the column instead of floating over the text. */
+      @media (max-height: 360px) {
+        #splash .splash-bar { position: static; margin-top: 14px; }
+      }
       @media (prefers-reduced-motion: reduce) {
         #splash, #splash * { animation: none !important; transition: opacity 300ms ease !important; }
         #splash.splash-out { transform: none; }
