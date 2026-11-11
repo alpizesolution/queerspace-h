@@ -639,7 +639,9 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           {message.kind === 'card' && message.card ? (
                             <ComfortCardBubble
                               card={{ category: message.card.category as ComfortCard['category'], question: message.text }}
-                              canAnswer={!ended && !unsent}
+                              canAnswer={!ended}
+                              pending={unsent}
+                              time={formatTime(message.createdAt)}
                               onAnswer={() => { setReplyingTo(message); setActiveId(null); composerFocus.requestFocus(); }}
                             />
                           ) : message.kind === 'gif' && message.gif ? (
@@ -654,7 +656,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           ) : (
                           <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-[length:calc(15px_*_var(--fs,1))] leading-snug">{message.text}</p>
                           )}
-                          {message.createdAt && <span className={`ml-auto translate-y-px select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
+                          {message.createdAt && !(message.kind === 'card' && message.card) && <span className={`ml-auto translate-y-px select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
                         </div>
                       </div>
                       </SwipeToReply>

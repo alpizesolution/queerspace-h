@@ -15,16 +15,25 @@ import { CARD_CATEGORIES, cardsInCategory, categoryLabel, randomCard, type CardC
 /** The composer button's icon: a small stack of cards. */
 export const ComfortCardsIcon: React.FC<{ className?: string }> = ({ className }) => <Layers className={className} aria-hidden="true" />;
 
-/** Accent as an "r g b" triplet (used as rgb(var(--accent) / alpha)) and a small emoji per category. */
-const LOOK: Record<CardCategoryId, { accent: string; emoji: string }> = {
-  soft: { accent: '244 143 177', emoji: '🌸' },
-  know: { accent: '247 178 130', emoji: '🌅' },
-  deep: { accent: '183 156 240', emoji: '🌙' },
-  love: { accent: '232 121 198', emoji: '💗' },
-  fun: { accent: '143 165 245', emoji: '🪐' },
-  comfort: { accent: '122 211 184', emoji: '🌿' },
+/**
+ * Accent as "r g b" triplets (used as rgb(var(--accent) / alpha)): `dark` for the dark theme, `light` a deeper shade for the light
+ * theme, plus a small emoji per category. The `cc-accent` class (index.css) picks the one that matches the theme.
+ */
+const LOOK: Record<CardCategoryId, { dark: string; light: string; emoji: string }> = {
+  soft: { dark: '244 143 177', light: '163 35 79', emoji: '🌸' },
+  know: { dark: '247 178 130', light: '148 69 16', emoji: '🌅' },
+  deep: { dark: '183 156 240', light: '106 58 168', emoji: '🌙' },
+  love: { dark: '232 121 198', light: '154 31 130', emoji: '💗' },
+  fun: { dark: '143 165 245', light: '51 73 176', emoji: '🪐' },
+  comfort: { dark: '122 211 184', light: '20 98 82', emoji: '🌿' },
 };
-const accentStyle = (category: string): React.CSSProperties => ({ ['--accent' as string]: LOOK[category as CardCategoryId]?.accent ?? LOOK.deep.accent });
+/** The accents, for tests that check their contrast in both themes. */
+export const CATEGORY_ACCENTS = LOOK;
+
+const accentStyle = (category: string): React.CSSProperties => {
+  const look = LOOK[category as CardCategoryId] ?? LOOK.deep;
+  return { ['--accent-d' as string]: look.dark, ['--accent-l' as string]: look.light };
+};
 
 /** A tiny decorative star; purely visual. */
 const Star: React.FC<{ className?: string }> = ({ className = '' }) => (
@@ -78,7 +87,7 @@ export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) =>
               type="button"
               onClick={send}
               style={accentStyle(selected.category)}
-              className="btn flex-[2] border border-[rgb(var(--accent)/0.5)] bg-gradient-to-r from-[rgb(var(--accent)/0.9)] to-[rgb(183_156_240/0.9)] font-semibold text-ink shadow-[0_6px_20px_-8px_rgb(var(--accent)/0.7)] transition active:scale-[0.98] hover:brightness-110"
+              className="cc-accent btn flex-[2] border border-[rgb(var(--accent))] bg-[rgb(var(--accent))] font-semibold text-ink shadow-[0_6px_20px_-8px_rgb(var(--accent)/0.7)] transition active:scale-[0.98] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg"
             >
               Send this card ✨
             </button>
@@ -105,7 +114,7 @@ export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) =>
           <button
             type="button"
             onClick={shuffle}
-            className="mt-3 inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-[#f48fb1] via-[#d49af0] to-[#8fa5f5] px-4 text-[length:calc(14px_*_var(--fs,1))] font-semibold text-ink shadow-[0_6px_18px_-8px_rgba(212,154,240,0.8)] transition hover:brightness-110 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60"
+            className="mt-3 inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-[#f48fb1] via-[#d49af0] to-[#8fa5f5] px-4 text-[length:calc(14px_*_var(--fs,1))] font-semibold text-[#1c1022] shadow-[0_6px_18px_-8px_rgba(212,154,240,0.8)] transition hover:brightness-110 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60"
           >
             <Shuffle className="h-4 w-4" aria-hidden="true" /> Shuffle question
           </button>
@@ -123,10 +132,10 @@ export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) =>
                 aria-selected={on}
                 onClick={() => setCategory(c.id)}
                 style={accentStyle(c.id)}
-                className={`inline-flex h-8 max-w-full items-center gap-1.5 rounded-full border px-3 text-[length:calc(12.5px_*_var(--fs,1))] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60 active:scale-[0.97] ${
+                className={`cc-accent inline-flex h-8 max-w-full items-center gap-1.5 rounded-full border px-3 text-[length:calc(12.5px_*_var(--fs,1))] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60 active:scale-[0.97] ${
                   on
                     ? 'border-[rgb(var(--accent)/0.65)] bg-[rgb(var(--accent)/0.2)] text-[rgb(var(--accent))] shadow-[0_0_14px_-4px_rgb(var(--accent)/0.6)]'
-                    : 'border-[rgb(var(--accent)/0.22)] bg-[rgb(var(--accent)/0.07)] text-fg/80 hover:bg-[rgb(var(--accent)/0.13)]'
+                    : 'border-[rgb(var(--accent)/0.65)] bg-[rgb(var(--accent)/0.07)] text-fg hover:bg-[rgb(var(--accent)/0.13)]'
                 }`}
               >
                 <span aria-hidden="true">{LOOK[c.id].emoji}</span>
@@ -141,7 +150,7 @@ export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) =>
           {cardsInCategory(category).map((card) => {
             const on = selected?.id === card.id;
             return (
-              <li key={card.id} style={accentStyle(card.category)}>
+              <li key={card.id} style={accentStyle(card.category)} className="cc-accent">
                 <button
                   id={`card-${card.id}`}
                   type="button"
@@ -150,7 +159,7 @@ export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) =>
                   className={`group relative flex w-full items-start gap-3 overflow-hidden rounded-2xl border py-3 pl-4 pr-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60 active:scale-[0.99] ${
                     on
                       ? 'border-[rgb(var(--accent)/0.7)] bg-[rgb(var(--accent)/0.16)] shadow-[0_6px_22px_-10px_rgb(var(--accent)/0.75)]'
-                      : 'border-line bg-[rgb(var(--accent)/0.05)] hover:border-[rgb(var(--accent)/0.4)] hover:bg-[rgb(var(--accent)/0.1)]'
+                      : 'border-[rgb(var(--accent)/0.65)] bg-[rgb(var(--accent)/0.05)] hover:border-[rgb(var(--accent)/0.85)] hover:bg-[rgb(var(--accent)/0.1)]'
                   }`}
                 >
                   <span aria-hidden="true" className={`absolute inset-y-2 left-1.5 w-[3px] rounded-full bg-[rgb(var(--accent))] transition-opacity ${on ? 'opacity-90' : 'opacity-45 group-hover:opacity-70'}`} />
@@ -173,35 +182,61 @@ export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) =>
   );
 };
 
-/** The card itself, as a bubble in the conversation: its category (in that category's accent) and the question. */
-const CardFace: React.FC<{ card: Pick<ComfortCard, 'category' | 'question'> }> = ({ card }) => (
+/**
+ * The card itself, as a bubble in the conversation. It has its own surface and colours (index.css, --card-*), never the ones of
+ * the message bubble around it, so it reads the same in a pink outgoing bubble, a dark or pale incoming one, in either theme. The
+ * category accent is only a thin bar and a star; every piece of text uses the card's own text colours.
+ */
+const CardFace: React.FC<{ card: Pick<ComfortCard, 'category' | 'question'>; footer?: React.ReactNode }> = ({ card, footer }) => (
   <div
     style={accentStyle(card.category)}
-    className="relative overflow-hidden rounded-2xl border border-[rgb(var(--accent)/0.35)] bg-gradient-to-br from-plum/50 via-surface to-ink px-4 py-3"
+    className="cc-accent relative overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] py-3 pl-5 pr-4 text-[var(--card-text)]"
   >
-    <Star className="absolute right-3 top-2 text-[length:calc(10px_*_var(--fs,1))]" />
-    <p className="flex items-center gap-1.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-wide text-[rgb(var(--accent))]">
+    <span aria-hidden="true" className="absolute inset-y-2.5 left-2 w-[3px] rounded-full bg-[rgb(var(--accent))]" />
+    <Star className="absolute right-3 top-2 text-[length:calc(10px_*_var(--fs,1))] !text-[rgb(var(--accent))]" />
+    <p className="flex items-center gap-1.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-wide text-[var(--card-label)]">
       <ComfortCardsIcon className="h-3.5 w-3.5" /> {categoryLabel(card.category)}
     </p>
-    <p className="mt-1.5 text-[length:calc(16px_*_var(--fs,1))] font-medium leading-snug text-fg [overflow-wrap:anywhere]">{card.question}</p>
+    <p className="mt-1.5 text-[length:calc(16px_*_var(--fs,1))] font-medium leading-snug text-[var(--card-text)] [overflow-wrap:anywhere]">{card.question}</p>
+    {footer}
   </div>
 );
 
+interface BubbleProps {
+  card: Pick<ComfortCard, 'category' | 'question'>;
+  /** False hides the Answer button altogether (the connection has ended). */
+  canAnswer: boolean;
+  onAnswer: () => void;
+  /** The card is still being sent: Answer is shown but cannot be used yet. */
+  pending?: boolean;
+  /** When it was sent, shown on the card itself so it is always readable on the card's own surface. */
+  time?: string;
+}
+
 /** A Comfort Card inside a message bubble, with an Answer button for either person: the answer is an ordinary reply. */
-export const ComfortCardBubble: React.FC<{ card: Pick<ComfortCard, 'category' | 'question'>; canAnswer: boolean; onAnswer: () => void }> = ({ card, canAnswer, onAnswer }) => (
-  <div className="min-w-0 max-w-full flex-auto text-fg" data-testid="comfort-card">
-    <CardFace card={card} />
-    {canAnswer && (
-      <button
-        type="button"
-        onClick={(event) => { event.stopPropagation(); onAnswer(); }}
-        onKeyDown={(event) => event.stopPropagation()}
-        style={accentStyle(card.category)}
-        className="mt-1.5 inline-flex h-8 items-center gap-1 rounded-full border border-[rgb(var(--accent)/0.45)] bg-[rgb(var(--accent)/0.12)] px-3 text-[length:calc(12px_*_var(--fs,1))] font-semibold text-[rgb(var(--accent))] transition hover:bg-[rgb(var(--accent)/0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60"
-        aria-label={`Answer this card: ${card.question}`}
-      >
-        <Reply className="h-3.5 w-3.5" aria-hidden="true" /> Answer
-      </button>
-    )}
+export const ComfortCardBubble: React.FC<BubbleProps> = ({ card, canAnswer, onAnswer, pending = false, time }) => (
+  <div className="min-w-0 max-w-full flex-auto" data-testid="comfort-card">
+    <CardFace
+      card={card}
+      footer={
+        (canAnswer || time) ? (
+          <div className="mt-2.5 flex items-center justify-between gap-3">
+            {time ? <span className="text-[length:calc(12px_*_var(--fs,1))] tabular-nums text-[var(--card-meta)]">{time}</span> : <span />}
+            {canAnswer && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={(event) => { event.stopPropagation(); onAnswer(); }}
+                onKeyDown={(event) => event.stopPropagation()}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-[var(--card-btn-border)] bg-[var(--card-btn-bg)] px-4 text-[length:calc(13px_*_var(--fs,1))] font-semibold text-[var(--card-btn-text)] transition-colors hover:bg-[var(--card-btn-hover)] active:bg-[var(--card-btn-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--card-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--card-bg)] disabled:cursor-not-allowed disabled:border-transparent disabled:bg-[var(--card-btn-disabled-bg)] disabled:text-[var(--card-btn-disabled-text)]"
+                aria-label={`Answer this card: ${card.question}`}
+              >
+                <Reply className="h-4 w-4" aria-hidden="true" /> Answer
+              </button>
+            )}
+          </div>
+        ) : null
+      }
+    />
   </div>
 );

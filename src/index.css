@@ -95,6 +95,48 @@ html[data-theme='light'] {
   --color-danger: #bd334f;
 }
 
+/*
+ * Comfort Cards get their own surface, text and button colours in each theme, so a card reads the same whether it sits in a pink
+ * outgoing bubble, a dark or pale incoming bubble, or the picker. Every pair below was measured (see docs/comfort-cards-contrast.md):
+ * text 4.5:1 or better, button and card edges 3:1 or better. The accent per category is decorative plus the selected state; its
+ * light-theme shade is darker so that text and a light label on it still pass.
+ */
+:root {
+  --card-bg: #211327;
+  --card-border: #a77fb8;
+  --card-text: #ffffff;
+  --card-label: #e8b5ff;
+  --card-meta: #c9b8d0;
+  --card-btn-bg: #49304f;
+  --card-btn-hover: #5a3d62;
+  --card-btn-active: #6a4874;
+  --card-btn-text: #ffffff;
+  --card-btn-border: #a77fb8;
+  --card-focus: #e8b5ff;
+  --card-btn-disabled-bg: #2c1d33;
+  --card-btn-disabled-text: #b8a9bd;
+}
+
+html[data-theme='light'] {
+  --card-bg: #ffffff;
+  --card-border: #8c64a3;
+  --card-text: #291b32;
+  --card-label: #75418e;
+  --card-meta: #5f5068;
+  --card-btn-bg: #ede2f2;
+  --card-btn-hover: #e1d0ea;
+  --card-btn-active: #d5bfe2;
+  --card-btn-text: #56316b;
+  --card-btn-border: #8c64a3;
+  --card-focus: #75418e;
+  --card-btn-disabled-bg: #f2edf6;
+  --card-btn-disabled-text: #6f6276;
+}
+
+/* A category accent: the pastel on the dark theme, a deeper shade on the light theme. Set --accent-d and --accent-l ("r g b"). */
+.cc-accent { --accent: var(--accent-d); }
+html[data-theme='light'] .cc-accent { --accent: var(--accent-l); }
+
 html[data-theme='light'] .btn-primary,
 html[data-theme='light'] .btn-danger {
   color: #ffffff;
