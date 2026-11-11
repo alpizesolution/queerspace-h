@@ -19,6 +19,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { SwipeToReply } from './SwipeToReply.tsx';
+import { ReplyQuote } from './ReplyQuote.tsx';
 import { MatchCelebration } from './MatchCelebration.tsx';
 import { auth } from '../lib/firebase.ts';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
@@ -675,19 +676,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     }`}
                   >
                     {msg.replyTo && (
-                      <button
-                        type="button"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onPointerUp={(e) => e.stopPropagation()}
+                      <ReplyQuote
+                        tone={isUser ? 'plum' : 'raised'}
+                        author={msg.replyTo.sender === 'user' ? 'You' : partner.displayName}
+                        text={msg.replyTo.text}
                         onClick={() => jumpToMessage(msg.replyTo!.id)}
-                        className="block w-full text-left mb-1.5 -mx-1 px-2.5 py-1.5 rounded-xl bg-black/20 border-l-2 border-berry cursor-pointer"
-                        aria-label={`Replying to: ${msg.replyTo.text}`}
-                      >
-                        <span className="block text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry">
-                          {msg.replyTo.sender === 'user' ? 'You' : partner.displayName}
-                        </span>
-                        <span className="block text-[length:calc(13px_*_var(--fs,1))] text-fg/75 line-clamp-2 [overflow-wrap:anywhere]">{msg.replyTo.text}</span>
-                      </button>
+                      />
                     )}
                     {msg.card ? (
                       <ComfortCardBubble

@@ -11,6 +11,7 @@ import { SwipeToReply } from './SwipeToReply.tsx';
 import { TimedPhotoComposer } from './TimedPhotoComposer.tsx';
 import { TimedPhotoViewer } from './TimedPhotoViewer.tsx';
 import { GifBubble, GifIcon, GifPicker } from './GifPicker.tsx';
+import { ReplyQuote } from './ReplyQuote.tsx';
 import { ComfortCardBubble, ComfortCardPicker, ComfortCardsIcon } from './ComfortCards.tsx';
 import type { ComfortCard } from '../utils/comfortCards.ts';
 import { gifSendProblemText, type GifInfo } from '../utils/gif.ts';
@@ -630,10 +631,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                         className={`${unsent ? 'opacity-70' : ''} min-w-0 max-w-full cursor-pointer rounded-2xl px-3 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}
                       >
                         {message.replyTo && (
-                          <div className={`mb-1 rounded-md border-l-2 px-2 py-0.5 text-[length:calc(11px_*_var(--fs,1))] leading-snug ${mine ? 'border-ink/40 bg-ink/10 text-ink/80' : 'border-lavender bg-surface/70 text-muted'}`}>
-                            <p className="font-semibold">{message.replyTo.senderId === userId ? 'You' : partnerName}</p>
-                            <p className="line-clamp-1 [overflow-wrap:anywhere]">{message.replyTo.text}</p>
-                          </div>
+                          <ReplyQuote tone={mine ? 'accent' : 'raised'} author={message.replyTo.senderId === userId ? 'You' : partnerName} text={message.replyTo.text} />
                         )}
                         <div className="flex flex-wrap items-end justify-end gap-x-2">
                           {message.kind === 'card' && message.card ? (

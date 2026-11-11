@@ -4,6 +4,7 @@ import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ArrowUp, BadgeCheck, CheckCircle2, Reply, Trash2, Users, X } from 'lucide-react';
 import { ConfirmDialog } from './Sheet.tsx';
 import { SwipeToReply } from './SwipeToReply.tsx';
+import { ReplyQuote } from './ReplyQuote.tsx';
 import { GifBubble, GifIcon, GifPicker } from './GifPicker.tsx';
 import type { GifInfo } from '../utils/gif.ts';
 import { useVisualViewport } from '../hooks/useVisualViewportHeight.ts';
@@ -441,17 +442,17 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                 <AnimalAvatar avatar={msg.authorAvatar} seed={msg.authorId || msg.author} className="w-8 h-8" />
               ))}
 
-            <div className={`max-w-[80%] flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}>
-              <div className="flex items-baseline gap-1.5 mb-0.5 px-1 text-[length:calc(12px_*_var(--fs,1))]">
-                {!msg.isSelf && <span className="font-semibold text-fg">{msg.author}</span>}
+            <div className={`min-w-0 max-w-[80%] flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}>
+              <div className="flex max-w-full min-w-0 items-baseline gap-1.5 mb-0.5 px-1 text-[length:calc(12px_*_var(--fs,1))]">
+                {!msg.isSelf && <span className="min-w-0 truncate whitespace-nowrap font-semibold text-fg">{msg.author}</span>}
                 {msg.team && (
                   <span className="inline-flex items-center gap-1 self-center px-1.5 py-px rounded-full bg-berry/15 text-berry text-[length:calc(10.5px_*_var(--fs,1))] font-semibold uppercase tracking-wide">
                     <BadgeCheck className="w-3 h-3" aria-hidden="true" />
                     Team
                   </span>
                 )}
-                {!msg.isSelf && !msg.team && <span className="text-subtle">{msg.authorPronouns}</span>}
-                <span className="text-subtle">{formatChatTime(msg.timestamp)}</span>
+                {!msg.isSelf && !msg.team && <span className="shrink-0 whitespace-nowrap text-subtle">{msg.authorPronouns}</span>}
+                <span className="shrink-0 whitespace-nowrap text-subtle">{formatChatTime(msg.timestamp)}</span>
               </div>
               <SwipeToReply onReply={() => startReply(msg)} className="max-w-full">
                 <ReactableBubble
@@ -474,17 +475,7 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                   }`}
                 >
                   {msg.replyTo && (
-                    <button
-                      type="button"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onPointerUp={(e) => e.stopPropagation()}
-                      onClick={() => jumpTo(msg.replyTo!.id)}
-                      className="block w-full text-left mb-1.5 -mx-1 px-2.5 py-1.5 rounded-xl bg-black/20 border-l-2 border-berry cursor-pointer"
-                      aria-label={`Replying to ${msg.replyTo.author}: ${msg.replyTo.text}`}
-                    >
-                      <span className="block text-[length:calc(12px_*_var(--fs,1))] font-semibold text-berry">{msg.replyTo.author}</span>
-                      <span className="block text-[length:calc(13px_*_var(--fs,1))] text-fg/75 line-clamp-2 [overflow-wrap:anywhere]">{msg.replyTo.text}</span>
-                    </button>
+                    <ReplyQuote tone={msg.isSelf ? 'plum' : 'raised'} author={msg.replyTo.author} text={msg.replyTo.text} onClick={() => jumpTo(msg.replyTo!.id)} />
                   )}
                   {msg.kind === 'gif' && msg.gif ? (
                     <GifBubble gif={msg.gif} mine={msg.isSelf} />
