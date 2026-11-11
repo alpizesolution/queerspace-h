@@ -9,8 +9,8 @@ test('parseInbox counts only unexpired pending invitations and tolerates junk', 
   const inbox = parseInbox({ rev: 3, pending: { a: ts(2_000), b: ts(500), c: 5_000, d: 'nope', e: null } }, now);
   assert.deepEqual(inbox.pendingIds.sort(), ['a', 'c']);
   assert.equal(inbox.rev, 3);
-  assert.deepEqual(parseInbox(null), { rev: 0, pendingIds: [], unread: {}, acceptedUnread: [], requestIds: [] });
-  assert.deepEqual(parseInbox({ rev: 'x', pending: 'y' }), { rev: 0, pendingIds: [], unread: {}, acceptedUnread: [], requestIds: [] });
+  assert.deepEqual(parseInbox(null), { rev: 0, pendingIds: [], unread: {}, last: {}, acceptedUnread: [], requestIds: [] });
+  assert.deepEqual(parseInbox({ rev: 'x', pending: 'y' }), { rev: 0, pendingIds: [], unread: {}, last: {}, acceptedUnread: [], requestIds: [] });
 });
 
 test('takeNewIds announces each invitation once, even if the snapshot repeats', () => {

@@ -76,7 +76,7 @@ test('skeletons are quiet, match the real layout, and stay still when reduced mo
   assert.match(skeleton, /role="status" aria-busy="true" aria-label="Loading profile"/);
   assert.match(skeleton, /rows = 6/, 'about six rows');
   assert.doesNotMatch(skeleton, /shimmer|gradient|animate-spin|animate-bounce/, 'no shimmer or other effects');
-  const real = view.match(/className="(-mx-2 flex min-h-16 w-\[calc\(100%\+1rem\)\] items-center gap-3 rounded-2xl px-2 py-2\.5)/);
+  const real = view.match(/className=\{`(-mx-2 flex min-h-16 w-\[calc\(100%\+1rem\)\] items-center gap-3 rounded-2xl px-2 py-2\.5)/);
   assert.ok(real, 'the real inbox row');
   const sized = 'flex min-h-16 w-[calc(100%+1rem)] items-center gap-3';
   assert.ok(skeleton.includes(`-mx-2 ${sized} px-2 py-2.5`), 'the skeleton row has the same size, spacing and position');

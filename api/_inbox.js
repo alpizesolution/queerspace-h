@@ -5,6 +5,29 @@
 // same full list as before. Underscore-prefixed files in api/ are not deployed as separate functions.
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 
+/** How much of a message the inbox keeps as its one-line preview. */
+export const PREVIEW_MAX = 80;
+
+/**
+ * The one-line preview of a message for the inbox rows: a GIF and a card say what they are, everything else is the text, on one
+ * line and cut to PREVIEW_MAX. Kept on the member's own inbox document (only they can read it), so the list shows the latest
+ * message without reading any messages.
+ */
+export function previewText(text, kind) {
+  if (kind === 'gif') return 'GIF';
+  const flat = String(text ?? '').replace(/\s+/g, ' ').trim();
+  const body = flat.length > PREVIEW_MAX ? `${flat.slice(0, PREVIEW_MAX - 1).trimEnd()}…` : flat;
+  return kind === 'card' ? `Comfort Card: ${body}` : body;
+}
+
+/** The two inbox writes that go with a new message: the latest-message line for both people, and one more unread for the other. */
+export function inboxWritesForMessage({ pairId, preview, stamp, increment }) {
+  return {
+    recipient: { unread: { [pairId]: increment(1) }, last: { [pairId]: { text: preview, mine: false, at: stamp } } },
+    sender: { last: { [pairId]: { text: preview, mine: true, at: stamp } } },
+  };
+}
+
 export const PAIR_PAGE_DEFAULT = 20;
 export const PAIR_PAGE_MAX = 50;
 /** The most a full (un-paged) list ever returns, as before. */

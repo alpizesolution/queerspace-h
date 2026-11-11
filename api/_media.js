@@ -11,6 +11,7 @@
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { rateLimit } from './_lib.js';
+import { inboxWritesForMessage, previewText } from './_inbox.js';
 import { createKeyedQueue, withContentionRetry } from './_requests.js';
 
 /** The only viewing times a photo can have, in seconds. Anything else is refused on the client and here. */
@@ -413,7 +414,9 @@ export function createMediaHandlers({ getStore = currentStore, now = Date.now } 
       const batch = db.batch();
       batch.update(metaRef, { state: 'unopened', unopenedUntil: Timestamp.fromMillis(sentAt + UNOPENED_TTL_MS), deleteAfter: Timestamp.fromMillis(sentAt + UNOPENED_TTL_MS) });
       batch.create(messageRef, { senderId: uid, kind: 'photo', text: PHOTO_TEXT, mediaId, durationSec: body.timerSeconds, createdAt: stamp, updatedAt: stamp });
-      batch.set(db.doc(`signalsInbox/${otherUid}`), { unread: { [pairId]: FieldValue.increment(1) } }, { merge: true });
+      const writes = inboxWritesForMessage({ pairId, preview: previewText(PHOTO_TEXT, 'photo'), stamp, increment: FieldValue.increment });
+      batch.set(db.doc(`signalsInbox/${otherUid}`), writes.recipient, { merge: true });
+      batch.set(db.doc(`signalsInbox/${uid}`), writes.sender, { merge: true });
       await batch.commit();
     } catch (error) {
       // Either a concurrent copy of this same send won, or the message could not be saved. Either way this copy's object is

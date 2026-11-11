@@ -8,7 +8,7 @@ import { ConnectionRequestsPanel } from './ConnectionRequestsPanel.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import type { SignalsInboxState } from '../hooks/useSignalsInbox.ts';
-import { formatUnread } from '../services/signalsInbox.ts';
+import { formatUnread, sortByActivity } from '../services/signalsInbox.ts';
 import {
   fetchPair,
   fetchPairsPage,
@@ -302,7 +302,8 @@ export const SignalsView: React.FC<{
 
   const pendingReceived = invitations.filter((item) => item.direction === 'received' && item.status === 'pending');
   const pendingSent = invitations.filter((item) => item.direction === 'sent' && item.status === 'pending');
-  const activePairs = pairs.filter((pair) => pair.status === 'active');
+  // Conversations with unread messages first, then the most recently active.
+  const activePairs = sortByActivity(pairs.filter((pair) => pair.status === 'active'), inbox?.unread ?? {}, inbox?.last ?? {});
   const endedPairs = pairs.filter((pair) => pair.status === 'ended');
   const selectedInvitation = pendingReceived.find((item) => item.id === selectedInvitationId) ?? null;
   const acceptedNotes = (inbox?.acceptedUnread ?? []).flatMap((id) => {
@@ -496,26 +497,31 @@ export const SignalsView: React.FC<{
                 {activePairs.map((pair) => {
                   const name = nameOf(pair.partner);
                   const unreadText = formatUnread(inbox?.unread[pair.id]);
+                  const latest = inbox?.last[pair.id];
                   return (
                     <li key={pair.id}>
                       <button
                         type="button"
                         onClick={() => openPair(pair.id)}
                         aria-label={unreadText ? `Open chat with ${name}, ${unreadText} unread` : `Open chat with ${name}`}
-                        className="-mx-2 flex min-h-16 w-[calc(100%+1rem)] items-center gap-3 rounded-2xl px-2 py-2.5 text-left transition-colors hover:bg-raised/60 active:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60"
+                        className={`-mx-2 flex min-h-16 w-[calc(100%+1rem)] items-center gap-3 rounded-2xl px-2 py-2.5 text-left transition-colors hover:bg-raised/60 active:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${unreadText ? 'bg-berry/[0.07]' : ''}`}
                       >
                         <PartnerAvatar avatar={pair.partner?.avatar} seed={pair.id} />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
-                            {unreadText && (
-                              <span className="shrink-0 rounded-full bg-berry px-1.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold leading-[18px] tabular-nums text-ink">
-                                {unreadText}
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-0.5 text-xs text-subtle">Since {formatShortDate(pair.createdAt)}</p>
+                          <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg">{name}</p>
+                          {latest ? (
+                            <p className={`mt-0.5 truncate text-xs ${unreadText ? 'font-medium text-fg/90' : 'text-subtle'}`}>
+                              {latest.mine && <span className="text-subtle">You: </span>}{latest.text}
+                            </p>
+                          ) : (
+                            <p className="mt-0.5 text-xs text-subtle">Since {formatShortDate(pair.createdAt)}</p>
+                          )}
                         </div>
+                        {unreadText && (
+                          <span data-testid="unread-badge" aria-hidden="true" className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-berry px-1.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold leading-none tabular-nums text-ink">
+                            {unreadText}
+                          </span>
+                        )}
                       </button>
                     </li>
                   );

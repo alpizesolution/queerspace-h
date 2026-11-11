@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LayoutDashboard, Volume2, VolumeX, Shield, Menu, Settings2 } from 'lucide-react';
 import { MenuDrawer, MenuInfoModal } from './MenuDrawer.tsx';
+import { formatUnread } from '../services/signalsInbox.ts';
 import { AnimatedBrandTitle } from './AnimatedBrandTitle.tsx';
 import { AuthStatusBadge } from './AuthStatusBadge.tsx';
 import { NAV_ITEMS, NavTarget, isNavActive } from './BottomNavigation.tsx';
@@ -73,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               {label}
-              {(badges[id] ?? 0) > 0 && <span aria-label={`${badges[id]} pending`} className="ml-1.5 inline-block min-w-[16px] rounded-full bg-berry px-1 text-center text-[length:calc(10px_*_var(--fs,1))] font-bold leading-4 text-ink">{badges[id]! > 9 ? '9+' : badges[id]}</span>}
+              {(badges[id] ?? 0) > 0 && <span aria-label={`${badges[id]} pending`} className="ml-1.5 inline-block min-w-[16px] rounded-full bg-berry px-1 text-center text-[length:calc(10px_*_var(--fs,1))] font-bold leading-4 text-ink">{formatUnread(badges[id])}</span>}
             </button>
           );
         })}

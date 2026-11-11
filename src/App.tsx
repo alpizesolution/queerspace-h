@@ -46,6 +46,7 @@ import { loadNsfwPreference, saveNsfwPreference, type NsfwPreference } from './u
 import { useSignalsInbox } from './hooks/useSignalsInbox.ts';
 import { useEchoReplyNotices } from './hooks/useEchoReplyNotices.ts';
 import { useEchoNotifications } from './hooks/useEchoNotifications.ts';
+import { totalUnread } from './services/signalsInbox.ts';
 import { useUnreadUpdates } from './hooks/useUnreadUpdates.ts';
 import { WhatsNewSheet } from './components/WhatsNewSheet.tsx';
 
@@ -512,6 +513,10 @@ export default function App() {
   };
 
   const showChrome = currentView !== 'chat';
+  // The Signals tab count: waiting invitations, accepted notes and connection requests (as before), plus unread incoming messages.
+  // The conversation that is open on screen is left out, so it never flashes a count while it is being read.
+  const openSignalsPair = currentView === 'signals' && signalsChatVisible ? signalsResumePairId : null;
+  const signalsBadge = signalsInbox.pendingIds.length + signalsInbox.acceptedUnread.length + signalsInbox.requestIds.length + totalUnread(signalsInbox.unread, openSignalsPair);
 
   return (
     <ProfileNavProvider value={profileNav}>
@@ -611,7 +616,7 @@ export default function App() {
           hasSupportReply={hasSupportReply}
           hasUnreadUpdates={hasUnreadUpdates}
           profile={userPrefs}
-          badges={{ signals: signalsInbox.pendingIds.length + signalsInbox.acceptedUnread.length + signalsInbox.requestIds.length, unsaid: echoNotifs.unread }}
+          badges={{ signals: signalsBadge, unsaid: echoNotifs.unread }}
         />
       )}
 
@@ -686,7 +691,7 @@ export default function App() {
         />
       )}
 
-      {showChrome && <BottomNavigation currentView={currentView} onNavigate={handleNavigate} badges={{ signals: signalsInbox.pendingIds.length + signalsInbox.acceptedUnread.length + signalsInbox.requestIds.length, unsaid: echoNotifs.unread }} />}
+      {showChrome && <BottomNavigation currentView={currentView} onNavigate={handleNavigate} badges={{ signals: signalsBadge, unsaid: echoNotifs.unread }} />}
 
       {setupModalOpen && (
         <MatchSetupModal

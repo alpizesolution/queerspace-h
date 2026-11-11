@@ -205,7 +205,8 @@ test('notifications are generic: a banner with no name or message, a badge count
   assert.match(app, /You have a new connection request\./);
   const banner = app.slice(app.indexOf('You have a new connection request.') - 400, app.indexOf('You have a new connection request.') + 400);
   assert.doesNotMatch(banner, /message|displayName|\.name/);
-  assert.equal((app.match(/signalsInbox\.requestIds\.length/g) || []).length, 2, 'waiting requests count on the tab badge');
+  assert.equal((app.match(/signalsInbox\.requestIds\.length/g) || []).length, 1, 'waiting requests count on the tab badge (one shared total)');
+  assert.match(app, /badges=\{\{ signals: signalsBadge,/);
   assert.match(read('src/hooks/useSignalsInbox.ts'), /takeNewIds\(next\.requestIds, seenRequests\)/);
   assert.match(read('src/hooks/useSignalsInbox.ts'), /if \(!first\) requested\.forEach/);
 });

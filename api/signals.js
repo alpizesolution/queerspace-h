@@ -6,6 +6,7 @@ import { createRequestHandlers } from './_requests.js';
 import { profileView } from './_profiles.js';
 import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
 import { cardById, shapeStoredCard } from './_cards.js';
+import { inboxWritesForMessage, previewText } from './_inbox.js';
 import { GIF_TEXT, sharedGiphy, isGifId, limitGifSearches, limitGifSends, parseGifQuery, shapeStoredGif } from './_giphy.js';
 import { createPartnerCache, getOnePair, listPairsLegacy, listPairsPage, parsePageLimit, partnerSummaries, shapePair } from './_inbox.js';
 
@@ -489,7 +490,10 @@ export default async function handler(req, res) {
         // whole batch is rejected and the counter is never incremented twice for one message.
         const batch = db.batch();
         batch.create(messageRef, { senderId: uid, text, ...(gif ? { kind: 'gif', gif } : {}), ...(isCard ? { kind: 'card', card: { id: card.id } } : {}), ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
-        batch.set(db.doc(`signalsInbox/${otherUid}`), { unread: { [pairId]: FieldValue.increment(1) } }, { merge: true });
+        // The recipient's unread counter, and the latest-message line for both people's inbox rows, in the same write.
+        const writes = inboxWritesForMessage({ pairId, preview: previewText(text, isGif ? 'gif' : isCard ? 'card' : 'text'), stamp, increment: FieldValue.increment });
+        batch.set(db.doc(`signalsInbox/${otherUid}`), writes.recipient, { merge: true });
+        batch.set(db.doc(`signalsInbox/${uid}`), writes.sender, { merge: true });
         await batch.commit();
       } catch (error) {
         // ALREADY_EXISTS: this exact send already went through (a retry). Answer with what was stored, never a copy.

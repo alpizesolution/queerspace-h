@@ -8,13 +8,52 @@ export interface SignalsInboxSnapshot {
   pendingIds: string[];
   /** Unread incoming messages per pair id; pairs with none are absent. */
   unread: Record<string, number>;
+  /** The latest message of each connection, as a short line, who it is from, and when. Pairs with no messages are absent. */
+  last: Record<string, InboxPreview>;
   /** Pair ids whose "your request was accepted" notification has not been opened yet. */
   acceptedUnread: string[];
   /** Connection requests waiting for this member's answer (as the author of a Looking For post). */
   requestIds: string[];
 }
 
-export const EMPTY_INBOX: SignalsInboxSnapshot = { rev: 0, pendingIds: [], unread: {}, acceptedUnread: [], requestIds: [] };
+export interface InboxPreview {
+  text: string;
+  /** True when the current member wrote it. */
+  mine: boolean;
+  /** When it was sent (ms), or null while the server time is not known yet. */
+  at: number | null;
+}
+
+export const EMPTY_INBOX: SignalsInboxSnapshot = { rev: 0, pendingIds: [], unread: {}, last: {}, acceptedUnread: [], requestIds: [] };
+
+/**
+ * Unread incoming messages across every connection, for the Signals badge. A conversation that is on screen right now is left
+ * out: the reader is looking at it, and the server marks it read within moments, so it should not flash on the tab bar.
+ */
+export function totalUnread(unread: Record<string, number>, openPairId: string | null = null): number {
+  let total = 0;
+  for (const [pairId, count] of Object.entries(unread)) {
+    if (pairId !== openPairId && Number.isFinite(count) && count >= 1) total += Math.floor(count);
+  }
+  return total;
+}
+
+/**
+ * Active connections as the inbox shows them: ones with unread messages first, then by latest activity (newest first). A
+ * connection with no messages yet counts from when it began. The sort is stable, so equal ones keep the order they came in.
+ */
+export function sortByActivity<T extends { id: string; createdAt: string | null }>(
+  pairs: readonly T[],
+  unread: Record<string, number>,
+  last: Record<string, InboxPreview>
+): T[] {
+  const activity = (pair: T) => last[pair.id]?.at ?? (pair.createdAt ? Date.parse(pair.createdAt) || 0 : 0);
+  const hasUnread = (pair: T) => ((unread[pair.id] ?? 0) >= 1 ? 1 : 0);
+  return pairs
+    .map((pair, index) => ({ pair, index }))
+    .sort((a, b) => hasUnread(b.pair) - hasUnread(a.pair) || activity(b.pair) - activity(a.pair) || a.index - b.index)
+    .map((item) => item.pair);
+}
 
 /** Badge text for an unread count: nothing at zero, the number up to 99, then "99+". */
 export function formatUnread(count: number | undefined): string | null {
@@ -30,7 +69,7 @@ const toMillis = (value: unknown): number | null => {
 
 /** Turns the raw inbox document into a safe snapshot; expired or malformed entries never count. */
 export function parseInbox(data: unknown, now: number = Date.now()): SignalsInboxSnapshot {
-  const raw = (data ?? {}) as { rev?: unknown; pending?: unknown; unread?: unknown; notifications?: unknown; requests?: unknown };
+  const raw = (data ?? {}) as { rev?: unknown; pending?: unknown; unread?: unknown; last?: unknown; notifications?: unknown; requests?: unknown };
   const rev = typeof raw.rev === 'number' && Number.isFinite(raw.rev) ? raw.rev : 0;
   const pending = raw.pending && typeof raw.pending === 'object' ? (raw.pending as Record<string, unknown>) : {};
   const pendingIds = Object.entries(pending)
@@ -43,6 +82,13 @@ export function parseInbox(data: unknown, now: number = Date.now()): SignalsInbo
   if (raw.unread && typeof raw.unread === 'object') {
     for (const [pairId, count] of Object.entries(raw.unread as Record<string, unknown>)) {
       if (typeof count === 'number' && Number.isFinite(count) && count >= 1) unread[pairId] = Math.floor(count);
+    }
+  }
+  const last: Record<string, InboxPreview> = {};
+  if (raw.last && typeof raw.last === 'object') {
+    for (const [pairId, entry] of Object.entries(raw.last as Record<string, unknown>)) {
+      const item = entry as { text?: unknown; mine?: unknown; at?: unknown } | null;
+      if (item && typeof item.text === 'string' && item.text) last[pairId] = { text: item.text.slice(0, 120), mine: item.mine === true, at: toMillis(item.at) };
     }
   }
   const acceptedUnread: string[] = [];
@@ -60,7 +106,7 @@ export function parseInbox(data: unknown, now: number = Date.now()): SignalsInbo
       return at !== null && at > now;
     })
     .map(([id]) => id);
-  return { rev, pendingIds, unread, acceptedUnread, requestIds };
+  return { rev, pendingIds, unread, last, acceptedUnread, requestIds };
 }
 
 /** Ids that have never been announced before; `seen` is updated so each request notifies once. */

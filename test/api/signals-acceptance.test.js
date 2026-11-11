@@ -96,7 +96,8 @@ test('a notification opens its conversation: card, banner and tab badge all lead
   assert.match(app, /Connection request accepted!/);
   assert.match(app, /setSignalsOpenPairId\(acceptedAlert\.pairId\); handleNavigate\('signals'\)/);
   assert.match(app, /requestedPairId=\{signalsOpenPairId\}/);
-  assert.equal((app.match(/signalsInbox\.pendingIds\.length \+ signalsInbox\.acceptedUnread\.length/g) || []).length, 2, 'unread acceptances count on the tab badge');
+  assert.equal((app.match(/signalsInbox\.pendingIds\.length \+ signalsInbox\.acceptedUnread\.length/g) || []).length, 1, 'unread acceptances count on the tab badge (one shared total)');
+  assert.equal((app.match(/signals: signalsBadge/g) || []).length, 2, 'the header and the bottom navigation both show that total');
   assert.match(view, /if \(pair\.status === 'active'\) openPair\(pair\.id\);/);
 });
 
