@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { ReactableBubble } from './ReactionPicker.tsx';
-import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { MemberAvatar, MemberName } from './ProfileNav.tsx';
 import { ArrowUp, BadgeCheck, CheckCircle2, Reply, Trash2, Users, X } from 'lucide-react';
 import { ConfirmDialog } from './Sheet.tsx';
 import { SwipeToReply } from './SwipeToReply.tsx';
@@ -439,12 +439,12 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
                   Q
                 </span>
               ) : (
-                <AnimalAvatar avatar={msg.authorAvatar} seed={msg.authorId || msg.author} className="w-8 h-8" />
+                <MemberAvatar memberId={msg.authorId} avatar={msg.authorAvatar} seed={msg.authorId || msg.author} name={msg.author} className="w-8 h-8" />
               ))}
 
             <div className={`min-w-0 max-w-[80%] flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}>
               <div className="flex max-w-full min-w-0 items-baseline gap-1.5 mb-0.5 px-1 text-[length:calc(12px_*_var(--fs,1))]">
-                {!msg.isSelf && <span className="min-w-0 truncate whitespace-nowrap font-semibold text-fg">{msg.author}</span>}
+                {!msg.isSelf && <MemberName memberId={msg.team ? null : msg.authorId} name={msg.author} className="min-w-0 truncate whitespace-nowrap font-semibold text-fg" />}
                 {msg.team && (
                   <span className="inline-flex items-center gap-1 self-center px-1.5 py-px rounded-full bg-berry/15 text-berry text-[length:calc(10.5px_*_var(--fs,1))] font-semibold uppercase tracking-wide">
                     <BadgeCheck className="w-3 h-3" aria-hidden="true" />

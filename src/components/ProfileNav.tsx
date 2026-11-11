@@ -14,6 +14,25 @@ export const useOpenProfile = (): ((memberId: string) => void) | null => useCont
 export const useOpenPost = (): ((postId: string) => void) | null => useContext(ProfileNavContext)?.openPost ?? null;
 
 /**
+ * A member's display name that opens their profile when tapped. Like MemberAvatar, where no profile can be opened (no id, no app
+ * around it) it is the plain name, so it is safe wherever an author's name appears. `className` styles the text.
+ */
+export const MemberName: React.FC<{ memberId?: string | null; name: string; className?: string }> = ({ memberId, name, className = '' }) => {
+  const nav = useContext(ProfileNavContext);
+  if (!nav || !isMemberId(memberId)) return <span className={className}>{name}</span>;
+  return (
+    <button
+      type="button"
+      onClick={(event) => { event.stopPropagation(); nav.openProfile(memberId); }}
+      aria-label={`View ${name}’s profile`}
+      className={`${className} cursor-pointer rounded-sm text-left hover:underline hover:decoration-1 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60`}
+    >
+      {name}
+    </button>
+  );
+};
+
+/**
  * An avatar that opens the member's profile when tapped. Where no profile can be opened (no id, or no app around it) it is
  * the plain avatar, so it is safe to use anywhere an author's avatar appears.
  */

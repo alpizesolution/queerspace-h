@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Flag, MapPin, Pause, Pencil, Plus, ShieldAlert, SlidersHorizontal, Trash2, UserX } from 'lucide-react';
-import { MemberAvatar } from './ProfileNav.tsx';
+import { MemberAvatar, MemberName } from './ProfileNav.tsx';
 import { ChipScroller } from './ChipScroller.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
 import { FloatingAddButton } from './FloatingAddButton.tsx';
@@ -213,7 +213,7 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
                   <MemberAvatar memberId={post.authorId} avatar={post.authorAvatar} seed={post.authorId || post.author} name={post.author} className="w-10 h-10" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg truncate">
-                      {post.author} {post.authorPronouns && <span className="font-normal text-subtle">{post.authorPronouns}</span>}
+                      <MemberName memberId={post.authorId} name={post.author} className="inline-block max-w-[75%] truncate align-bottom" /> {post.authorPronouns && <span className="font-normal text-subtle">{post.authorPronouns}</span>}
                     </p>
                     <p className="mt-0.5 flex items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle min-w-0">
                       {post.requestsPaused && <span className="shrink-0 text-subtle">Paused</span>}

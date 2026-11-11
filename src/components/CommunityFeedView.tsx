@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowUp, Info, Check, CheckCircle2, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
-import { MemberAvatar } from './ProfileNav.tsx';
+import { MemberAvatar, MemberName } from './ProfileNav.tsx';
 import { StardustButton } from './StardustButton.tsx';
 import { useStardust } from '../hooks/useStardust.ts';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
@@ -90,7 +90,7 @@ const Replies: React.FC<{
             <MemberAvatar memberId={reply.authorId} avatar={reply.authorAvatar} seed={reply.authorId || reply.author} name={reply.author} className="w-7 h-7 mt-0.5" />
             <div className="min-w-0 flex-1">
               <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">
-                <span className="font-semibold text-fg">{reply.author}</span> {reply.authorPronouns} ·{' '}
+                <MemberName memberId={reply.authorId} name={reply.author} className="font-semibold text-fg" /> {reply.authorPronouns} ·{' '}
                 {formatChatTime(reply.timestamp)}
               </p>
               <p className="text-muted leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] mt-0.5">{reply.content}</p>
@@ -411,7 +411,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                   <MemberAvatar memberId={post.authorId} avatar={post.authorAvatar} seed={post.authorId || post.author} name={post.author} className="w-9 h-9" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[length:calc(13px_*_var(--fs,1))] font-semibold text-fg truncate">
-                      {post.author} <span className="font-normal text-subtle">{post.authorPronouns}</span>
+                      <MemberName memberId={post.authorId} name={post.author} className="inline-block max-w-[75%] truncate align-bottom" /> <span className="font-normal text-subtle">{post.authorPronouns}</span>
                     </p>
                     <p className="mt-0.5 flex items-center gap-1.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">
                       <span className="inline-flex items-center h-5 px-2 rounded-full bg-plum/30 text-lavender text-[length:calc(11px_*_var(--fs,1))] font-semibold">

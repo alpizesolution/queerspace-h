@@ -50,6 +50,6 @@ test('the Galaxy room, Seek chat and Signals all use the shared quote, and the o
     assert.doesNotMatch(src, /line-clamp-2 \[overflow-wrap:anywhere\]">\{msg\.replyTo/, f);
   }
   const room = read('src/components/PublicRoomView.tsx');
-  assert.match(room, /min-w-0 truncate whitespace-nowrap font-semibold text-fg">\{msg\.author\}/, 'the sender name above a bubble never wraps');
+  assert.match(room, /name=\{msg\.author\} className="min-w-0 truncate whitespace-nowrap font-semibold text-fg"/, 'the sender name above a bubble never wraps');
   assert.match(room, /replyTo!\.id\)\}/, 'jump-to-original is still wired');
 });
