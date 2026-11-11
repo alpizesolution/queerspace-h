@@ -5,6 +5,7 @@ import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { createRequestHandlers } from './_requests.js';
 import { profileView } from './_profiles.js';
 import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
+import { cardById, shapeStoredCard } from './_cards.js';
 import { GIF_TEXT, sharedGiphy, isGifId, limitGifSearches, limitGifSends, parseGifQuery, shapeStoredGif } from './_giphy.js';
 import { createPartnerCache, getOnePair, listPairsLegacy, listPairsPage, parsePageLimit, partnerSummaries, shapePair } from './_inbox.js';
 
@@ -198,14 +199,17 @@ export default async function handler(req, res) {
         const messages = messageSnap.docs.map(snap => {
           const data = snap.data();
           const reactions = data.reactions && typeof data.reactions === 'object' ? data.reactions : {};
+          // A Comfort Card: the question always comes from the approved list, never from what is stored on the message.
+          const card = data.kind === 'card' ? shapeStoredCard(data.card) : null;
           return {
             id: snap.id,
             senderId: data.senderId,
-            text: data.text,
+            text: card ? card.question : data.text,
             // A timed photo: its timer and state only, never where the image is kept.
             ...(data.kind === 'photo' ? { kind: 'photo', photo: photos.get(snap.id) ?? { durationSec: data.durationSec, status: 'expired', mine: data.senderId === uid } } : {}),
             // A GIF: only the approved GIPHY addresses saved with it. A record that fails the check is shown as plain text.
             ...(data.kind === 'gif' && shapeStoredGif(data.gif) ? { kind: 'gif', gif: shapeStoredGif(data.gif) } : {}),
+            ...(card ? { kind: 'card', card: { id: card.id, category: card.category } } : {}),
             createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
             replyTo: data.replyTo && typeof data.replyTo === 'object' ? {
               messageId: data.replyTo.messageId,
@@ -414,15 +418,22 @@ export default async function handler(req, res) {
     if (action === 'send-message') {
       const pairId = req.body?.pairId;
       const kind = req.body?.kind;
-      if (kind !== undefined && kind !== 'text' && kind !== 'gif') return send(res, 400, { error: 'invalid_message' });
+      if (kind !== undefined && kind !== 'text' && kind !== 'gif' && kind !== 'card') return send(res, 400, { error: 'invalid_message' });
       const isGif = kind === 'gif';
+      const isCard = kind === 'card';
+      // A Comfort Card is sent by its id alone. The question comes from the approved list on the server; any other field is refused.
+      const card = isCard ? cardById(req.body?.cardId) : null;
+      if (isCard && (!card || ['text', 'card', 'question', 'gifId', 'gif', 'category'].some(field => req.body[field] !== undefined))) {
+        return send(res, 400, { error: 'invalid_card' });
+      }
+      if (!isCard && req.body?.cardId !== undefined) return send(res, 400, { error: 'invalid_message' });
       // A GIF is sent by its GIPHY id alone. A link, or anything else about the GIF, is never taken from the app.
       const gifId = req.body?.gifId;
       if (isGif && (!isGifId(gifId) || ['gif', 'url', 'gifUrl', 'text'].some(field => req.body[field] !== undefined))) {
         return send(res, 400, { error: 'invalid_gif' });
       }
       if (!isGif && req.body?.gifId !== undefined) return send(res, 400, { error: 'invalid_message' });
-      const text = isGif ? GIF_TEXT : typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      const text = isGif ? GIF_TEXT : isCard ? card.question : typeof req.body?.text === 'string' ? req.body.text.trim() : '';
       const replyToInput = req.body?.replyTo;
       // The app picks the message id up front, so a retry after a dropped connection can't create a second copy.
       const requestedId = req.body?.messageId;
@@ -477,19 +488,20 @@ export default async function handler(req, res) {
         // The message and the recipient's unread counter commit together. A retried send fails on create(), so the
         // whole batch is rejected and the counter is never incremented twice for one message.
         const batch = db.batch();
-        batch.create(messageRef, { senderId: uid, text, ...(gif ? { kind: 'gif', gif } : {}), ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
+        batch.create(messageRef, { senderId: uid, text, ...(gif ? { kind: 'gif', gif } : {}), ...(isCard ? { kind: 'card', card: { id: card.id } } : {}), ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
         batch.set(db.doc(`signalsInbox/${otherUid}`), { unread: { [pairId]: FieldValue.increment(1) } }, { merge: true });
         await batch.commit();
       } catch (error) {
         // ALREADY_EXISTS: this exact send already went through (a retry). Answer with what was stored, never a copy.
         if (error?.code !== 6) throw error;
         const stored = (await messageRef.get()).data();
-        if (stored?.senderId !== uid || (isGif && stored.kind !== 'gif')) return send(res, 409, { error: 'invalid_message' });
+        if (stored?.senderId !== uid || (isGif && stored.kind !== 'gif') || (isCard && (stored.kind !== 'card' || stored.card?.id !== card.id))) return send(res, 409, { error: 'invalid_message' });
         return send(res, 200, {
           id: messageRef.id,
           senderId: uid,
           text: stored.text,
           ...(stored.kind === 'gif' && shapeStoredGif(stored.gif) ? { kind: 'gif', gif: shapeStoredGif(stored.gif) } : {}),
+          ...(isCard ? { kind: 'card', card: { id: card.id, category: card.category } } : {}),
           replyTo: replyBody(stored),
           reactions: [],
           createdAt: stored.createdAt?.toDate?.().toISOString?.() || new Date().toISOString(),
@@ -500,6 +512,7 @@ export default async function handler(req, res) {
         senderId: uid,
         text,
         ...(gif ? { kind: 'gif', gif } : {}),
+        ...(isCard ? { kind: 'card', card: { id: card.id, category: card.category } } : {}),
         replyTo: replyTo ? { ...replyTo, senderId: replyTo.sender === 'self' ? uid : otherUid } : null,
         reactions: [],
         createdAt: new Date().toISOString(),

@@ -4,6 +4,7 @@
  */
 
 import { parseGifInfo, type GifInfo } from './gif.ts';
+import { cardById, parseCard } from './comfortCards.ts';
 import type { PhotoInfo } from './timedPhoto.ts';
 
 export type Reaction = { emoji: string; count: number; userReacted: boolean };
@@ -16,8 +17,10 @@ export type ThreadMessage = {
   replyTo?: { messageId: string; senderId: string; text: string } | null;
   reactions?: Reaction[];
   /** A timed photo: its timer and state. The picture itself is never part of the thread. */
-  kind?: 'photo' | 'gif';
+  kind?: 'photo' | 'gif' | 'card';
   photo?: PhotoInfo;
+  /** A Comfort Card: only its id and category; the question is always read from the approved list in the app. */
+  card?: { id: string; category: string };
   /** A GIPHY GIF: the approved addresses and size. Sent by id; the server supplies the rest. */
   gif?: GifInfo;
 };
@@ -30,6 +33,8 @@ export type PendingMessage = {
   text: string;
   /** Set for a GIF: it is sent by this GIF's id and shown as the GIF while it sends. */
   gif?: GifInfo;
+  /** Set for a Comfort Card: it is sent by this card's id alone and shown as the card while it sends. */
+  cardId?: string;
   replyTo: { messageId: string; text: string; sender: 'self' | 'partner'; senderId: string } | null;
   status: PendingStatus;
   /** Why it failed, in words for the member. */
@@ -56,12 +61,24 @@ export function checkedGif(message: ThreadMessage): ThreadMessage {
 }
 
 /**
+ * A Comfort Card message is shown as a card only if its id is on the approved list; then its words come from that list. A record
+ * that fails the check is shown as ordinary text, so a wrong record can never put unapproved words in a card.
+ */
+export function checkedCard(message: ThreadMessage): ThreadMessage {
+  if (message.kind !== 'card') return message;
+  const card = parseCard(message.card);
+  if (card) return { ...message, text: card.question, card: { id: card.id, category: card.category } };
+  const { kind: _kind, card: _card, ...rest } = message;
+  return rest;
+}
+
+/**
  * Folds messages from the server into the list: a message already shown is replaced in place (a reaction changed),
  * a new one is placed by its time. Nothing is ever dropped, so a slow or out-of-order poll cannot remove a message.
  */
 export function mergeMessages(current: ThreadMessage[], received: ThreadMessage[]): ThreadMessage[] {
   if (!received.length) return current;
-  const incoming = received.map(checkedGif);
+  const incoming = received.map((m) => checkedCard(checkedGif(m)));
   const next = current.slice();
   const index = new Map(next.map((m, i) => [m.id, i]));
   let changed = false;
@@ -91,6 +108,7 @@ export function visibleThread(server: ThreadMessage[], pending: PendingMessage[]
       senderId: selfId,
       text: p.text,
       ...(p.gif ? { kind: 'gif' as const, gif: p.gif } : {}),
+      ...(p.cardId && cardById(p.cardId) ? { kind: 'card' as const, card: { id: p.cardId, category: cardById(p.cardId)!.category } } : {}),
       createdAt: new Date(p.createdAt).toISOString(),
       replyTo: p.replyTo ? { messageId: p.replyTo.messageId, senderId: p.replyTo.senderId, text: p.replyTo.text } : null,
       reactions: [],

@@ -11,6 +11,8 @@ import { SwipeToReply } from './SwipeToReply.tsx';
 import { TimedPhotoComposer } from './TimedPhotoComposer.tsx';
 import { TimedPhotoViewer } from './TimedPhotoViewer.tsx';
 import { GifBubble, GifIcon, GifPicker } from './GifPicker.tsx';
+import { ComfortCardBubble, ComfortCardPicker, ComfortCardsIcon } from './ComfortCards.tsx';
+import type { ComfortCard } from '../utils/comfortCards.ts';
 import { gifSendProblemText, type GifInfo } from '../utils/gif.ts';
 import { pickedFileProblem, pickProblemText, photoCard, photoReadProblemText, type PhotoTimer } from '../utils/timedPhoto.ts';
 import { copyPickedPhoto, prepareTimedPhoto, sendPhotoProblemText, sendTimedPhoto } from '../services/timedPhotoService.ts';
@@ -75,6 +77,7 @@ async function request<T>(path: string, body?: Record<string, unknown>): Promise
       pair_not_found: 'This connection could not be found.',
       pair_not_active: 'This connection has ended.',
       account_unavailable: 'Messaging is temporarily unavailable for this account.',
+      invalid_card: 'That card isn’t available. Please pick another.',
       internal_error: 'Signals is temporarily unavailable. Please try again.',
     };
     throw Object.assign(new Error(messages[data.error ?? ''] || gifSendProblemText(data.error) || 'Could not complete that action. Please try again.'), { code: data.error });
@@ -135,6 +138,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [gifOpen, setGifOpen] = useState(false);
+  const [cardsOpen, setCardsOpen] = useState(false);
   const [closedPhotos, setClosedPhotos] = useState<Set<string>>(() => new Set());
   const [clock, setClock] = useState(() => Date.now());
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -375,7 +379,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
         pairId,
         messageId: item.id,
         // A GIF goes by its GIPHY id only; the server finds the picture and its address itself.
-        ...(item.gif ? { kind: 'gif', gifId: item.gif.id } : { text: item.text }),
+        // A Comfort Card goes by its id alone; the server supplies the question.
+        ...(item.cardId ? { kind: 'card', cardId: item.cardId } : item.gif ? { kind: 'gif', gifId: item.gif.id } : { text: item.text }),
         ...(item.replyTo ? { replyTo: { messageId: item.replyTo.messageId, text: item.replyTo.text, sender: item.replyTo.sender } } : {}),
       });
       setMessages((current) => mergeMessages(current, [result]));
@@ -413,6 +418,31 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     if (!soundMutedRef.current) soundEffects.playMessageSent();
     setPending((list) => [...list, item]);
     setDraft('');
+    setReplyingTo(null);
+    setError(null);
+    enqueue(item);
+  };
+
+  /** Sends the chosen Comfort Card as a message. It shows at once, marked "Sending…", and goes through the same outbox as text. */
+  const sendCard = (card: ComfortCard) => {
+    if (ended) return;
+    const reply = replyingTo;
+    const item: PendingMessage = {
+      id: crypto.randomUUID(),
+      text: card.question,
+      cardId: card.id,
+      replyTo: reply
+        ? { messageId: reply.id, text: reply.text, sender: reply.senderId === userId ? 'self' : 'partner', senderId: reply.senderId }
+        : null,
+      status: 'sending',
+      retryable: true,
+      createdAt: Date.now(),
+    };
+    lastOwnSend.current = true;
+    stickToBottom.current = true;
+    if (!soundMutedRef.current) soundEffects.playMessageSent();
+    setCardsOpen(false);
+    setPending((list) => [...list, item]);
     setReplyingTo(null);
     setError(null);
     enqueue(item);
@@ -604,7 +634,13 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           </div>
                         )}
                         <div className="flex flex-wrap items-end justify-end gap-x-2">
-                          {message.kind === 'gif' && message.gif ? (
+                          {message.kind === 'card' && message.card ? (
+                            <ComfortCardBubble
+                              card={{ category: message.card.category as ComfortCard['category'], question: message.text }}
+                              canAnswer={!ended && !unsent}
+                              onAnswer={() => { setReplyingTo(message); setActiveId(null); composerFocus.requestFocus(); }}
+                            />
+                          ) : message.kind === 'gif' && message.gif ? (
                             <GifBubble gif={message.gif} mine={mine} />
                           ) : message.photo ? (
                             <PhotoBubble
@@ -702,7 +738,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancel reply" className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:text-fg"><X className="h-4 w-4" /></button>
               </div>
             )}
-            <form onSubmit={sendMessage} className="flex items-end gap-2">
+            <form onSubmit={sendMessage} className="flex items-end gap-1.5 sm:gap-2">
               <label className="sr-only" htmlFor="signals-message">Your message</label>
               <textarea
                 ref={textareaRef}
@@ -725,6 +761,9 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
               <button type="button" onClick={() => setGifOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Send a GIF" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-raised text-muted transition hover:text-fg">
                 <GifIcon className="h-[20px] w-[20px]" />
               </button>
+              <button type="button" onClick={() => setCardsOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Comfort Cards" title="Comfort Cards" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-lavender/30 bg-raised text-lavender transition hover:brightness-125">
+                <ComfortCardsIcon className="h-[18px] w-[18px]" />
+              </button>
               <button type="submit" disabled={!draft.trim()} onMouseDown={(event) => event.preventDefault()} aria-label="Send message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-berry text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
                 <Send className="h-4 w-4" />
               </button>
@@ -736,6 +775,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
         <TimedPhotoComposer file={photoFile} sending={photoSending} error={photoError} onSend={(timer) => void sendPhoto(timer)} onClose={() => { photoMessageId.current = null; setPhotoFile(null); }} />
       )}
       {gifOpen && !ended && <GifPicker onSend={sendGif} onClose={() => setGifOpen(false)} />}
+      {cardsOpen && !ended && <ComfortCardPicker onSend={sendCard} onClose={() => setCardsOpen(false)} />}
       {viewingPhoto && (
         <TimedPhotoViewer
           key={viewingPhoto}
