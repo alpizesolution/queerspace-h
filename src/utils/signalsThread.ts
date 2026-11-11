@@ -6,6 +6,7 @@
 import { parseGifInfo, type GifInfo } from './gif.ts';
 import { cardById, parseCard } from './comfortCards.ts';
 import type { PhotoInfo } from './timedPhoto.ts';
+import { GAME_TEXT, parseGame, type Challenge, type GameCard } from './twoTruths.ts';
 
 export type Reaction = { emoji: string; count: number; userReacted: boolean };
 
@@ -17,12 +18,14 @@ export type ThreadMessage = {
   replyTo?: { messageId: string; senderId: string; text: string } | null;
   reactions?: Reaction[];
   /** A timed photo: its timer and state. The picture itself is never part of the thread. */
-  kind?: 'photo' | 'gif' | 'card';
+  kind?: 'photo' | 'gif' | 'card' | 'game';
   photo?: PhotoInfo;
   /** A Comfort Card: only its id and category; the question is always read from the approved list in the app. */
   card?: { id: string; category: string };
   /** A GIPHY GIF: the approved addresses and size. Sent by id; the server supplies the rest. */
   gif?: GifInfo;
+  /** A Two Truths and a Lie challenge. The answer is part of it only once the recipient has guessed. */
+  game?: GameCard;
 };
 
 export type PendingStatus = 'sending' | 'failed';
@@ -35,6 +38,8 @@ export type PendingMessage = {
   gif?: GifInfo;
   /** Set for a Comfort Card: it is sent by this card's id alone and shown as the card while it sends. */
   cardId?: string;
+  /** Set for a Two Truths and a Lie challenge being sent: the statements and the sender's own answer. */
+  challenge?: Challenge;
   replyTo: { messageId: string; text: string; sender: 'self' | 'partner'; senderId: string } | null;
   status: PendingStatus;
   /** Why it failed, in words for the member. */
@@ -73,12 +78,24 @@ export function checkedCard(message: ThreadMessage): ThreadMessage {
 }
 
 /**
+ * A game message is shown as a game only if it is a well-formed card; otherwise it is plain text. The card is re-read here so an answer
+ * is only ever shown from a game that is complete.
+ */
+export function checkedGame(message: ThreadMessage): ThreadMessage {
+  if (message.kind !== 'game') return message;
+  const game = parseGame(message.game);
+  if (game) return { ...message, text: GAME_TEXT, game };
+  const { kind: _kind, game: _game, ...rest } = message;
+  return rest;
+}
+
+/**
  * Folds messages from the server into the list: a message already shown is replaced in place (a reaction changed),
  * a new one is placed by its time. Nothing is ever dropped, so a slow or out-of-order poll cannot remove a message.
  */
 export function mergeMessages(current: ThreadMessage[], received: ThreadMessage[]): ThreadMessage[] {
   if (!received.length) return current;
-  const incoming = received.map((m) => checkedCard(checkedGif(m)));
+  const incoming = received.map((m) => checkedGame(checkedCard(checkedGif(m))));
   const next = current.slice();
   const index = new Map(next.map((m, i) => [m.id, i]));
   let changed = false;
@@ -108,6 +125,7 @@ export function visibleThread(server: ThreadMessage[], pending: PendingMessage[]
       senderId: selfId,
       text: p.text,
       ...(p.gif ? { kind: 'gif' as const, gif: p.gif } : {}),
+      ...(p.challenge ? { kind: 'game' as const, game: { statements: p.challenge.statements, intro: p.challenge.intro, status: 'open' as const, canGuess: false } } : {}),
       ...(p.cardId && cardById(p.cardId) ? { kind: 'card' as const, card: { id: p.cardId, category: cardById(p.cardId)!.category } } : {}),
       createdAt: new Date(p.createdAt).toISOString(),
       replyTo: p.replyTo ? { messageId: p.replyTo.messageId, senderId: p.replyTo.senderId, text: p.replyTo.text } : null,

@@ -15,16 +15,18 @@ export const PREVIEW_MAX = 80;
  */
 export function previewText(text, kind) {
   if (kind === 'gif') return 'GIF';
+  if (kind === 'guess') return '✨ Someone guessed your Two Truths and a Lie!';
+  if (kind === 'game') return '✨ Sent you a Two Truths and a Lie challenge.';
   const flat = String(text ?? '').replace(/\s+/g, ' ').trim();
   const body = flat.length > PREVIEW_MAX ? `${flat.slice(0, PREVIEW_MAX - 1).trimEnd()}…` : flat;
   return kind === 'card' ? `Comfort Card: ${body}` : body;
 }
 
 /** The two inbox writes that go with a new message: the latest-message line for both people, and one more unread for the other. */
-export function inboxWritesForMessage({ pairId, preview, stamp, increment }) {
+export function inboxWritesForMessage({ pairId, preview, senderPreview = preview, stamp, increment }) {
   return {
     recipient: { unread: { [pairId]: increment(1) }, last: { [pairId]: { text: preview, mine: false, at: stamp } } },
-    sender: { last: { [pairId]: { text: preview, mine: true, at: stamp } } },
+    sender: { last: { [pairId]: { text: senderPreview, mine: true, at: stamp } } },
   };
 }
 

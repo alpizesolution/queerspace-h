@@ -1354,6 +1354,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Two Truths and a Lie answers (which statement is the lie). Server-only, so the answer cannot be read before the guess.
+    match /signalsPairs/{pairId}/gameSecrets/{gameId} {
+      allow read, write: if false;
+    }
+
     match /signalsIdempotency/{requestId} {
       allow read, write: if false;
     }

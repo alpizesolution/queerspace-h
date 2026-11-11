@@ -14,6 +14,8 @@ import { GifBubble, GifIcon, GifPicker } from './GifPicker.tsx';
 import { ReplyQuote } from './ReplyQuote.tsx';
 import { ComfortCardBubble, ComfortCardPicker, ComfortCardsIcon } from './ComfortCards.tsx';
 import type { ComfortCard } from '../utils/comfortCards.ts';
+import { TwoTruthsCard, TwoTruthsCreator, TwoTruthsIcon } from './TwoTruthsGame.tsx';
+import { gameProblemText, parseGame, type Challenge } from '../utils/twoTruths.ts';
 import { gifSendProblemText, type GifInfo } from '../utils/gif.ts';
 import { pickedFileProblem, pickProblemText, photoCard, photoReadProblemText, type PhotoTimer } from '../utils/timedPhoto.ts';
 import { copyPickedPhoto, prepareTimedPhoto, sendPhotoProblemText, sendTimedPhoto } from '../services/timedPhotoService.ts';
@@ -45,6 +47,12 @@ type SignalsConversationProps = {
   onBack: () => void;
   /** The other member's id, so their avatar can open their profile. */
   partnerId?: string;
+  /**
+   * When the other member's latest activity landed, from the live listener on the member's own inbox document (null when the latest
+   * line is their own). A change means something new is waiting (a message, or a guess at a Two Truths and a Lie), so the open
+   * conversation reads it now instead of waiting for the next poll.
+   */
+  liveAt?: number | null;
   /** Ends this connection with the existing `end` action. Resolves to null on success, or a message to show. */
   onEnd?: () => Promise<string | null>;
 };
@@ -81,7 +89,7 @@ async function request<T>(path: string, body?: Record<string, unknown>): Promise
       invalid_card: 'That card isn’t available. Please pick another.',
       internal_error: 'Signals is temporarily unavailable. Please try again.',
     };
-    throw Object.assign(new Error(messages[data.error ?? ''] || gifSendProblemText(data.error) || 'Could not complete that action. Please try again.'), { code: data.error });
+    throw Object.assign(new Error(messages[data.error ?? ''] || gameProblemText(data.error) || gifSendProblemText(data.error) || 'Could not complete that action. Please try again.'), { code: data.error });
   }
   return data as T;
 }
@@ -116,7 +124,7 @@ const PhotoBubble: React.FC<{ photo: NonNullable<SignalMessage['photo']>; clock:
   return <p className="flex min-h-9 items-center gap-1.5 text-[length:calc(14px_*_var(--fs,1))]"><Camera className="h-4 w-4" aria-hidden="true" /> {card.label}</p>;
 };
 
-export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, partnerId, isSoundMuted = false, onBack, onEnd }) => {
+export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, partnerId, liveAt = null, isSoundMuted = false, onBack, onEnd }) => {
   const [messages, setMessages] = useState<SignalMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -140,6 +148,12 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [gifOpen, setGifOpen] = useState(false);
   const [cardsOpen, setCardsOpen] = useState(false);
+  const [gameOpen, setGameOpen] = useState(false);
+  /** Games with a guess on its way, and the reason a guess did not go through. */
+  const [guessing, setGuessing] = useState<Set<string>>(() => new Set());
+  const [guessErrors, setGuessErrors] = useState<Record<string, string>>({});
+  /** Set the instant a guess starts, before any state update, so a quick second tap cannot send another. */
+  const guessBusy = useRef(new Set<string>());
   const [closedPhotos, setClosedPhotos] = useState<Set<string>>(() => new Set());
   const [clock, setClock] = useState(() => Date.now());
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -251,11 +265,17 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   useEffect(() => {
     if (!tabVisible || !userId) return;
     const newestIncoming = [...messages].reverse().find((m) => m.senderId !== userId);
-    if (!newestIncoming || markedThrough.current === newestIncoming.id) return;
-    markedThrough.current = newestIncoming.id;
-    request('/api/signals', { action: 'mark-read', pairId, throughMessageId: newestIncoming.id }).catch(() => {
+    // A guess at the member's own Two Truths and a Lie also counts as one unread, and it is not a message: when one has been answered
+    // the conversation is marked read again (through the newest message if the other person never wrote), so that unread cannot stay.
+    const answeredMine = messages.filter((m) => m.senderId === userId && m.game?.status === 'complete').length;
+    const through = newestIncoming ?? (answeredMine > 0 ? messages[messages.length - 1] : undefined);
+    if (!through) return;
+    const key = `${through.id}:${answeredMine}`;
+    if (markedThrough.current === key) return;
+    markedThrough.current = key;
+    request('/api/signals', { action: 'mark-read', pairId, throughMessageId: through.id }).catch(() => {
       // Not marked: allow the next poll to try again.
-      if (markedThrough.current === newestIncoming.id) markedThrough.current = null;
+      if (markedThrough.current === key) markedThrough.current = null;
     });
   }, [messages, tabVisible, userId, pairId]);
 
@@ -276,6 +296,23 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
       textareaRef.current?.scrollIntoView?.({ block: 'nearest' });
     },
   }) ;
+
+  // The inbox listener saw new activity from the other member: read it now. A read that overlaps a poll is harmless (the merge is by id).
+  useEffect(() => {
+    if (liveAt === null || !loadedOnce.current || document.visibilityState !== 'visible') return;
+    void loadMessages(true);
+  }, [liveAt, loadMessages]);
+
+  // Chime when a Two Truths and a Lie of the member's own is answered while they are here (answers already there stay silent).
+  const answeredSeen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!loadedOnce.current) return;
+    const answered = messages.filter((m) => m.senderId === userId && m.game?.status === 'complete').map((m) => m.id);
+    if (answeredSeen.current === null) { answeredSeen.current = new Set(answered); return; }
+    const fresh = answered.filter((id) => !answeredSeen.current!.has(id));
+    fresh.forEach((id) => answeredSeen.current!.add(id));
+    if (fresh.length && !soundMutedRef.current) soundEffects.playMessageReceived();
+  }, [messages, userId]);
 
   // Chime when the other member's message arrives (the list is polled); existing history stays silent.
   useEffect(() => {
@@ -383,7 +420,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
         messageId: item.id,
         // A GIF goes by its GIPHY id only; the server finds the picture and its address itself.
         // A Comfort Card goes by its id alone; the server supplies the question.
-        ...(item.cardId ? { kind: 'card', cardId: item.cardId } : item.gif ? { kind: 'gif', gifId: item.gif.id } : { text: item.text }),
+        ...(item.challenge ? { kind: 'game', game: item.challenge } : item.cardId ? { kind: 'card', cardId: item.cardId } : item.gif ? { kind: 'gif', gifId: item.gif.id } : { text: item.text }),
         ...(item.replyTo ? { replyTo: { messageId: item.replyTo.messageId, text: item.replyTo.text, sender: item.replyTo.sender } } : {}),
       });
       setMessages((current) => mergeMessages(current, [result]));
@@ -449,6 +486,48 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     setReplyingTo(null);
     setError(null);
     enqueue(item);
+  };
+
+  /** Sends a Two Truths and a Lie challenge. It shows at once, marked "Sending...", and goes through the same outbox as text. */
+  const sendGame = (challenge: Challenge) => {
+    if (ended) return;
+    const item: PendingMessage = {
+      id: crypto.randomUUID(),
+      text: '✨ Two Truths and a Lie',
+      challenge,
+      replyTo: null,
+      status: 'sending',
+      retryable: true,
+      createdAt: Date.now(),
+    };
+    lastOwnSend.current = true;
+    stickToBottom.current = true;
+    if (!soundMutedRef.current) soundEffects.playMessageSent();
+    setGameOpen(false);
+    setPending((list) => [...list, item]);
+    setError(null);
+    enqueue(item);
+  };
+
+  /** Records the recipient's one guess. The server answers with the finished card (the answer is only sent back with it). */
+  const guessGame = async (message: SignalMessage, index: number) => {
+    if (ended || guessBusy.current.has(message.id)) return;
+    guessBusy.current.add(message.id);
+    setGuessing((current) => new Set(current).add(message.id));
+    setGuessErrors(({ [message.id]: _gone, ...rest }) => rest);
+    try {
+      const result = await request<{ game?: unknown }>('/api/signals', { action: 'guess-game', pairId, messageId: message.id, guess: index });
+      const game = parseGame(result.game);
+      if (game) setMessages((current) => current.map((m) => (m.id === message.id ? { ...m, game } : m)));
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      // Already answered (another tab, or a retry that went through): show what the server has instead of a failure.
+      if (code === 'game_already_answered') void loadMessages(true);
+      setGuessErrors((current) => ({ ...current, [message.id]: err instanceof Error ? err.message : 'Could not send your guess. Please try again.' }));
+    } finally {
+      guessBusy.current.delete(message.id);
+      setGuessing((current) => { const next = new Set(current); next.delete(message.id); return next; });
+    }
   };
 
   /** Sends the chosen GIF as a message. It shows at once, marked "Sending…", and goes through the same outbox as text. */
@@ -613,7 +692,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 const toggleActive = () => setActiveId((current) => (current === message.id ? null : message.id));
                 return (
                   <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'} ${index === 0 ? '' : sameSenderAsPrev ? 'mt-0.5' : 'mt-2'}`}>
-                    <div className={`flex min-w-0 max-w-[82%] flex-col sm:max-w-[75%] ${mine ? 'items-end' : 'items-start'}`}>
+                    <div className={`flex min-w-0 flex-col ${message.kind === 'game' && message.game ? 'w-full max-w-[min(22rem,96%)]' : 'max-w-[82%] sm:max-w-[75%]'} ${mine ? 'items-end' : 'items-start'}`}>
                       <SwipeToReply
                         disabled={ended || unsent}
                         className="max-w-full"
@@ -628,13 +707,24 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                         onKeyDown={(event) => {
                           if (!unsent && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggleActive(); }
                         }}
-                        className={`${unsent ? 'opacity-70' : ''} min-w-0 max-w-full cursor-pointer rounded-2xl px-3 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}
+                        className={`${unsent ? 'opacity-70' : ''} min-w-0 max-w-full cursor-pointer rounded-2xl text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${message.kind === 'game' && message.game ? 'w-full' : `px-3 py-1.5 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}`}
                       >
                         {message.replyTo && (
                           <ReplyQuote tone={mine ? 'accent' : 'raised'} author={message.replyTo.senderId === userId ? 'You' : partnerName} text={message.replyTo.text} />
                         )}
                         <div className="flex flex-wrap items-end justify-end gap-x-2">
-                          {message.kind === 'card' && message.card ? (
+                          {message.kind === 'game' && message.game ? (
+                            <TwoTruthsCard
+                              game={message.game}
+                              mine={mine}
+                              partnerName={partnerName}
+                              pending={unsent}
+                              guessing={guessing.has(message.id)}
+                              error={guessErrors[message.id]}
+                              time={formatTime(message.createdAt)}
+                              onGuess={(index) => void guessGame(message, index)}
+                            />
+                          ) : message.kind === 'card' && message.card ? (
                             <ComfortCardBubble
                               card={{ category: message.card.category as ComfortCard['category'], question: message.text }}
                               canAnswer={!ended}
@@ -654,7 +744,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           ) : (
                           <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-[length:calc(15px_*_var(--fs,1))] leading-snug">{message.text}</p>
                           )}
-                          {message.createdAt && !(message.kind === 'card' && message.card) && <span className={`ml-auto translate-y-px select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
+                          {message.createdAt && !(message.kind === 'card' && message.card) && !(message.kind === 'game' && message.game) && <span className={`ml-auto translate-y-px select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
                         </div>
                       </div>
                       </SwipeToReply>
@@ -772,6 +862,9 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 <button type="button" onClick={() => setCardsOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Comfort Cards" title="Comfort Cards" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lavender transition hover:bg-raised hover:brightness-125 active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
                   <ComfortCardsIcon className="h-5 w-5" />
                 </button>
+                <button type="button" onClick={() => setGameOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Two Truths and a Lie" title="Two Truths and a Lie" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lavender transition hover:bg-raised hover:brightness-125 active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
+                  <TwoTruthsIcon className="h-5 w-5" />
+                </button>
               </div>
             </form>
           </div>
@@ -782,6 +875,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
       )}
       {gifOpen && !ended && <GifPicker onSend={sendGif} onClose={() => setGifOpen(false)} />}
       {cardsOpen && !ended && <ComfortCardPicker onSend={sendCard} onClose={() => setCardsOpen(false)} />}
+      {gameOpen && !ended && <TwoTruthsCreator onSend={sendGame} onClose={() => setGameOpen(false)} />}
       {viewingPhoto && (
         <TimedPhotoViewer
           key={viewingPhoto}

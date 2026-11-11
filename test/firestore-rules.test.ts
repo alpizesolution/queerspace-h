@@ -3042,3 +3042,24 @@ test('GIF-01: no client can create, change, read or delete a GIF message; only t
   }
   await assertFails(testEnv.unauthenticatedContext().firestore().doc('signalsPairs/p1/messages/g1').get());
 });
+
+test('TTL-01: no client can read, write or list the Two Truths and a Lie answers, and the card holds none', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('signalsPairs/p1').set({ participants: ['alice', 'bob'], status: 'active' });
+    await ctx.firestore().doc('signalsPairs/p1/messages/t1').set({ senderId: 'alice', kind: 'game', text: 'x', game: { statements: ['a', 'b', 'c'], status: 'open' } });
+    await ctx.firestore().doc('signalsPairs/p1/gameSecrets/t1').set({ senderId: 'alice', lie: 1 });
+  });
+  for (const who of ['alice', 'bob', 'carol']) {
+    const fs = testEnv.authenticatedContext(who).firestore();
+    await assertFails(fs.doc('signalsPairs/p1/gameSecrets/t1').get());
+    await assertFails(fs.collection('signalsPairs/p1/gameSecrets').get());
+    await assertFails(fs.collectionGroup('gameSecrets').get());
+    await assertFails(fs.doc('signalsPairs/p1/gameSecrets/t1').set({ senderId: who, lie: 0 }));
+    await assertFails(fs.doc('signalsPairs/p1/gameSecrets/t1').update({ lie: 0 }));
+    await assertFails(fs.doc('signalsPairs/p1/gameSecrets/t1').delete());
+    await assertFails(fs.doc('signalsPairs/p1/messages/t1').get());
+    await assertFails(fs.doc('signalsPairs/p1/messages/t1').update({ game: { statements: ['a', 'b', 'c'], status: 'complete', guess: 1, lie: 1 } }));
+    await assertFails(fs.doc('signalsPairs/p1/messages/t2').set({ senderId: who, kind: 'game', game: { statements: ['a', 'b', 'c'], status: 'open' } }));
+  }
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('signalsPairs/p1/gameSecrets/t1').get());
+});

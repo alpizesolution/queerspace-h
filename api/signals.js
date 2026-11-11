@@ -7,6 +7,7 @@ import { profileView } from './_profiles.js';
 import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
 import { cardById, shapeStoredCard } from './_cards.js';
 import { inboxWritesForMessage, previewText } from './_inbox.js';
+import { GAME_TEXT, isGuess, parseChallenge, shapeStoredGame } from './_game.js';
 import { GIF_TEXT, sharedGiphy, isGifId, limitGifSearches, limitGifSends, parseGifQuery, shapeStoredGif } from './_giphy.js';
 import { createPartnerCache, getOnePair, listPairsLegacy, listPairsPage, parsePageLimit, partnerSummaries, shapePair } from './_inbox.js';
 
@@ -202,15 +203,18 @@ export default async function handler(req, res) {
           const reactions = data.reactions && typeof data.reactions === 'object' ? data.reactions : {};
           // A Comfort Card: the question always comes from the approved list, never from what is stored on the message.
           const card = data.kind === 'card' ? shapeStoredCard(data.card) : null;
+          // Two Truths and a Lie: the answer is part of this only once the recipient's guess has been recorded.
+          const game = data.kind === 'game' ? shapeStoredGame(data.game, uid, data.senderId) : null;
           return {
             id: snap.id,
             senderId: data.senderId,
-            text: card ? card.question : data.text,
+            text: card ? card.question : game ? GAME_TEXT : data.text,
             // A timed photo: its timer and state only, never where the image is kept.
             ...(data.kind === 'photo' ? { kind: 'photo', photo: photos.get(snap.id) ?? { durationSec: data.durationSec, status: 'expired', mine: data.senderId === uid } } : {}),
             // A GIF: only the approved GIPHY addresses saved with it. A record that fails the check is shown as plain text.
             ...(data.kind === 'gif' && shapeStoredGif(data.gif) ? { kind: 'gif', gif: shapeStoredGif(data.gif) } : {}),
             ...(card ? { kind: 'card', card: { id: card.id, category: card.category } } : {}),
+            ...(game ? { kind: 'game', game } : {}),
             createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
             replyTo: data.replyTo && typeof data.replyTo === 'object' ? {
               messageId: data.replyTo.messageId,
@@ -419,9 +423,16 @@ export default async function handler(req, res) {
     if (action === 'send-message') {
       const pairId = req.body?.pairId;
       const kind = req.body?.kind;
-      if (kind !== undefined && kind !== 'text' && kind !== 'gif' && kind !== 'card') return send(res, 400, { error: 'invalid_message' });
+      if (kind !== undefined && kind !== 'text' && kind !== 'gif' && kind !== 'card' && kind !== 'game') return send(res, 400, { error: 'invalid_message' });
       const isGif = kind === 'gif';
       const isCard = kind === 'card';
+      const isGame = kind === 'game';
+      // A Two Truths and a Lie challenge carries the three statements, the answer and an optional note, and nothing else.
+      const challenge = isGame ? parseChallenge(req.body?.game) : null;
+      if (isGame && (!challenge.ok || ['text', 'cardId', 'gifId', 'card', 'gif'].some(field => req.body[field] !== undefined))) {
+        return send(res, 400, { error: challenge.ok ? 'invalid_game' : challenge.error });
+      }
+      if (!isGame && req.body?.game !== undefined) return send(res, 400, { error: 'invalid_message' });
       // A Comfort Card is sent by its id alone. The question comes from the approved list on the server; any other field is refused.
       const card = isCard ? cardById(req.body?.cardId) : null;
       if (isCard && (!card || ['text', 'card', 'question', 'gifId', 'gif', 'category'].some(field => req.body[field] !== undefined))) {
@@ -434,7 +445,7 @@ export default async function handler(req, res) {
         return send(res, 400, { error: 'invalid_gif' });
       }
       if (!isGif && req.body?.gifId !== undefined) return send(res, 400, { error: 'invalid_message' });
-      const text = isGif ? GIF_TEXT : isCard ? card.question : typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      const text = isGif ? GIF_TEXT : isCard ? card.question : isGame ? GAME_TEXT : typeof req.body?.text === 'string' ? req.body.text.trim() : '';
       const replyToInput = req.body?.replyTo;
       // The app picks the message id up front, so a retry after a dropped connection can't create a second copy.
       const requestedId = req.body?.messageId;
@@ -489,9 +500,11 @@ export default async function handler(req, res) {
         // The message and the recipient's unread counter commit together. A retried send fails on create(), so the
         // whole batch is rejected and the counter is never incremented twice for one message.
         const batch = db.batch();
-        batch.create(messageRef, { senderId: uid, text, ...(gif ? { kind: 'gif', gif } : {}), ...(isCard ? { kind: 'card', card: { id: card.id } } : {}), ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
+        batch.create(messageRef, { senderId: uid, text, ...(gif ? { kind: 'gif', gif } : {}), ...(isCard ? { kind: 'card', card: { id: card.id } } : {}), ...(isGame ? { kind: 'game', game: { statements: challenge.statements, intro: challenge.intro, status: 'open' } } : {}), ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
+        // The answer goes in its own document, which no client can read, in the same commit as the card.
+        if (isGame) batch.create(pairRef.collection('gameSecrets').doc(messageRef.id), { senderId: uid, lie: challenge.lie, createdAt: stamp });
         // The recipient's unread counter, and the latest-message line for both people's inbox rows, in the same write.
-        const writes = inboxWritesForMessage({ pairId, preview: previewText(text, isGif ? 'gif' : isCard ? 'card' : 'text'), stamp, increment: FieldValue.increment });
+        const writes = inboxWritesForMessage({ pairId, preview: previewText(text, isGif ? 'gif' : isCard ? 'card' : isGame ? 'game' : 'text'), ...(isGame ? { senderPreview: '✨ You sent a Two Truths and a Lie challenge.' } : {}), stamp, increment: FieldValue.increment });
         batch.set(db.doc(`signalsInbox/${otherUid}`), writes.recipient, { merge: true });
         batch.set(db.doc(`signalsInbox/${uid}`), writes.sender, { merge: true });
         await batch.commit();
@@ -499,13 +512,14 @@ export default async function handler(req, res) {
         // ALREADY_EXISTS: this exact send already went through (a retry). Answer with what was stored, never a copy.
         if (error?.code !== 6) throw error;
         const stored = (await messageRef.get()).data();
-        if (stored?.senderId !== uid || (isGif && stored.kind !== 'gif') || (isCard && (stored.kind !== 'card' || stored.card?.id !== card.id))) return send(res, 409, { error: 'invalid_message' });
+        if (stored?.senderId !== uid || (isGif && stored.kind !== 'gif') || (isCard && (stored.kind !== 'card' || stored.card?.id !== card.id)) || (isGame && stored.kind !== 'game')) return send(res, 409, { error: 'invalid_message' });
         return send(res, 200, {
           id: messageRef.id,
           senderId: uid,
           text: stored.text,
           ...(stored.kind === 'gif' && shapeStoredGif(stored.gif) ? { kind: 'gif', gif: shapeStoredGif(stored.gif) } : {}),
           ...(isCard ? { kind: 'card', card: { id: card.id, category: card.category } } : {}),
+          ...(isGame ? { kind: 'game', game: shapeStoredGame(stored.game, uid, uid) } : {}),
           replyTo: replyBody(stored),
           reactions: [],
           createdAt: stored.createdAt?.toDate?.().toISOString?.() || new Date().toISOString(),
@@ -517,9 +531,80 @@ export default async function handler(req, res) {
         text,
         ...(gif ? { kind: 'gif', gif } : {}),
         ...(isCard ? { kind: 'card', card: { id: card.id, category: card.category } } : {}),
+        ...(isGame ? { kind: 'game', game: shapeStoredGame({ statements: challenge.statements, intro: challenge.intro, status: 'open' }, uid, uid) } : {}),
         replyTo: replyTo ? { ...replyTo, senderId: replyTo.sender === 'self' ? uid : otherUid } : null,
         reactions: [],
         createdAt: new Date().toISOString(),
+      });
+    }
+
+    if (action === 'guess-game') {
+      // Two Truths and a Lie: the recipient's one guess. The answer is read here, on the server, and only written onto the card
+      // (where both members can then see it) in the same transaction that records the guess. See api/_game.js.
+      const pairId = req.body?.pairId;
+      const messageId = req.body?.messageId;
+      const guess = req.body?.guess;
+      if (!safeId(pairId) || !safeId(messageId) || !isGuess(guess)
+        || Object.keys(req.body).some(key => !['action', 'pairId', 'messageId', 'guess'].includes(key))) {
+        return send(res, 400, { error: 'invalid_guess' });
+      }
+      const pairRef = db.doc(`signalsPairs/${pairId}`);
+      const pairSnap = await pairRef.get();
+      if (!pairSnap.exists) return send(res, 404, { error: 'pair_not_found' });
+      const pair = pairSnap.data();
+      if (!Array.isArray(pair.participants) || !pair.participants.includes(uid)) return send(res, 403, { error: 'not_allowed' });
+      if (pair.status !== 'active') return send(res, 409, { error: 'pair_not_active' });
+      const otherUid = pair.participants.find(participant => participant !== uid);
+      if (!otherUid) return send(res, 403, { error: 'not_allowed' });
+      const [ownSettings, otherSettings, ownSuspension, otherSuspension] = await Promise.all([
+        db.doc(`users/${uid}/private/settings`).get(),
+        db.doc(`users/${otherUid}/private/settings`).get(),
+        db.doc(`suspensions/${uid}`).get(),
+        db.doc(`suspensions/${otherUid}`).get(),
+      ]);
+      const ownBlocked = ownSettings.data()?.blockedPartnerIds;
+      const otherBlocked = otherSettings.data()?.blockedPartnerIds;
+      if (ownSuspension.exists || otherSuspension.exists
+        || (Array.isArray(ownBlocked) && ownBlocked.includes(otherUid))
+        || (Array.isArray(otherBlocked) && otherBlocked.includes(uid))) {
+        return send(res, 403, { error: 'not_allowed' });
+      }
+      const messageRef = pairRef.collection('messages').doc(messageId);
+      const secretRef = pairRef.collection('gameSecrets').doc(messageId);
+      const result = await db.runTransaction(async tx => {
+        const [messageSnap, secretSnap] = await Promise.all([tx.get(messageRef), tx.get(secretRef)]);
+        const stored = messageSnap.exists ? messageSnap.data() : null;
+        if (!stored || stored.kind !== 'game' || !secretSnap.exists) throw Object.assign(new Error('game_not_found'), { statusCode: 404 });
+        const secret = secretSnap.data();
+        // Only the person the challenge was sent to may guess: not the one who made it, and (by the pair check above) no one else.
+        if (stored.senderId === uid || secret.senderId !== stored.senderId || stored.senderId !== otherUid) throw Object.assign(new Error('not_allowed'), { statusCode: 403 });
+        if (!isGuess(secret.lie)) throw Object.assign(new Error('game_not_found'), { statusCode: 404 });
+        const current = stored.game;
+        if (current?.status === 'complete') {
+          // One guess per game. The same guess again (a retry after a dropped connection) is answered with the recorded result;
+          // anything else is refused and changes nothing.
+          if (current.guess === guess) return { replayed: true, stored };
+          throw Object.assign(new Error('game_already_answered'), { statusCode: 409 });
+        }
+        const game = { ...current, status: 'complete', guess, lie: secret.lie, guessedBy: uid, guessedAt: Timestamp.now() };
+        tx.update(messageRef, { game, updatedAt: FieldValue.serverTimestamp() });
+        // Tell the person who made the challenge, through their own inbox document (the one their app already listens to): one more
+        // unread and a new latest line. Written only here, in the transaction that records the guess, so a retried or simultaneous
+        // guess can never add a second one. The words are fixed: they never say what was guessed or what the answer is.
+        tx.set(db.doc(`signalsInbox/${stored.senderId}`), { unread: { [pairId]: FieldValue.increment(1) }, last: { [pairId]: { text: previewText('', 'guess'), mine: false, at: FieldValue.serverTimestamp() } } }, { merge: true });
+        return { replayed: false, stored: { ...stored, game } };
+      });
+      const stored = result.stored;
+      return send(res, 200, {
+        id: messageId,
+        senderId: stored.senderId,
+        text: GAME_TEXT,
+        kind: 'game',
+        game: shapeStoredGame(stored.game, uid, stored.senderId),
+        createdAt: stored.createdAt?.toDate?.().toISOString?.() || null,
+        replyTo: null,
+        reactions: [],
+        replayed: result.replayed,
       });
     }
 
