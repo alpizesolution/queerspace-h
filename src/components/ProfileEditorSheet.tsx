@@ -7,6 +7,8 @@ import { UserPreferences } from '../types.ts';
 import { MY_VIBE_OPTIONS, PERSONAL_STYLE_OPTIONS, PRONOUN_OPTIONS, SEXUAL_ORIENTATIONS, GENDER_IDENTITIES, GENDER_EXPRESSIONS } from '../utils/matching-logic.ts';
 import { suggestPseudonym } from '../services/pseudonymService.ts';
 import { ProfileFields } from '../utils/preferences.ts';
+import { BackgroundStudio } from './BackgroundStudio.tsx';
+import { describeBackground, type ProfileBackground } from '../utils/profileBackground.ts';
 interface ProfileEditorSheetProps { currentPrefs: UserPreferences; onClose: () => void; onSave: (profile: ProfileFields) => void; }
 /** Anonymous profile: a pseudonym and illustrated avatar, never a required photo or real name. */
 export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentPrefs, onClose, onSave }) => {
@@ -27,6 +29,8 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
   const [showGenderIdentity, setShowGenderIdentity] = useState(currentPrefs.showGenderIdentityOnProfile ?? false);
   const [showGenderExpression, setShowGenderExpression] = useState(currentPrefs.showGenderExpressionOnProfile ?? false);
   const [showAge, setShowAge] = useState(currentPrefs.showAgeOnProfile ?? false);
+  const [background, setBackground] = useState<ProfileBackground | null>(currentPrefs.background ?? null);
+  const [studioOpen, setStudioOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const handleSubmit = () => {
     const name = displayName.trim();
@@ -46,6 +50,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
       showAgeOnProfile: showAge,
       showSogieOnProfile: showSexualOrientation || showGenderIdentity || showGenderExpression,
       showLocationOnProfile: currentPrefs.showLocationOnProfile ?? true,
+      background,
     };
     const validation: Record<string, string> = {};
     if (name.length < 2) validation.displayName = 'Choose a display name with at least 2 characters.';
@@ -138,7 +143,15 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
         <label className="flex items-center justify-between gap-3 text-sm"><span className="font-medium">Show my age</span><input type="checkbox" className="check" checked={showAge} onChange={(e) => setShowAge(e.target.checked)} /></label>
         <p className="mt-1 text-xs text-subtle">Off by default. When on, people you chat with can see your age. Your birthday is never shown.</p>
       </section>
+      <section className="rounded-2xl border border-line p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0"><p className="label !mb-0.5">Profile background</p><p className="text-xs text-subtle" data-testid="background-summary">{describeBackground(background)}</p></div>
+          <button type="button" onClick={() => setStudioOpen(true)} className="btn btn-secondary btn-sm shrink-0">Customize background</button>
+        </div>
+        <p className="mt-1 text-xs text-subtle">An animated galaxy, or a still picture of your own, behind your whole profile. Free for everyone.</p>
+      </section>
       <p className="text-xs text-subtle">Your birthday and My Type preferences stay private. You never need to share your real name or photo.</p>
     </div>
+    {studioOpen && <BackgroundStudio initial={background} displayName={displayName} avatar={avatar} aboutMe={aboutMe} onClose={() => setStudioOpen(false)} onApply={(next) => { setBackground(next); setStudioOpen(false); }} />}
   </Sheet>;
 };

@@ -7,6 +7,7 @@ import type { LookingForPost } from './lookingFor.ts';
 import { resolveAvatar } from './avatar.ts';
 import type { UserPreferences } from '../types.ts';
 import { parseVibe, type VibeView } from './currentVibe.ts';
+import { parseBackground, type ProfileBackground } from './profileBackground.ts';
 
 export interface MemberProfile {
   id: string;
@@ -27,6 +28,8 @@ export interface MemberProfile {
   showsAge: boolean;
   /** When the member joined (ISO date), from the server's trusted timestamps. Absent from older answers, null when unknown. */
   memberSince?: string | null;
+  /** The member's chosen profile background (validated again here), or null/absent for the default look. */
+  background?: ProfileBackground | null;
 }
 
 export type RelationState = 'self' | 'none' | 'request_sent' | 'request_received' | 'declined' | 'connected';
@@ -173,7 +176,8 @@ export function parseProfileResponse(data: unknown): ProfileResponse | null {
   if (typeof member.showsAge !== 'boolean') return null;
   if (member.memberSince !== undefined && !isStringOrNull(member.memberSince)) return null;
   // A status that is not exactly the expected shape is simply not shown; it never makes the profile fail.
-  return { ...(raw as unknown as ProfileResponse), currentVibe: parseVibe(raw.currentVibe) };
+  // A background that is not exactly a valid preset or image is the default look; it never makes the profile fail.
+  return { ...(raw as unknown as ProfileResponse), member: { ...(member as unknown as MemberProfile), background: parseBackground(member.background) }, currentVibe: parseVibe(raw.currentVibe) };
 }
 
 export type PostsFailure = 'permission' | 'network' | 'failed';

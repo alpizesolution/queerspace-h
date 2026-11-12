@@ -3130,3 +3130,81 @@ test('CV-01: no client can read, list, write, extend or delete a Current Vibe, w
   // A member cannot put one on their own public profile either (the field list is closed).
   await assertFails(testEnv.authenticatedContext('alice').firestore().doc('users/alice/public/profile').set({ displayName: 'A', pronouns: 'she', intention: 'x', region: 'y', topics: [], profileComplete: true, updatedAt: now(), currentVibe: { moodId: 'happy', expiresAt: future } }));
 });
+
+// ------------------------------------------------------------------
+// Profile backgrounds: a small map on the public profile (an animated preset or the id of the member's own picture)
+// ------------------------------------------------------------------
+const BG_PRESETS = ['nebula-dreams', 'midnight-universe', 'stardust-bloom', 'aurora-galaxy', 'celestial-ocean', 'solar-eclipse', 'cosmic-dust', 'moonlight'];
+const bgPreset = (over: Record<string, unknown> = {}) => ({ kind: 'preset', preset: 'aurora-galaxy', x: 40, y: 60, dim: 25, animate: true, ...over });
+const bgImage = (over: Record<string, unknown> = {}) => ({ kind: 'image', image: 'a1b2c3d4e5f60718', x: 50, y: 50, dim: 40, animate: true, ...over });
+
+test('BG-01: members CAN save any of the eight presets, or their own picture id, with a position, a darkness and the animation switch; and remove it again', async () => {
+  await reserveFor('alice', 'Willow');
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  for (const preset of BG_PRESETS) await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ background: bgPreset({ preset }) })));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ background: bgPreset({ x: 0, y: 100, dim: 0, animate: false }) })));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ background: bgPreset({ dim: 80 }) })));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ background: bgImage() })));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(profile()));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ background: bgPreset() })));
+  await assertSucceeds(alice.doc('users/alice/public/profile').set(profile({ background: firebase.firestore.FieldValue.delete() }), { merge: true }));
+});
+
+test('BG-02: anything that is not exactly a valid preset or image setting is REFUSED', async () => {
+  await reserveFor('alice', 'Willow');
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const write = (background: unknown) => alice.doc('users/alice/public/profile').set(profile({ background }));
+  const { image: _drop, ...withoutImage } = bgImage();
+  const { preset: _p, ...withoutPreset } = bgPreset();
+  const { animate: _a, ...withoutAnimate } = bgPreset();
+  const { kind: _k, ...withoutKind } = bgPreset();
+  for (const bad of [
+    bgPreset({ preset: 'not-a-preset' }), bgPreset({ preset: 'Aurora-Galaxy' }), bgPreset({ preset: '' }), bgPreset({ preset: 7 }),
+    bgPreset({ image: 'a1b2c3d4e5f60718' }), withoutPreset, bgImage({ preset: 'moonlight' }), withoutImage,
+    bgImage({ image: 'A1B2C3D4E5F60718' }), bgImage({ image: 'a1b2c3d4e5f6071' }), bgImage({ image: 'a1b2c3d4e5f607189' }), bgImage({ image: 'g1b2c3d4e5f60718' }), bgImage({ image: '../../etc/passwd' }), bgImage({ image: 12 }),
+    bgPreset({ x: -1 }), bgPreset({ x: 101 }), bgPreset({ y: -1 }), bgPreset({ y: 101 }), bgPreset({ dim: -1 }), bgPreset({ dim: 81 }), bgPreset({ x: 50.5 }), bgPreset({ dim: '20' }), bgPreset({ y: null }),
+    bgPreset({ animate: 'yes' }), bgPreset({ animate: 1 }), withoutAnimate,
+    bgPreset({ video: 'https://evil.example/x.webm' }), bgPreset({ url: 'https://evil.example/x.png' }), bgPreset({ kind: 'video' }), bgPreset({ kind: 'both' }), withoutKind,
+    'aurora-galaxy', 7, true, ['aurora-galaxy'], {}, null,
+  ]) {
+    await assertFails(write(bad));
+  }
+});
+
+test('BG-03: nobody can change another member\'s background, and nobody signed out can change one', async () => {
+  await reserveFor('alice', 'Willow');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('users/alice/public/profile').set(profile({ background: bgPreset() })); });
+  const bob = testEnv.authenticatedContext('bob').firestore();
+  await assertFails(bob.doc('users/alice/public/profile').set(profile({ background: bgPreset({ preset: 'moonlight' }) })));
+  await assertFails(bob.doc('users/alice/public/profile').update({ background: bgPreset({ preset: 'moonlight' }) }));
+  await assertFails(bob.doc('users/alice/public/profile').update({ background: firebase.firestore.FieldValue.delete() }));
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('users/alice/public/profile').update({ background: bgPreset({ preset: 'moonlight' }) }));
+});
+
+test('BG-04: the background is deliberately public: any signed-in member can read it on a finished profile, but no media is ever in Firestore', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('users/alice/public/profile').set(profile({ profileComplete: true, background: bgImage() })); });
+  const seen = await assertSucceeds(testEnv.authenticatedContext('carol').firestore().doc('users/alice/public/profile').get());
+  assert.deepEqual(seen.data()!.background, bgImage());
+  assert.ok(Object.keys(seen.data()!.background).every((k) => ['kind', 'preset', 'image', 'x', 'y', 'dim', 'animate'].includes(k)), 'only the small setting, never a URL or bytes');
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('users/alice/public/profile').get());
+});
+
+test('BG-05: the record of uploaded pictures is server-only: nobody can read, list or change it', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('profileBackgroundImages/alice').set({ ids: ['a1b2c3d4e5f60718'] }); });
+  for (const who of ['alice', 'bob']) {
+    const fs = testEnv.authenticatedContext(who).firestore();
+    await assertFails(fs.doc('profileBackgroundImages/alice').get());
+    await assertFails(fs.collection('profileBackgroundImages').get());
+    await assertFails(fs.doc('profileBackgroundImages/alice').set({ ids: [] }));
+    await assertFails(fs.doc('profileBackgroundImages/alice').delete());
+  }
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('profileBackgroundImages/alice').get());
+});
+
+test('BG-06: the rules list the same eight presets as the app', async () => {
+  const rules = fs.readFileSync('./firestore.rules', 'utf8');
+  const listed = [...(rules.match(/function backgroundPresetIds\(\) \{\s*return \[([^\]]+)\]/)?.[1].matchAll(/'([a-z-]+)'/g) ?? [])].map((m) => m[1]);
+  assert.deepEqual(listed, BG_PRESETS);
+  const app = fs.readFileSync('./src/utils/profileBackground.ts', 'utf8');
+  assert.deepEqual([...app.matchAll(/\{ id: '([a-z-]+)', name:/g)].map((m) => m[1]), BG_PRESETS);
+});

@@ -1,0 +1,242 @@
+@import "./cosmos-tiles.css";
+
+/*
+ * Animated galaxy backgrounds for member profiles (see src/components/CosmicBackground.tsx and src/utils/profileBackground.ts).
+ *
+ * Original artwork drawn entirely from CSS gradients and the generated star tiles in cosmos-tiles.css, so there is nothing to download,
+ * nothing to license and no video to decode. Rules every animation here follows:
+ *   - Only `transform` and `opacity` are animated, so the browser moves already-painted layers on the GPU and never repaints.
+ *   - Layers that scroll use a repeating tile and move by exactly one tile (or one half of a doubled layer), so the loop has no jump.
+ *   - Every layer has its own duration (mostly prime numbers of seconds, 14 s to 460 s) so the layers drift in and out of step and the
+ *     whole picture takes far longer than any one layer to repeat. Nothing moves fast and nothing flashes.
+ *   - Motion stops with prefers-reduced-motion, with the member's own "animation off" switch, and while the tab is hidden.
+ */
+
+.cosmos {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+  contain: paint;
+  background: #06030f;
+  pointer-events: none;
+}
+/* The stage is a little bigger than the screen so the member's position setting can shift the scene without showing an edge. */
+.cosmos .cb-stage {
+  position: absolute;
+  inset: -12%;
+  transform: translate3d(calc((var(--bx, 50) - 50) * 0.2%), calc((var(--by, 50) - 50) * 0.2%), 0);
+}
+.cosmos .cb { position: absolute; pointer-events: none; will-change: transform; backface-visibility: hidden; }
+.cosmos .cb-dim { position: absolute; inset: 0; pointer-events: none; }
+/*
+ * Fine grain over the whole scene. Very dark gradients only have a few dozen steps per colour channel, which shows as stripes; a faint, still
+ * grain breaks the stripes up (dithering) so the gradients look smooth. One small still tile, drawn once and never animated.
+ */
+.cosmos::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.085;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+/* ---- repeating tiles: scroll by exactly one tile, so the loop is seamless ------------------------------------------------------ */
+.cosmos .cb-tile-up { left: 0; right: 0; top: 0; bottom: calc(var(--tile) * -1); background-size: var(--tile) var(--tile); animation: cb-rise var(--dur) linear infinite; }
+.cosmos .cb-tile-down { left: 0; right: 0; bottom: 0; top: calc(var(--tile) * -1); background-size: var(--tile) var(--tile); animation: cb-fall var(--dur) linear infinite; }
+.cosmos .cb-tile-left { top: 0; bottom: 0; left: 0; right: calc(var(--tile) * -1); background-size: var(--tile) var(--tile); animation: cb-pan var(--dur) linear infinite; }
+@keyframes cb-rise { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, calc(var(--tile) * -1), 0); } }
+@keyframes cb-fall { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, var(--tile), 0); } }
+@keyframes cb-pan { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(calc(var(--tile) * -1), 0, 0); } }
+
+.cosmos .t-stars-s { --tile: var(--tile-stars-s-size); background-image: var(--tile-stars-s); }
+.cosmos .t-stars-m { --tile: var(--tile-stars-m-size); background-image: var(--tile-stars-m); }
+.cosmos .t-stars-l { --tile: var(--tile-stars-l-size); background-image: var(--tile-stars-l); }
+.cosmos .t-stars-blue { --tile: var(--tile-stars-blue-size); background-image: var(--tile-stars-blue); }
+.cosmos .t-stars-dim { --tile: var(--tile-stars-dim-size); background-image: var(--tile-stars-dim); }
+.cosmos .t-dust-s { --tile: var(--tile-dust-s-size); background-image: var(--tile-dust-s); }
+.cosmos .t-dust-m { --tile: var(--tile-dust-m-size); background-image: var(--tile-dust-m); }
+.cosmos .t-dust-l { --tile: var(--tile-dust-l-size); background-image: var(--tile-dust-l); }
+.cosmos .t-sparkle { --tile: var(--tile-sparkle-size); background-image: var(--tile-sparkle); }
+
+/* ---- shared motions -------------------------------------------------------------------------------------------------------------- */
+@keyframes cb-twinkle { from { opacity: 0.35; } to { opacity: 1; } }
+@keyframes cb-pulse { from { opacity: 0.7; } to { opacity: 1; } }
+@keyframes cb-sway-x { from { transform: translate3d(-22px, 0, 0); } to { transform: translate3d(22px, 0, 0); } }
+@keyframes cb-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes cb-spin-back { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+
+/* ============================================================================================================================== */
+/* 1. NEBULA DREAMS: soft purple, blue and magenta clouds drifting along different paths through a field of stars                   */
+/* ============================================================================================================================== */
+.cosmos-nebula-dreams { background: radial-gradient(ellipse at 30% 18%, #1c1152 0%, #0b0728 55%, #05030f 100%); }
+.cosmos-nebula-dreams .cb-cloud { border-radius: 50%; }
+.cosmos-nebula-dreams .c-a { width: 92vmax; height: 92vmax; left: -24%; top: -30%; background: radial-gradient(circle, rgba(139, 70, 250, 0.66), rgba(88, 42, 180, 0.32) 42%, transparent 72%); animation: cb-nd-a 97s ease-in-out infinite alternate; }
+.cosmos-nebula-dreams .c-b { width: 84vmax; height: 84vmax; right: -28%; top: 6%; background: radial-gradient(circle, rgba(48, 112, 245, 0.62), rgba(34, 72, 190, 0.28) 44%, transparent 72%); animation: cb-nd-b 131s ease-in-out infinite alternate; }
+.cosmos-nebula-dreams .c-c { width: 64vmax; height: 64vmax; left: 12%; bottom: -26%; background: radial-gradient(circle, rgba(226, 84, 248, 0.52), rgba(150, 56, 240, 0.24) 46%, transparent 72%); animation: cb-nd-c 173s ease-in-out infinite alternate; }
+@keyframes cb-nd-a { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(14%, 10%, 0) scale(1.2); } }
+@keyframes cb-nd-b { from { transform: translate3d(0, 0, 0) scale(1.12); } to { transform: translate3d(-16%, 12%, 0) scale(0.94); } }
+@keyframes cb-nd-c { from { transform: translate3d(-6%, 4%, 0) scale(0.92); } to { transform: translate3d(12%, -14%, 0) scale(1.14); } }
+.cosmos-nebula-dreams .t-stars-s { --dur: 311s; opacity: 0.9; }
+.cosmos-nebula-dreams .t-stars-m { --dur: 467s; opacity: 0.95; }
+.cosmos-nebula-dreams .tw { animation: cb-twinkle 9s ease-in-out infinite alternate; }
+.cosmos-nebula-dreams .tw-2 { animation: cb-twinkle 13s ease-in-out infinite alternate-reverse; }
+
+/* ============================================================================================================================== */
+/* 2. MIDNIGHT UNIVERSE: deep navy; three star layers passing at different depths, with faint distant galaxies drifting sideways    */
+/* ============================================================================================================================== */
+.cosmos-midnight-universe { background: linear-gradient(180deg, #02050f 0%, #061230 55%, #0a1c4a 100%); }
+.cosmos-midnight-universe .t-stars-s { --dur: 229s; }
+.cosmos-midnight-universe .t-stars-blue { --dur: 137s; }
+.cosmos-midnight-universe .t-stars-l { --dur: 83s; }
+.cosmos-midnight-universe .cb-galaxy { width: 46vmax; height: 13vmax; border-radius: 50%; background: radial-gradient(ellipse, rgba(190, 215, 255, 0.34), rgba(120, 150, 255, 0.14) 38%, transparent 70%); }
+.cosmos-midnight-universe .g-a { left: 4%; top: 22%; --rot: -28deg; animation: cb-mu-a 211s ease-in-out infinite alternate; }
+.cosmos-midnight-universe .g-b { right: 2%; top: 62%; --rot: 21deg; opacity: 0.75; animation: cb-mu-b 283s ease-in-out infinite alternate; }
+@keyframes cb-mu-a { from { transform: translate3d(0, 0, 0) rotate(var(--rot)); } to { transform: translate3d(16vw, 3vh, 0) rotate(var(--rot)); } }
+@keyframes cb-mu-b { from { transform: translate3d(0, 0, 0) rotate(var(--rot)); } to { transform: translate3d(-14vw, -4vh, 0) rotate(var(--rot)); } }
+.cosmos-midnight-universe .tw { animation: cb-twinkle 11s ease-in-out infinite alternate; }
+
+/* ============================================================================================================================== */
+/* 3. STARDUST BLOOM: pink and magenta clouds that slowly breathe and turn, with soft sparkles                                      */
+/* ============================================================================================================================== */
+.cosmos-stardust-bloom { background: radial-gradient(ellipse at 50% 100%, #3d0b40 0%, #1c0622 58%, #0b0310 100%); }
+.cosmos-stardust-bloom .cb-breathe { left: 50%; top: 46%; width: 118vmax; height: 118vmax; margin: -59vmax 0 0 -59vmax; }
+.cosmos-stardust-bloom .b-a { animation: cb-sb-breathe 41s ease-in-out infinite alternate; }
+.cosmos-stardust-bloom .b-b { animation: cb-sb-breathe 59s ease-in-out infinite alternate-reverse; width: 92vmax; height: 92vmax; margin: -46vmax 0 0 -46vmax; }
+.cosmos-stardust-bloom .cb-petals { position: absolute; inset: 0; border-radius: 50%; -webkit-mask-image: radial-gradient(circle, transparent 5%, #000 30%, transparent 68%); mask-image: radial-gradient(circle, transparent 5%, #000 30%, transparent 68%); }
+.cosmos-stardust-bloom .p-a { background: conic-gradient(from 0deg, rgba(255, 80, 180, 0.3), rgba(190, 60, 200, 0.24), rgba(255, 130, 205, 0.3), rgba(210, 60, 170, 0.24), rgba(255, 80, 180, 0.3)); animation: cb-spin 421s linear infinite; }
+.cosmos-stardust-bloom .p-b { background: conic-gradient(from 90deg, rgba(236, 80, 165, 0.26), rgba(160, 60, 200, 0.22), rgba(255, 150, 215, 0.27), rgba(215, 70, 150, 0.22), rgba(236, 80, 165, 0.26)); animation: cb-spin-back 577s linear infinite; }
+@keyframes cb-sb-breathe { from { transform: scale(0.9); opacity: 0.8; } to { transform: scale(1.1); opacity: 1; } }
+.cosmos-stardust-bloom .cb-core { left: 50%; top: 46%; width: 70vmax; height: 70vmax; margin: -35vmax 0 0 -35vmax; border-radius: 50%; background: radial-gradient(circle, rgba(255, 105, 195, 0.42), rgba(214, 60, 160, 0.2) 40%, transparent 68%); animation: cb-sb-breathe 29s ease-in-out infinite alternate; }
+.cosmos-stardust-bloom .t-sparkle { --dur: 353s; animation-name: cb-rise, cb-twinkle; animation-duration: var(--dur), 8s; animation-timing-function: linear, ease-in-out; animation-iteration-count: infinite, infinite; animation-direction: normal, alternate; }
+.cosmos-stardust-bloom .t-stars-s { --dur: 397s; opacity: 0.7; }
+
+/* ============================================================================================================================== */
+/* 4. AURORA GALAXY: tall ribbons of teal and cyan light that sway and ripple overhead                                              */
+/* ============================================================================================================================== */
+.cosmos-aurora-galaxy { background: linear-gradient(180deg, #020a14 0%, #04161f 55%, #031017 100%); }
+.cosmos-aurora-galaxy .cb-ribbon {
+  top: -4%;
+  height: 78%;
+  transform-origin: 50% 100%;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 28%, #000 72%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 28%, #000 72%, transparent);
+}
+.cosmos-aurora-galaxy .r-1 { left: -6%; width: 36%; background: linear-gradient(180deg, transparent 0%, rgba(20, 184, 166, 0.5) 46%, rgba(34, 211, 238, 0.2) 76%, transparent 100%); animation: cb-ag-1 23s ease-in-out infinite alternate; }
+.cosmos-aurora-galaxy .r-2 { left: 14%; width: 34%; background: linear-gradient(180deg, transparent 0%, rgba(45, 212, 191, 0.4) 40%, rgba(110, 231, 183, 0.18) 74%, transparent 100%); animation: cb-ag-2 31s ease-in-out infinite alternate; }
+.cosmos-aurora-galaxy .r-3 { left: 34%; width: 38%; background: linear-gradient(180deg, transparent 0%, rgba(56, 189, 248, 0.42) 44%, rgba(99, 102, 241, 0.2) 78%, transparent 100%); animation: cb-ag-3 43s ease-in-out infinite alternate; }
+.cosmos-aurora-galaxy .r-4 { left: 56%; width: 32%; background: linear-gradient(180deg, transparent 0%, rgba(34, 211, 238, 0.44) 42%, rgba(20, 184, 166, 0.2) 76%, transparent 100%); animation: cb-ag-2 37s ease-in-out infinite alternate-reverse; }
+.cosmos-aurora-galaxy .r-5 { left: 74%; width: 36%; background: linear-gradient(180deg, transparent 0%, rgba(74, 222, 168, 0.4) 46%, rgba(56, 189, 248, 0.2) 78%, transparent 100%); animation: cb-ag-3 53s ease-in-out infinite alternate; }
+@keyframes cb-ag-1 { 0% { transform: translate3d(-8%, 0, 0) skewX(-8deg) scaleY(0.84); opacity: 0.6; } 100% { transform: translate3d(9%, 0, 0) skewX(7deg) scaleY(1.12); opacity: 1; } }
+@keyframes cb-ag-2 { 0% { transform: translate3d(7%, 0, 0) skewX(6deg) scaleY(1.1); opacity: 0.85; } 100% { transform: translate3d(-10%, 0, 0) skewX(-9deg) scaleY(0.8); opacity: 0.55; } }
+@keyframes cb-ag-3 { 0% { transform: translate3d(-5%, 0, 0) skewX(-5deg) scaleY(0.92); opacity: 0.5; } 100% { transform: translate3d(11%, 0, 0) skewX(10deg) scaleY(1.16); opacity: 0.95; } }
+.cosmos-aurora-galaxy .cb-horizon { left: -10%; right: -10%; bottom: -8%; height: 34%; background: radial-gradient(ellipse at 50% 100%, rgba(20, 184, 166, 0.3), transparent 70%); animation: cb-pulse 19s ease-in-out infinite alternate; }
+.cosmos-aurora-galaxy .t-stars-s { --dur: 419s; opacity: 0.85; }
+.cosmos-aurora-galaxy .t-stars-m { --dur: 541s; opacity: 0.6; }
+
+/* ============================================================================================================================== */
+/* 5. CELESTIAL OCEAN: layered currents flowing sideways in opposite directions, with slow shafts of light                          */
+/* ============================================================================================================================== */
+.cosmos-celestial-ocean { background: linear-gradient(180deg, #010617 0%, #04163f 50%, #07265f 100%); }
+.cosmos-celestial-ocean .cb-wave { left: 0; width: 200%; height: 36%; background-image: radial-gradient(ellipse 60% 50% at 50% 50%, var(--wave), transparent 100%); background-size: 50% 100%; background-repeat: repeat-x; }
+.cosmos-celestial-ocean .w-1 { top: 18%; --wave: rgba(46, 128, 255, 0.4); animation: cb-pan-half 71s linear infinite; }
+.cosmos-celestial-ocean .w-2 { top: 40%; --wave: rgba(80, 168, 255, 0.34); animation: cb-pan-half-rev 109s linear infinite; }
+.cosmos-celestial-ocean .w-3 { top: 62%; --wave: rgba(34, 100, 235, 0.5); animation: cb-pan-half 167s linear infinite; }
+@keyframes cb-pan-half { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
+@keyframes cb-pan-half-rev { from { transform: translate3d(-50%, 0, 0); } to { transform: translate3d(0, 0, 0); } }
+.cosmos-celestial-ocean .cb-shaft { top: -10%; width: 14%; height: 120%; background: linear-gradient(180deg, rgba(140, 200, 255, 0) 0%, rgba(140, 200, 255, 0.2) 40%, rgba(140, 200, 255, 0) 100%); transform-origin: 50% 0; }
+.cosmos-celestial-ocean .s-a { left: 18%; --lean: 16deg; animation: cb-co-shaft 47s ease-in-out infinite alternate; }
+.cosmos-celestial-ocean .s-b { left: 58%; --lean: 11deg; width: 10%; opacity: 0.8; animation: cb-co-shaft 61s ease-in-out infinite alternate-reverse; }
+@keyframes cb-co-shaft { from { transform: rotate(var(--lean)) translate3d(-5vw, 0, 0); opacity: 0.5; } to { transform: rotate(var(--lean)) translate3d(6vw, 0, 0); opacity: 1; } }
+.cosmos-celestial-ocean .t-stars-blue { --dur: 487s; opacity: 0.55; }
+
+/* ============================================================================================================================== */
+/* 6. SOLAR ECLIPSE: a dark sun ringed by a glowing corona; two layers of rays turn slowly in opposite directions                   */
+/* ============================================================================================================================== */
+.cosmos-solar-eclipse { background: radial-gradient(circle at 50% 36%, #0a0508 0%, #040208 60%, #020106 100%); }
+.cosmos-solar-eclipse .cb-ring { left: 50%; top: 36%; width: 118vmin; height: 118vmin; margin: -59vmin 0 0 -59vmin; border-radius: 50%; }
+.cosmos-solar-eclipse .e-rays { background: repeating-conic-gradient(from 0deg, rgba(255, 190, 80, 0) 0deg, rgba(255, 190, 80, 0.34) 4deg, rgba(255, 190, 80, 0) 9deg); -webkit-mask-image: radial-gradient(circle, transparent 26%, #000 34%, transparent 70%); mask-image: radial-gradient(circle, transparent 26%, #000 34%, transparent 70%); animation: cb-spin 337s linear infinite; }
+.cosmos-solar-eclipse .e-fine { background: repeating-conic-gradient(from 7deg, rgba(255, 215, 140, 0) 0deg, rgba(255, 215, 140, 0.22) 1.6deg, rgba(255, 215, 140, 0) 3.4deg); -webkit-mask-image: radial-gradient(circle, transparent 28%, #000 38%, transparent 62%); mask-image: radial-gradient(circle, transparent 28%, #000 38%, transparent 62%); animation: cb-spin-back 491s linear infinite; }
+.cosmos-solar-eclipse .e-glow { background: radial-gradient(circle, transparent 25%, rgba(255, 205, 125, 0.7) 29.5%, rgba(255, 150, 40, 0.28) 37%, transparent 60%); animation: cb-se-glow 17s ease-in-out infinite alternate; }
+@keyframes cb-se-glow { from { transform: scale(0.965); opacity: 0.78; } to { transform: scale(1.04); opacity: 1; } }
+.cosmos-solar-eclipse .e-disc { background: radial-gradient(circle, #000 0 27.5%, transparent 28.5%); }
+.cosmos-solar-eclipse .cb-flare { left: -20%; right: -20%; top: 36%; height: 3px; background: linear-gradient(90deg, transparent, rgba(255, 220, 160, 0.5), transparent); animation: cb-se-flare 97s ease-in-out infinite alternate; }
+@keyframes cb-se-flare { from { transform: translate3d(-14vw, 0, 0); opacity: 0.2; } to { transform: translate3d(14vw, 0, 0); opacity: 0.55; } }
+.cosmos-solar-eclipse .t-stars-s { --dur: 509s; opacity: 0.55; }
+.cosmos-solar-eclipse .t-stars-dim { --dur: 613s; opacity: 0.5; }
+
+/* ============================================================================================================================== */
+/* 7. COSMIC DUST: glowing particles of every colour rising at three speeds, each layer swaying gently from side to side            */
+/* ============================================================================================================================== */
+.cosmos-cosmic-dust { background: radial-gradient(ellipse at 28% 82%, #1d0c38 0%, #0a0516 58%, #05030b 100%); }
+.cosmos-cosmic-dust .cb-wash { border-radius: 50%; }
+.cosmos-cosmic-dust .k-a { width: 80vmax; height: 80vmax; left: -20%; bottom: -34%; background: radial-gradient(circle, rgba(217, 70, 239, 0.28), transparent 66%); animation: cb-cd-wash 89s ease-in-out infinite alternate; }
+.cosmos-cosmic-dust .k-b { width: 72vmax; height: 72vmax; right: -22%; top: -22%; background: radial-gradient(circle, rgba(56, 189, 248, 0.24), transparent 66%); animation: cb-cd-wash 127s ease-in-out infinite alternate-reverse; }
+@keyframes cb-cd-wash { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(8%, -6%, 0) scale(1.14); } }
+.cosmos-cosmic-dust .cb-sway { position: absolute; inset: 0; will-change: transform; }
+.cosmos-cosmic-dust .sw-1 { animation: cb-sway-x 17s ease-in-out infinite alternate; }
+.cosmos-cosmic-dust .sw-2 { animation: cb-sway-x 23s ease-in-out infinite alternate-reverse; }
+.cosmos-cosmic-dust .sw-3 { animation: cb-sway-x 29s ease-in-out infinite alternate; }
+.cosmos-cosmic-dust .t-dust-s { --dur: 313s; }
+.cosmos-cosmic-dust .t-dust-m { --dur: 197s; animation-name: cb-rise, cb-twinkle; animation-duration: var(--dur), 12s; animation-timing-function: linear, ease-in-out; animation-iteration-count: infinite, infinite; animation-direction: normal, alternate; }
+.cosmos-cosmic-dust .t-dust-l { --dur: 127s; opacity: 0.85; }
+
+/* ============================================================================================================================== */
+/* 8. MOONLIGHT: a soft moon glow drifting in violet haze, with thin silver cloud sliding across the sky                            */
+/* ============================================================================================================================== */
+.cosmos-moonlight { background: linear-gradient(180deg, #0b0a1d 0%, #15122e 58%, #1d1a40 100%); }
+.cosmos-moonlight .cb-halo { right: -4%; top: 2%; width: 92vmin; height: 92vmin; border-radius: 50%; background: radial-gradient(circle, rgba(232, 235, 250, 0.6) 0%, rgba(172, 158, 232, 0.4) 16%, rgba(120, 104, 200, 0.2) 38%, transparent 66%); animation: cb-ml-halo 23s ease-in-out infinite alternate; }
+.cosmos-moonlight .cb-orb { right: 17%; top: 16%; width: 17vmin; height: 17vmin; border-radius: 50%; background: radial-gradient(circle at 38% 34%, #ffffff 0%, #e6e9f8 46%, rgba(205, 210, 240, 0.4) 76%, transparent 100%); animation: cb-ml-orb 151s ease-in-out infinite alternate; }
+@keyframes cb-ml-halo { from { transform: scale(0.95); opacity: 0.8; } to { transform: scale(1.06); opacity: 1; } }
+@keyframes cb-ml-orb { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-5vw, 4vh, 0); } }
+.cosmos-moonlight .cb-wisp { left: 0; width: 200%; background-image: radial-gradient(ellipse 60% 50% at 50% 50%, var(--mist), transparent 100%); background-size: 50% 100%; background-repeat: repeat-x; }
+.cosmos-moonlight .m-1 { top: 22%; height: 18%; --mist: rgba(205, 210, 245, 0.17); animation: cb-pan-half 127s linear infinite; }
+.cosmos-moonlight .m-2 { top: 48%; height: 22%; --mist: rgba(175, 165, 235, 0.17); animation: cb-pan-half-rev 211s linear infinite; }
+.cosmos-moonlight .m-3 { top: 72%; height: 20%; --mist: rgba(220, 220, 248, 0.13); animation: cb-pan-half 331s linear infinite; }
+.cosmos-moonlight .t-stars-dim { --dur: 521s; }
+.cosmos-moonlight .t-stars-s { --dur: 389s; opacity: 0.55; }
+
+/* ---- a member's own picture: still, positioned, never animated ------------------------------------------------------------------ */
+.cosmos-image { background: #06030f center / cover no-repeat; }
+
+/* ---- stopping the motion: reduced motion, the member's own switch, and a hidden tab ---------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .cosmos .cb, .cosmos .cb-sway { animation: none !important; }
+}
+.cosmos[data-animate='false'] .cb,
+.cosmos[data-animate='false'] .cb-sway { animation: none !important; }
+.cosmos[data-paused='true'] .cb,
+.cosmos[data-paused='true'] .cb-sway { animation-play-state: paused !important; }
+
+/* ---- the profile page over a background: dark tokens, and glass instead of solid cards -------------------------------------------- */
+/*
+ * A galaxy is dark whatever theme the app is in, so the page over it always uses the dark palette (the same values as the dark theme).
+ * Surfaces that are normally solid or half-solid become see-through dark glass with a soft edge, so the galaxy shows behind them.
+ */
+.theme-cosmos {
+  color-scheme: dark;
+  --color-ink: #120b17;
+  --color-surface: #1a111f;
+  --color-raised: #241829;
+  --color-line: #33253a;
+  --color-line-strong: #4a3552;
+  --color-fg: #f7f0f6;
+  --color-muted: #b8a9bd;
+  --color-subtle: #8f8195;
+  --color-berry: #e07bb8;
+  --color-berry-hover: #ea94c6;
+  --color-plum: #8e547e;
+  --color-lavender: #c8b5e6;
+  --color-danger: #f17c8a;
+  color: var(--color-fg);
+}
+.theme-cosmos .glass-surfaces [class*='bg-raised'],
+.theme-cosmos .glass-surfaces .tag,
+.theme-cosmos .glass-surfaces .chip {
+  background-color: rgb(14 7 22 / 0.56) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  backdrop-filter: blur(10px) saturate(1.15);
+  border-color: rgb(255 255 255 / 0.13) !important;
+}

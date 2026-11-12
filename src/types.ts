@@ -1,4 +1,5 @@
 import type { GifInfo } from './utils/gif.ts';
+import type { ProfileBackground } from './utils/profileBackground.ts';
 
 export type ChatMode = 'quick' | 'custom' | 'public' | 'community';
 
@@ -41,6 +42,8 @@ export interface UserPreferences {
   myVibe?: string;
   /** Optional public aesthetic label (e.g. Vintage); not SOGIE. */
   personalStyle?: string;
+  /** The animated galaxy (or own still image) shown behind the member's profile page; absent = the default look. */
+  background?: ProfileBackground | null;
   /** True only after the member explicitly saves their profile. */
   profileComplete?: boolean;
   /** Opt-in (default off): lets chat partners see my age. The age itself is never stored in a readable document. */

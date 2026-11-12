@@ -187,6 +187,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // A profile background: an animated galaxy preset or the id of the member's own picture (the picture itself lives in R2, never here),
+    // with a position, a darkness and the member's animation switch. No background at all is the default look. Keep the preset ids in
+    // step with src/utils/profileBackground.ts and api/_background.js (a test checks that they match).
+    function backgroundPresetIds() {
+      return ['nebula-dreams', 'midnight-universe', 'stardust-bloom', 'aurora-galaxy', 'celestial-ocean', 'solar-eclipse', 'cosmic-dust', 'moonlight'];
+    }
+
+    function validBackground(b) {
+      return b is map
+        && b.keys().hasAll(['kind', 'x', 'y', 'dim', 'animate'])
+        && b.keys().hasOnly(['kind', 'preset', 'image', 'x', 'y', 'dim', 'animate'])
+        && b.x is int && b.x >= 0 && b.x <= 100
+        && b.y is int && b.y >= 0 && b.y <= 100
+        && b.dim is int && b.dim >= 0 && b.dim <= 80
+        && b.animate is bool
+        && ((b.kind == 'preset' && b.keys().hasAll(['preset']) && !('image' in b) && b.preset in backgroundPresetIds())
+            || (b.kind == 'image' && b.keys().hasAll(['image']) && !('preset' in b) && b.image is string && b.image.matches('^[a-f0-9]{16}$')));
+    }
+
     // Public Profile (displayName, pronouns, intention, region, topics)
     // READABLE BY ALL AUTHENTICATED USERS. WRITABLE ONLY BY OWNER.
     match /users/{userId}/public/profile {
@@ -198,7 +217,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
              'displayName', 'pronouns', 'intention', 'topics', 
              'region', 'showGenderExpressionOnProfile', 'showSexualOrientationOnProfile', 'showGenderIdentityOnProfile', 'showSogieOnProfile',
-             'showLocationOnProfile', 'showAgeOnProfile', 'avatar', 'aboutMe', 'myVibe', 'personalStyle', 'sexualOrientation', 'genderIdentity', 'genderExpression', 'profileComplete', 'createdAt', 'updatedAt'
+             'showLocationOnProfile', 'showAgeOnProfile', 'avatar', 'aboutMe', 'myVibe', 'personalStyle', 'sexualOrientation', 'genderIdentity', 'genderExpression', 'profileComplete', 'background', 'createdAt', 'updatedAt'
            ])
         // createdAt marks when someone joined: set once to "now", then never changed.
         && (resource != null && 'createdAt' in resource.data
@@ -228,6 +247,7 @@ service cloud.firestore {
         && (!('genderExpression' in request.resource.data) || (request.resource.data.genderExpression is list && request.resource.data.genderExpression.size() <= 2))
         && (!('profileComplete' in request.resource.data) || request.resource.data.profileComplete is bool)
         && (!('showAgeOnProfile' in request.resource.data) || request.resource.data.showAgeOnProfile is bool)
+        && (!('background' in request.resource.data) || validBackground(request.resource.data.background))
         && request.resource.data.updatedAt is timestamp;
 
       allow delete: if false;
@@ -1362,6 +1382,11 @@ service cloud.firestore {
     // Current Vibe (a temporary 24-hour mood status). Written and read only by the Signals API (Admin SDK), which checks who may see it
     // and whether it has expired on every read. No client can read or write one, so a hidden or expired vibe cannot be fetched directly.
     match /currentVibes/{userId} {
+      allow read, write: if false;
+    }
+
+    // Which uploaded profile-background pictures a member has stored (so the unused ones can be removed). Server-only.
+    match /profileBackgroundImages/{userId} {
       allow read, write: if false;
     }
 

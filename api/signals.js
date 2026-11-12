@@ -8,6 +8,7 @@ import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
 import { cardById, shapeStoredCard } from './_cards.js';
 import { inboxWritesForMessage, previewText } from './_inbox.js';
 import { clearCurrentVibe, setCurrentVibe, vibeView } from './_vibe.js';
+import { backgroundImageView, pruneBackgroundImages, setBackgroundImage } from './_background.js';
 import { GAME_TEXT, isGuess, parseChallenge, shapeStoredGame } from './_game.js';
 import { GIF_TEXT, sharedGiphy, isGifId, limitGifSearches, limitGifSends, parseGifQuery, shapeStoredGif } from './_giphy.js';
 import { createPartnerCache, getOnePair, listPairsLegacy, listPairsPage, parsePageLimit, partnerSummaries, shapePair } from './_inbox.js';
@@ -156,7 +157,7 @@ export default async function handler(req, res) {
       const view = req.query?.view || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('view');
       // No view means the invitations list, as always. A view this server does not know is an error, never that list, so a
       // newer app talking to an older server (or a typo) cannot be mistaken for a real answer.
-      if (view && !['messages', 'pairs', 'requests', 'profile', 'gifs', 'vibe'].includes(view)) return send(res, 400, { error: 'invalid_view' });
+      if (view && !['messages', 'pairs', 'requests', 'profile', 'gifs', 'vibe', 'background-image'].includes(view)) return send(res, 400, { error: 'invalid_view' });
       if (view === 'gifs') {
         // GIF search and trending for the picker. The key stays here; a suspended member gets nothing.
         if ((await db.doc(`suspensions/${uid}`).get()).exists) return send(res, 403, { error: 'account_unavailable' });
@@ -232,6 +233,13 @@ export default async function handler(req, res) {
         return send(res, 200, { messages, cursor: deltaCursor(pollStartedAt) });
       }
       if (view === 'requests') return send(res, 200, await connectionRequests.list(db, uid));
+      if (view === 'background-image') {
+        // A member's saved profile background picture, for a viewer who may see that profile (same rules as opening the profile).
+        const memberId = req.query?.memberId || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('memberId');
+        const found = await backgroundImageView(db, uid, memberId);
+        setNoStoreHeaders(res);
+        return send(res, 200, found);
+      }
       if (view === 'vibe') {
         // Current Vibe (a 24-hour mood status): the same viewing rules as a profile, then the member's own setting, then expiry.
         const memberId = req.query?.memberId || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('memberId');
@@ -387,6 +395,10 @@ export default async function handler(req, res) {
       });
       return send(res, result.replayed ? 200 : 201, result);
     }
+
+    // Profile background: store a new picture, and tidy up after the profile is saved. Only ever the signed-in member's own.
+    if (action === 'bg-image-set') return send(res, 200, await setBackgroundImage(db, uid, req.body || {}));
+    if (action === 'bg-image-prune') return send(res, 200, await pruneBackgroundImages(db, uid));
 
     // Current Vibe: publish (or replace) and remove. Only ever the signed-in member's own; the id comes from the verified token.
     if (action === 'vibe-set') return send(res, 200, await setCurrentVibe(db, uid, req.body || {}));

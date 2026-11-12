@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Check, Flag, LoaderCircle, MapPin, MessageCircle, Pencil, SatelliteDish, Share2, Sparkles, UserX } from 'lucide-react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { CosmicBackground } from './CosmicBackground.tsx';
+import { useBackgroundImage } from '../hooks/useBackgroundImage.ts';
 import { ProfileSkeleton } from './Skeleton.tsx';
 import { ConfirmDialog } from './Sheet.tsx';
 import { AddStatusPill, CurrentVibeSheet, VibeBubble } from './CurrentVibe.tsx';
@@ -175,6 +177,9 @@ export const ProfilePage: React.FC<Props> = ({
   const action: ProfileAction = data ? profileAction(data, lookingFor) : { kind: 'none' };
   const name = member?.displayName || 'Anonymous member';
   const cover = profileCover(member?.avatar, memberId);
+  // The member's galaxy (or own still picture) behind the whole page. Only a loaded, visible profile has one; a failed or blocked page keeps the plain look.
+  const background = member && data?.blocked !== 'by_me' ? member.background ?? null : null;
+  const backgroundImage = useBackgroundImage(memberId, background);
   const joined = formatMemberSince(member?.memberSince);
   const details = member ? aboutDetails(member, intentionLabel(member.intention)) : [];
   const line = member ? identityLine(member, age) : '';
@@ -193,7 +198,9 @@ export const ProfilePage: React.FC<Props> = ({
   const roundButton = 'flex h-10 w-10 items-center justify-center rounded-full border border-line bg-ink/70 text-fg backdrop-blur transition hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-berry/60 cursor-pointer';
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={member ? `${name}’s profile` : 'Profile'} className="fixed inset-0 z-[45] flex flex-col bg-ink">
+    <div role="dialog" aria-modal="true" aria-label={member ? `${name}’s profile` : 'Profile'} data-has-background={background ? 'true' : undefined} className={`fixed inset-0 z-[45] flex flex-col bg-ink ${background ? 'theme-cosmos' : ''}`}>
+      {/* Fixed to the screen behind everything: the page scrolls over it and the animation keeps going. It takes no taps or scrolling. */}
+      {background && <CosmicBackground background={background} imageUrl={backgroundImage} />}
       <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-3 pt-[calc(env(safe-area-inset-top)+0.5rem)]">
         <button type="button" onClick={onClose} aria-label="Back" className={roundButton} autoFocus><ArrowLeft className="h-5 w-5" /></button>
         {member && !isSelf && (
@@ -211,9 +218,12 @@ export const ProfilePage: React.FC<Props> = ({
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain">
+      <div className={`relative flex-1 overflow-y-auto overscroll-contain ${background ? 'glass-surfaces' : ''}`}>
         <div className="mx-auto w-full max-w-xl md:max-w-2xl pb-[calc(env(safe-area-inset-bottom)+7.5rem)]">
-          <div className="h-28 w-full sm:mt-4 sm:h-40 sm:overflow-hidden sm:rounded-3xl" style={{ backgroundImage: cover }} aria-hidden="true" />
+          {background
+            // With a background the galaxy IS the page: no cover banner, just room for the back button above the avatar.
+            ? <div className="h-28 w-full sm:h-36" aria-hidden="true" />
+            : <div className="h-28 w-full sm:mt-4 sm:h-40 sm:overflow-hidden sm:rounded-3xl" style={{ backgroundImage: cover }} aria-hidden="true" />}
 
           {load === null ? (
             <ProfileSkeleton />

@@ -5,6 +5,7 @@ import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../utils/storage.t
 import { formatSyncFeedback, StorageOperationResult } from '../utils/sync-feedback.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 import { INTENTION_LABELS, SEXUAL_ORIENTATIONS, GENDER_IDENTITIES } from '../utils/matching-logic.ts';
+import { backgroundToStore, parseBackground } from '../utils/profileBackground.ts';
 import { calculateAge } from '../utils/ageEligibility.ts';
 
 export interface ProfileLoadResult {
@@ -36,6 +37,8 @@ export function buildPublicProfilePayload(prefs: UserPreferences) {
     aboutMe: (prefs.aboutMe || '').trim().slice(0, 160),
     myVibe: (prefs.myVibe || '').slice(0, 24),
     personalStyle: (prefs.personalStyle || '').slice(0, 24),
+    // Only the small setting is stored (never media); no background (or a reset) removes the field.
+    background: backgroundToStore(prefs.background) ?? deleteField(),
     // Public SOGIE values are included only when that exact field is opted into visibility.
     sexualOrientation: prefs.showSexualOrientationOnProfile && prefs.sexualOrientation
       ? (prefs.sexualOrientation === 'Self-described' ? (prefs.sexualOrientationCustom ?? '') : prefs.sexualOrientation || '').trim().slice(0, 40)
@@ -130,6 +133,8 @@ export function mergeCloudProfile(
   set('aboutMe', typeof publicData.aboutMe === 'string' ? publicData.aboutMe.slice(0, 160) : undefined);
   set('myVibe', text(publicData.myVibe));
   set('personalStyle', text(publicData.personalStyle));
+  // A background that is gone from the cloud (a reset on another device) is gone here too; a malformed one is the default look.
+  merged.background = parseBackground(publicData.background);
   set('profileComplete', flag(publicData.profileComplete));
   set('showGenderExpressionOnProfile', flag(publicData.showGenderExpressionOnProfile));
   set('showAgeOnProfile', flag(publicData.showAgeOnProfile));

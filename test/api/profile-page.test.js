@@ -167,7 +167,7 @@ test('an unsupported or failing profile API gives the page a named error state, 
 });
 
 test('unknown GET views are refused, and profile lookups are limited per viewer on the server', () => {
-  assert.match(signals, /\['messages', 'pairs', 'requests', 'profile', 'gifs', 'vibe']\.includes\(view\)\) return send\(res, 400, \{ error: 'invalid_view' \}\)/);
+  assert.match(signals, /\['messages', 'pairs', 'requests', 'profile', 'gifs', 'vibe', 'background-image']\.includes\(view\)\) return send\(res, 400, \{ error: 'invalid_view' \}\)/);
   assert.match(profiles, /import \{ rateLimit \} from '\.\/_lib\.js'/);
   assert.match(profiles, /PROFILE_LOOKUPS_PER_MINUTE = 60/);
   assert.match(profiles, /if \(memberId !== uid\) await counting\.run\(uid, \(\) => rateLimit\(db, uid, 'profile-view', PROFILE_LOOKUPS_PER_MINUTE, 60_000\)\)/, 'own profile is not counted, and one viewer\'s counter updates take turns');

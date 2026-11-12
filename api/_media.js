@@ -298,6 +298,8 @@ let storeOverride = null;
 /** Test seam: lets a test supply an in-memory store. Pass null to go back to the environment. */
 export const setMediaStoreForTests = store => { storeOverride = store; };
 const currentStore = () => storeOverride ?? storeFromEnv();
+/** The same store, for other features that keep images in the private bucket (profile backgrounds). */
+export const currentMediaStore = currentStore;
 
 // -------------------------------------------------------------------------------------------- state of one photo
 

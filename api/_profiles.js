@@ -10,6 +10,7 @@ import { isAdultMember } from './_adult.js';
 import { rateLimit } from './_lib.js';
 import { createKeyedQueue } from './_requests.js';
 import { vibeOnProfile } from './_vibe.js';
+import { shapeBackground } from './_background.js';
 
 /** How many other members' profiles one member can open per minute. Opening your own is not counted. Well above normal browsing. */
 export const PROFILE_LOOKUPS_PER_MINUTE = 60;
@@ -61,6 +62,8 @@ export function shapeProfile(id, profile) {
     expression,
     // Whether to ask for an age. The age itself never travels here: it comes from the age API, to connected members only.
     showsAge: profile.showAgeOnProfile === true,
+    // The member's chosen background (an animated preset or their own picture), re-validated here; null means the default look.
+    background: shapeBackground(profile.background),
   };
 }
 

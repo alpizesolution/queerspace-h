@@ -28,6 +28,8 @@ import { isPostId, postIdFromSearch } from './utils/communityPostLink.ts';
 import { recordDailyActivity } from './services/activityService.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature } from './services/profilePersistence.ts';
+import { clearProfileCache } from './services/profileViewService.ts';
+import { clearBackgroundImageCache, pruneBackgroundImages } from './services/profileBackgroundService.ts';
 import { applyFilters, applyProfile, FilterFields, matchPrefsForMode, ProfileFields } from './utils/preferences.ts';
 import { ProfileEditorSheet } from './components/ProfileEditorSheet.tsx';
 import { ProfilePageSheet } from './components/ProfilePageSheet.tsx';
@@ -387,6 +389,10 @@ export default function App() {
     setProfileEditOpen(false);
     setProfileOpen(true);
     const { feedback, cloudChanged } = await persistPrefs(next);
+    // The profile page asks the server again (a changed background must show now), and uploaded pictures that are no longer used are deleted.
+    clearProfileCache();
+    clearBackgroundImageCache();
+    if (feedback.savedToCloud) void pruneBackgroundImages();
     showToast(feedback.savedToCloud || !cloudChanged ? 'Profile updated.' : feedback.userMessage);
   };
 
