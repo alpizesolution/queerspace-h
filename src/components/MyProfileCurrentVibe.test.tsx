@@ -2,12 +2,12 @@ import '../../test/dom-setup.ts';
 import test, { afterEach, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { parseVibe, type VibeView } from '../utils/currentVibe.ts';
 
 /**
- * The "My profile" sheet (what the Profile button in the header and menu opens) now shows the member's own Current Vibe: the card
- * with Edit and Remove when it is live, a quiet prompt when it is not, and nothing until the profile is finished (publishing needs it).
+ * The "My profile" sheet (what the Profile button in the header and menu opens) shows the member's own status as a small bubble under
+ * their name, or a quiet "Add status" pill: no card. Nothing until the profile is finished (saving a status needs it).
  */
 mock.module('../lib/firebase.ts', { namedExports: { auth: { currentUser: { uid: 'self-member-1', getIdToken: async () => 't' } }, db: null } });
 let stored: VibeView | null = null;
@@ -26,64 +26,66 @@ const { ProfilePageSheet } = await import('./ProfilePageSheet.tsx');
 
 const NOW = Date.now();
 const live = (over: Record<string, unknown> = {}) =>
-  parseVibe({ moodId: 'healing', message: 'One day at a time', updatedAt: new Date(NOW - 3_600_000).toISOString(), expiresAt: new Date(NOW + 23 * 3_600_000).toISOString(), visibility: 'everyone', ...over })!;
+  parseVibe({ emoji: '🌙', message: 'taking it slow', updatedAt: new Date(NOW - 3_600_000).toISOString(), expiresAt: new Date(NOW + 23 * 3_600_000).toISOString(), visibility: 'everyone', ...over })!;
 const prefs = (over: Record<string, unknown> = {}) => ({ displayName: 'Luna', pronouns: 'she/her', profileComplete: true, intention: 'friendship', aboutMe: '', ...over }) as never;
 const show = (over: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) =>
   render(<ProfilePageSheet currentPrefs={prefs(over)} onClose={() => {}} onEditProfile={() => {}} onEditPreferences={() => {}} {...extra} />);
+const absent = (id: string) => assert.ok(screen.queryByTestId(id) === null, `no ${id}`);
 
 beforeEach(() => { stored = null; removeOk = true; removed.length = 0; });
 afterEach(cleanup);
 
-test('with no live status the sheet offers a quiet way to set one, and it opens the editor', async () => {
+test('with no live status the sheet offers a small "Add status" pill, and it opens the editor', async () => {
   show();
-  fireEvent.click(await screen.findByTestId('set-current-vibe'));
-  assert.ok(await screen.findByRole('radiogroup', { name: 'Choose a mood' }));
+  fireEvent.click(await screen.findByTestId('add-status'));
+  assert.ok(await screen.findByLabelText('Your status message'));
 });
 
-test('a live status shows as a card with Edit Mood, Remove Mood and who can see it', async () => {
-  stored = live({ visibility: 'connections' });
-  show();
-  const card = within(await screen.findByTestId('current-vibe'));
-  assert.ok(card.getByText('Healing'));
-  assert.ok(card.getByText('“One day at a time”'));
-  assert.ok(card.getByText(/Visible to: Approved connections only/));
-  assert.ok(card.getByRole('button', { name: /Edit Mood/ }));
-  assert.ok(card.getByRole('button', { name: /Remove Mood/ }));
-});
-
-test('an expired status is not shown, only the prompt', async () => {
-  stored = live({ expiresAt: new Date(NOW - 1000).toISOString() });
-  show();
-  await screen.findByTestId('set-current-vibe');
-  assert.ok(screen.queryByTestId('current-vibe') === null);
-});
-
-test('Remove Mood takes it off and brings the prompt back; a failure leaves it and says so', async () => {
+test('a live status shows as a small bubble under the name: the emoji and the words, no card, no heading, no time', async () => {
   stored = live();
   show();
-  removeOk = false;
-  fireEvent.click(within(await screen.findByTestId('current-vibe')).getByRole('button', { name: /Remove Mood/ }));
-  assert.ok(await screen.findByText('problem:failed'));
-  assert.ok(screen.queryByTestId('current-vibe') !== null, 'still there after a failed removal');
-  removeOk = true;
-  fireEvent.click(within(screen.getByTestId('current-vibe')).getByRole('button', { name: /Remove Mood/ }));
-  await screen.findByTestId('set-current-vibe');
-  assert.equal(removed.length, 2);
-  assert.ok(screen.queryByTestId('current-vibe') === null);
+  const bubble = await screen.findByTestId('vibe-bubble');
+  assert.match(bubble.textContent ?? '', /🌙/);
+  assert.match(bubble.textContent ?? '', /taking it slow/);
+  absent('current-vibe');
+  assert.ok(screen.queryByText(/Visible to|Updated .* ago|Expires in|Clears in/) === null);
+  assert.ok(screen.queryByText(/^Current Vibe$/i) === null);
 });
 
-test('Edit Mood opens the editor on the current status', async () => {
-  stored = live({ moodId: 'lonely', message: 'quiet night' });
+test('an expired status is not shown, only the pill', async () => {
+  stored = live({ expiresAt: new Date(NOW - 1000).toISOString() });
   show();
-  fireEvent.click(within(await screen.findByTestId('current-vibe')).getByRole('button', { name: /Edit Mood/ }));
-  assert.equal((await screen.findByRole('radio', { name: /Lonely/ })).getAttribute('aria-checked'), 'true');
+  await screen.findByTestId('add-status');
+  absent('vibe-bubble');
 });
 
-test('until the profile is finished there is no Current Vibe section (publishing needs a finished profile)', async () => {
+test('tapping the bubble opens the editor on it, and Clear removes it and brings the pill back', async () => {
+  stored = live({ visibility: 'connections' });
+  show();
+  fireEvent.click(await screen.findByTestId('vibe-bubble'));
+  assert.equal(((await screen.findByLabelText('Your status message')) as HTMLInputElement).value, 'taking it slow');
+  assert.equal((screen.getByRole('radio', { name: /Approved connections only/ }) as HTMLInputElement).checked, true);
+  fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+  await screen.findByTestId('add-status');
+  assert.equal(removed.length, 1);
+  absent('vibe-bubble');
+});
+
+test('a failed clear leaves the status in place and says so', async () => {
+  stored = live();
+  removeOk = false;
+  show();
+  fireEvent.click(await screen.findByTestId('vibe-bubble'));
+  fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
+  assert.ok(await screen.findByText('problem:failed'));
+  assert.ok(screen.queryAllByTestId('vibe-bubble').length >= 1, 'the status is still there (the editor shows a second, preview one)');
+});
+
+test('until the profile is finished there is no status control (saving one needs a finished profile)', async () => {
   show({ profileComplete: false });
   await waitFor(() => assert.ok(screen.queryByText('Finish your profile') !== null));
-  assert.ok(screen.queryByTestId('my-profile-current-vibe') === null);
-  assert.ok(screen.queryByTestId('set-current-vibe') === null);
+  absent('my-profile-current-vibe');
+  absent('add-status');
 });
 
 test('"View my public profile" opens the page other members see, and is absent when it cannot', async () => {
@@ -93,6 +95,6 @@ test('"View my public profile" opens the page other members see, and is absent w
   assert.deepEqual(calls, ['open']);
   view.unmount();
   show();
-  await screen.findByTestId('set-current-vibe');
+  await screen.findByTestId('add-status');
   assert.ok(screen.queryByRole('button', { name: /View my public profile/ }) === null);
 });

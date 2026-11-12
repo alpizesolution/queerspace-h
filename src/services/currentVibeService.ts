@@ -1,5 +1,5 @@
 import { auth } from '../lib/firebase.ts';
-import { VIBE_CACHE_MS, isLive, parseVibe, tidyMessage, type VibeMoodId, type VibeView, type VibeVisibility } from '../utils/currentVibe.ts';
+import { VIBE_CACHE_MS, isLive, parseVibe, tidyMessage, type VibeView, type VibeVisibility } from '../utils/currentVibe.ts';
 
 /**
  * Current Vibe, through the Signals API (api/_vibe.js). Nothing is read from or written to Firestore here: the status lives in a
@@ -45,7 +45,7 @@ const failure = (status: number): VibeOutcome => ({
 /** Words for a failed publish or removal. */
 export function vibeProblemText(reason: Extract<VibeOutcome, { ok: false }>['reason']): string {
   switch (reason) {
-    case 'invalid': return 'That status couldn’t be saved. Check the mood and message and try again.';
+    case 'invalid': return 'That status couldn’t be saved. Check the emoji and message and try again.';
     case 'not-allowed': return 'You can’t set a Current Vibe right now.';
     case 'rate-limited': return 'You’re updating very quickly. Please wait a little and try again.';
     default: return 'Couldn’t save that. Please try again.';
@@ -53,10 +53,10 @@ export function vibeProblemText(reason: Extract<VibeOutcome, { ok: false }>['rea
 }
 
 /** Publishes (or replaces) the member's Current Vibe. The server stamps the times and sets the 24-hour expiry. */
-export async function publishCurrentVibe(input: { moodId: VibeMoodId; message: string; visibility: VibeVisibility }): Promise<VibeOutcome> {
+export async function publishCurrentVibe(input: { emoji: string; message: string; visibility: VibeVisibility }): Promise<VibeOutcome> {
   try {
     const message = tidyMessage(input.message);
-    const response = await request('/api/signals', { action: 'vibe-set', moodId: input.moodId, ...(message ? { message } : {}), visibility: input.visibility });
+    const response = await request('/api/signals', { action: 'vibe-set', ...(input.emoji ? { emoji: input.emoji } : {}), ...(message ? { message } : {}), visibility: input.visibility });
     if (!response) return { ok: false, reason: 'failed' };
     if (!response.ok) return failure(response.status);
     const data = await response.json().catch(() => null);

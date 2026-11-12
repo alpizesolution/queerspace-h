@@ -7,20 +7,20 @@ import { parseVibe, type VibeView } from '../utils/currentVibe.ts';
 import type { ProfileResponse } from '../utils/profileView.ts';
 
 /**
- * Current Vibe on the real profile page, with only the services replaced: your own page offers a quiet way to set one and shows
- * a live one with Edit and Remove; someone else's shows a card only when they have a live status the server let this viewer see,
- * and never an empty card; an expired status disappears; blocked and unavailable profiles never show one.
+ * The custom status on the real profile page, with only the services replaced: a small bubble beside the avatar when there is a live
+ * status the server let this viewer see; on your own page a quiet "Add status" pill when there is none; never an empty bubble, never a
+ * pill on someone else's page; an expired status disappears; blocked and unavailable profiles never show one.
  */
 const NOW = Date.now();
 const iso = (ms: number) => new Date(NOW + ms).toISOString();
 const live = (over: Record<string, unknown> = {}) =>
-  parseVibe({ moodId: 'healing', message: 'Taking life one day at a time.', updatedAt: iso(-2 * 3_600_000), expiresAt: iso(22 * 3_600_000), visibility: 'everyone', ...over })!;
+  parseVibe({ emoji: '🦋', message: 'healing quietly', updatedAt: iso(-2 * 3_600_000), expiresAt: iso(22 * 3_600_000), visibility: 'everyone', ...over })!;
 
 let answer: { ok: true; data: ProfileResponse } | { ok: false; reason: string } = { ok: false, reason: 'failed' };
-const removed: number[] = [];
 let removeOk = true;
 let publishAs: VibeView | null = null;
 const published: unknown[] = [];
+let removed = 0;
 
 mock.module('../services/profileViewService.ts', {
   namedExports: {
@@ -39,7 +39,7 @@ mock.module('../services/stardustService.ts', { namedExports: { fetchStardustTot
 mock.module('../services/currentVibeService.ts', {
   namedExports: {
     publishCurrentVibe: async (input: unknown) => { published.push(input); return { ok: true, vibe: publishAs }; },
-    removeCurrentVibe: async () => { removed.push(1); return removeOk ? { ok: true, vibe: null } : { ok: false, reason: 'failed' }; },
+    removeCurrentVibe: async () => { removed++; return removeOk ? { ok: true, vibe: null } : { ok: false, reason: 'failed' }; },
     fetchMemberVibe: async () => null,
     clearVibeCache: () => {},
     vibeProblemText: (reason: string) => `problem:${reason}`,
@@ -59,94 +59,117 @@ const show = async (data: ProfileResponse | { ok: false; reason: string }, waitF
   if (waitFor === 'profile') await screen.findByRole('heading', { level: 1 });
   else await screen.findByText(waitFor);
 };
+const none = (id: string) => assert.ok(screen.queryByTestId(id) === null, `no ${id}`);
 
-beforeEach(() => { removed.length = 0; published.length = 0; removeOk = true; publishAs = null; });
+beforeEach(() => { removed = 0; published.length = 0; removeOk = true; publishAs = null; });
 afterEach(cleanup);
 
-test('another member with a live status: the card shows the mood, the message and the times, with no actions', async () => {
+test('another member with a live status: a small bubble beside their avatar with the emoji and the words, and no card, heading or time on the page', async () => {
   await show(profile({ currentVibe: live() }));
-  const card = within(await screen.findByTestId('current-vibe'));
-  assert.ok(card.getByText('Healing'));
-  assert.ok(card.getByText('“Taking life one day at a time.”'));
-  assert.ok(card.getByText('Updated 2 hours ago · Expires in 22 hours'));
-  assert.ok(card.queryByRole('button') === null, 'no Edit or Remove on someone else\'s');
-  assert.ok(screen.queryByTestId('set-current-vibe') === null, 'no prompt to set one on someone else\'s page');
+  const bubble = await screen.findByTestId('vibe-bubble');
+  assert.match(bubble.textContent ?? '', /🦋/);
+  assert.match(bubble.textContent ?? '', /healing quietly/);
+  none('current-vibe');
+  assert.ok(screen.queryByText(/Current Vibe/i) === null, 'no section heading');
+  assert.ok(screen.queryByText(/Updated 2 hours ago|Expires in/) === null, 'no time line on the page');
+  none('add-status');
 });
 
-test('another member with no status (or one the server hid): nothing at all, never an empty card or a prompt', async () => {
+test('the bubble sits in the avatar block, off to its right at the top, with a width that fits the screen', async () => {
+  await show(profile({ currentVibe: live() }));
+  const holder = (await screen.findByTestId('vibe-bubble')).closest('.absolute') as HTMLElement;
+  assert.ok(holder, 'positioned relative to the avatar');
+  assert.match(holder.className, /left-\[calc\(100%\+0\.5rem\)\]/, 'to the right of the avatar, not over it');
+  assert.match(holder.className, /-top-1\.5/, 'a little above the avatar top, so it clears the buttons below');
+  assert.match(holder.className, /max-w-\[calc\(100vw-7\.5rem\)\]/, 'never wider than the screen minus the avatar and the margins');
+  assert.ok(holder.parentElement!.querySelector('img, svg, [class*="rounded-full"]') !== null, 'the avatar is in the same block');
+});
+
+test('another member with no status (or one the server hid): nothing at all, never an empty bubble or a pill', async () => {
   await show(profile({ currentVibe: null }));
-  assert.ok(screen.queryByTestId('current-vibe') === null);
-  assert.ok(screen.queryByTestId('set-current-vibe') === null);
-  assert.ok(screen.queryByText(/Current Vibe/) === null);
+  none('vibe-bubble');
+  none('add-status');
+  assert.ok(screen.queryByText(/status/i) === null);
 });
 
 test('an older server answer with no status field at all shows nothing and nothing breaks', async () => {
   const { currentVibe: _gone, ...older } = profile();
   await show(older as ProfileResponse);
-  assert.ok(screen.queryByTestId('current-vibe') === null);
+  none('vibe-bubble');
   assert.ok(screen.getByText('Tea and books'));
 });
 
 test('an expired status is not shown, even if the answer still carries it', async () => {
   await show(profile({ currentVibe: live({ expiresAt: iso(-1000) }) }));
-  assert.ok(screen.queryByTestId('current-vibe') === null);
+  none('vibe-bubble');
 });
 
-test('your own page without a status offers a quiet way to set one, and opens the editor', async () => {
+test('tapping a long message on someone else\'s bubble spreads it out, and the page stays usable', async () => {
+  await show(profile({ currentVibe: live({ message: 'x'.repeat(60) }) }));
+  const bubble = await screen.findByTestId('vibe-bubble');
+  fireEvent.click(bubble);
+  assert.equal(bubble.getAttribute('aria-expanded'), 'true');
+  assert.ok(screen.getByText('Tea and books'));
+});
+
+test('your own page without a status offers a small "Add status" pill, and it opens the editor', async () => {
   await show(profile({ self: true, currentVibe: null }));
-  fireEvent.click(await screen.findByTestId('set-current-vibe'));
-  assert.ok(screen.getByRole('dialog', { name: 'Current Vibe' }));
-  assert.equal(screen.getAllByRole('radio').filter((r) => r.getAttribute('role') === 'radio' && r.getAttribute('aria-checked') !== null).length, 14);
+  fireEvent.click(await screen.findByTestId('add-status'));
+  assert.ok(await screen.findByLabelText('Your status message'));
+  assert.ok(screen.getByTestId('emoji-picker'));
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  assert.ok(screen.queryByRole('dialog', { name: 'Current Vibe' }) === null, 'cancel closes without saving');
-  assert.equal(published.length, 0);
+  await waitFor(() => assert.ok(document.querySelector('[role=dialog][aria-labelledby]') === null));
+  assert.equal(published.length, 0, 'cancel saves nothing');
 });
 
-test('publishing from your own page puts the status on it straight away', async () => {
-  publishAs = live({ moodId: 'grateful', message: 'Thank you all', updatedAt: iso(0), expiresAt: iso(24 * 3_600_000) });
+test('saving from your own page puts the bubble beside your avatar straight away', async () => {
+  publishAs = live({ emoji: '💜', message: 'feeling loved', updatedAt: iso(0), expiresAt: iso(24 * 3_600_000) });
   await show(profile({ self: true, currentVibe: null }));
-  fireEvent.click(await screen.findByTestId('set-current-vibe'));
-  fireEvent.click(screen.getByRole('radio', { name: /Grateful/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
-  // Compare a boolean, never the element itself: if the first poll comes before the dialog has closed, a failed assertion on a DOM
-  // node makes Node print the whole jsdom tree, which freezes the page (so it can never close) and exhausts memory.
-  await waitFor(() => assert.equal(document.querySelector('[role=dialog][aria-labelledby]') === null, true)); // the editor sheet (the profile page itself is also a dialog)
-  const card = within(await screen.findByTestId('current-vibe'));
-  assert.ok(card.getByText('Grateful'));
-  assert.ok(card.getByText('“Thank you all”'));
-  assert.ok(screen.queryByTestId('set-current-vibe') === null);
-  assert.ok(screen.queryByRole('dialog', { name: 'Current Vibe' }) === null);
+  fireEvent.click(await screen.findByTestId('add-status'));
+  fireEvent.click(screen.getByRole('button', { name: 'Use 💜' }));
+  fireEvent.change(screen.getByLabelText('Your status message'), { target: { value: 'feeling loved' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => assert.ok(document.querySelector('[role=dialog][aria-labelledby]') === null));
+  const bubble = await screen.findByTestId('vibe-bubble');
+  assert.match(bubble.textContent ?? '', /feeling loved/);
+  none('add-status');
+  assert.deepEqual(published, [{ emoji: '💜', message: 'feeling loved', visibility: 'everyone' }]);
+  assert.ok(screen.getByText('Status saved.'));
 });
 
-test('your own live status shows Edit Mood, Remove Mood and who can see it; Edit opens the editor on it', async () => {
+test('on your own page a tap on your bubble opens the editor on it, and Clear takes it away and brings the pill back', async () => {
   await show(profile({ self: true, currentVibe: live({ visibility: 'connections' }) }));
-  const card = within(await screen.findByTestId('current-vibe'));
-  assert.ok(card.getByText(/Visible to: Approved connections only/));
-  fireEvent.click(card.getByRole('button', { name: /Edit Mood/ }));
-  assert.equal(screen.getByRole('radio', { name: /Healing/ }).getAttribute('aria-checked'), 'true');
+  fireEvent.click(await screen.findByTestId('vibe-bubble'));
+  assert.equal((await screen.findByLabelText('Your status message') as HTMLInputElement).value, 'healing quietly');
   assert.equal((screen.getByRole('radio', { name: /Approved connections only/ }) as HTMLInputElement).checked, true);
+  fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+  await screen.findByTestId('add-status');
+  assert.equal(removed, 1);
+  none('vibe-bubble');
+  assert.ok(screen.getByText('Status cleared.'));
 });
 
-test('Remove Mood takes it off the page and the prompt comes back; a failure leaves it and says so', async () => {
-  await show(profile({ self: true, currentVibe: live() }));
+test('a failed clear leaves the status and says so', async () => {
   removeOk = false;
-  fireEvent.click(within(await screen.findByTestId('current-vibe')).getByRole('button', { name: /Remove Mood/ }));
-  await waitFor(() => assert.equal(removed.length, 1));
+  await show(profile({ self: true, currentVibe: live() }));
+  fireEvent.click(await screen.findByTestId('vibe-bubble'));
+  fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
   assert.ok(await screen.findByText('problem:failed'));
-  assert.ok(screen.getByTestId('current-vibe'), 'still there after a failed removal');
-  removeOk = true;
-  fireEvent.click(within(screen.getByTestId('current-vibe')).getByRole('button', { name: /Remove Mood/ }));
-  assert.ok(await screen.findByTestId('set-current-vibe'));
-  assert.ok(screen.queryByTestId('current-vibe') === null);
-  assert.ok(screen.getByText('Current Vibe removed.'));
+  assert.equal(within(document.body).queryAllByTestId('vibe-bubble').length >= 1, true, 'still there');
+});
+
+test('your own page keeps its other actions: Edit profile and Share are still there beside the bubble', async () => {
+  await show(profile({ self: true, currentVibe: live() }));
+  assert.ok(await screen.findByRole('button', { name: /Edit profile/ }));
+  assert.ok(screen.getByRole('button', { name: 'Share profile' }));
+  assert.ok(screen.getByTestId('vibe-bubble'));
 });
 
 test('a blocked member\'s profile and an unavailable one never show a status', async () => {
   await show({ self: false, member: null, relation: { state: 'none' }, blocked: 'by_me' } as ProfileResponse, /You blocked this member/);
-  assert.ok(screen.queryByTestId('current-vibe') === null);
-  assert.ok(screen.queryByTestId('set-current-vibe') === null);
+  none('vibe-bubble');
+  none('add-status');
   cleanup();
   await show({ ok: false, reason: 'unavailable' }, /This profile isn’t available/);
-  assert.ok(screen.queryByTestId('current-vibe') === null);
+  none('vibe-bubble');
 });

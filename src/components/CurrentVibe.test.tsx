@@ -4,207 +4,246 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { VIBE_MOODS, parseVibe, type VibeView } from '../utils/currentVibe.ts';
+import { COMMON_EMOJI, parseVibe, type VibeView } from '../utils/currentVibe.ts';
 
 /**
- * The Current Vibe screens, rendered and used. Only the service that reaches the server is replaced, so every check here is about
+ * The custom status screens, rendered and used. Only the service that reaches the server is replaced, so every check here is about
  * what the screen does with what it is given and what it sends; the server's rules are proved by the emulator tests.
  */
-type Published = { moodId: string; message: string; visibility: string };
-const published: Published[] = [];
-let result: { ok: true; vibe: VibeView } | { ok: false; reason: 'invalid' | 'not-allowed' | 'rate-limited' | 'failed' } | null = null;
+type Saved = { emoji: string; message: string; visibility: string };
+const saved: Saved[] = [];
+let removed = 0;
+let result: { ok: true; vibe: VibeView } | { ok: false; reason: 'invalid' | 'not-allowed' | 'rate-limited' | 'failed' } = { ok: false, reason: 'failed' };
+let removeResult: { ok: true; vibe: null } | { ok: false; reason: 'failed' } = { ok: true, vibe: null };
 let gate: Promise<void> | null = null;
 mock.module('../services/currentVibeService.ts', {
   namedExports: {
-    publishCurrentVibe: async (input: Published) => { published.push(input); if (gate) await gate; return result!; },
-    removeCurrentVibe: async () => ({ ok: true, vibe: null }),
+    publishCurrentVibe: async (input: Saved) => { saved.push(input); if (gate) await gate; return result; },
+    removeCurrentVibe: async () => { removed++; return removeResult; },
     fetchMemberVibe: async () => null,
     clearVibeCache: () => {},
     vibeProblemText: (reason: string) => `problem:${reason}`,
   },
 });
-const { CurrentVibeCard, CurrentVibeSheet, SetVibePrompt, VibeChip } = await import('./CurrentVibe.tsx');
+const { AddStatusPill, CurrentVibeSheet, VibeBubble, VibeChip } = await import('./CurrentVibe.tsx');
 
 const NOW = Date.now();
 const vibe = (over: Record<string, unknown> = {}): VibeView =>
-  parseVibe({ moodId: 'healing', message: 'Taking life one day at a time.', updatedAt: new Date(NOW - 2 * 3_600_000).toISOString(), expiresAt: new Date(NOW + 22 * 3_600_000).toISOString(), visibility: 'everyone', ...over })!;
+  parseVibe({ emoji: '🌙', message: 'taking it slow', updatedAt: new Date(NOW - 2 * 3_600_000).toISOString(), expiresAt: new Date(NOW + 22 * 3_600_000).toISOString(), visibility: 'everyone', ...over })!;
 
-beforeEach(() => { published.length = 0; gate = null; result = { ok: true, vibe: vibe() }; });
+beforeEach(() => { saved.length = 0; removed = 0; gate = null; result = { ok: true, vibe: vibe() }; removeResult = { ok: true, vibe: null }; });
 afterEach(cleanup);
 
 const open = (props: Partial<React.ComponentProps<typeof CurrentVibeSheet>> = {}) => {
-  const calls = { published: [] as VibeView[], closed: 0 };
-  render(<CurrentVibeSheet onPublished={(v) => calls.published.push(v)} onClose={() => { calls.closed++; }} {...props} />);
+  const calls = { published: [] as VibeView[], cleared: 0, closed: 0 };
+  render(<CurrentVibeSheet onPublished={(v) => calls.published.push(v)} onCleared={() => { calls.cleared++; }} onClose={() => { calls.closed++; }} {...props} />);
   return calls;
 };
-const radio = (label: string) => screen.getByRole('radio', { name: new RegExp(label) });
-const preview = () => screen.getByRole('button', { name: 'Preview' }) as HTMLButtonElement;
+const messageBox = () => screen.getByLabelText('Your status message') as HTMLInputElement;
+const save = () => screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+const pickEmoji = (emoji: string) => fireEvent.click(screen.getByRole('button', { name: `Use ${emoji}` }));
 
 // ------------------------------------------------------------------------------------------------------------------ the editor
-test('the sheet offers all fourteen moods as selectable cards, none chosen at first, and a visibility choice', () => {
+test('the editor is one compact sheet: an emoji picker of common emoji, a free message box, who can see it, and Cancel and Save; no mood list', () => {
   open();
-  assert.ok(screen.getByRole('dialog', { name: 'Current Vibe' }));
-  const group = screen.getByRole('radiogroup', { name: 'Choose a mood' });
-  assert.equal(within(group).getAllByRole('radio').length, 14);
-  for (const mood of VIBE_MOODS) assert.ok(within(group).getByRole('radio', { name: new RegExp(mood.label) }), mood.label);
-  assert.equal(within(group).getAllByRole('radio').filter((r) => r.getAttribute('aria-checked') === 'true').length, 0);
-  assert.ok(screen.getByText('Who can see my Current Vibe?'));
-  assert.equal((screen.getByRole('radio', { name: /Everyone who can view my profile/ }) as HTMLInputElement).checked, true, 'the widest is the default');
+  assert.ok(screen.getByRole('dialog', { name: 'Set your status' }));
+  const picker = within(screen.getByTestId('emoji-picker'));
+  assert.equal(picker.getAllByRole('button').length, COMMON_EMOJI.length);
+  assert.ok(messageBox());
+  assert.ok(screen.getByText('Who can see my status?'));
   assert.ok(screen.getByRole('button', { name: 'Cancel' }));
+  assert.ok(screen.queryByRole('radiogroup', { name: /mood/i }) === null, 'no predefined mood categories');
+  assert.ok(screen.queryByRole('button', { name: 'Preview' }) === null, 'the preview is live, not a separate step');
 });
 
-test('each mood can be selected, and the selected one is obvious (checked, and only one at a time)', () => {
+test('the message is free text: whatever the member writes, up to 60 characters, with a count of what is left', () => {
   open();
-  for (const mood of VIBE_MOODS) {
-    fireEvent.click(radio(mood.label));
-    const checked = within(screen.getByRole('radiogroup', { name: 'Choose a mood' })).getAllByRole('radio').filter((r) => r.getAttribute('aria-checked') === 'true');
-    assert.equal(checked.length, 1, mood.label);
-    assert.match(checked[0].textContent ?? '', new RegExp(mood.label));
-    assert.match(checked[0].className, /border-berry/, 'a visible selected style, not only a checked flag');
-  }
+  assert.ok(screen.getByText('60 characters left'));
+  fireEvent.change(messageBox(), { target: { value: 'overwhelmed rn' } });
+  assert.ok(screen.getByText('46 characters left'));
+  assert.equal(messageBox().value, 'overwhelmed rn');
+  fireEvent.change(messageBox(), { target: { value: 'x'.repeat(80) } });
+  assert.equal(messageBox().value.length, 60, 'it cannot go past 60');
+  assert.ok(screen.getByText('0 characters left'));
+  fireEvent.change(messageBox(), { target: { value: '🌱'.repeat(80) } });
+  assert.equal([...messageBox().value].length, 60, 'an emoji counts as one character');
 });
 
-test('Preview needs a mood and nothing more: a mood alone is enough, with no message', () => {
+test('Save needs an emoji or some words, but either one alone is enough', () => {
   open();
-  assert.equal(preview().disabled, true, 'no mood yet');
-  fireEvent.click(radio('Healing'));
-  assert.equal(preview().disabled, false, 'a mood alone is enough');
+  assert.equal(save().disabled, true, 'nothing yet');
+  pickEmoji('☕');
+  assert.equal(save().disabled, false, 'an emoji alone');
+  fireEvent.click(screen.getByRole('button', { name: /Emoji: ☕/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'No emoji, just words' }));
+  assert.equal(save().disabled, true, 'neither again');
+  fireEvent.change(messageBox(), { target: { value: 'need coffee' } });
+  assert.equal(save().disabled, false, 'words alone');
 });
 
-test('the message is optional, counted as you type, and cannot go past 100 characters', () => {
+test('the preview is the bubble itself and updates as you type', () => {
   open();
-  fireEvent.click(radio('Happy'));
-  const box = screen.getByLabelText(/Add a short note/) as HTMLInputElement;
-  assert.ok(screen.getByText('0/100'));
-  fireEvent.change(box, { target: { value: 'Feeling good' } });
-  assert.ok(screen.getByText('12/100'));
-  fireEvent.change(box, { target: { value: 'x'.repeat(100) } });
-  assert.ok(screen.getByText('100/100'));
-  assert.equal(preview().disabled, false, 'exactly 100 is allowed');
-  fireEvent.change(box, { target: { value: 'x'.repeat(101) } });
-  assert.ok(screen.getByText('101/100'));
-  assert.ok(screen.getByRole('alert'), 'a message says why');
-  assert.equal(preview().disabled, true, 'it cannot be previewed or published over the limit');
-  fireEvent.change(box, { target: { value: '🌱'.repeat(100) } });
-  assert.ok(screen.getByText('100/100'), 'an emoji counts as one');
-  assert.equal(preview().disabled, false);
+  const preview = within(screen.getByTestId('status-preview'));
+  assert.ok(preview.getByText(/Pick an emoji or write a few words/));
+  pickEmoji('🦋');
+  fireEvent.change(messageBox(), { target: { value: 'healing quietly' } });
+  const bubble = preview.getByTestId('vibe-bubble');
+  assert.match(bubble.textContent ?? '', /🦋/);
+  assert.match(bubble.textContent ?? '', /healing quietly/);
+  fireEvent.change(messageBox(), { target: { value: '  healing   quietly  ' } });
+  assert.match(preview.getByTestId('vibe-bubble').textContent ?? '', /healing quietly/, 'tidied, as it will be saved');
 });
 
-test('preview shows exactly the card that will be published, with the lifetime and who can see it; Edit keeps everything', () => {
+test('choosing an emoji closes the picker; the emoji button reopens it', () => {
   open();
-  fireEvent.click(radio('Healing'));
-  fireEvent.change(screen.getByLabelText(/Add a short note/), { target: { value: '  Taking   it slow ' } });
-  fireEvent.click(screen.getByRole('radio', { name: /Approved connections only/ }));
-  fireEvent.click(preview());
-  const card = within(screen.getByTestId('vibe-preview'));
-  assert.ok(card.getByText('Healing'));
-  assert.ok(card.getByText('“Taking it slow”'), 'tidied, as it will be saved');
-  assert.ok(card.getAllByText(/Expires in 24 hours/).length >= 1);
-  assert.ok(card.getByText(/Visible to: Approved connections only/));
-  assert.equal(published.length, 0, 'nothing is saved by previewing');
-  fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-  assert.equal((screen.getByLabelText(/Add a short note/) as HTMLInputElement).value, '  Taking   it slow ');
-  assert.equal(radio('Healing').getAttribute('aria-checked'), 'true');
-  assert.equal((screen.getByRole('radio', { name: /Approved connections only/ }) as HTMLInputElement).checked, true);
+  assert.ok(screen.queryByTestId('emoji-picker') !== null, 'open for a new status');
+  pickEmoji('💜');
+  assert.ok(screen.queryByTestId('emoji-picker') === null);
+  fireEvent.click(screen.getByRole('button', { name: /Emoji: 💜/ }));
+  assert.ok(screen.queryByTestId('emoji-picker') !== null);
 });
 
 test('Cancel closes without saving anything', () => {
   const calls = open();
-  fireEvent.click(radio('Sad'));
-  fireEvent.change(screen.getByLabelText(/Add a short note/), { target: { value: 'never mind' } });
+  pickEmoji('😔');
+  fireEvent.change(messageBox(), { target: { value: 'never mind' } });
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   assert.equal(calls.closed, 1);
-  assert.equal(published.length, 0);
+  assert.equal(saved.length, 0);
   assert.equal(calls.published.length, 0);
 });
 
-test('Publish sends the mood id, the tidied message and the choice once, even if tapped twice, then hands back the saved status', async () => {
+test('Save sends the emoji, the message and the choice once, even if tapped twice, then hands back the saved status', async () => {
   let release!: () => void;
   gate = new Promise<void>((resolve) => { release = resolve; });
   const calls = open();
-  fireEvent.click(radio('Grateful'));
-  fireEvent.change(screen.getByLabelText(/Add a short note/), { target: { value: ' Thank you ' } });
+  pickEmoji('💜');
+  fireEvent.change(messageBox(), { target: { value: ' feeling loved ' } });
   fireEvent.click(screen.getByRole('radio', { name: /Nobody/ }));
-  fireEvent.click(preview());
-  const publish = screen.getByRole('button', { name: 'Publish' });
-  fireEvent.click(publish);
-  fireEvent.click(screen.getByRole('button', { name: /Publishing/ }));
-  assert.deepEqual(published, [{ moodId: 'grateful', message: ' Thank you ', visibility: 'nobody' }]);
-  assert.equal((screen.getByRole('button', { name: /Publishing/ }) as HTMLButtonElement).disabled, true);
+  fireEvent.click(save());
+  fireEvent.click(screen.getByRole('button', { name: /Saving/ }));
+  assert.deepEqual(saved, [{ emoji: '💜', message: ' feeling loved ', visibility: 'nobody' }]);
+  assert.equal((screen.getByRole('button', { name: /Saving/ }) as HTMLButtonElement).disabled, true);
   release();
   await waitFor(() => assert.equal(calls.published.length, 1));
-  assert.equal(published.length, 1, 'one request');
+  assert.equal(saved.length, 1, 'one request');
 });
 
-test('a failed publish shows why, keeps the sheet open and lets the member try again', async () => {
+test('words alone are saved with no emoji', async () => {
+  const calls = open();
+  fireEvent.change(messageBox(), { target: { value: 'need coffee' } });
+  fireEvent.click(save());
+  await waitFor(() => assert.equal(calls.published.length, 1));
+  assert.deepEqual(saved, [{ emoji: '', message: 'need coffee', visibility: 'everyone' }]);
+});
+
+test('a failed save shows why, keeps the sheet open and lets the member try again', async () => {
   result = { ok: false, reason: 'rate-limited' };
   const calls = open();
-  fireEvent.click(radio('Happy'));
-  fireEvent.click(preview());
-  fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+  pickEmoji('😊');
+  fireEvent.click(save());
   assert.equal((await screen.findByRole('alert')).textContent, 'problem:rate-limited');
   assert.equal(calls.published.length, 0);
-  assert.ok(screen.getByRole('button', { name: 'Publish' }), 'still there to try again');
   result = { ok: true, vibe: vibe() };
-  fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+  fireEvent.click(save());
   await waitFor(() => assert.equal(calls.published.length, 1));
 });
 
-test('editing an existing status starts from it: its mood, message and setting, ready to publish again', () => {
-  open({ existing: vibe({ moodId: 'lonely', message: 'quiet night', visibility: 'connections' }) });
-  assert.equal(radio('Lonely').getAttribute('aria-checked'), 'true');
-  assert.equal((screen.getByLabelText(/Add a short note/) as HTMLInputElement).value, 'quiet night');
-  assert.equal((screen.getByRole('radio', { name: /Approved connections only/ }) as HTMLInputElement).checked, true);
-  assert.equal(preview().disabled, false);
+test('the visibility choices are the existing three, and the first is the default', () => {
+  open();
+  const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+  assert.deepEqual(radios.map((r) => r.getAttribute('aria-label')), ['Everyone who can view my profile', 'Approved connections only', 'Nobody']);
+  assert.deepEqual(radios.map((r) => r.checked), [true, false, false]);
+  fireEvent.click(radios[1]);
+  assert.equal((screen.getAllByRole('radio') as HTMLInputElement[])[1].checked, true);
 });
 
-// ------------------------------------------------------------------------------------------------------------------ the card, prompt and chip
-test('the card shows the mood, the message and when it was updated and ends', () => {
-  render(<CurrentVibeCard vibe={vibe()} />);
-  const card = within(screen.getByTestId('current-vibe'));
-  assert.ok(card.getByText('Current Vibe'));
-  assert.ok(card.getByText('Healing'));
-  assert.ok(card.getByText('🌱'));
-  assert.ok(card.getByText('“Taking life one day at a time.”'));
-  assert.ok(card.getByText('Updated 2 hours ago · Expires in 22 hours'));
+test('editing a status starts from it, says when it clears, and offers Clear', () => {
+  open({ existing: vibe({ emoji: '🌱', message: 'one day at a time', visibility: 'connections' }) });
+  assert.ok(screen.getByRole('dialog', { name: 'Edit status' }));
+  assert.equal(messageBox().value, 'one day at a time');
+  assert.ok(screen.getByRole('button', { name: /Emoji: 🌱/ }));
+  assert.equal((screen.getAllByRole('radio') as HTMLInputElement[])[1].checked, true);
+  assert.ok(screen.getByText(/Clears in 22 hours/));
+  assert.ok(screen.getByRole('button', { name: 'Clear' }));
+  assert.ok(screen.queryByTestId('emoji-picker') === null, 'the picker stays closed when there is already an emoji');
 });
 
-test('without a message the card is just the mood and the times, with no empty quotes', () => {
-  render(<CurrentVibeCard vibe={vibe({ message: null })} />);
-  assert.ok(screen.queryByText(/“/) === null);
-  assert.ok(screen.getByText('Healing'));
+test('Clear removes the status once and tells the page; a failure leaves it and says so', async () => {
+  const calls = open({ existing: vibe() });
+  removeResult = { ok: false, reason: 'failed' };
+  fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+  assert.equal((await screen.findByRole('alert')).textContent, 'problem:failed');
+  assert.equal(calls.cleared, 0);
+  removeResult = { ok: true, vibe: null };
+  fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+  await waitFor(() => assert.equal(calls.cleared, 1));
+  assert.equal(removed, 2);
 });
 
-test('on someone else\'s profile the card has no actions and no setting; on your own it has Edit Mood, Remove Mood and who can see it', () => {
-  const edits: string[] = [];
-  const { unmount } = render(<CurrentVibeCard vibe={vibe()} />);
-  assert.ok(screen.queryByRole('button') === null);
-  assert.ok(screen.queryByText(/Visible to/) === null);
+test('a new status has no Clear button, and says it clears on its own after 24 hours', () => {
+  open();
+  assert.ok(screen.queryByRole('button', { name: 'Clear' }) === null);
+  assert.ok(screen.getByText(/Clears on its own 24 hours after you save it/));
+});
+
+// ------------------------------------------------------------------------------------------------------------------ the bubble, pill and chip
+test('the bubble is a small pill with the emoji and the message, and no time or heading on it', () => {
+  render(<VibeBubble vibe={vibe()} />);
+  const bubble = screen.getByTestId('vibe-bubble');
+  assert.match(bubble.textContent ?? '', /🌙/);
+  assert.match(bubble.textContent ?? '', /taking it slow/);
+  assert.doesNotMatch(bubble.textContent ?? '', /Updated|Clears|Expires|hours|Current Vibe/);
+  assert.match(bubble.className, /rounded-2xl/);
+  assert.match(bubble.getAttribute('title') ?? '', /Clears in 22 hours/, 'the time left is in the tooltip');
+  assert.match(bubble.getAttribute('title') ?? '', /Manila time/);
+});
+
+test('an emoji-only or words-only status still makes a bubble', () => {
+  const { unmount } = render(<VibeBubble vibe={vibe({ message: null })} />);
+  assert.equal(screen.getByTestId('vibe-bubble').textContent, '🌙');
   unmount();
-  render(<CurrentVibeCard vibe={vibe({ visibility: 'connections' })} self onEdit={() => edits.push('edit')} onRemove={() => edits.push('remove')} />);
-  fireEvent.click(screen.getByRole('button', { name: /Edit Mood/ }));
-  fireEvent.click(screen.getByRole('button', { name: /Remove Mood/ }));
-  assert.deepEqual(edits, ['edit', 'remove']);
-  assert.ok(screen.getByText(/Visible to: Approved connections only/));
+  render(<VibeBubble vibe={vibe({ emoji: '' })} />);
+  assert.equal(screen.getByTestId('vibe-bubble').textContent, 'taking it slow');
 });
 
-test('a long message and a long unbroken word wrap inside the card instead of overflowing', () => {
-  render(<CurrentVibeCard vibe={vibe({ message: 'x'.repeat(100) })} />);
-  const quote = screen.getByText(/x{100}/);
-  assert.match(quote.className, /\[overflow-wrap:anywhere\]/);
-  assert.match(screen.getByTestId('current-vibe').className, /rounded-2xl/);
+test('on your own profile a tap on the bubble edits the status', () => {
+  const taps: string[] = [];
+  render(<VibeBubble vibe={vibe()} self onEdit={() => taps.push('edit')} />);
+  const bubble = screen.getByTestId('vibe-bubble');
+  assert.match(bubble.getAttribute('aria-label') ?? '', /Edit status/);
+  fireEvent.click(bubble);
+  assert.deepEqual(taps, ['edit']);
 });
 
-test('the prompt is one quiet button, and the chip shows only an emoji and the mood name', () => {
+test('on someone else\'s a tap spreads a long message over a few lines instead of cutting it with an ellipsis, and back', () => {
+  render(<VibeBubble vibe={vibe({ message: 'x'.repeat(60) })} />);
+  const bubble = screen.getByTestId('vibe-bubble');
+  const text = bubble.querySelector('span:last-child') as HTMLElement;
+  assert.match(text.className, /truncate/);
+  assert.equal(bubble.getAttribute('aria-expanded'), 'false');
+  fireEvent.click(bubble);
+  assert.equal(bubble.getAttribute('aria-expanded'), 'true');
+  assert.doesNotMatch(text.className, /truncate/);
+  assert.match(text.className, /\[overflow-wrap:anywhere\]/);
+  fireEvent.click(bubble);
+  assert.match(text.className, /truncate/);
+});
+
+test('the Add status pill is one quiet button', () => {
   let taps = 0;
-  const { unmount } = render(<SetVibePrompt onClick={() => { taps++; }} />);
-  fireEvent.click(screen.getByRole('button', { name: /Set your Current Vibe/ }));
+  render(<AddStatusPill onClick={() => { taps++; }} />);
+  fireEvent.click(screen.getByRole('button', { name: /Add status/ }));
   assert.equal(taps, 1);
-  unmount();
-  render(<VibeChip vibe={vibe()} />);
+  assert.match(screen.getByTestId('add-status').className, /border-dashed/);
+});
+
+test('the header chip shows the emoji and a cut-off message, never a long one in full', () => {
+  render(<VibeChip vibe={vibe({ message: 'x'.repeat(60) })} />);
   const chip = screen.getByTestId('vibe-chip');
-  assert.equal(chip.textContent, '🌱Healing', 'no message in the chip');
-  assert.match(chip.getAttribute('title') ?? '', /Taking life one day at a time/, 'the full status is in the tooltip');
+  assert.match(chip.className, /max-w-\[9\.5rem\]/);
+  assert.match(chip.querySelector('span:last-child')!.className, /truncate/);
+  assert.match(chip.getAttribute('title') ?? '', /x{60}/, 'the whole message is in the tooltip');
 });
 
 // ------------------------------------------------------------------------------------------------------------------ themes and layout
@@ -221,23 +260,24 @@ const ratio = (a: number[], b: number[]) => { const x = lum(a), y = lum(b); retu
 const over = (fg: number[], alpha: number, bg: number[]) => fg.map((c, i) => Math.round(c * alpha + bg[i] * (1 - alpha)));
 
 for (const [name, t] of [['dark', tokens('@theme')], ['light', tokens("html[data-theme='light']")]] as const) {
-  test(`${name} theme: the card's text, the time line, the actions and the chip are all 4.5:1 or better`, () => {
-    const ink = rgb(t.ink), raised = rgb(t.raised), plum = rgb(t.plum);
-    // The darkest/lightest the card background gets: the plum corner of the gradient, and the plain raised panel.
-    const surfaces = [over(plum, 0.3, ink), over(raised, 0.5, ink)];
-    for (const surface of surfaces) {
-      for (const text of ['fg', 'muted', 'berry', 'danger']) assert.ok(ratio(rgb(t[text]), surface) >= 4.5, `${text} on the card ${ratio(rgb(t[text]), surface).toFixed(2)}`);
+  test(`${name} theme: the bubble text and the Add status pill are 4.5:1 or better, even over the lightest or darkest cover image`, () => {
+    const ink = rgb(t.ink);
+    for (const cover of [[0, 0, 0], [255, 255, 255], rgb(t.plum), rgb(t.berry)]) {
+      assert.ok(ratio(rgb(t.fg), over(ink, 0.9, cover)) >= 4.5, `bubble text over cover ${cover}: ${ratio(rgb(t.fg), over(ink, 0.9, cover)).toFixed(2)}`);
+      assert.ok(ratio(rgb(t.lavender), over(ink, 0.9, cover)) >= 4.5, `pill text over cover ${cover}: ${ratio(rgb(t.lavender), over(ink, 0.9, cover)).toFixed(2)}`);
     }
-    assert.ok(ratio(rgb(t.lavender), ink) >= 4.5, 'the Set your Current Vibe prompt on the page');
-    assert.ok(ratio(rgb(t.fg), over(plum, 0.25, ink)) >= 4.5, 'the chip text on its tint');
-    assert.ok(ratio(rgb(t.fg), rgb(t.raised)) >= 4.5 && ratio(rgb(t.muted), rgb(t.raised)) >= 4.5, 'mood cards in the editor');
+    assert.ok(ratio(rgb(t.fg), over(rgb(t.plum), 0.25, ink)) >= 4.5, 'the header chip text on its tint');
+    assert.ok(ratio(rgb(t.fg), rgb(t.raised)) >= 4.5 && ratio(rgb(t.muted), rgb(t.raised)) >= 4.5, 'the editor text');
   });
 }
 
-test('layout: the editor and card use theme tokens only (no fixed colours or widths), and touch targets are at least 44px', () => {
+test('layout: theme tokens only, one line with an ellipsis, a bigger touch area than the pill, and 44px controls in the editor', () => {
   const src = fs.readFileSync('src/components/CurrentVibe.tsx', 'utf8').replace(/\r\n/g, '\n');
-  assert.doesNotMatch(src, /#[0-9a-fA-F]{3,6}\b|rgb\(|\bw-\[\d+px\]|min-w-\[\d+/, 'no fixed colours or widths');
-  assert.equal((src.match(/min-h-11/g) || []).length >= 6, true, 'Edit, Remove, the prompt, the note, the choices and the buttons are 44px tall');
-  assert.match(src, /min-h-\[3\.5rem\]/, 'a mood card is 56px tall');
-  assert.match(src, /grid-cols-3 gap-2 sm:grid-cols-4/, 'three across on a phone, four on larger screens');
+  assert.doesNotMatch(src, /#[0-9a-fA-F]{3,6}\b|rgb\(|\bw-\[\d+px\]/, 'no fixed colours or widths');
+  assert.match(src, /after:-inset-y-2/, 'the pill is small but the tap area is not');
+  assert.match(src, /h-11 w-11 shrink-0/, 'the emoji button is 44px');
+  assert.match(src, /grid grid-cols-6 gap-1/, 'six emoji across: 44px cells even on a 320px phone');
+  assert.match(src, /flex h-11 items-center justify-center rounded-xl text-xl/, 'every emoji is 44px tall');
+  assert.equal((src.match(/min-h-11/g) || []).length >= 4, true);
+  assert.doesNotMatch(src, />\s*Current Vibe\s*</i, 'no section heading or card title on the profile');
 });

@@ -3,9 +3,8 @@ import { ArrowLeft, Check, Flag, LoaderCircle, MapPin, MessageCircle, Pencil, Sa
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ProfileSkeleton } from './Skeleton.tsx';
 import { ConfirmDialog } from './Sheet.tsx';
-import { CurrentVibeCard, CurrentVibeSheet, SetVibePrompt } from './CurrentVibe.tsx';
+import { AddStatusPill, CurrentVibeSheet, VibeBubble } from './CurrentVibe.tsx';
 import { useMinuteClock } from '../hooks/useMemberVibe.ts';
-import { removeCurrentVibe, vibeProblemText } from '../services/currentVibeService.ts';
 import { isLive, type VibeView } from '../utils/currentVibe.ts';
 import { ConnectionRequestSheet } from './ConnectionRequestSheet.tsx';
 import { ReportMemberSheet } from './ReportMemberSheet.tsx';
@@ -95,7 +94,6 @@ export const ProfilePage: React.FC<Props> = ({
   // Current Vibe: what the member just published or removed (undefined = use what the profile answer says), and its editor.
   const [vibeOverride, setVibeOverride] = useState<VibeView | null | undefined>(undefined);
   const [editingVibe, setEditingVibe] = useState(false);
-  const [removingVibe, setRemovingVibe] = useState(false);
   const clock = useMinuteClock();
 
   const overlayOpen = reporting || blocking || requestPost !== null || editingVibe;
@@ -185,14 +183,6 @@ export const ProfilePage: React.FC<Props> = ({
   const shownVibe = (vibeOverride !== undefined ? vibeOverride : data?.currentVibe ?? null);
   const vibe = isLive(shownVibe, clock) ? shownVibe : null;
 
-  const removeVibe = async () => {
-    if (removingVibe) return;
-    setRemovingVibe(true);
-    const result = await removeCurrentVibe();
-    setRemovingVibe(false);
-    if (result.ok) { clearProfileCache(memberId); setVibeOverride(null); setToast('Current Vibe removed.'); }
-    else setToast(vibeProblemText(result.reason));
-  };
 
   const share = async () => {
     const result = await shareMemberProfile(memberId, name);
@@ -245,7 +235,17 @@ export const ProfilePage: React.FC<Props> = ({
           ) : member ? (
             <div className="px-4 sm:px-6">
               <div className="-mt-10 flex items-end justify-between gap-3">
-                <AnimalAvatar avatar={member.avatar ?? undefined} seed={memberId} className="h-20 w-20 shrink-0 ring-4 ring-ink shadow-lg shadow-black/30" />
+                <div className="relative shrink-0">
+                  <AnimalAvatar avatar={member.avatar ?? undefined} seed={memberId} className="h-20 w-20 shrink-0 ring-4 ring-ink shadow-lg shadow-black/30" />
+                  {/* Current Vibe: a small status bubble floating beside the avatar. On your own page with no status, a quiet "Add status" pill in the same spot; on someone else's page with none, nothing at all. */}
+                  {(vibe || isSelf) && (
+                    <div className="absolute left-[calc(100%+0.5rem)] -top-1.5 z-10 w-max max-w-[calc(100vw-7.5rem)] sm:max-w-sm">
+                      {vibe
+                        ? <VibeBubble vibe={vibe} self={isSelf} onEdit={() => setEditingVibe(true)} />
+                        : <AddStatusPill onClick={() => setEditingVibe(true)} />}
+                    </div>
+                  )}
+                </div>
                 {isSelf && (
                   <div className="flex items-center gap-2 pb-1">
                     <button type="button" onClick={onEditProfile} className="btn btn-primary btn-sm"><Pencil className="h-4 w-4" /> Edit profile</button>
@@ -279,15 +279,6 @@ export const ProfilePage: React.FC<Props> = ({
                     </span>
                   )}
                 </p>
-              )}
-
-              {/* Current Vibe: a card when there is a live status; on the member's own page, a quiet prompt when there is none. Never an empty card, and nothing at all on someone else's page without one. */}
-              {(vibe || isSelf) && (
-                <div className="mt-4">
-                  {vibe
-                    ? <CurrentVibeCard vibe={vibe} self={isSelf} onEdit={() => setEditingVibe(true)} onRemove={() => void removeVibe()} removing={removingVibe} />
-                    : <SetVibePrompt onClick={() => setEditingVibe(true)} />}
-                </div>
               )}
 
               {isSelf && (
@@ -370,7 +361,8 @@ export const ProfilePage: React.FC<Props> = ({
         <CurrentVibeSheet
           existing={vibe}
           onClose={() => setEditingVibe(false)}
-          onPublished={(published) => { clearProfileCache(memberId); setVibeOverride(published); setEditingVibe(false); setToast('Current Vibe updated.'); }}
+          onPublished={(published) => { clearProfileCache(memberId); setVibeOverride(published); setEditingVibe(false); setToast('Status saved.'); }}
+          onCleared={() => { clearProfileCache(memberId); setVibeOverride(null); setEditingVibe(false); setToast('Status cleared.'); }}
         />
       )}
       {requestPost && <ConnectionRequestSheet post={requestPost} onClose={() => { setRequestPost(null); clearProfileCache(memberId); void run(true); }} onViewRequests={onOpenRequests} />}

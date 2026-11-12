@@ -18,7 +18,7 @@ const { useMemberVibe } = await import('../hooks/useMemberVibe.ts');
 const { clearVibeCache } = await import('../services/currentVibeService.ts');
 
 const NOW = Date.now();
-const vibeAnswer = (over: Record<string, unknown> = {}) => ({ moodId: 'peaceful', message: 'Quiet evening', updatedAt: new Date(NOW - 3_600_000).toISOString(), expiresAt: new Date(NOW + 23 * 3_600_000).toISOString(), ...over });
+const vibeAnswer = (over: Record<string, unknown> = {}) => ({ emoji: '🌙', message: 'taking it slow', updatedAt: new Date(NOW - 3_600_000).toISOString(), expiresAt: new Date(NOW + 23 * 3_600_000).toISOString(), ...over });
 let vibeBody: unknown = { vibe: null };
 let vibeStatus = 200;
 const asked: string[] = [];
@@ -53,10 +53,10 @@ test('Signals: a live status shows as a small chip beside the name in the header
   vibeBody = { vibe: vibeAnswer() };
   await show();
   const chip = await within(header()).findByTestId('vibe-chip', {}, { timeout: 5000 });
-  assert.equal(chip.textContent, '😌Peaceful');
-  assert.match(chip.getAttribute('title') ?? '', /Quiet evening/);
+  assert.equal(chip.textContent, '🌙taking it slow');
+  assert.match(chip.getAttribute('title') ?? '', /taking it slow/);
   assert.equal(screen.getAllByTestId('vibe-chip').length, 1, 'one chip: not one on every message');
-  assert.equal(screen.getAllByText('Peaceful').length, 1, 'the mood appears once on the whole screen');
+  assert.equal(screen.getAllByText('taking it slow').length, 1, 'the status appears once on the whole screen');
   assert.ok(asked.some((u) => u.includes('view=vibe&memberId=bob-member-12')), 'asked the server about this member');
 });
 
@@ -80,7 +80,7 @@ test('Signals: a failed lookup shows nothing, and a status that has already expi
 });
 
 test('Signals: a malformed answer shows nothing rather than a broken chip', async () => {
-  vibeBody = { vibe: { moodId: 'not-a-mood', updatedAt: 'x', expiresAt: 'y' } };
+  vibeBody = { vibe: { emoji: '🌙', updatedAt: 'x', expiresAt: 'y' } };
   await show();
   await waitFor(() => assert.ok(asked.some((u) => u.includes('view=vibe'))));
   assert.ok(screen.queryByTestId('vibe-chip') === null);
@@ -93,14 +93,14 @@ test('Signals: no member id (an older caller) means no lookup at all', async () 
 
 const Probe: React.FC<{ id: string | null }> = ({ id }) => {
   const vibe = useMemberVibe(id);
-  return <p data-testid="probe">{vibe ? `${vibe.emoji} ${vibe.label}` : 'none'}</p>;
+  return <p data-testid="probe">{vibe ? `${vibe.emoji} ${vibe.message}` : 'none'}</p>;
 };
 
 test('the hook (Seek and Signals): shows a live status, then drops it at the moment it expires, with no further request', async () => {
   // A real, short expiry: the status is live now and ends 700 ms from now.
   vibeBody = { vibe: vibeAnswer({ expiresAt: new Date(Date.now() + 700).toISOString() }) };
   render(<Probe id="bob-member-12" />);
-  await waitFor(() => assert.equal(screen.getByTestId('probe').textContent, '😌 Peaceful'));
+  await waitFor(() => assert.equal(screen.getByTestId('probe').textContent, '🌙 taking it slow'));
   const requests = asked.length;
   await waitFor(() => assert.equal(screen.getByTestId('probe').textContent, 'none'), { timeout: 3000 });
   assert.equal(asked.length, requests, 'no new request was needed to take it down');
@@ -109,7 +109,7 @@ test('the hook (Seek and Signals): shows a live status, then drops it at the mom
 test('the hook: moving to another member never shows the previous member\'s status', async () => {
   vibeBody = { vibe: vibeAnswer() };
   const view = render(<Probe id="bob-member-12" />);
-  await waitFor(() => assert.equal(screen.getByTestId('probe').textContent, '😌 Peaceful'));
+  await waitFor(() => assert.equal(screen.getByTestId('probe').textContent, '🌙 taking it slow'));
   vibeBody = { vibe: null };
   view.rerender(<Probe id="carol-member-1" />);
   assert.equal(screen.getByTestId('probe').textContent, 'none', 'cleared at once, before the new answer');
@@ -120,10 +120,10 @@ test('the hook: moving to another member never shows the previous member\'s stat
 test('the hook remembers an answer for a minute, so reopening chats does not ask again each time', async () => {
   vibeBody = { vibe: vibeAnswer() };
   const first = render(<Probe id="bob-member-12" />);
-  await waitFor(() => assert.equal(screen.getByTestId('probe').textContent, '😌 Peaceful'));
+  await waitFor(() => assert.equal(screen.getByTestId('probe').textContent, '🌙 taking it slow'));
   first.unmount();
   render(<Probe id="bob-member-12" />);
-  await waitFor(() => assert.equal(screen.getByTestId('probe').textContent, '😌 Peaceful'));
+  await waitFor(() => assert.equal(screen.getByTestId('probe').textContent, '🌙 taking it slow'));
   assert.equal(asked.filter((u) => u.includes('view=vibe')).length, 1);
 });
 
