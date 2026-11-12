@@ -58,7 +58,7 @@ test('another member\'s profile shows only what they shared, and never a birthda
   assert.equal(m.showsAge, true, 'it says an age may be asked for, but does not contain it');
   const json = JSON.stringify(res.body);
   for (const secret of ['birthDate', 'Secret Street', 'exactLocation', 'blockedPartnerIds', '"age"']) assert.equal(json.includes(secret), false, secret);
-  assert.deepEqual(Object.keys(m).sort(), ['about', 'avatar', 'displayName', 'expression', 'id', 'identity', 'intention', 'interests', 'location', 'memberSince', 'orientation', 'pronouns', 'showsAge', 'style', 'vibe']);
+  assert.deepEqual(Object.keys(m).sort(), ['about', 'avatar', 'background', 'displayName', 'expression', 'id', 'identity', 'intention', 'interests', 'location', 'memberSince', 'orientation', 'pronouns', 'showsAge', 'style', 'vibe']);
 });
 
 test('location and each identity field follow the member\'s own switches, including older profiles with one switch', { skip }, async () => {
