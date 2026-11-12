@@ -37,7 +37,7 @@ export const bubbleWidth = (gif: Pick<GifInfo, 'width' | 'height'>): number =>
  * A GIF inside a message. Its box is sized from the GIF's own dimensions before it loads, so the thread does not jump,
  * and it never grows past the bubble or a sensible height. With reduced motion it shows a still frame; a tap plays it.
  */
-export const GifBubble: React.FC<{ gif: GifInfo; mine: boolean }> = ({ gif }) => {
+export const GifBubble: React.FC<{ gif: GifInfo; mine: boolean; /** Shown straight on the conversation background, not inside a coloured bubble. */ bare?: boolean }> = ({ gif, bare = false }) => {
   const reduced = usePrefersReducedMotion();
   const [playing, setPlaying] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -69,7 +69,7 @@ export const GifBubble: React.FC<{ gif: GifInfo; mine: boolean }> = ({ gif }) =>
           {box}
         </button>
       ) : box}
-      <span className="select-none text-[length:calc(9px_*_var(--fs,1))] uppercase tracking-wider opacity-60">GIF · via GIPHY</span>
+      <span className={`select-none text-[length:calc(9px_*_var(--fs,1))] uppercase tracking-wider ${bare ? 'text-muted' : 'opacity-60'}`}>GIF · via GIPHY</span>
     </span>
   );
 };

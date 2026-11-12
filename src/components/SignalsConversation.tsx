@@ -689,6 +689,9 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 const unsent = Boolean(message.pending);
                 const sameSenderAsPrev = index > 0 && thread[index - 1].senderId === message.senderId;
                 const open = activeId === message.id;
+                // A GIF stands alone on the conversation background, with no coloured bubble. One that answers another message keeps its bubble,
+                // because the quoted message needs a surface to sit on.
+                const bareGif = message.kind === 'gif' && Boolean(message.gif) && !message.replyTo;
                 const toggleActive = () => setActiveId((current) => (current === message.id ? null : message.id));
                 return (
                   <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'} ${index === 0 ? '' : sameSenderAsPrev ? 'mt-0.5' : 'mt-2'}`}>
@@ -707,12 +710,12 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                         onKeyDown={(event) => {
                           if (!unsent && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggleActive(); }
                         }}
-                        className={`${unsent ? 'opacity-70' : ''} min-w-0 max-w-full cursor-pointer rounded-2xl text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${message.kind === 'game' && message.game ? 'w-full' : `px-3 py-1.5 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}`}
+                        className={`${unsent ? 'opacity-70' : ''} min-w-0 max-w-full cursor-pointer rounded-2xl text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${message.kind === 'game' && message.game ? 'w-full' : bareGif ? '' : `px-3 py-1.5 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}`}
                       >
                         {message.replyTo && (
                           <ReplyQuote tone={mine ? 'accent' : 'raised'} author={message.replyTo.senderId === userId ? 'You' : partnerName} text={message.replyTo.text} />
                         )}
-                        <div className="flex flex-wrap items-end justify-end gap-x-2">
+                        <div className={bareGif ? `flex flex-col gap-0.5 ${mine ? 'items-end' : 'items-start'}` : 'flex flex-wrap items-end justify-end gap-x-2'}>
                           {message.kind === 'game' && message.game ? (
                             <TwoTruthsCard
                               game={message.game}
@@ -733,7 +736,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                               onAnswer={() => { setReplyingTo(message); setActiveId(null); composerFocus.requestFocus(); }}
                             />
                           ) : message.kind === 'gif' && message.gif ? (
-                            <GifBubble gif={message.gif} mine={mine} />
+                            <GifBubble gif={message.gif} mine={mine} bare={bareGif} />
                           ) : message.photo ? (
                             <PhotoBubble
                               photo={message.photo}
@@ -744,7 +747,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           ) : (
                           <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-[length:calc(15px_*_var(--fs,1))] leading-snug">{message.text}</p>
                           )}
-                          {message.createdAt && !(message.kind === 'card' && message.card) && !(message.kind === 'game' && message.game) && <span className={`ml-auto translate-y-px select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
+                          {message.createdAt && !(message.kind === 'card' && message.card) && !(message.kind === 'game' && message.game) && <span className={`${bareGif ? '' : 'ml-auto translate-y-px'} select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${bareGif ? 'text-muted' : mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
                         </div>
                       </div>
                       </SwipeToReply>

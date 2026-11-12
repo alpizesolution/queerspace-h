@@ -59,7 +59,7 @@ test('GIFs in the thread are bounded, sized before they load, and respect reduce
   assert.match(picker, /gif\.stillUrl/);
   assert.match(picker, /referrerPolicy="no-referrer"/);
   assert.match(picker, /loading="lazy"/);
-  assert.match(conversation, /message\.kind === 'gif' && message\.gif \? \(\s*<GifBubble gif=\{message\.gif\} mine=\{mine\} \/>/);
+  assert.match(conversation, /message\.kind === 'gif' && message\.gif \? \(\s*<GifBubble gif=\{message\.gif\} mine=\{mine\} bare=\{bareGif\} \/>/);
 });
 
 test('the GIPHY key stays on the server: not in the app, the build, or any request from the browser', () => {
