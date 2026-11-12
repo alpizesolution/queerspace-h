@@ -34,6 +34,8 @@ import { soundEffects } from '../utils/sound.ts';
 import { createTypingSender, createTypingWatcher, TypingSender } from '../utils/typing-indicator.ts';
 import { QUICK_REACTIONS } from '../utils/reactions.ts';
 import { usePartnerAge } from '../hooks/usePartnerAge.ts';
+import { useMemberVibe } from '../hooks/useMemberVibe.ts';
+import { VibeChip } from './CurrentVibe.tsx';
 import { chatEventManager } from '../utils/chat-events.ts';
 import {
   startOrCreateConversation,
@@ -89,6 +91,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [showPartnerProfile, setShowPartnerProfile] = useState(false);
   // Shown only while the partner has "Show my age" on; follows their switch live.
   const partnerAge = usePartnerAge(partner.id, conversationId);
+  // Their Current Vibe, only if the server says this member may see it (their own setting, blocks, expiry).
+  const partnerVibe = useMemberVibe(partner.id);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [reportReason, setReportReason] = useState('Harassment or disrespectful behavior');
@@ -501,7 +505,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <AnimalAvatar avatar={partner.avatar} seed={partner.id} className="w-10 h-10" />
 
           <div className="min-w-0 flex-1 pl-2">
-            <h1 className="text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg truncate">{partner.displayName}</h1>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <h1 className="min-w-0 text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg truncate">{partner.displayName}</h1>
+              {partnerVibe && <VibeChip vibe={partnerVibe} className="shrink-0" />}
+            </div>
             <p className="text-[length:calc(12px_*_var(--fs,1))] text-muted truncate" aria-live="polite">
               <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${partnerLeft ? 'bg-subtle' : 'bg-emerald-400'}`} />
               {partner.pronouns}{partnerAge ? ` · ${partnerAge}` : ''} · {partnerLeft ? 'Left the chat' : isCloudActive ? 'Online' : 'Connecting…'}

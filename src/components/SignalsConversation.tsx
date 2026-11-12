@@ -15,6 +15,8 @@ import { ReplyQuote } from './ReplyQuote.tsx';
 import { ComfortCardBubble, ComfortCardPicker, ComfortCardsIcon } from './ComfortCards.tsx';
 import type { ComfortCard } from '../utils/comfortCards.ts';
 import { TwoTruthsCard, TwoTruthsCreator, TwoTruthsIcon } from './TwoTruthsGame.tsx';
+import { VibeChip } from './CurrentVibe.tsx';
+import { useMemberVibe } from '../hooks/useMemberVibe.ts';
 import { gameProblemText, parseGame, type Challenge } from '../utils/twoTruths.ts';
 import { gifSendProblemText, type GifInfo } from '../utils/gif.ts';
 import { pickedFileProblem, pickProblemText, photoCard, photoReadProblemText, type PhotoTimer } from '../utils/timedPhoto.ts';
@@ -182,6 +184,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   soundMutedRef.current = isSoundMuted;
   const userId = auth?.currentUser?.uid;
   const partnerName = partner?.displayName?.trim() || 'Anonymous member';
+  // Their Current Vibe in the header only (never on messages), and only if the server says this member may see it.
+  const partnerVibe = useMemberVibe(partnerId);
   const { height: viewportHeight, offsetTop: viewportTop } = useVisualViewport();
   const coarsePointer = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
   // On phones the keyboard overlays the page (iOS), so lift the conversation to the visible area while typing.
@@ -625,7 +629,10 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
             ? <MemberAvatar memberId={partnerId} avatar={partner?.avatar} seed={pairId} name={partnerName} className="h-9 w-9" />
             : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-lavender/20 bg-plum/30 text-lavender"><MessageCircle className="h-4 w-4" /></div>}
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg" title={partnerName}>{partnerName}</h1>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <h1 className="min-w-0 truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold leading-tight text-fg" title={partnerName}>{partnerName}</h1>
+              {partnerVibe && <VibeChip vibe={partnerVibe} className="shrink-0" />}
+            </div>
             <p className="truncate text-[length:calc(11px_*_var(--fs,1))] leading-tight text-subtle">{ended ? 'Connection ended' : 'Private conversation · just the two of you'}</p>
           </div>
           <button type="button" onClick={() => void loadMessages()} disabled={loading} aria-label="Refresh messages" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition hover:text-fg disabled:opacity-50">

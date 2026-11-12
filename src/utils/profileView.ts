@@ -6,6 +6,7 @@
 import type { LookingForPost } from './lookingFor.ts';
 import { resolveAvatar } from './avatar.ts';
 import type { UserPreferences } from '../types.ts';
+import { parseVibe, type VibeView } from './currentVibe.ts';
 
 export interface MemberProfile {
   id: string;
@@ -35,6 +36,8 @@ export interface ProfileResponse {
   member: MemberProfile | null;
   relation: { state: RelationState; conversationId?: string };
   blocked: 'by_me' | null;
+  /** The member's live Current Vibe as this viewer may see it (decided on the server), or null. Absent from older answers. */
+  currentVibe?: VibeView | null;
 }
 
 /** The one connection action the page offers, always through the existing connection-request flow. */
@@ -169,7 +172,8 @@ export function parseProfileResponse(data: unknown): ProfileResponse | null {
   if (!Array.isArray(member.expression) || !member.expression.every((v) => typeof v === 'string')) return null;
   if (typeof member.showsAge !== 'boolean') return null;
   if (member.memberSince !== undefined && !isStringOrNull(member.memberSince)) return null;
-  return raw as unknown as ProfileResponse;
+  // A status that is not exactly the expected shape is simply not shown; it never makes the profile fail.
+  return { ...(raw as unknown as ProfileResponse), currentVibe: parseVibe(raw.currentVibe) };
 }
 
 export type PostsFailure = 'permission' | 'network' | 'failed';

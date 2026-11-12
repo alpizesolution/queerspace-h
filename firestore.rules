@@ -1359,6 +1359,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Current Vibe (a temporary 24-hour mood status). Written and read only by the Signals API (Admin SDK), which checks who may see it
+    // and whether it has expired on every read. No client can read or write one, so a hidden or expired vibe cannot be fetched directly.
+    match /currentVibes/{userId} {
+      allow read, write: if false;
+    }
+
     match /signalsIdempotency/{requestId} {
       allow read, write: if false;
     }

@@ -9,6 +9,7 @@
 import { isAdultMember } from './_adult.js';
 import { rateLimit } from './_lib.js';
 import { createKeyedQueue } from './_requests.js';
+import { vibeOnProfile } from './_vibe.js';
 
 /** How many other members' profiles one member can open per minute. Opening your own is not counted. Well above normal browsing. */
 export const PROFILE_LOOKUPS_PER_MINUTE = 60;
@@ -103,7 +104,7 @@ export async function profileView(db, uid, memberId) {
   const profileSnap = await db.doc(`users/${memberId}/public/profile`).get();
   if (memberId === uid) {
     if (!profileSnap.exists) throw fail(404, 'profile_unavailable');
-    return { self: true, member: { ...shapeProfile(memberId, profileSnap.data()), memberSince: memberSinceOf(profileSnap.data(), viewerSettings.data()) }, relation: { state: 'self' }, blocked: null };
+    return { self: true, member: { ...shapeProfile(memberId, profileSnap.data()), memberSince: memberSinceOf(profileSnap.data(), viewerSettings.data()) }, relation: { state: 'self' }, blocked: null, currentVibe: await vibeOnProfile(db, memberId, { self: true }) };
   }
 
   const blockedByMe = viewerSettings.data()?.blockedPartnerIds;
@@ -121,5 +122,8 @@ export async function profileView(db, uid, memberId) {
   }
   const viewerSuspended = await db.doc(`suspensions/${uid}`).get();
   if (viewerSuspended.exists) throw fail(403, 'account_unavailable');
-  return { self: false, member: { ...shapeProfile(memberId, profileSnap.data()), memberSince: memberSinceOf(profileSnap.data(), memberSettings.data()) }, relation: await relationBetween(db, uid, memberId), blocked: null };
+  // The member's Current Vibe, only if their own setting lets this viewer see it and it has not expired (decided in api/_vibe.js).
+  const relation = await relationBetween(db, uid, memberId);
+  const currentVibe = await vibeOnProfile(db, memberId, { self: false, connected: relation.state === 'connected' });
+  return { self: false, member: { ...shapeProfile(memberId, profileSnap.data()), memberSince: memberSinceOf(profileSnap.data(), memberSettings.data()) }, relation, blocked: null, currentVibe };
 }

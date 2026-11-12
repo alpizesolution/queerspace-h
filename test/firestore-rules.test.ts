@@ -3095,3 +3095,38 @@ test('EC-13: turning replies on for Random Thoughts opens nothing else: the othe
     await assertFails(replyAsFull(['bob', 'carol', 'dana'][i], `still-${kind}`, `reply-still-${kind}`));
   }
 });
+
+// ------------------------------------------------------------------
+// Current Vibe: a server-only record, so privacy and expiry cannot be bypassed from a client
+// ------------------------------------------------------------------
+test('CV-01: no client can read, list, write, extend or delete a Current Vibe, whatever the setting or expiry', async () => {
+  const future = new Date(Date.now() + 3_600_000);
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('currentVibes/alice').set({ moodId: 'happy', emoji: '😊', label: 'Happy', message: 'hi', visibility: 'nobody', createdAt: new Date(), updatedAt: new Date(), expiresAt: future });
+    await ctx.firestore().doc('currentVibes/bob').set({ moodId: 'sad', emoji: '😔', label: 'Sad', message: '', visibility: 'everyone', createdAt: new Date(), updatedAt: new Date(), expiresAt: future });
+  });
+  for (const who of ['alice', 'bob', 'carol']) {
+    const fs = testEnv.authenticatedContext(who).firestore();
+    // Not even the owner reads their own directly: the API is the only door (it applies the visibility and expiry rules).
+    await assertFails(fs.doc('currentVibes/alice').get());
+    await assertFails(fs.doc('currentVibes/bob').get());
+    await assertFails(fs.collection('currentVibes').get());
+    await assertFails(fs.collection('currentVibes').where('visibility', '==', 'everyone').get());
+    await assertFails(fs.collectionGroup('currentVibes').get());
+    // Nobody creates, changes, extends or removes one, their own or another's.
+    await assertFails(fs.doc(`currentVibes/${who}`).set({ moodId: 'happy', emoji: '😊', label: 'Happy', message: '', visibility: 'everyone', createdAt: now(), updatedAt: now(), expiresAt: new Date(Date.now() + 99 * 24 * 3_600_000) }));
+    await assertFails(fs.doc('currentVibes/alice').update({ expiresAt: new Date(Date.now() + 99 * 24 * 3_600_000) }));
+    await assertFails(fs.doc('currentVibes/alice').update({ visibility: 'everyone' }));
+    await assertFails(fs.doc('currentVibes/bob').delete());
+  }
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('currentVibes/bob').get());
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('currentVibes/bob').set({ moodId: 'happy' }));
+  // The public profile, which other members CAN read, never carries a status or its setting.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('users/alice/public/profile').set({ displayName: 'A', pronouns: 'she', intention: 'x', region: 'y', topics: [], profileComplete: true, updatedAt: new Date() });
+  });
+  const profile = await assertSucceeds(testEnv.authenticatedContext('carol').firestore().doc('users/alice/public/profile').get());
+  for (const key of ['currentVibe', 'vibe', 'moodId', 'visibility', 'expiresAt']) assert.ok(!(key in profile.data()!), `${key} is not on the public profile`);
+  // A member cannot put one on their own public profile either (the field list is closed).
+  await assertFails(testEnv.authenticatedContext('alice').firestore().doc('users/alice/public/profile').set({ displayName: 'A', pronouns: 'she', intention: 'x', region: 'y', topics: [], profileComplete: true, updatedAt: now(), currentVibe: { moodId: 'happy', expiresAt: future } }));
+});

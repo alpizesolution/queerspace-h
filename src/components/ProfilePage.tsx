@@ -3,6 +3,10 @@ import { ArrowLeft, Check, Flag, LoaderCircle, MapPin, MessageCircle, Pencil, Sa
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { ProfileSkeleton } from './Skeleton.tsx';
 import { ConfirmDialog } from './Sheet.tsx';
+import { CurrentVibeCard, CurrentVibeSheet, SetVibePrompt } from './CurrentVibe.tsx';
+import { useMinuteClock } from '../hooks/useMemberVibe.ts';
+import { removeCurrentVibe, vibeProblemText } from '../services/currentVibeService.ts';
+import { isLive, type VibeView } from '../utils/currentVibe.ts';
 import { ConnectionRequestSheet } from './ConnectionRequestSheet.tsx';
 import { ReportMemberSheet } from './ReportMemberSheet.tsx';
 import { ProfileLookingFor, ProfilePosts, Section } from './ProfileSections.tsx';
@@ -88,8 +92,13 @@ export const ProfilePage: React.FC<Props> = ({
   const [blocking, setBlocking] = useState(false);
   const [requestPost, setRequestPost] = useState<LookingForPost | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Current Vibe: what the member just published or removed (undefined = use what the profile answer says), and its editor.
+  const [vibeOverride, setVibeOverride] = useState<VibeView | null | undefined>(undefined);
+  const [editingVibe, setEditingVibe] = useState(false);
+  const [removingVibe, setRemovingVibe] = useState(false);
+  const clock = useMinuteClock();
 
-  const overlayOpen = reporting || blocking || requestPost !== null;
+  const overlayOpen = reporting || blocking || requestPost !== null || editingVibe;
 
   const run = useCallback(async (force = false) => {
     const id = ++runId.current;
@@ -98,6 +107,7 @@ export const ProfilePage: React.FC<Props> = ({
     if (!cached) setLoad(null);
     setAge(null);
     setLookingFor([]);
+    setVibeOverride(undefined);
     // The posts do not wait for the profile: their reads start now, alongside it. Nothing from them is shown until the
     // server has said this viewer may see the profile (a blocked or unavailable profile discards them).
     prefetchMemberPosts(memberId);
@@ -171,6 +181,18 @@ export const ProfilePage: React.FC<Props> = ({
   const details = member ? aboutDetails(member, intentionLabel(member.intention)) : [];
   const line = member ? identityLine(member, age) : '';
   const showBar = !isSelf && data !== null && action.kind !== 'none';
+  // The status shown: always one that has not expired (the server already drops expired ones; this keeps an open page honest).
+  const shownVibe = (vibeOverride !== undefined ? vibeOverride : data?.currentVibe ?? null);
+  const vibe = isLive(shownVibe, clock) ? shownVibe : null;
+
+  const removeVibe = async () => {
+    if (removingVibe) return;
+    setRemovingVibe(true);
+    const result = await removeCurrentVibe();
+    setRemovingVibe(false);
+    if (result.ok) { clearProfileCache(memberId); setVibeOverride(null); setToast('Current Vibe removed.'); }
+    else setToast(vibeProblemText(result.reason));
+  };
 
   const share = async () => {
     const result = await shareMemberProfile(memberId, name);
@@ -259,6 +281,15 @@ export const ProfilePage: React.FC<Props> = ({
                 </p>
               )}
 
+              {/* Current Vibe: a card when there is a live status; on the member's own page, a quiet prompt when there is none. Never an empty card, and nothing at all on someone else's page without one. */}
+              {(vibe || isSelf) && (
+                <div className="mt-4">
+                  {vibe
+                    ? <CurrentVibeCard vibe={vibe} self={isSelf} onEdit={() => setEditingVibe(true)} onRemove={() => void removeVibe()} removing={removingVibe} />
+                    : <SetVibePrompt onClick={() => setEditingVibe(true)} />}
+                </div>
+              )}
+
               {isSelf && (
                 <div className="mt-4">
                   <div className="rounded-2xl border border-line bg-raised/50 p-3.5">
@@ -335,6 +366,13 @@ export const ProfilePage: React.FC<Props> = ({
         </div>
       )}
 
+      {editingVibe && isSelf && (
+        <CurrentVibeSheet
+          existing={vibe}
+          onClose={() => setEditingVibe(false)}
+          onPublished={(published) => { clearProfileCache(memberId); setVibeOverride(published); setEditingVibe(false); setToast('Current Vibe updated.'); }}
+        />
+      )}
       {requestPost && <ConnectionRequestSheet post={requestPost} onClose={() => { setRequestPost(null); clearProfileCache(memberId); void run(true); }} onViewRequests={onOpenRequests} />}
       {reporting && (
         <ReportMemberSheet
