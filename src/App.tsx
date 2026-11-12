@@ -320,7 +320,7 @@ export default function App() {
     }, 4000);
   };
 
-  // Replies to the member's own Echoes (Need Advice and Uplift): a badge on the Echoes tab, a "new" tag on the post, and a toast.
+  // Replies to the member's own Echoes (Need Advice, Random Thoughts and Uplift): a badge on the Echoes tab, a "new" tag on the post, and a toast.
   // Replies are anonymous, so the notice never says who. On the Echoes screen itself the post already shows it.
   // The Echo Notifications list (replies and milestones); its unread count is the Echoes tab's badge.
   const echoNotifs = useEchoNotifications(isFirebaseConfigured && !ageGateOpen && !ageRestricted);

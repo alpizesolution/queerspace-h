@@ -1,6 +1,6 @@
 # Echoes: categories, replies and notifications
 
-Echoes is QUEERSPACE's anonymous expression space. It has eight categories in three groups, and four of them take replies.
+Echoes is QUEERSPACE's anonymous expression space. It has eight categories in three groups, and five of them take replies.
 
 | Group | Category | Stored `kind` | Replies |
 |---|---|---|---|
@@ -8,7 +8,7 @@ Echoes is QUEERSPACE's anonymous expression space. It has eight categories in th
 | 🌙 Release | Vent | `vent` | reactions only |
 | 🌙 Release | Unsent Letters | `unsent` | reactions only |
 | ✨ Connect | Need Advice | `advice` | **replies** |
-| ✨ Connect | Random Thoughts | `thoughts` | reactions only |
+| ✨ Connect | Random Thoughts | `thoughts` | **replies** |
 | ☀️ Uplift | Little Wins | `wins` | **replies** |
 | ☀️ Uplift | Gratitude | `gratitude` | **replies** |
 | ☀️ Uplift | Daydreams | `daydreams` | **replies** |
@@ -33,13 +33,13 @@ Replies are labelled "Anonymous" for everyone except their writer, who sees "You
 
 Hiding the Reply button is not the protection. `firestore.rules` is:
 
-- A reply document can only be created when the parent post's `kind` is one of `advice`, `wins`, `gratitude`, `daydreams`.
+- A reply document can only be created when the parent post's `kind` is one of `advice`, `thoughts`, `wins`, `gratitude`, `daydreams`.
 - The post's `replyCount` can only move with a reply: +1 in the same batch as the reply, its owner record and the member's slow-mode stamp; -1 in the same batch that deletes that reply and its owner record. `lastReply` names the reply, so the counter cannot move on its own.
-- A `replyCount` field can only exist on posts of those four kinds, and starts at 0. Older posts have none, which reads as 0.
+- A `replyCount` field can only exist on posts of those five kinds, and starts at 0. Older posts have none, which reads as 0 (this includes Random Thoughts posted before replies were turned on: they can be replied to, and their authors are notified, but not through the owner-record badge, see Notifications).
 - Reply writers must be adult members with a profile and not suspended (`isEligibleMember`, `!isSuspended()`), 5 seconds apart (`rate_limits.unsaidReply`), 1 to 300 characters.
 - Only the reply's writer, or a moderator, can delete it. Nobody can edit one.
 
-The app also refuses early (`replyToUnsaid` returns `not-allowed` for the other four kinds), but the rules are what stop a modified client.
+The app also refuses early (`replyToUnsaid` returns `not-allowed` for the other three kinds), but the rules are what stop a modified client.
 
 ## Notifications
 

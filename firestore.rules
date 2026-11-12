@@ -849,10 +849,10 @@ service cloud.firestore {
       return ['confession', 'vent', 'unsent', 'advice', 'thoughts', 'wins', 'gratitude', 'daydreams'];
     }
 
-    // Replies exist ONLY for Need Advice and the three Uplift categories. Confession, Vent, Unsent Letters and Random Thoughts
+    // Replies exist ONLY for Need Advice, Random Thoughts and the three Uplift categories. Confession, Vent and Unsent Letters
     // are reactions only: no rule below lets a reply, or a reply counter, exist on them, whatever the app shows.
     function unsaidReplyKinds() {
-      return ['advice', 'wins', 'gratitude', 'daydreams'];
+      return ['advice', 'thoughts', 'wins', 'gratitude', 'daydreams'];
     }
 
     // Optional mood tags on an Echo (metadata, not categories). Keep in step with MOODS in src/utils/echoMoods.ts.

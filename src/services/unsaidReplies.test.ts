@@ -18,14 +18,14 @@ test('a reply is checked like a post, in a shorter box', () => {
   }
 });
 
-test('the app itself refuses to send a reply to Confession, Vent, Unsent Letters or Random Thoughts, before touching the database', async () => {
-  for (const kind of ['confession', 'vent', 'unsent', 'thoughts'] as const) {
+test('the app itself refuses to send a reply to Confession, Vent or Unsent Letters, before touching the database', async () => {
+  for (const kind of ['confession', 'vent', 'unsent'] as const) {
     assert.deepEqual(await replyToUnsaid({ id: 'post1', kind }, 'You are not alone'), { ok: false, reason: 'not-allowed' }, kind);
   }
 });
 
-test('Need Advice and the Uplift categories accept a reply to be sent; an empty one is refused first', async () => {
-  for (const kind of ['advice', 'wins', 'gratitude', 'daydreams'] as const) {
+test('Need Advice, Random Thoughts and the Uplift categories accept a reply to be sent; an empty one is refused first', async () => {
+  for (const kind of ['advice', 'thoughts', 'wins', 'gratitude', 'daydreams'] as const) {
     assert.deepEqual(await replyToUnsaid({ id: 'post1', kind }, '   '), { ok: false, reason: 'invalid' }, kind);
     // With no database in a test run, a valid reply fails cleanly rather than throwing.
     assert.deepEqual(await replyToUnsaid({ id: 'post1', kind }, 'Sending love'), { ok: false, reason: 'failed' }, kind);

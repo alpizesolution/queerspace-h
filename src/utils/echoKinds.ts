@@ -38,7 +38,7 @@ export const UNSAID_KINDS = [
   { id: 'unsent', label: 'Unsent Letter', plural: 'Unsent Letters', group: 'release', emoji: '💌', placeholder: 'Dear…, the words you can’t send', hint: 'What you wish you could say, but can’t send.', replies: false },
   // Connect
   { id: 'advice', label: 'Need Advice', plural: 'Advice', group: 'connect', emoji: '🧭', placeholder: 'What are you stuck on? Ask the community…', hint: 'Ask anonymously. Members can reply with advice.', replies: true, replyPlaceholder: 'Share advice or your experience…', replyAction: 'Reply' },
-  { id: 'thoughts', label: 'Random Thought', plural: 'Random Thoughts', group: 'connect', emoji: '💭', placeholder: 'A thought that has been on your mind…', hint: 'Casual thoughts and passing ideas.', replies: false },
+  { id: 'thoughts', label: 'Random Thought', plural: 'Random Thoughts', group: 'connect', emoji: '💭', placeholder: 'A thought that has been on your mind…', hint: 'Casual thoughts and passing ideas. Others can reply.', replies: true, replyPlaceholder: 'Share a thought back…', replyAction: 'Reply' },
   // Uplift
   { id: 'wins', label: 'Little Win', plural: 'Little Wins', group: 'uplift', emoji: '🌟', placeholder: 'A small win worth celebrating…', hint: 'Progress, big or small. Others can cheer you on.', replies: true, replyPlaceholder: 'Cheer them on…', replyAction: 'Cheer' },
   { id: 'gratitude', label: 'Gratitude', plural: 'Gratitude', group: 'uplift', emoji: '💛', placeholder: 'Who or what are you thankful for?', hint: 'Appreciation, shared. Others can send warmth.', replies: true, replyPlaceholder: 'Send some warmth…', replyAction: 'Send love' },
@@ -50,7 +50,7 @@ export type UnsaidKind = (typeof UNSAID_KINDS)[number]['id'];
 /** Every kind id, for the rules test and validation. */
 export const UNSAID_KIND_IDS: readonly UnsaidKind[] = UNSAID_KINDS.map((k) => k.id);
 
-/** The categories that take replies: Need Advice and the three Uplift ones. */
+/** The categories that take replies: Need Advice, Random Thoughts and the three Uplift ones. */
 export const UNSAID_REPLY_KINDS: readonly UnsaidKind[] = UNSAID_KINDS.filter((k) => k.replies).map((k) => k.id);
 
 const BY_ID = new Map<string, EchoKindInfo>(UNSAID_KINDS.map((k) => [k.id, k]));

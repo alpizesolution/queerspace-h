@@ -412,7 +412,7 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices; notificatio
                       </div>
                     </div>
 
-                    {/* Replies exist only for Need Advice and the Uplift categories. The other four never show a Reply control
+                    {/* Replies exist only for Need Advice, Random Thoughts and the Uplift categories. The other three never show a Reply control
                         (and firestore.rules refuses a reply to them regardless). */}
                     {kindAllowsReplies(post.kind) && (
                       <div className="mt-0.5 -ml-2 flex items-center gap-1">
@@ -522,7 +522,7 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices; notificatio
               </div>
               {anonInfoOpen && (
                 <p className="mt-1 text-[length:calc(12px_*_var(--fs,1))] leading-relaxed text-muted">
-                  No names. Nobody can see who wrote an echo or a reply; only you can tell which ones are yours, and you can delete them any time. Need Advice, Little Wins, Gratitude and Daydreams take replies; the rest are reactions only.
+                  No names. Nobody can see who wrote an echo or a reply; only you can tell which ones are yours, and you can delete them any time. Need Advice, Random Thoughts, Little Wins, Gratitude and Daydreams take replies; the rest are reactions only.
                 </p>
               )}
             </div>

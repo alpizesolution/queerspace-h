@@ -31,10 +31,10 @@ test('the two original categories keep their stored ids', () => {
   assert.equal(kindInfo('confession').label, 'Confession');
 });
 
-test('replies are for Need Advice, Little Wins, Gratitude and Daydreams only', () => {
-  assert.deepEqual([...UNSAID_REPLY_KINDS].sort(), ['advice', 'daydreams', 'gratitude', 'wins']);
-  for (const kind of ['advice', 'wins', 'gratitude', 'daydreams']) assert.equal(kindAllowsReplies(kind), true, kind);
-  for (const kind of ['confession', 'vent', 'unsent', 'thoughts']) assert.equal(kindAllowsReplies(kind), false, kind);
+test('replies are for Need Advice, Random Thoughts, Little Wins, Gratitude and Daydreams only', () => {
+  assert.deepEqual([...UNSAID_REPLY_KINDS].sort(), ['advice', 'daydreams', 'gratitude', 'thoughts', 'wins']);
+  for (const kind of ['advice', 'thoughts', 'wins', 'gratitude', 'daydreams']) assert.equal(kindAllowsReplies(kind), true, kind);
+  for (const kind of ['confession', 'vent', 'unsent']) assert.equal(kindAllowsReplies(kind), false, kind);
   // Unknown or missing kinds read as a vent, which takes no replies.
   for (const kind of [undefined, null, '', 'rant', 42]) assert.equal(kindAllowsReplies(kind), false);
 });

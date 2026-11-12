@@ -23,7 +23,7 @@ export function replyNoticeFor(
 }
 
 /**
- * Tells an author, in the app, about new replies to their own Echoes (Need Advice and Uplift only). It never learns or shows
+ * Tells an author, in the app, about new replies to their own Echoes (Need Advice, Random Thoughts and Uplift only). It never learns or shows
  * who replied: replies are anonymous, and the author's identity stays in a record only they can read. `onNotice` is how App
  * shows the toast; the per-post counts also feed the "new" badge and the Echoes tab's count.
  */

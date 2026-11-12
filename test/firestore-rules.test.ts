@@ -1056,8 +1056,8 @@ test('AR-01: only an admin can allow another birthday try; only that member can 
 // ------------------------------------------------------------------
 // Echoes: eight categories, and replies only where they belong
 // ------------------------------------------------------------------
-const REACTION_ONLY_KINDS = ['confession', 'vent', 'unsent', 'thoughts'];
-const REPLY_KINDS = ['advice', 'wins', 'gratitude', 'daydreams'];
+const REACTION_ONLY_KINDS = ['confession', 'vent', 'unsent'];
+const REPLY_KINDS = ['advice', 'thoughts', 'wins', 'gratitude', 'daydreams'];
 const ALL_KINDS = [...REACTION_ONLY_KINDS, ...REPLY_KINDS];
 const takesReplies = (kind: string) => REPLY_KINDS.includes(kind);
 
@@ -1132,8 +1132,8 @@ test('EC-01: all eight categories CAN be published anonymously, and only those e
   await assertFails(echoAs('fay', 'e-seen', 'wins', { owner: { seenReplies: 3 } }));
 });
 
-test('EC-02: replies CAN be posted on Need Advice, Little Wins, Gratitude and Daydreams, in order, with the count going up', async () => {
-  const repliers = ['bob', 'carol', 'cha', 'dana'];
+test('EC-02: replies CAN be posted on Need Advice, Random Thoughts, Little Wins, Gratitude and Daydreams, in order, with the count going up', async () => {
+  const repliers = ['bob', 'carol', 'cha', 'dana', 'fay'];
   for (const [i, kind] of REPLY_KINDS.entries()) {
     await seedEcho(`r-${kind}`, 'alice', kind);
     await assertSucceeds(replyAsFull(repliers[i], `r-${kind}`, `reply-${kind}-0001`, `A kind word on ${kind}`));
@@ -1151,7 +1151,7 @@ test('EC-02: replies CAN be posted on Need Advice, Little Wins, Gratitude and Da
   assert.equal(post.data()!.replyCount, 2);
 });
 
-test('EC-03: replies are REFUSED on Confession, Vent, Unsent Letters and Random Thoughts, whatever the client tries', async () => {
+test('EC-03: replies are REFUSED on Confession, Vent and Unsent Letters, whatever the client tries', async () => {
   let n = 0;
   for (const kind of REACTION_ONLY_KINDS) {
     const id = `n-${kind}`;
@@ -1324,7 +1324,7 @@ test('EC-07: existing Echoes and reactions are untouched: old posts read, react,
   await assertSucceeds(del.commit());
 });
 
-test('EC-08: the rules list the same eight categories and the same four reply categories as the app', async () => {
+test('EC-08: the rules list the same eight categories and the same five reply categories as the app', async () => {
   const rules = fs.readFileSync('./firestore.rules', 'utf8');
   const list = (name: string) => [...(rules.match(new RegExp(`function ${name}\\(\\) \\{\\s*return \\[([^\\]]+)\\]`))?.[1].matchAll(/'([a-z]+)'/g) ?? [])].map((m) => m[1]);
   assert.deepEqual([...list('unsaidKinds')].sort(), [...ALL_KINDS].sort());
@@ -1373,14 +1373,14 @@ async function addReactions(postId: string, counts: Record<string, number>) {
   await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc(`unsaid/${postId}`).update(counts); });
 }
 
-test('EN-01: the author CAN record a reply notification on each of the four reply categories, and only they can read it', async () => {
+test('EN-01: the author CAN record a reply notification on each of the five reply categories, and only they can read it', async () => {
   for (const kind of REPLY_KINDS) {
     await seedEcho(`n-${kind}`, 'alice', kind);
     await seedReply(`n-${kind}`, `reply-bob-${kind}`, 'bob');
     await assertSucceeds(replyNote('alice', `n-${kind}`, `reply-bob-${kind}`, kind));
   }
   const mine = await assertSucceeds(testEnv.authenticatedContext('alice').firestore().collection('echo_notifications/alice/items').get());
-  assert.equal(mine.size, 4);
+  assert.equal(mine.size, 5);
   for (const stranger of ['bob', 'carol']) {
     await assertFails(testEnv.authenticatedContext(stranger).firestore().collection('echo_notifications/alice/items').get());
     await assertFails(testEnv.authenticatedContext(stranger).firestore().doc('echo_notifications/alice/items/reply_reply-bob-wins').get());
@@ -3062,4 +3062,36 @@ test('TTL-01: no client can read, write or list the Two Truths and a Lie answers
     await assertFails(fs.doc('signalsPairs/p1/messages/t2').set({ senderId: who, kind: 'game', game: { statements: ['a', 'b', 'c'], status: 'open' } }));
   }
   await assertFails(testEnv.unauthenticatedContext().firestore().doc('signalsPairs/p1/gameSecrets/t1').get());
+});
+
+test('EC-12: a Random Thought posted BEFORE replies were turned on (no counter, plain owner record) can still be replied to, and its author notified', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    // Exactly what the app wrote for a Random Thought when it was reactions only.
+    await ctx.firestore().doc('unsaid/old-thought').set({ kind: 'thoughts', text: 'an older thought', createdAt: new Date(), hugs: 0, same: 0, flags: 0 });
+    await ctx.firestore().doc('unsaid_owners/old-thought').set({ authorId: 'alice' });
+  });
+  await assertSucceeds(replyAsFull('bob', 'old-thought', 'reply-old-thought-0001', 'I think about this too'));
+  const reader = testEnv.authenticatedContext('erin').firestore();
+  assert.equal((await assertSucceeds(reader.doc('unsaid/old-thought').get())).data()!.replyCount, 1, 'the counter starts from zero');
+  // It stays anonymous: the reply is only text and a time, and nobody but its writer can read who wrote it.
+  const replies = await assertSucceeds(reader.collection('unsaid/old-thought/replies').get());
+  assert.deepEqual(Object.keys(replies.docs[0].data()).sort(), ['createdAt', 'text']);
+  await assertFails(testEnv.authenticatedContext('alice').firestore().doc('unsaid_reply_owners/reply-old-thought-0001').get());
+  await assertFails(testEnv.authenticatedContext('carol').firestore().doc('unsaid_reply_owners/reply-old-thought-0001').get());
+  // The author can be told about it, on the real data.
+  await assertSucceeds(replyNote('alice', 'old-thought', 'reply-old-thought-0001', 'thoughts'));
+  // Replying is still held to the same limits: adults with a profile, 5 seconds apart, not suspended, 1 to 300 characters.
+  await assertFails(replyAsFull('bob', 'old-thought', 'reply-old-thought-0002', 'too soon after the last one'));
+  await seedStamp('bob', 'unsaidReply', 10);
+  await assertFails(replyAsFull('bob', 'old-thought', 'reply-old-thought-0003', 'x'.repeat(301)));
+  await assertSucceeds(replyAsFull('bob', 'old-thought', 'reply-old-thought-0004', 'Another one'));
+  // Reactions still work on it alongside replies.
+  await assertSucceeds(reactAs('erin', 'old-thought', 'hugs'));
+});
+
+test('EC-13: turning replies on for Random Thoughts opens nothing else: the other three reaction-only categories still refuse them', async () => {
+  for (const [i, kind] of ['confession', 'vent', 'unsent'].entries()) {
+    await seedEcho(`still-${kind}`, 'alice', kind);
+    await assertFails(replyAsFull(['bob', 'carol', 'dana'][i], `still-${kind}`, `reply-still-${kind}`));
+  }
 });

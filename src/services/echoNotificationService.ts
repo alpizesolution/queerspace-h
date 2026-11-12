@@ -28,7 +28,7 @@ import { loadMyReplyIds, toUnsaidPost, type UnsaidPost } from './unsaidService.t
  * never counts) and the id is derived from the event, so the same event can only ever have one notification. Nothing in a
  * notification, or anywhere public, says who replied or who reacted.
  *
- * Kinds of notification: a reply (Need Advice and Uplift categories only), and an engagement milestone (total reactions on an Echo
+ * Kinds of notification: a reply (Need Advice, Random Thoughts and Uplift categories only), and an engagement milestone (total reactions on an Echo
  * reaching 10, 25, 50 or 100). "Comfort received" is not built: there is no Send Comfort in the app.
  */
 
@@ -361,7 +361,7 @@ export async function syncEchoNotifications(echoes: readonly OwnEcho[], prefs: E
 
   for (const echo of echoes) {
     try {
-      // New replies (Need Advice and Uplift only): every reply the author has not yet seen.
+      // New replies (Need Advice, Random Thoughts and Uplift only): every reply the author has not yet seen.
       const unseen = echo.replyCount - echo.seenReplies;
       if (prefs.replies && kindAllowsReplies(echo.kind) && unseen > 0 && !looked.has(`r:${echo.id}:${echo.replyCount}:${echo.seenReplies}`)) {
         looked.add(`r:${echo.id}:${echo.replyCount}:${echo.seenReplies}`);

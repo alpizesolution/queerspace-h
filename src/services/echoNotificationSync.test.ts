@@ -38,8 +38,8 @@ const echo = (over: Record<string, unknown> = {}) => ({ id: 'p1', kind: 'advice'
 
 beforeEach(() => { store.clear(); writes.length = 0; replies = []; myReplyIds = []; resetEchoNotificationMemory(); });
 
-test('a new reply on each of the four reply categories makes one notification, with a safe preview and no one named', async () => {
-  for (const kind of ['advice', 'wins', 'gratitude', 'daydreams'] as const) {
+test('a new reply on each of the five reply categories makes one notification, with a safe preview and no one named', async () => {
+  for (const kind of ['advice', 'thoughts', 'wins', 'gratitude', 'daydreams'] as const) {
     writes.length = 0; store.clear(); resetEchoNotificationMemory();
     replies = [{ id: `r-${kind}`, text: 'You are  doing\nso well', createdAt: 'T1' }];
     await syncEchoNotifications([echo({ id: `p-${kind}`, kind, replyCount: 1 })], ALL);
@@ -51,7 +51,7 @@ test('a new reply on each of the four reply categories makes one notification, w
 
 test('nothing for categories that take no replies, even if a reply count somehow shows', async () => {
   replies = [{ id: 'r1', text: 'hello', createdAt: 'T' }];
-  for (const kind of ['confession', 'vent', 'unsent', 'thoughts'] as const) await syncEchoNotifications([echo({ id: `p-${kind}`, kind, replyCount: 1 })], ALL);
+  for (const kind of ['confession', 'vent', 'unsent'] as const) await syncEchoNotifications([echo({ id: `p-${kind}`, kind, replyCount: 1 })], ALL);
   assert.equal(writes.length, 0);
 });
 

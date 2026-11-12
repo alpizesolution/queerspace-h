@@ -50,7 +50,7 @@ export interface UnsaidPost {
   kind: UnsaidKind;
   text: string;
   createdAt: number;
-  /** Replies, for the categories that take them (Need Advice and Uplift); 0 for everything else, including older posts. */
+  /** Replies, for the categories that take them (Need Advice, Random Thoughts and Uplift); 0 for everything else, including older posts. */
   replyCount: number;
   /** Optional mood tags (0 to 2); empty for older Echoes and for any Echo posted without one. */
   moodTags: MoodId[];
@@ -360,7 +360,7 @@ export async function deleteUnsaid(postId: string): Promise<boolean> {
 
 // ---------------------------------------------------------------------------------------------------------------- replies
 //
-// Need Advice, Little Wins, Gratitude and Daydreams take replies; Confession, Vent, Unsent Letters and Random Thoughts do not
+// Need Advice, Random Thoughts, Little Wins, Gratitude and Daydreams take replies; Confession, Vent and Unsent Letters do not
 // (utils/echoKinds.ts, and firestore.rules refuses a reply to anything else). Like posts, replies are anonymous: the public
 // document is just text and a time, and who wrote it lives in `unsaid_reply_owners/{replyId}`, which only that member (and no
 // one else, not even the post's author) can read.

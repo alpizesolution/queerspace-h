@@ -35,7 +35,7 @@ const FAILURES = {
 } as const;
 
 /**
- * The thread under an Echo that takes replies (Need Advice, Little Wins, Gratitude, Daydreams). Replies are anonymous and read
+ * The thread under an Echo that takes replies (Need Advice, Random Thoughts, Little Wins, Gratitude, Daydreams). Replies are anonymous and read
  * oldest first. The writer of a reply sees "You" and a delete control; everyone else can report it; moderators can remove any.
  * Kept light on purpose: a short box and one button, not a forum.
  */
@@ -131,7 +131,7 @@ export const UnsaidReplies: React.FC<Props> = ({ post, isAdmin, onViewed, onToas
         <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted">Couldn’t load the replies. Please try again soon.</p>
       ) : shown.length === 0 ? (
         <p className="text-[length:calc(13px_*_var(--fs,1))] text-subtle">
-          {uplift ? 'Be the first to send some warmth.' : 'No replies yet. Be the first to help.'}
+          {uplift ? 'Be the first to send some warmth.' : post.kind === 'thoughts' ? 'No replies yet. Be the first to reply.' : 'No replies yet. Be the first to help.'}
         </p>
       ) : (
         <ul className="space-y-1.5" aria-label="Replies">

@@ -42,7 +42,7 @@ const { UnsaidReplies } = await import('./UnsaidReplies.tsx');
 const { EchoFilterBar, EchoKindPicker, EchoKindTag } = await import('./EchoCategories.tsx');
 
 const ALL = ['confession', 'vent', 'unsent', 'advice', 'thoughts', 'wins', 'gratitude', 'daydreams'] as const;
-const REPLY = ['advice', 'wins', 'gratitude', 'daydreams'];
+const REPLY = ['advice', 'thoughts', 'wins', 'gratitude', 'daydreams'];
 const LABEL: Record<string, string> = { confession: 'Confession', vent: 'Vent', unsent: 'Unsent Letter', advice: 'Need Advice', thoughts: 'Random Thought', wins: 'Little Win', gratitude: 'Gratitude', daydreams: 'Daydream' };
 
 const echo = (kind: (typeof ALL)[number], over: Partial<UnsaidPost> = {}): UnsaidPost => ({
@@ -84,7 +84,7 @@ test('every category keeps the same six reactions (existing reaction functionali
 });
 
 // -------------------------------------------------------------------------------------------------------- reply controls
-test('a Reply control appears on Need Advice, Little Wins, Gratitude and Daydreams, and on nothing else', async () => {
+test('a Reply control appears on Need Advice, Random Thoughts, Little Wins, Gratitude and Daydreams, and on nothing else', async () => {
   await showBoard();
   const replyControl = (kind: string) => within(card(kind)).queryByRole('button', { name: /^Reply$|\d+ repl/i });
   for (const kind of ALL) {
@@ -160,6 +160,8 @@ test('the composer groups the eight categories, says whether replies are on, and
   assert.match(picker.textContent ?? '', /Replies are on\./);
   assert.ok(screen.getByPlaceholderText('A small win worth celebrating…'));
   fireEvent.click(within(picker).getByRole('radio', { name: /Random Thought/ }));
+  assert.match(picker.textContent ?? '', /Replies are on\./);
+  fireEvent.click(within(picker).getByRole('radio', { name: /Vent/ }));
   assert.match(picker.textContent ?? '', /Reactions only: no replies\./);
 
   fireEvent.change(screen.getByLabelText('Write something unsaid'), { target: { value: 'My daydream is a small house by the sea' } });
@@ -219,6 +221,33 @@ test('sending a reply: validated, sent once with the post, and the box clears', 
   assert.equal((calls.reply[0][0] as { id: string }).id, 'p-advice');
   assert.equal(calls.reply[0][1], 'Maybe talk to her first.');
   await waitFor(() => assert.equal(box.value, ''));
+});
+
+test('Random Thoughts take replies: its own wording, sent once with the post, anonymous, and still reactions too', async () => {
+  thread$('thoughts');
+  await screen.findByText('No replies yet. Be the first to reply.');
+  const box = screen.getByLabelText('Write a reply') as HTMLTextAreaElement;
+  assert.equal(box.placeholder, 'Share a thought back…');
+  fireEvent.change(box, { target: { value: 'I think about this too.' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+  await waitFor(() => assert.equal(calls.reply.length, 1));
+  assert.equal((calls.reply[0][0] as { id: string; kind: string }).id, 'p-thoughts');
+  assert.equal((calls.reply[0][0] as { kind: string }).kind, 'thoughts');
+  assert.equal(calls.reply[0][1], 'I think about this too.');
+  await waitFor(() => assert.equal(box.value, ''));
+});
+
+test('a Random Thought on the board opens a reply thread and keeps its six reactions', async () => {
+  feed = [echo('confession'), echo('thoughts', { replyCount: 1 }), echo('vent')];
+  thread = [reply('r1', 'Same here', 1000)];
+  await showBoard();
+  const toggle = await screen.findByRole('button', { name: /1 reply\. Show replies/ });
+  fireEvent.click(toggle);
+  assert.ok(await screen.findByText('Same here'));
+  assert.ok(within(card('thoughts')).getByLabelText('Write a reply'));
+  const reactions = within(card('thoughts')).getAllByRole('button').filter((b) => b.hasAttribute('aria-pressed') && /, \d+$/.test(b.getAttribute('aria-label') ?? ''));
+  assert.equal(reactions.length, 6);
+  assert.equal(within(card('vent')).queryByLabelText('Write a reply'), null, 'a vent still has no reply box');
 });
 
 test('identifying text is refused before anything is sent, with the anonymity reason', async () => {
