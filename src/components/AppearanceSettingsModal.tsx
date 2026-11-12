@@ -85,7 +85,8 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
         </p>
       </div>
       {onChangeNsfwPreference && (
-        <div className="mt-5">
+        // Hidden on phones (the setting and its saved value are untouched); larger screens keep it.
+        <div className="mt-5 hidden sm:block">
           <p id="nsfw-pref-label" className="text-sm font-semibold text-fg">Show NSFW content</p>
           <p className="text-xs text-subtle mt-0.5 mb-2">For mature posts in Cosmos. Each post is only revealed when you choose.</p>
           <div role="radiogroup" aria-labelledby="nsfw-pref-label" className="space-y-1.5">
@@ -111,7 +112,7 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
       <button
         type="button"
         onClick={onOpenWhatsNew}
-        className="mt-5 w-full flex items-center gap-3 h-12 px-3 rounded-xl border border-line text-left text-sm font-semibold text-fg transition-colors cursor-pointer hover:bg-raised"
+        className="mt-5 w-full hidden sm:flex items-center gap-3 h-12 px-3 rounded-xl border border-line text-left text-sm font-semibold text-fg transition-colors cursor-pointer hover:bg-raised"
       >
         <Sparkles className="w-[18px] h-[18px] text-lavender shrink-0" aria-hidden="true" />
         <span className="flex-1">What’s New</span>
