@@ -129,3 +129,48 @@ test('after a failure the next request is made fresh, not answered with the fail
   assert.equal(calls, 2);
   void fetchPairsPage;
 });
+
+// ---------------------------------------------------------------------------------------------- a refresh after a known change
+test('a refresh after a change (fresh) never joins a request that was sent before the change, so it cannot return the old list', async () => {
+  const answers = ['old list', 'new list'];
+  const gates: Array<() => void> = [];
+  let sent = 0;
+  const fetchImpl = (async () => {
+    const answer = answers[sent];
+    sent += 1;
+    await new Promise<void>((resolve) => gates.push(resolve));
+    return okResponse({ answer });
+  }) as unknown as typeof fetch;
+  const early = getShared<{ answer: string }>('/api/race', { fetchImpl, getToken: token });
+  const joined = getShared<{ answer: string }>('/api/race', { fetchImpl, getToken: token });
+  await new Promise((r) => setTimeout(r, 5));
+  const later = getShared<{ answer: string }>('/api/race', { fetchImpl, getToken: token, fresh: true });
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(sent, 2, 'the fresh one made its own request');
+  gates.forEach((open) => open());
+  assert.equal((await early).answer, 'old list');
+  assert.equal((await joined).answer, 'old list', 'an ordinary caller still shares the request that was out');
+  assert.equal((await later).answer, 'new list');
+});
+
+test('finishing an older request does not forget a newer one that is still out', async () => {
+  const gates: Array<() => void> = [];
+  let sent = 0;
+  const fetchImpl = (async () => { sent += 1; await new Promise<void>((resolve) => gates.push(resolve)); return okResponse({ n: sent }); }) as unknown as typeof fetch;
+  const first = getShared('/api/forget', { fetchImpl, getToken: token });
+  await new Promise((r) => setTimeout(r, 5));
+  const second = getShared('/api/forget', { fetchImpl, getToken: token, fresh: true });
+  await new Promise((r) => setTimeout(r, 5));
+  gates[0]();
+  await first;
+  const third = getShared('/api/forget', { fetchImpl, getToken: token });
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(sent, 2, 'the third caller joined the newer request still out');
+  gates[1]();
+  await Promise.all([second, third]);
+});
+
+test('a missing inbox index is explained, not shown as a vague failure', async () => {
+  const failing = (async () => ({ ok: false, status: 503, json: async () => ({ error: 'inbox_index_missing' }) })) as unknown as typeof fetch;
+  await assert.rejects(getShared('/api/missing-index', { fetchImpl: failing, getToken: token }), (e: ListRequestError) => e.code === 'inbox_index_missing' && /being set up/i.test(e.message) && /nothing has been lost/i.test(e.message));
+});

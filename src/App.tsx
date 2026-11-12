@@ -28,6 +28,7 @@ import { isPostId, postIdFromSearch } from './utils/communityPostLink.ts';
 import { recordDailyActivity } from './services/activityService.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature } from './services/profilePersistence.ts';
+import { requestDurableStorage } from './services/accountLinking.ts';
 import { clearProfileCache } from './services/profileViewService.ts';
 import { clearBackgroundImageCache, pruneBackgroundImages } from './services/profileBackgroundService.ts';
 import { applyFilters, applyProfile, FilterFields, matchPrefsForMode, ProfileFields } from './utils/preferences.ts';
@@ -272,6 +273,8 @@ export default function App() {
   // Initialize anonymous auth session on startup and restore cloud profile if available
   useEffect(() => {
     if (isFirebaseConfigured) {
+      // Ask the browser not to evict this site's data (which holds the sign-in) when storage is tight or the app is left unused.
+      void requestDurableStorage();
       ensureAnonymousAuth()
         .then((user) => {
           if (user) {

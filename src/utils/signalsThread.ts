@@ -152,6 +152,9 @@ export function applyMyReaction(reactions: Reaction[] | undefined, emoji: string
     : [...without, { emoji, count: 1, userReacted: true }];
 }
 
+/** How many messages a conversation loads at a time: the newest page on opening, then one older page each time the reader scrolls up. */
+export const MESSAGE_PAGE_SIZE = 50;
+
 /** The newer of two cursors (ISO strings); null counts as "nothing yet". */
 export function newerCursor(current: string | null, next: string | null | undefined): string | null {
   if (!next) return current;

@@ -43,7 +43,8 @@ test('the two banners and the inbox share requests instead of each asking for ev
   assert.match(view, /const invitations = await fetchPendingInvitations\(\);/);
   assert.match(view, /return \(await fetchPair\(pairId\)\)\?\.partner\?\.displayName/, 'one connection, not the whole list');
   assert.match(view, /readInboxCache\(auth\?\.currentUser\?\.uid\)\?\.pairs\.find/, 'the remembered inbox answers first');
-  assert.match(list, /const pending = inFlight\.get\(path\);\s*if \(pending\) return pending as Promise<T>;/);
+  // An ordinary caller joins a request already out; a refresh after a known change (fresh) does not, so it can never get an older answer.
+  assert.match(list, /const pending = inFlight\.get\(path\);\s*if \(pending && !fresh\) return pending as Promise<T>;/);
   assert.doesNotMatch(view, /signalsRequest<\{ pairs: SignalPair\[\] \}>\('\/api\/signals\?view=pairs'\)/, 'no more un-paged list request');
 });
 

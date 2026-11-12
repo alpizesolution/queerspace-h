@@ -105,41 +105,59 @@ const createdMs = data => data?.createdAt?.toMillis?.() || 0;
 const newestFirst = (a, b) => createdMs(b.data) - createdMs(a.data) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 const isVisiblePair = (data, uid) => Array.isArray(data?.participants) && data.participants.includes(uid) && ['active', 'ended'].includes(data.status);
 
+/** What a missing composite index looks like (Firestore FAILED_PRECONDITION): a clear, specific error instead of a quietly shorter list. */
+export function inboxIndexError(error) {
+  return Object.assign(new Error('inbox_index_missing'), {
+    statusCode: 503,
+    cause: error,
+    detail: 'The signalsPairs index (participants array-contains, createdAt desc) is not deployed. Run: firebase deploy --only firestore:indexes',
+  });
+}
+
+const orderedPairs = (db, uid) => db.collection('signalsPairs').where('participants', 'array-contains', uid)
+  .orderBy('createdAt', 'desc').orderBy(FieldPath.documentId(), 'desc');
+
 /**
- * One page of the member's connections, newest first, with where the next page starts. Reads one page (plus one, to know
- * whether there is more) when the ordered query is available. If its index has not been created yet, it falls back to
- * reading the member's connections once and slicing in memory, so paging works either way.
+ * One page of the member's connections, newest first, with where the next page starts. It reads one page (plus one, to know
+ * whether there is more). There is deliberately NO fallback for a missing index: an unordered read capped at some number would
+ * quietly leave connections out. A missing index is reported as a clear error (503 inbox_index_missing) so it gets fixed.
  */
 export async function listPairsPage(db, uid, { limit, before }) {
   const cursor = decodeCursor(before);
-  const base = db.collection('signalsPairs').where('participants', 'array-contains', uid);
+  let query = orderedPairs(db, uid);
+  if (cursor) query = query.startAfter(Timestamp.fromMillis(cursor.millis), cursor.id);
   let docs;
-  let ordered = true;
   try {
-    let query = base.orderBy('createdAt', 'desc').orderBy(FieldPath.documentId(), 'desc');
-    if (cursor) query = query.startAfter(Timestamp.fromMillis(cursor.millis), cursor.id);
     docs = (await query.limit(limit + 1).get()).docs.map(snap => ({ id: snap.id, data: snap.data() }));
   } catch (error) {
-    if (error?.code !== 9) throw error;
-    ordered = false;
-    const all = (await base.limit(PAIR_LEGACY_LIMIT).get()).docs.map(snap => ({ id: snap.id, data: snap.data() })).sort(newestFirst);
-    const start = cursor ? all.findIndex(item => createdMs(item.data) < cursor.millis || (createdMs(item.data) === cursor.millis && item.id < cursor.id)) : 0;
-    docs = start < 0 ? [] : all.slice(start, start + limit + 1);
+    if (error?.code === 9) {
+      console.error('[Signals API] inbox_index_missing: deploy the signalsPairs index (firebase deploy --only firestore:indexes).');
+      throw inboxIndexError(error);
+    }
+    throw error;
   }
   const hasMore = docs.length > limit;
   const page = docs.slice(0, limit);
   const last = page[page.length - 1];
   return {
-    ordered,
+    ordered: true,
     nextCursor: hasMore && last ? encodeCursor(createdMs(last.data), last.id) : null,
     pairs: page.filter(item => isVisiblePair(item.data, uid)),
   };
 }
 
-/** The member's full list, as before: up to 100, newest first. */
+/** The member's list for a client that asks for no page: the newest PAIR_LEGACY_LIMIT, newest first (never an arbitrary subset). */
 export async function listPairsLegacy(db, uid) {
-  const snap = await db.collection('signalsPairs').where('participants', 'array-contains', uid).limit(PAIR_LEGACY_LIMIT).get();
-  return snap.docs.map(item => ({ id: item.id, data: item.data() })).filter(item => isVisiblePair(item.data, uid)).sort(newestFirst);
+  try {
+    const snap = await orderedPairs(db, uid).limit(PAIR_LEGACY_LIMIT).get();
+    return snap.docs.map(item => ({ id: item.id, data: item.data() })).filter(item => isVisiblePair(item.data, uid)).sort(newestFirst);
+  } catch (error) {
+    if (error?.code === 9) {
+      console.error('[Signals API] inbox_index_missing: deploy the signalsPairs index (firebase deploy --only firestore:indexes).');
+      throw inboxIndexError(error);
+    }
+    throw error;
+  }
 }
 
 /** One connection of the member's, or null: a stranger's, a missing one and an unusable one all look the same. */

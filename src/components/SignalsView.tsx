@@ -5,6 +5,8 @@ import { InboxSkeleton } from './Skeleton.tsx';
 import { Sheet } from './Sheet.tsx';
 import { SignalsConversation } from './SignalsConversation.tsx';
 import { ConnectionRequestsPanel } from './ConnectionRequestsPanel.tsx';
+import { AccountRecoverySheet } from './AccountRecoverySheet.tsx';
+import { accountStatus } from '../services/accountLinking.ts';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import type { SignalsInboxState } from '../hooks/useSignalsInbox.ts';
@@ -138,40 +140,58 @@ export const SignalsView: React.FC<{
   const [notice, setNotice] = useState<string | null>(null);
   const [openPairId, setOpenPairId] = useState<string | null>(initialPairId);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  // Anonymous members are told, once on this screen, that their conversations live only in this browser session.
+  const unsavedAccount = accountStatus(auth?.currentUser).anonymous;
   const [selectedInvitationId, setSelectedInvitationId] = useState<string | null>(null);
   const [invitationError, setInvitationError] = useState<string | null>(null);
   const [invitationAction, setInvitationAction] = useState<'accept' | 'decline' | null>(null);
 
-  const loadPairs = useCallback(async (quiet = false) => {
+  /** The list as last shown, readable outside a state update (so a refresh can tell whether deeper pages are already loaded). */
+  const pairsRef = useRef(pairs);
+  pairsRef.current = pairs;
+  /** Counts refreshes: only the newest one may change the screen, so a slow, older answer can never overwrite a newer one. */
+  const loadGeneration = useRef(0);
+
+  /**
+   * Reads the first page and the waiting invitations. `fresh` is for a refresh that follows a known change (a new rev from the live
+   * inbox, an accepted invitation): it never joins a request that was sent before the change, which would give the old list back.
+   */
+  const loadPairs = useCallback(async (quiet = false, fresh = false) => {
     if (!isFirebaseConfigured) {
       setError('Connect Firebase to use Signals. Your other QUEERSPACE features remain available.');
       setLoading(false);
       return;
     }
+    const generation = ++loadGeneration.current;
+    // The revision the answer is valid for is the one when it was ASKED, not when it came back.
+    const revAtStart = latestRev.current;
     // Content that is already on screen stays: only a first load with nothing to show uses the skeleton.
     if (!loadedOnce.current && !quiet) setLoading(true);
     setRefreshing(true);
     setError(null);
     try {
-      const [page, pending] = await Promise.all([fetchPairsPage(null), fetchPendingInvitations()]);
-      let kept = false;
-      setPairs((current) => {
-        const merged = mergeFirstPage(current, page.pairs);
-        kept = merged.length > page.pairs.length;
-        return merged;
-      });
+      const [page, pending] = await Promise.all([fetchPairsPage(null, fresh), fetchPendingInvitations(fresh)]);
+      if (generation !== loadGeneration.current) return;
+      const merged = mergeFirstPage(pairsRef.current, page.pairs);
+      const kept = merged.length > page.pairs.length;
+      pairsRef.current = merged;
+      setPairs(merged);
       // If pages further down were already loaded, their cursor still points to what comes next.
       const cursor = kept ? cursorRef.current : page.nextCursor;
       cursorRef.current = cursor;
       setNextCursor(cursor);
       setInvitations(pending);
       loadedOnce.current = true;
-      loadedRev.current = latestRev.current;
+      loadedRev.current = revAtStart;
     } catch (err) {
+      if (generation !== loadGeneration.current) return;
       setError(err instanceof Error ? err.message : 'Could not load your connections.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (generation === loadGeneration.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -224,7 +244,7 @@ export const SignalsView: React.FC<{
   useEffect(() => {
     if (inbox === undefined || inbox.rev === lastRev.current) return;
     lastRev.current = inbox.rev;
-    void loadPairs(true);
+    void loadPairs(true, true);
   }, [inbox?.rev, loadPairs]);
 
   const invitationsRef = useRef<HTMLDivElement>(null);
@@ -259,7 +279,7 @@ export const SignalsView: React.FC<{
       setInvitations((current) => current.map((item) => item.id === invitation.id ? { ...item, status: result.status as SignalInvitation['status'] } : item));
       if (action === 'accept' && result.status === 'accepted') {
         setNotice(`Connected with ${nameOf(invitation.partner)}.`);
-        await loadPairs();
+        await loadPairs(false, true);
       } else if (action === 'decline') {
         setNotice('Invitation declined. No message was sent.');
       } else if (action === 'revoke') {
@@ -321,7 +341,7 @@ export const SignalsView: React.FC<{
       onRequestedPairHandled?.();
     } else if (retriedRequestedPair.current !== requestedPairId) {
       retriedRequestedPair.current = requestedPairId;
-      void loadPairs(true);
+      void loadPairs(true, true);
     } else {
       onRequestedPairHandled?.();
     }
@@ -395,6 +415,12 @@ export const SignalsView: React.FC<{
         </button>
       </div>
 
+      {unsavedAccount && (
+        <div data-testid="save-account-banner" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-line bg-raised/60 px-3 py-2 text-xs text-muted">
+          <span>Keep your conversations safe if you clear data or change phone.</span>
+          <button type="button" onClick={() => setRecoveryOpen(true)} className="shrink-0 font-semibold text-berry underline underline-offset-4">Save account</button>
+        </div>
+      )}
       <div role="tablist" aria-label="Signals sections" className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1">
         {([['inbox', 'Inbox'], ['requests', 'Requests']] as const).map(([id, label]) => (
           <button key={id} role="tab" aria-selected={section === id} onClick={() => setSection(id)} className={`h-9 rounded-full text-[length:calc(13px_*_var(--fs,1))] font-semibold transition-colors cursor-pointer ${section === id ? 'bg-raised text-fg ring-1 ring-berry/40' : 'text-muted hover:text-fg'}`}>
@@ -411,8 +437,14 @@ export const SignalsView: React.FC<{
           <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notice" className="flex h-8 w-8 items-center justify-center text-muted hover:text-fg"><X className="h-4 w-4" /></button>
         </div>
       )}
+      {inbox?.reconnecting && !inbox.error && (
+        <p role="status" data-testid="inbox-reconnecting" className="mb-3 flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-xs text-muted"><LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Reconnecting live updates…</p>
+      )}
       {inbox?.error && !error && (
-        <p role="status" className="mb-3 rounded-xl border border-line px-3 py-2 text-xs text-muted">{inbox.error}</p>
+        <p role="status" data-testid="inbox-sync-error" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2 text-xs text-muted">
+          <span>{inbox.error}</span>
+          {inbox.retry && <button type="button" onClick={() => { inbox.retry?.(); void loadPairs(true, true); }} className="shrink-0 font-semibold text-berry underline underline-offset-4">Retry</button>}
+        </p>
       )}
       {error && (
         <div role="alert" className="mb-3 flex items-center gap-3 rounded-xl border border-berry/30 bg-plum/20 px-3 py-2 text-sm text-fg">
@@ -422,7 +454,7 @@ export const SignalsView: React.FC<{
       )}
 
       {section === 'requests' ? (
-        <ConnectionRequestsPanel rev={inbox?.rev ?? 0} onChanged={() => void loadPairs(true)} onOpenConversation={openPair} onBlockMember={onBlockMember} />
+        <ConnectionRequestsPanel rev={inbox?.rev ?? 0} onChanged={() => void loadPairs(true, true)} onOpenConversation={openPair} onBlockMember={onBlockMember} />
       ) : loading ? (
         <InboxSkeleton />
       ) : !loadedOnce.current ? null : (
@@ -588,6 +620,7 @@ export const SignalsView: React.FC<{
           {invitationError && <p role="alert" className="mt-3 text-sm text-danger">{invitationError}</p>}
         </Sheet>
       )}
+      {recoveryOpen && <AccountRecoverySheet onClose={() => setRecoveryOpen(false)} />}
       {privacyOpen && (
         <Sheet title="Private connections" size="sm" icon={<ShieldCheck className="h-5 w-5" />} onClose={() => setPrivacyOpen(false)}>
           <p className="text-sm leading-relaxed text-muted">Only you can view your connections. Ending a connection closes it here; no message is sent.</p>

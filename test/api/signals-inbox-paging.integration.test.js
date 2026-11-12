@@ -150,30 +150,41 @@ test('other members\' connections never appear in anyone\'s pages, and unusable 
   assert.ok(!JSON.stringify((await get(me, { view: 'pairs', limit: '20' })).body).includes('secret-about'));
 });
 
-test('without the ordered query\'s index the pages still work, and give the same answer', { skip }, async () => {
+test('without the ordered index the inbox says so clearly (503 inbox_index_missing) instead of quietly returning a shorter list', { skip }, async () => {
   const { get, me, connect } = await setup();
-  const ids = await connect(30);
-  const ordered = await get(me, { view: 'pairs', limit: '20' });
+  await connect(30);
   counter.orderedFails = true;
   counter.simulated = 0;
   try {
-    const seen = [];
-    let cursor;
-    let pages = 0;
-    do {
-      const res = await get(me, { view: 'pairs', limit: '20', ...(cursor ? { before: cursor } : {}) });
-      assert.equal(res.statusCode, 200, 'no error without the index');
-      seen.push(...res.body.pairs.map((p) => p.id));
-      cursor = res.body.nextCursor;
-      pages += 1;
-    } while (cursor && pages < 10);
-    assert.deepEqual(seen, ids);
-    assert.ok(counter.simulated >= 2, `the missing-index failure was really simulated (${counter.simulated} times)`);
-    assert.deepEqual(seen.slice(0, 20), ordered.body.pairs.map((p) => p.id), 'the same first page');
+    for (const query of [{ view: 'pairs', limit: '20' }, { view: 'pairs' }]) {
+      const res = await get(me, query);
+      assert.equal(res.statusCode, 503, 'a clear error, never a partial list');
+      assert.equal(res.body.error, 'inbox_index_missing');
+      assert.equal(res.body.pairs, undefined, 'no partial list');
+    }
+    assert.ok(counter.simulated >= 2, 'the missing-index failure was really simulated');
   } finally {
     counter.orderedFails = false;
   }
 });
+
+test('the full list (no page asked for) is the NEWEST 100, newest first, for a member with more than 100 connections; paging reaches all', { skip }, async () => {
+  const { get, me, connect } = await setup();
+  const ids = await connect(110);
+  const all = await get(me, { view: 'pairs' });
+  assert.equal(all.statusCode, 200);
+  assert.equal(all.body.pairs.length, 100);
+  assert.deepEqual(all.body.pairs.map((p) => p.id), ids.slice(0, 100), 'the newest 100, in order');
+  const seen = [];
+  let cursor;
+  do {
+    const res = await get(me, { view: 'pairs', limit: '20', ...(cursor ? { before: cursor } : {}) });
+    seen.push(...res.body.pairs.map((p) => p.id));
+    cursor = res.body.nextCursor;
+  } while (cursor);
+  assert.deepEqual(seen, ids);
+});
+
 
 test('what the inbox reads: a page costs a page, a repeat is cheaper, and the old full list costs what it always did', { skip }, async () => {
   const { get, me, connect } = await setup();

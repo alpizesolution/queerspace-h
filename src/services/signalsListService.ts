@@ -43,6 +43,7 @@ export class ListRequestError extends Error {
 const MESSAGES: Record<string, string> = {
   unauthenticated: 'Your session needs to refresh. Please try again.',
   not_allowed: 'You are not allowed to change this connection.',
+  inbox_index_missing: 'Your conversations can’t be listed right now because Signals is being set up. Nothing has been lost. Please try again later.',
   pair_not_found: 'This connection could not be found.',
   pair_not_active: 'This connection is no longer active.',
   invitation_not_pending: 'This invitation was already answered.',
@@ -60,15 +61,20 @@ export interface SharedDeps {
   /** The signed-in member's token, or null when signed out. */
   getToken?: () => Promise<string | null>;
   timeoutMs?: number;
+  /**
+   * Do not join a request that is already out for this address. For a refresh that follows a known change: an answer to a request
+   * sent BEFORE the change would be the old list.
+   */
+  fresh?: boolean;
 }
 
 const currentToken = async (): Promise<string | null> => (auth?.currentUser ? auth.currentUser.getIdToken() : null);
 
 /** One GET at a time per address: a second caller while it is out waits for the same answer. */
 export function getShared<T>(path: string, deps: SharedDeps = {}): Promise<T> {
+  const { fetchImpl = fetch, getToken = currentToken, timeoutMs = LIST_REQUEST_TIMEOUT_MS, fresh = false } = deps;
   const pending = inFlight.get(path);
-  if (pending) return pending as Promise<T>;
-  const { fetchImpl = fetch, getToken = currentToken, timeoutMs = LIST_REQUEST_TIMEOUT_MS } = deps;
+  if (pending && !fresh) return pending as Promise<T>;
   const request = (async (): Promise<T> => {
     const token = await getToken();
     if (!token) throw new ListRequestError('Sign in is still preparing. Please try again in a moment.', 'unauthenticated');
@@ -87,7 +93,7 @@ export function getShared<T>(path: string, deps: SharedDeps = {}): Promise<T> {
     } finally {
       clearTimeout(timer);
     }
-  })().finally(() => inFlight.delete(path));
+  })().finally(() => { if (inFlight.get(path) === request) inFlight.delete(path); });
   inFlight.set(path, request);
   return request;
 }
@@ -95,15 +101,15 @@ export function getShared<T>(path: string, deps: SharedDeps = {}): Promise<T> {
 export interface PairsPage { pairs: SignalPair[]; nextCursor: string | null }
 
 /** A page of connections, newest first. An older server that ignores paging answers with everything and no cursor. */
-export async function fetchPairsPage(before: string | null = null): Promise<PairsPage> {
+export async function fetchPairsPage(before: string | null = null, fresh = false): Promise<PairsPage> {
   const query = `view=pairs&limit=${PAIR_PAGE_SIZE}${before ? `&before=${encodeURIComponent(before)}` : ''}`;
-  const result = await getShared<{ pairs?: SignalPair[]; nextCursor?: string | null }>(`/api/signals?${query}`);
+  const result = await getShared<{ pairs?: SignalPair[]; nextCursor?: string | null }>(`/api/signals?${query}`, { fresh });
   return { pairs: Array.isArray(result.pairs) ? result.pairs : [], nextCursor: typeof result.nextCursor === 'string' ? result.nextCursor : null };
 }
 
 /** Invitations still waiting, which is all the inbox shows. */
-export async function fetchPendingInvitations(): Promise<SignalInvitation[]> {
-  const result = await getShared<{ invitations?: SignalInvitation[] }>('/api/signals?status=pending');
+export async function fetchPendingInvitations(fresh = false): Promise<SignalInvitation[]> {
+  const result = await getShared<{ invitations?: SignalInvitation[] }>('/api/signals?status=pending', { fresh });
   return Array.isArray(result.invitations) ? result.invitations : [];
 }
 

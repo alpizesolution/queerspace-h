@@ -27,6 +27,7 @@ import { QUICK_REACTIONS } from '../utils/reactions.ts';
 import {
   applyMyReaction,
   describeSendFailure,
+  MESSAGE_PAGE_SIZE,
   mergeMessages,
   newerCursor,
   visibleThread,
@@ -87,6 +88,7 @@ async function request<T>(path: string, body?: Record<string, unknown>): Promise
       not_allowed: 'You can no longer message this connection.',
       pair_not_found: 'This connection could not be found.',
       pair_not_active: 'This connection has ended.',
+      conversation_unavailable: 'This conversation isn’t available right now.',
       account_unavailable: 'Messaging is temporarily unavailable for this account.',
       invalid_card: 'That card isn’t available. Please pick another.',
       internal_error: 'Signals is temporarily unavailable. Please try again.',
@@ -134,6 +136,20 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [pending, setPending] = useState<PendingMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
+  /** The server refused to show this conversation (a block either way, or a suspension). Shown as its own state, never as an empty chat. */
+  const [unavailable, setUnavailable] = useState(false);
+  const unavailableRef = useRef(false);
+  /** Where the next, older page starts (null when the whole history is already loaded). */
+  const [olderCursor, setOlderCursor] = useState<string | null>(null);
+  const olderCursorRef = useRef<string | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState(false);
+  const olderBusy = useRef(false);
+  /** Set just before older messages are added at the top: the thread keeps the reader's place instead of jumping. */
+  const prepended = useRef(false);
+  const restoreScroll = useRef<{ height: number; top: number } | null>(null);
+  const activePair = useRef(pairId);
+  activePair.current = pairId;
   const [replyingTo, setReplyingTo] = useState<SignalMessage | null>(null);
   /** Message whose Reply / reaction actions are open (tap or Enter on the bubble). */
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -194,31 +210,77 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   // phone, see index.css) and the bottom tab bar.
   const chrome = 'var(--chat-top-chrome) - var(--tabbar-h)';
 
+  const markUnavailable = useCallback(() => {
+    unavailableRef.current = true;
+    setUnavailable(true);
+    setMessages([]);
+    setError(null);
+  }, []);
+
   const loadMessages = useCallback(async (quiet = false) => {
+    // Once the server has said "not available", polling stops asking; "Try again" lifts it.
+    if (unavailableRef.current && quiet) return;
     if (!quiet) setLoading(true);
     try {
-      // After the first load, a poll asks only for messages that are new or changed (a reaction) since the cursor.
+      // The first read is always the NEWEST page. After that, a poll asks only for messages that are new or changed (a reaction)
+      // since the cursor. Older messages come from loadOlder, a page at a time.
       const since = quiet && cursor.current ? `&after=${encodeURIComponent(cursor.current)}` : '';
-      const result = await request<{ messages: SignalMessage[]; cursor?: string | null }>(
-        `/api/signals?view=messages&pairId=${encodeURIComponent(pairId)}${since}`
+      const size = since ? '' : `&limit=${MESSAGE_PAGE_SIZE}`;
+      const result = await request<{ messages: SignalMessage[]; cursor?: string | null; olderCursor?: string | null }>(
+        `/api/signals?view=messages&pairId=${encodeURIComponent(pairId)}${since}${size}`
       );
+      if (activePair.current !== pairId) return;
       const next = Array.isArray(result.messages) ? result.messages : [];
       cursor.current = newerCursor(cursor.current, result.cursor);
       if (!loadedOnce.current) {
         loadedOnce.current = true;
         lastMessageId.current = next.length ? next[next.length - 1].id : '';
+        olderCursorRef.current = typeof result.olderCursor === 'string' ? result.olderCursor : null;
+        setOlderCursor(olderCursorRef.current);
       }
+      unavailableRef.current = false;
+      setUnavailable(false);
       setMessages((current) => (loadedOnce.current && current.length ? mergeMessages(current, next) : next));
       setError(null);
       setEnded(false);
     } catch (err) {
+      if ((err as { code?: string } | null)?.code === 'conversation_unavailable') { markUnavailable(); return; }
       const message = err instanceof Error ? err.message : 'Could not load messages.';
       if (message.toLowerCase().includes('ended')) setEnded(true);
       setError(message);
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [pairId]);
+  }, [pairId, markUnavailable]);
+
+  /** Loads the page of messages just older than what is shown, keeping the reader's place. Safe to call again while one is out. */
+  const loadOlder = useCallback(async () => {
+    const before = olderCursorRef.current;
+    if (!before || olderBusy.current) return;
+    olderBusy.current = true;
+    setLoadingOlder(true);
+    setOlderError(false);
+    try {
+      const result = await request<{ messages: SignalMessage[]; olderCursor?: string | null }>(
+        `/api/signals?view=messages&pairId=${encodeURIComponent(pairId)}&limit=${MESSAGE_PAGE_SIZE}&before=${encodeURIComponent(before)}`
+      );
+      if (activePair.current !== pairId) return;
+      const older = Array.isArray(result.messages) ? result.messages : [];
+      const el = listRef.current;
+      if (el && older.length) restoreScroll.current = { height: el.scrollHeight, top: el.scrollTop };
+      prepended.current = older.length > 0;
+      // Merged by id and ordered by time, so a message that a poll already brought in is never shown twice.
+      setMessages((current) => mergeMessages(current, older));
+      olderCursorRef.current = typeof result.olderCursor === 'string' ? result.olderCursor : null;
+      setOlderCursor(olderCursorRef.current);
+    } catch (err) {
+      if ((err as { code?: string } | null)?.code === 'conversation_unavailable') markUnavailable();
+      else setOlderError(true);
+    } finally {
+      olderBusy.current = false;
+      setLoadingOlder(false);
+    }
+  }, [pairId, markUnavailable]);
 
   // Polls only while someone is around: a hidden or idle tab stops asking, and coming back makes one quiet catch-up read
   // (it asks only for what changed since the cursor) before the polling resumes.
@@ -331,6 +393,15 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     const grew = thread.length > lastCount.current;
     const first = lastCount.current === 0;
     lastCount.current = thread.length;
+    // Older messages were added at the top: put the reader back where they were, and do not call them "new messages".
+    if (prepended.current) {
+      prepended.current = false;
+      const saved = restoreScroll.current;
+      restoreScroll.current = null;
+      const el = listRef.current;
+      if (saved && el) el.scrollTop = saved.top + (el.scrollHeight - saved.height);
+      return;
+    }
     if (!grew) return;
     if (first || stickToBottom.current || lastOwnSend.current) scrollToBottom(!first);
     else setHasUnseen(true);
@@ -676,6 +747,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
               const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
               stickToBottom.current = atBottom;
               if (atBottom) setHasUnseen(false);
+              // Scrolling up to the top brings in the next older page.
+              if (el.scrollTop < 120 && olderCursorRef.current) void loadOlder();
             }}
             className="h-full overflow-y-auto overscroll-contain px-3 py-2"
             aria-live="polite"
@@ -685,13 +758,31 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
               <div className="flex h-full min-h-40 items-center justify-center gap-2 text-sm text-muted">
                 <LoaderCircle className="h-4 w-4 animate-spin text-berry" /> Opening your conversation…
               </div>
+            ) : unavailable ? (
+              <div role="status" data-testid="conversation-unavailable" className="flex h-full min-h-40 flex-col items-center justify-center px-6 text-center">
+                <p className="text-sm font-semibold text-fg">This conversation isn’t available right now</p>
+                <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">It can’t be opened at the moment. Nothing has been deleted. If this keeps happening, you can contact support.</p>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" onClick={() => { unavailableRef.current = false; void loadMessages(); }} className="btn btn-secondary btn-sm">Try again</button>
+                  <button type="button" onClick={onBack} className="btn btn-secondary btn-sm">Back to Signals</button>
+                </div>
+              </div>
             ) : thread.length === 0 ? (
               <div className="flex h-full min-h-40 flex-col items-center justify-center px-4 text-center">
                 <p className="text-sm font-medium text-fg">A quiet little beginning</p>
                 <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">Say hello to {partnerName} when you're ready. There's no need to rush.</p>
               </div>
             ) : (
-              thread.map((message, index) => {
+              <>
+              {olderCursor && (
+                <div className="flex justify-center pb-2">
+                  <button type="button" onClick={() => void loadOlder()} disabled={loadingOlder} data-testid="load-earlier" className="flex items-center gap-1.5 rounded-full border border-line bg-raised/80 px-3 py-1.5 text-xs font-semibold text-muted transition hover:text-fg disabled:opacity-60">
+                    {loadingOlder ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : null}
+                    {olderError ? 'Couldn’t load earlier messages. Tap to retry' : loadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}
+                  </button>
+                </div>
+              )}
+              {thread.map((message, index) => {
                 const mine = message.senderId === userId;
                 const unsent = Boolean(message.pending);
                 const sameSenderAsPrev = index > 0 && thread[index - 1].senderId === message.senderId;
@@ -801,7 +892,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                     </div>
                   </div>
                 );
-              })
+              })}
+              </>
             )}
           </div>
           {hasUnseen && (
@@ -823,6 +915,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
             This connection has ended. Messaging is now closed.
             <button type="button" onClick={onBack} className="ml-2 font-semibold text-berry underline underline-offset-4">Back to Signals</button>
           </div>
+        ) : unavailable ? (
+          <div className="shrink-0 border-t border-line bg-raised/60 p-3 text-center text-xs text-muted">Messaging is paused while this conversation isn’t available.</div>
         ) : (
           <div className="shrink-0 border-t border-line bg-ink px-3 pb-1 pt-2">
             {replyingTo && (

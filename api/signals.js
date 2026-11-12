@@ -11,6 +11,7 @@ import { clearCurrentVibe, setCurrentVibe, vibeView } from './_vibe.js';
 import { backgroundImageView, pruneBackgroundImages, setBackgroundImage } from './_background.js';
 import { GAME_TEXT, isGuess, parseChallenge, shapeStoredGame } from './_game.js';
 import { GIF_TEXT, sharedGiphy, isGifId, limitGifSearches, limitGifSends, parseGifQuery, shapeStoredGif } from './_giphy.js';
+import { listMessagesPage, parseMessageLimit } from './_messages.js';
 import { createPartnerCache, getOnePair, listPairsLegacy, listPairsPage, parsePageLimit, partnerSummaries, shapePair } from './_inbox.js';
 
 const giphy = sharedGiphy;
@@ -188,7 +189,9 @@ export default async function handler(req, res) {
         if ((Array.isArray(ownBlocked) && ownBlocked.includes(otherUid))
           || (Array.isArray(otherBlocked) && otherBlocked.includes(uid))
           || ownSuspension.exists || otherSuspension.exists) {
-          return send(res, 403, { error: 'not_allowed' });
+          // One answer for a block (either way) and for a suspension, so the app can say "not available" without telling the member
+          // which it is or who did it. The record is untouched; nothing is deleted.
+          return send(res, 403, { error: 'conversation_unavailable' });
         }
         // After the first load the client sends `after` (the cursor it was given) and only gets messages that are new or
         // changed (a reaction) since then, instead of the whole history every few seconds.
@@ -196,9 +199,19 @@ export default async function handler(req, res) {
         const afterMs = typeof afterParam === 'string' ? Date.parse(afterParam) : Number.NaN;
         const pollStartedAt = Date.now();
         const messagesRef = db.collection('signalsPairs').doc(pairId).collection('messages');
-        const messageSnap = Number.isFinite(afterMs)
-          ? await messagesRef.where('updatedAt', '>', Timestamp.fromMillis(afterMs - DELTA_OVERLAP_MS)).orderBy('updatedAt', 'asc').limit(100).get()
-          : await messagesRef.orderBy('createdAt', 'asc').limit(100).get();
+        // A poll asks only for what changed since its cursor. Opening a conversation (or asking for earlier messages with `before`)
+        // reads a page of the NEWEST messages, newest page first, so a long conversation can never hide its latest messages.
+        const messageParam = name => req.query?.[name] || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get(name);
+        let olderCursor = null;
+        let messageSnap;
+        if (Number.isFinite(afterMs)) {
+          messageSnap = await messagesRef.where('updatedAt', '>', Timestamp.fromMillis(afterMs - DELTA_OVERLAP_MS)).orderBy('updatedAt', 'asc').limit(100).get();
+        } else {
+          const page = await listMessagesPage(messagesRef, { limit: parseMessageLimit(messageParam('limit')), before: messageParam('before') });
+          if (page.invalid) return send(res, 400, { error: 'invalid_request' });
+          messageSnap = { docs: page.docs };
+          olderCursor = page.olderCursor;
+        }
         const photos = await media.photoViews(db, uid, messageSnap.docs);
         const messages = messageSnap.docs.map(snap => {
           const data = snap.data();
@@ -230,7 +243,7 @@ export default async function handler(req, res) {
             ),
           };
         });
-        return send(res, 200, { messages, cursor: deltaCursor(pollStartedAt) });
+        return send(res, 200, { messages, cursor: deltaCursor(pollStartedAt), ...(Number.isFinite(afterMs) ? {} : { olderCursor }) });
       }
       if (view === 'requests') return send(res, 200, await connectionRequests.list(db, uid));
       if (view === 'background-image') {
@@ -728,12 +741,14 @@ export default async function handler(req, res) {
         const senderId = invite.senderId;
         const recipientId = invite.recipientId;
         const pairRef = db.doc(`signalsPairs/${invitationId}`);
-        const [senderSettings, recipientSettings, senderSuspension, recipientSuspension, pairSnap] = await Promise.all([
+        const [senderSettings, recipientSettings, senderSuspension, recipientSuspension, pairSnap, existingPair] = await Promise.all([
           tx.get(db.doc(`users/${senderId}/private/settings`)),
           tx.get(db.doc(`users/${recipientId}/private/settings`)),
           tx.get(db.doc(`suspensions/${senderId}`)),
           tx.get(db.doc(`suspensions/${recipientId}`)),
           tx.get(pairRef),
+          // A conversation these two already have (from an earlier Signal or a connection request) is reused, never duplicated.
+          tx.get(db.collection('signalsPairs').where('participants', '==', [senderId, recipientId].sort()).where('status', '==', 'active').limit(1)),
         ]);
         const aBlocked = senderSettings.data()?.blockedPartnerIds;
         const bBlocked = recipientSettings.data()?.blockedPartnerIds;
@@ -743,6 +758,12 @@ export default async function handler(req, res) {
           tx.update(inviteRef, { status: 'declined', updatedAt: FieldValue.serverTimestamp() });
           resolved();
           return { status: 'declined' };
+        }
+        if (!existingPair.empty && !pairSnap.exists) {
+          const existingId = existingPair.docs[0].id;
+          tx.update(inviteRef, { status: 'accepted', updatedAt: FieldValue.serverTimestamp() });
+          resolved(acceptedNotification(existingId));
+          return { status: 'accepted', pairId: existingId };
         }
         if (pairSnap.exists) throw Object.assign(new Error('pair_already_exists'), { statusCode: 409 });
         tx.create(pairRef, {

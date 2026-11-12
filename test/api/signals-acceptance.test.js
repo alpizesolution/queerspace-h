@@ -36,9 +36,11 @@ test('touchInbox adds the notification to the same write as the revision bump', 
 });
 
 test('only the accept branch writes the notification, in the same transaction that creates the pair', () => {
-  assert.equal((api.match(/acceptedNotification\(/g) || []).length, 2, 'defined once, used once');
+  // Defined once; used when the pair is created, and when the two already had an active conversation (which is reused, not duplicated).
+  assert.equal((api.match(/acceptedNotification\(/g) || []).length, 3);
   const accept = api.slice(api.indexOf("if (action === 'accept')"), api.indexOf("const nextStatus"));
   assert.match(accept, /tx\.create\(pairRef/);
+  assert.match(accept, /existingPair\.empty[\s\S]*resolved\(acceptedNotification\(existingId\)\)/, 'an existing active conversation is reused, never duplicated');
   assert.match(accept, /resolved\(acceptedNotification\(invitationId\)\)/);
   const rest = api.slice(api.indexOf("const nextStatus"));
   assert.doesNotMatch(rest, /acceptedNotification/, 'decline / revoke never notify');
