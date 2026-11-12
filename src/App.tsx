@@ -709,7 +709,8 @@ export default function App() {
       {profileOpen && !ageGateOpen && !ageRestricted && (
         <ProfilePageSheet currentPrefs={userPrefs} onClose={() => setProfileOpen(false)}
           onEditProfile={() => { setProfileOpen(false); setProfileEditOpen(true); }}
-          onEditPreferences={() => { setProfileOpen(false); setSetupInitialMode('custom'); setSetupModalOpen(true); }} />
+          onEditPreferences={() => { setProfileOpen(false); setSetupInitialMode('custom'); setSetupModalOpen(true); }}
+          onViewPublicProfile={auth?.currentUser?.uid ? () => { const id = auth!.currentUser!.uid; setProfileOpen(false); openProfile(id); } : undefined} />
       )}
 
       {profileEditOpen && !ageGateOpen && !ageRestricted && (

@@ -1,5 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight, LockKeyhole, Pencil, Sparkles } from 'lucide-react';
+import { auth } from '../lib/firebase.ts';
+import { CurrentVibeCard, CurrentVibeSheet, SetVibePrompt } from './CurrentVibe.tsx';
+import { useMinuteClock } from '../hooks/useMemberVibe.ts';
+import { fetchMemberVibe, removeCurrentVibe, vibeProblemText } from '../services/currentVibeService.ts';
+import { isLive, type VibeView } from '../utils/currentVibe.ts';
 import { Sheet } from './Sheet.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { UserPreferences } from '../types.ts';
@@ -12,10 +17,34 @@ interface ProfilePageSheetProps {
   onClose: () => void;
   onEditProfile: () => void;
   onEditPreferences: () => void;
+  /** Opens the public page other members see (where the Current Vibe card also shows). */
+  onViewPublicProfile?: () => void;
 }
 
 /** Private self-view for the member; only the public fields are visible to other members. */
-export const ProfilePageSheet: React.FC<ProfilePageSheetProps> = ({ currentPrefs, onClose, onEditProfile, onEditPreferences }) => {
+export const ProfilePageSheet: React.FC<ProfilePageSheetProps> = ({ currentPrefs, onClose, onEditProfile, onEditPreferences, onViewPublicProfile }) => {
+  // Current Vibe: the member's own live status (undefined while it loads), and its editor. Publishing needs a finished profile.
+  const [vibe, setVibe] = useState<VibeView | null | undefined>(undefined);
+  const [editingVibe, setEditingVibe] = useState(false);
+  const [removingVibe, setRemovingVibe] = useState(false);
+  const [vibeNote, setVibeNote] = useState<string | null>(null);
+  const clock = useMinuteClock();
+  useEffect(() => {
+    const uid = auth?.currentUser?.uid;
+    if (!uid || !currentPrefs.profileComplete) { setVibe(null); return; }
+    let live = true;
+    void fetchMemberVibe(uid).then((found) => { if (live) setVibe(found); });
+    return () => { live = false; };
+  }, [currentPrefs.profileComplete]);
+  const liveVibe = vibe && isLive(vibe, clock) ? vibe : null;
+  const removeVibe = async () => {
+    if (removingVibe) return;
+    setRemovingVibe(true);
+    setVibeNote(null);
+    const result = await removeCurrentVibe();
+    setRemovingVibe(false);
+    if (result.ok) setVibe(null); else setVibeNote(vibeProblemText(result.reason));
+  };
   const age = currentPrefs.birthDate ? calculateAge(currentPrefs.birthDate) : null;
   const [correcting, setCorrecting] = React.useState(false);
   const myType = currentPrefs.applyGenderExpressionFilter
@@ -38,6 +67,17 @@ export const ProfilePageSheet: React.FC<ProfilePageSheetProps> = ({ currentPrefs
         <Sparkles className="w-5 h-5 text-berry shrink-0 mt-0.5" />
         <div><p className="text-sm font-medium">Finish your profile</p><p className="text-xs text-muted mt-1">Save your anonymous details before joining discovery.</p></div>
       </div>}
+      {currentPrefs.profileComplete && vibe !== undefined && (
+        <section data-testid="my-profile-current-vibe">
+          {liveVibe
+            ? <CurrentVibeCard vibe={liveVibe} self onEdit={() => setEditingVibe(true)} onRemove={() => void removeVibe()} removing={removingVibe} />
+            : <SetVibePrompt onClick={() => setEditingVibe(true)} />}
+          {vibeNote && <p role="alert" className="mt-1.5 text-xs text-danger">{vibeNote}</p>}
+        </section>
+      )}
+      {onViewPublicProfile && currentPrefs.profileComplete && (
+        <button type="button" onClick={onViewPublicProfile} className="btn btn-secondary w-full">View my public profile <ArrowRight className="w-4 h-4" /></button>
+      )}
       <section className="rounded-2xl border border-line bg-raised/60 p-4 space-y-2">
         <p className="text-[length:calc(11px_*_var(--fs,1))] uppercase tracking-[0.14em] font-semibold text-subtle">About Me</p>
         {currentPrefs.aboutMe?.trim() ? <p className="text-sm leading-6 whitespace-pre-wrap [overflow-wrap:anywhere]">{currentPrefs.aboutMe}</p> : <p className="text-sm text-subtle">Nothing here yet.</p>}
@@ -74,5 +114,6 @@ export const ProfilePageSheet: React.FC<ProfilePageSheetProps> = ({ currentPrefs
       <p className="text-xs leading-5 text-subtle">Your birthday and My Type stay private. You never need to share your real name or photo.</p>
     </div>
     {correcting && <BirthdayCorrectionSheet onClose={() => setCorrecting(false)} />}
+    {editingVibe && <CurrentVibeSheet existing={liveVibe} onClose={() => setEditingVibe(false)} onPublished={(published) => { setVibe(published); setEditingVibe(false); }} />}
   </Sheet>;
 };

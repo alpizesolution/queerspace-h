@@ -6,7 +6,9 @@ profile field. (The older permanent "My Vibe" text on a profile is a different t
 
 ## Where it appears
 
-- **Profile page:** a compact card (mood, message, "Updated 2 hours ago · Expires in 22 hours"). On your own page it has Edit Mood
+- **My profile (the Profile button in the header and menu):** the member's own card with Edit Mood and Remove Mood, or the
+  "Set your Current Vibe" prompt, plus a "View my public profile" button. It shows once the profile is finished.
+- **Public profile page** (opened by tapping a member's name or avatar, or a shared profile link): a compact card (mood, message, "Updated 2 hours ago · Expires in 22 hours"). On your own page it has Edit Mood
   and Remove Mood and says who can see it; with no live status it shows a quiet "Set your Current Vibe" button. On someone else's
   page it appears only when they have a live status you are allowed to see, and never as an empty card.
 - **Seek:** a small emoji-and-name chip beside the partner's name in the chat header.
