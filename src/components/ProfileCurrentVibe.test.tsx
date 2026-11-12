@@ -69,27 +69,27 @@ test('another member with a live status: the card shows the mood, the message an
   assert.ok(card.getByText('Healing'));
   assert.ok(card.getByText('“Taking life one day at a time.”'));
   assert.ok(card.getByText('Updated 2 hours ago · Expires in 22 hours'));
-  assert.equal(card.queryByRole('button'), null, 'no Edit or Remove on someone else\'s');
-  assert.equal(screen.queryByTestId('set-current-vibe'), null, 'no prompt to set one on someone else\'s page');
+  assert.ok(card.queryByRole('button') === null, 'no Edit or Remove on someone else\'s');
+  assert.ok(screen.queryByTestId('set-current-vibe') === null, 'no prompt to set one on someone else\'s page');
 });
 
 test('another member with no status (or one the server hid): nothing at all, never an empty card or a prompt', async () => {
   await show(profile({ currentVibe: null }));
-  assert.equal(screen.queryByTestId('current-vibe'), null);
-  assert.equal(screen.queryByTestId('set-current-vibe'), null);
-  assert.equal(screen.queryByText(/Current Vibe/), null);
+  assert.ok(screen.queryByTestId('current-vibe') === null);
+  assert.ok(screen.queryByTestId('set-current-vibe') === null);
+  assert.ok(screen.queryByText(/Current Vibe/) === null);
 });
 
 test('an older server answer with no status field at all shows nothing and nothing breaks', async () => {
   const { currentVibe: _gone, ...older } = profile();
   await show(older as ProfileResponse);
-  assert.equal(screen.queryByTestId('current-vibe'), null);
+  assert.ok(screen.queryByTestId('current-vibe') === null);
   assert.ok(screen.getByText('Tea and books'));
 });
 
 test('an expired status is not shown, even if the answer still carries it', async () => {
   await show(profile({ currentVibe: live({ expiresAt: iso(-1000) }) }));
-  assert.equal(screen.queryByTestId('current-vibe'), null);
+  assert.ok(screen.queryByTestId('current-vibe') === null);
 });
 
 test('your own page without a status offers a quiet way to set one, and opens the editor', async () => {
@@ -98,7 +98,7 @@ test('your own page without a status offers a quiet way to set one, and opens th
   assert.ok(screen.getByRole('dialog', { name: 'Current Vibe' }));
   assert.equal(screen.getAllByRole('radio').filter((r) => r.getAttribute('role') === 'radio' && r.getAttribute('aria-checked') !== null).length, 14);
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  assert.equal(screen.queryByRole('dialog', { name: 'Current Vibe' }), null, 'cancel closes without saving');
+  assert.ok(screen.queryByRole('dialog', { name: 'Current Vibe' }) === null, 'cancel closes without saving');
   assert.equal(published.length, 0);
 });
 
@@ -109,12 +109,14 @@ test('publishing from your own page puts the status on it straight away', async 
   fireEvent.click(screen.getByRole('radio', { name: /Grateful/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
   fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
-  await waitFor(() => assert.equal(screen.queryByRole('dialog', { name: 'Current Vibe' }), null));
+  // Compare a boolean, never the element itself: if the first poll comes before the dialog has closed, a failed assertion on a DOM
+  // node makes Node print the whole jsdom tree, which freezes the page (so it can never close) and exhausts memory.
+  await waitFor(() => assert.equal(document.querySelector('[role=dialog][aria-labelledby]') === null, true)); // the editor sheet (the profile page itself is also a dialog)
   const card = within(await screen.findByTestId('current-vibe'));
   assert.ok(card.getByText('Grateful'));
   assert.ok(card.getByText('“Thank you all”'));
-  assert.equal(screen.queryByTestId('set-current-vibe'), null);
-  assert.equal(screen.queryByRole('dialog', { name: 'Current Vibe' }), null);
+  assert.ok(screen.queryByTestId('set-current-vibe') === null);
+  assert.ok(screen.queryByRole('dialog', { name: 'Current Vibe' }) === null);
 });
 
 test('your own live status shows Edit Mood, Remove Mood and who can see it; Edit opens the editor on it', async () => {
@@ -136,15 +138,15 @@ test('Remove Mood takes it off the page and the prompt comes back; a failure lea
   removeOk = true;
   fireEvent.click(within(screen.getByTestId('current-vibe')).getByRole('button', { name: /Remove Mood/ }));
   assert.ok(await screen.findByTestId('set-current-vibe'));
-  assert.equal(screen.queryByTestId('current-vibe'), null);
+  assert.ok(screen.queryByTestId('current-vibe') === null);
   assert.ok(screen.getByText('Current Vibe removed.'));
 });
 
 test('a blocked member\'s profile and an unavailable one never show a status', async () => {
   await show({ self: false, member: null, relation: { state: 'none' }, blocked: 'by_me' } as ProfileResponse, /You blocked this member/);
-  assert.equal(screen.queryByTestId('current-vibe'), null);
-  assert.equal(screen.queryByTestId('set-current-vibe'), null);
+  assert.ok(screen.queryByTestId('current-vibe') === null);
+  assert.ok(screen.queryByTestId('set-current-vibe') === null);
   cleanup();
   await show({ ok: false, reason: 'unavailable' }, /This profile isn’t available/);
-  assert.equal(screen.queryByTestId('current-vibe'), null);
+  assert.ok(screen.queryByTestId('current-vibe') === null);
 });

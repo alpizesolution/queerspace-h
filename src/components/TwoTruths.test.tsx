@@ -37,7 +37,7 @@ test('Preview is refused with a message for each problem: empty statements, no l
   fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
   assert.equal(screen.getAllByText('Write a statement.').length, 3);
   assert.ok(screen.getByText('Choose which statement is the lie.'));
-  assert.equal(screen.queryByTestId('two-truths-preview'), null);
+  assert.ok(screen.queryByTestId('two-truths-preview') === null);
   assert.equal(sent.length, 0);
 });
 
@@ -47,7 +47,7 @@ test('duplicate statements are refused', () => {
   fireEvent.click(screen.getByRole('radio', { name: 'Statement 3 is the lie' }));
   fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
   assert.equal(screen.getAllByText('Each statement needs to be different.').length, 2);
-  assert.equal(screen.queryByTestId('two-truths-preview'), null);
+  assert.ok(screen.queryByTestId('two-truths-preview') === null);
 });
 
 test('exactly one statement can be the lie', () => {
@@ -111,7 +111,7 @@ test('the recipient sees the three statements, the instruction and the status, b
   assert.ok(within(c).getAllByText('Which one do you think is the lie?').length >= 1);
   assert.ok(within(c).getByText('✨ Two Truths and a Lie'));
   assert.match(screen.getByTestId('two-truths-status').textContent ?? '', /Your turn/);
-  assert.equal(c.querySelector('[data-lie]'), null);
+  assert.ok(c.querySelector('[data-lie]') === null);
   assert.doesNotMatch(c.textContent ?? '', /The lie|Truth\b|You got it right|Not quite/);
   assert.equal(c.getAttribute('data-status'), 'open');
 });
@@ -145,21 +145,21 @@ test('while a guess is on its way the choices and the button are locked, so it c
 
 test('a card that is still being sent cannot be guessed', () => {
   card(base, { pending: true });
-  assert.equal(screen.queryByRole('button', { name: 'Submit Guess' }), null);
+  assert.ok(screen.queryByRole('button', { name: 'Submit Guess' }) === null);
 });
 
 test('the sender sees their card waiting, with no way to guess their own challenge', () => {
   card({ ...base, canGuess: false }, { mine: true });
-  assert.equal(screen.queryByRole('radio'), null);
-  assert.equal(screen.queryByRole('button', { name: 'Submit Guess' }), null);
+  assert.ok(screen.queryByRole('radio') === null);
+  assert.ok(screen.queryByRole('button', { name: 'Submit Guess' }) === null);
   assert.ok(screen.getByText('Waiting for Luna to guess…'));
   assert.match(screen.getByTestId('two-truths-status').textContent ?? '', /Waiting/);
 });
 
 test('answered: the guess is locked (no choices, no button) and the lie is shown', () => {
   card(done(0, 1));
-  assert.equal(screen.queryByRole('radio'), null);
-  assert.equal(screen.queryByRole('button', { name: 'Submit Guess' }), null);
+  assert.ok(screen.queryByRole('radio') === null);
+  assert.ok(screen.queryByRole('button', { name: 'Submit Guess' }) === null);
   const lie = screen.getByTestId('two-truths-card').querySelector('[data-lie="true"]');
   assert.ok(lie && /I own a snake/.test(lie.textContent ?? ''));
   assert.match(screen.getByTestId('two-truths-status').textContent ?? '', /Answered/);

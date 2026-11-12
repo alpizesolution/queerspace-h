@@ -171,15 +171,15 @@ test('the card shows the mood, the message and when it was updated and ends', ()
 
 test('without a message the card is just the mood and the times, with no empty quotes', () => {
   render(<CurrentVibeCard vibe={vibe({ message: null })} />);
-  assert.equal(screen.queryByText(/“/), null);
+  assert.ok(screen.queryByText(/“/) === null);
   assert.ok(screen.getByText('Healing'));
 });
 
 test('on someone else\'s profile the card has no actions and no setting; on your own it has Edit Mood, Remove Mood and who can see it', () => {
   const edits: string[] = [];
   const { unmount } = render(<CurrentVibeCard vibe={vibe()} />);
-  assert.equal(screen.queryByRole('button'), null);
-  assert.equal(screen.queryByText(/Visible to/), null);
+  assert.ok(screen.queryByRole('button') === null);
+  assert.ok(screen.queryByText(/Visible to/) === null);
   unmount();
   render(<CurrentVibeCard vibe={vibe({ visibility: 'connections' })} self onEdit={() => edits.push('edit')} onRemove={() => edits.push('remove')} />);
   fireEvent.click(screen.getByRole('button', { name: /Edit Mood/ }));

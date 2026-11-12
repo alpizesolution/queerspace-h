@@ -64,26 +64,26 @@ test('Signals: when the server returns no status (hidden by their setting, block
   vibeBody = { vibe: null };
   await show();
   await waitFor(() => assert.ok(asked.some((u) => u.includes('view=vibe'))));
-  assert.equal(screen.queryByTestId('vibe-chip'), null);
+  assert.ok(screen.queryByTestId('vibe-chip') === null);
 });
 
 test('Signals: a failed lookup shows nothing, and a status that has already expired is never shown even if the server sent it', async () => {
   vibeBody = { error: 'internal_error' }; vibeStatus = 500;
   await show();
   await waitFor(() => assert.ok(asked.some((u) => u.includes('view=vibe'))));
-  assert.equal(screen.queryByTestId('vibe-chip'), null);
+  assert.ok(screen.queryByTestId('vibe-chip') === null);
   cleanup(); clearVibeCache();
   vibeStatus = 200; vibeBody = { vibe: vibeAnswer({ expiresAt: new Date(NOW - 1000).toISOString() }) };
   await show();
   await waitFor(() => assert.ok(asked.filter((u) => u.includes('view=vibe')).length >= 2));
-  assert.equal(screen.queryByTestId('vibe-chip'), null);
+  assert.ok(screen.queryByTestId('vibe-chip') === null);
 });
 
 test('Signals: a malformed answer shows nothing rather than a broken chip', async () => {
   vibeBody = { vibe: { moodId: 'not-a-mood', updatedAt: 'x', expiresAt: 'y' } };
   await show();
   await waitFor(() => assert.ok(asked.some((u) => u.includes('view=vibe'))));
-  assert.equal(screen.queryByTestId('vibe-chip'), null);
+  assert.ok(screen.queryByTestId('vibe-chip') === null);
 });
 
 test('Signals: no member id (an older caller) means no lookup at all', async () => {
