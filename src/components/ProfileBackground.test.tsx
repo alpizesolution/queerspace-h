@@ -313,27 +313,13 @@ test('Escape closes only the Studio', () => {
   assert.equal(closed(), 1);
 });
 
-test('Escape in the Studio does not also close the profile editor under it', async () => {
-  let editorClosed = 0;
-  render(<ProfileEditorSheet currentPrefs={{ displayName: 'Luna', background: presetBackground('moonlight') } as never} onClose={() => { editorClosed++; }} onSave={() => {}} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Customize background' }));
-  screen.getByTestId('background-studio');
-  fireEvent.keyDown(document.body, { key: 'Escape' });
-  assert.equal(screen.queryByTestId('background-studio'), null);
-  assert.equal(editorClosed, 0);
-});
-
 // ------------------------------------------------------------------ the editor
 
-test('Edit Profile has a Customize background entry that shows the current choice, and saving carries the new background', async () => {
+test('the profile editor no longer holds the background card (it lives in Profile settings), and saving never wipes the background', async () => {
   const saved: Array<{ background?: ProfileBackground | null }> = [];
-  render(<ProfileEditorSheet currentPrefs={{ displayName: 'Luna', avatar: undefined } as never} onClose={() => {}} onSave={(p) => saved.push(p)} />);
-  assert.equal(screen.getByTestId('background-summary').textContent, 'Default');
-  fireEvent.click(screen.getByRole('button', { name: 'Customize background' }));
-  fireEvent.click(screen.getByRole('button', { name: /Stardust Bloom/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Use this background' }));
-  assert.equal(screen.getByTestId('background-summary').textContent, 'Stardust Bloom (animated)');
-  assert.equal(saved.length, 0, 'applying in the Studio is only a draft');
+  render(<ProfileEditorSheet currentPrefs={{ displayName: 'Luna', background: presetBackground('stardust-bloom') } as never} onClose={() => {}} onSave={(p) => saved.push(p)} />);
+  assert.equal(screen.queryByTestId('background-summary'), null);
+  assert.equal(screen.queryByRole('button', { name: 'Customize background' }), null);
   fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
   assert.deepEqual(saved[0].background, presetBackground('stardust-bloom'));
 });

@@ -22,6 +22,7 @@ import { createNameGate } from './services/pseudonymGate.ts';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from './utils/storage.ts';
 import { auth, ensureAnonymousAuth, isFirebaseConfigured, logScreenView } from './lib/firebase.ts';
 import { ProfilePage } from './components/ProfilePage.tsx';
+import { ProfileSettingsPage } from './components/ProfileSettingsPage.tsx';
 import { ProfileNavProvider } from './components/ProfileNav.tsx';
 import { isMemberId, profileIdFromSearch } from './utils/profileView.ts';
 import { isPostId, postIdFromSearch } from './utils/communityPostLink.ts';
@@ -29,6 +30,7 @@ import { recordDailyActivity } from './services/activityService.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
 import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature } from './services/profilePersistence.ts';
 import { requestDurableStorage } from './services/accountLinking.ts';
+import type { ProfileBackground } from './utils/profileBackground.ts';
 import { clearProfileCache } from './services/profileViewService.ts';
 import { clearBackgroundImageCache, pruneBackgroundImages } from './services/profileBackgroundService.ts';
 import { applyFilters, applyProfile, FilterFields, matchPrefsForMode, ProfileFields } from './utils/preferences.ts';
@@ -81,10 +83,13 @@ export default function App() {
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
+  const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   // Another member's (or the member's own) profile page, opened by tapping an avatar or a shared link.
   const [profileMemberId, setProfileMemberId] = useState<string | null>(null);
   const profileOpenRef = useRef(false);
   profileOpenRef.current = profileMemberId !== null;
+  // Profile settings sit on top of the member's own profile page, so they go when that page does.
+  useEffect(() => { if (profileMemberId === null) setProfileSettingsOpen(false); }, [profileMemberId]);
   // One Cosmos post shown on its own, opened from a member's profile or a shared link.
   const [focusPostId, setFocusPostId] = useState<string | null>(null);
   const openProfile = useCallback((memberId: string) => {
@@ -397,6 +402,17 @@ export default function App() {
     clearBackgroundImageCache();
     if (feedback.savedToCloud) void pruneBackgroundImages();
     showToast(feedback.savedToCloud || !cloudChanged ? 'Profile updated.' : feedback.userMessage);
+  };
+
+  /** Saves only the profile background (from Profile settings, Appearance), through the same profile save as everything else. */
+  const handleSaveBackground = async (background: ProfileBackground | null) => {
+    const next = { ...userPrefs, background };
+    setUserPrefs(next);
+    const { feedback, cloudChanged } = await persistPrefs(next);
+    clearProfileCache();
+    clearBackgroundImageCache();
+    if (feedback.savedToCloud) void pruneBackgroundImages();
+    showToast(feedback.savedToCloud || !cloudChanged ? 'Background saved.' : feedback.userMessage);
   };
 
   const handleOpenSetup = (mode: 'quick' | 'custom' = 'quick') => {
@@ -768,8 +784,25 @@ export default function App() {
           onOpenConversation={(conversationId) => { closeProfile(); setSignalsOpenPairId(conversationId); handleNavigate('signals'); }}
           onOpenRequests={() => { closeProfile(); setSignalsStartSection('requests'); handleNavigate('signals'); }}
           onEditProfile={() => { closeProfile(); setProfileEditOpen(true); }}
+          onOpenProfileSettings={() => setProfileSettingsOpen(true)}
           onBlockMember={handleBlockMember}
           onOpenSettings={() => setSettingsOpen(true)}
+        />
+      )}
+
+      {profileSettingsOpen && profileMemberId && !ageGateOpen && !ageRestricted && (
+        <ProfileSettingsPage
+          userPrefs={userPrefs}
+          nsfwPreference={nsfwPreference}
+          onChangeNsfwPreference={chooseNsfwPreference}
+          hasUnreadUpdates={hasUnreadUpdates}
+          onClose={() => setProfileSettingsOpen(false)}
+          onEditProfile={() => { setProfileSettingsOpen(false); closeProfile(); setProfileEditOpen(true); }}
+          onEditPreferences={() => { setProfileSettingsOpen(false); closeProfile(); setSetupInitialMode('custom'); setSetupModalOpen(true); }}
+          onSaveBackground={handleSaveBackground}
+          onOpenAppAppearance={() => setSettingsOpen(true)}
+          onOpenWhatsNew={() => setWhatsNewOpen(true)}
+          onOpenSupport={openSupport}
         />
       )}
     </div>

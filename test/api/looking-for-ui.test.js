@@ -66,7 +66,8 @@ test('the content setting is in Settings, defaults to Always hide, and is stored
   const util = read('src/utils/nsfwPreference.ts');
   assert.match(util, /DEFAULT_NSFW_PREFERENCE: NsfwPreference = 'hide'/);
   for (const label of ['Always hide', 'Ask before revealing', 'Show after confirmation']) assert.ok(util.includes(label), label);
-  assert.match(settings, /Show NSFW content/);
+  assert.match(settings, /<NsfwPreferenceControl/);
+  assert.match(read('src/components/NsfwPreferenceControl.tsx'), /Show NSFW content/);
   assert.match(app, /loadNsfwPreference/);
   assert.match(app, /nsfwPreference=\{nsfwPreference\}/);
 });

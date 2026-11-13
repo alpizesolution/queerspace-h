@@ -25,10 +25,14 @@ test('the page shows what the server returned, and never reads the profile or pr
 });
 
 test('owner-only controls exist only on the owner\'s own page', () => {
-  const owner = page.slice(page.indexOf('{isSelf && ('), page.indexOf('{details.length > 0'));
-  for (const text of ['Edit profile', 'Share profile', 'What others can see']) assert.ok(owner.includes(text), `${text} is inside the owner block`);
+  const owner = page.slice(page.indexOf('{isSelf && ('), page.indexOf('<h1'));
+  for (const text of ['Edit profile', 'Share profile', 'Profile settings']) assert.ok(owner.includes(text), `${text} is inside the owner block`);
   const outside = page.replace(owner, '');
-  for (const text of ['Edit profile', 'Share profile', 'What others can see']) assert.equal(outside.includes(text), false, `${text} appears nowhere else`);
+  for (const text of ['Edit profile', 'Share profile', 'Profile settings']) assert.equal(outside.includes(text), false, `${text} appears nowhere else`);
+  assert.match(owner, /\{onOpenProfileSettings && <button/, 'the gear is only offered when the app gives the page a settings destination, and only in the owner block');
+  // Settings are not spread over the profile: the visibility summary lives in Profile settings now.
+  assert.equal(page.includes('What others can see'), false, 'no settings card on the profile page');
+  assert.ok(read('src/components/ProfileSettingsPage.tsx').includes('What others can see'));
   assert.match(page, /const showBar = !isSelf && data !== null && action\.kind !== 'none';/);
   assert.match(page, /\{member && !isSelf && \(\s*<div className="relative"/, 'the Report / Block menu is for visitors only');
 });

@@ -22,7 +22,7 @@ const isInnerControl = (target: EventTarget): boolean => target instanceof Eleme
 
 /** A titled, clearly separated block of the profile page. */
 export const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <section className="mt-6">
+  <section className="mt-5">
     <h2 className="mb-2.5 text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-[0.14em] text-subtle">{title}</h2>
     {children}
   </section>

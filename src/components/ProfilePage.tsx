@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, Flag, LoaderCircle, MapPin, MessageCircle, Pencil, SatelliteDish, Share2, Sparkles, UserX } from 'lucide-react';
+import { ArrowLeft, Flag, LoaderCircle, MapPin, MessageCircle, Pencil, SatelliteDish, Settings, Share2, Sparkles, UserX } from 'lucide-react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { CosmicBackground } from './CosmicBackground.tsx';
 import { useBackgroundImage } from '../hooks/useBackgroundImage.ts';
@@ -21,7 +21,6 @@ import {
   aboutDetails,
   formatMemberSince,
   identityLine,
-  ownerVisibility,
   profileAction,
   profileCover,
   visibleLookingForPosts,
@@ -49,6 +48,8 @@ interface Props {
   onOpenConversation: (conversationId: string) => void;
   onOpenRequests: () => void;
   onEditProfile: () => void;
+  /** Opens the settings page (customisation and account controls). Offered on the member's own page only. */
+  onOpenProfileSettings?: () => void;
   onBlockMember: (memberId: string) => void;
   onOpenSettings: () => void;
 }
@@ -76,7 +77,7 @@ const intentionLabel = (value: string | null): string | null => (value ? (INTENT
  * their live Looking For posts. The owner sees the same page with their own controls instead of connection actions.
  */
 export const ProfilePage: React.FC<Props> = ({
-  memberId, selfId, userPrefs, nsfwPreference, onClose, onOpenConversation, onOpenRequests, onEditProfile, onBlockMember, onOpenSettings,
+  memberId, selfId, userPrefs, nsfwPreference, onClose, onOpenConversation, onOpenRequests, onEditProfile, onOpenProfileSettings, onBlockMember, onOpenSettings,
 }) => {
   // A profile seen in the last minute opens at once, with no skeleton and no request.
   const [load, setLoad] = useState<ProfileLoad | null>(() => {
@@ -178,7 +179,8 @@ export const ProfilePage: React.FC<Props> = ({
   const name = member?.displayName || 'Anonymous member';
   const cover = profileCover(member?.avatar, memberId);
   // The member's galaxy (or own still picture) behind the whole page. Only a loaded, visible profile has one; a failed or blocked page keeps the plain look.
-  const background = member && data?.blocked !== 'by_me' ? member.background ?? null : null;
+  // On the member's own page the background is their own saved setting (so a change made in the settings page shows at once).
+  const background = member && data?.blocked !== 'by_me' ? (isSelf ? userPrefs.background ?? member.background ?? null : member.background ?? null) : null;
   const backgroundImage = useBackgroundImage(memberId, background);
   const joined = formatMemberSince(member?.memberSince);
   const details = member ? aboutDetails(member, intentionLabel(member.intention)) : [];
@@ -219,7 +221,7 @@ export const ProfilePage: React.FC<Props> = ({
       </header>
 
       <div className={`relative flex-1 overflow-y-auto overscroll-contain ${background ? 'glass-surfaces' : ''}`}>
-        <div className="mx-auto w-full max-w-xl md:max-w-2xl pb-[calc(env(safe-area-inset-bottom)+7.5rem)]">
+        <div className="mx-auto w-full max-w-xl md:max-w-2xl lg:max-w-5xl pb-[calc(env(safe-area-inset-bottom)+7.5rem)]">
           {background
             // With a background the galaxy IS the page: no cover banner, just room for the back button above the avatar.
             ? <div className="h-28 w-full sm:h-36" aria-hidden="true" />
@@ -243,96 +245,84 @@ export const ProfilePage: React.FC<Props> = ({
               <button type="button" onClick={onClose} className="btn btn-secondary btn-sm mt-5">Back</button>
             </div>
           ) : member ? (
-            <div className="px-4 sm:px-6">
-              <div className="-mt-10 flex items-end justify-between gap-3">
-                <div className="relative shrink-0">
-                  <AnimalAvatar avatar={member.avatar ?? undefined} seed={memberId} className="h-20 w-20 shrink-0 ring-4 ring-ink shadow-lg shadow-black/30" />
-                  {/* Current Vibe: a small status bubble floating beside the avatar. On your own page with no status, a quiet "Add status" pill in the same spot; on someone else's page with none, nothing at all. */}
-                  {(vibe || isSelf) && (
-                    <div className="absolute left-[calc(100%+0.5rem)] -top-1.5 z-10 w-max max-w-[calc(100vw-7.5rem)] sm:max-w-sm">
-                      {vibe
-                        ? <VibeBubble vibe={vibe} self={isSelf} onEdit={() => setEditingVibe(true)} />
-                        : <AddStatusPill onClick={() => setEditingVibe(true)} />}
+            <div className="px-4 sm:px-6 lg:px-8">
+              {/* Phones: one column. Wide screens: the member's identity on the left, their content on the right. */}
+              <div className="lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start lg:gap-10">
+                <div className="lg:sticky lg:top-4">
+                  <div className="-mt-12 flex items-end justify-between gap-2">
+                    <div className="relative shrink-0">
+                      <AnimalAvatar avatar={member.avatar ?? undefined} seed={memberId} className="h-[5.5rem] w-[5.5rem] shrink-0 ring-4 ring-ink shadow-lg shadow-black/30" />
+                      {/* Current Vibe: a small status bubble floating beside the avatar. On your own page with no status, a quiet "Add status" pill in the same spot; on someone else's page with none, nothing at all. */}
+                      {(vibe || isSelf) && (
+                        <div className="absolute left-[calc(100%+0.5rem)] -top-1.5 z-10 w-max max-w-[calc(100vw-7.5rem)] sm:max-w-sm lg:max-w-[14rem]">
+                          {vibe
+                            ? <VibeBubble vibe={vibe} self={isSelf} onEdit={() => setEditingVibe(true)} />
+                            : <AddStatusPill onClick={() => setEditingVibe(true)} />}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                {isSelf && (
-                  <div className="flex items-center gap-2 pb-1">
-                    <button type="button" onClick={onEditProfile} className="btn btn-primary btn-sm"><Pencil className="h-4 w-4" /> Edit profile</button>
-                    <button type="button" onClick={() => void share()} aria-label="Share profile" title="Share profile" className="btn btn-secondary btn-sm !px-3"><Share2 className="h-4 w-4" /></button>
-                  </div>
-                )}
-              </div>
-              <h1 className="mt-3 text-[length:calc(24px_*_var(--fs,1))] font-semibold leading-tight tracking-tight text-fg [overflow-wrap:anywhere]">{name}</h1>
-              {(line || member.location) && (
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[length:calc(14px_*_var(--fs,1))] text-muted">
-                  {line && <span>{line}</span>}
-                  {line && member.location && <span aria-hidden="true" className="text-line-strong">·</span>}
-                  {member.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" aria-hidden="true" /> {member.location}</span>}
-                </p>
-              )}
-              {member.about && <p className="mt-3 whitespace-pre-wrap text-[length:calc(15px_*_var(--fs,1))] leading-relaxed text-fg [overflow-wrap:anywhere]">{member.about}</p>}
-
-              {(joined || stardustTotal !== null) && (
-                // Member since and the Stardust earned share one small line (they wrap on a narrow screen).
-                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[length:calc(12px_*_var(--fs,1))] text-subtle">
-                  {joined && (
-                    <span title={`Member since ${joined.since}`}>
-                      <span aria-hidden="true">✦ </span>Member since {joined.since}<span aria-hidden="true"> · </span><span className="sr-only">, </span>{joined.duration.replace('Member for ', '')}
-                    </span>
-                  )}
-                  {joined && stardustTotal !== null && <span aria-hidden="true" className="text-line-strong">·</span>}
-                  {stardustTotal !== null && (
-                    <span className="inline-flex items-center gap-1 text-lavender" aria-label={`${stardustTotal} Stardust earned`}>
-                      <Sparkles className="h-3 w-3" aria-hidden="true" />
-                      <span className="tabular-nums font-semibold">{stardustTotal}</span> Stardust
-                    </span>
-                  )}
-                </p>
-              )}
-
-              {isSelf && (
-                <div className="mt-4">
-                  <div className="rounded-2xl border border-line bg-raised/50 p-3.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-[0.14em] text-subtle">What others can see</p>
-                      <button type="button" onClick={onEditProfile} className="text-[length:calc(13px_*_var(--fs,1))] font-semibold text-berry underline underline-offset-4">Change</button>
-                    </div>
-                    <ul className="mt-2 space-y-1.5">
-                      {ownerVisibility(userPrefs).map((row) => (
-                        <li key={row.label} className="flex items-center justify-between gap-3 text-[length:calc(14px_*_var(--fs,1))]">
-                          <span className="text-fg">{row.label}</span>
-                          <span className={`inline-flex items-center gap-1 ${row.shown ? 'text-lavender' : 'text-subtle'}`}>{row.shown && <Check className="h-3.5 w-3.5" aria-hidden="true" />}{row.hint}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-
-              {details.length > 0 && (
-                <Section title="About">
-                  <dl className="divide-y divide-line/60 rounded-2xl border border-line bg-raised/50">
-                    {details.map((row) => (
-                      <div key={row.label} className="flex items-baseline justify-between gap-4 px-3.5 py-2.5">
-                        <dt className="text-[length:calc(13px_*_var(--fs,1))] text-subtle">{row.label}</dt>
-                        <dd className="text-right text-[length:calc(14px_*_var(--fs,1))] text-fg [overflow-wrap:anywhere]">{row.value}</dd>
+                    {isSelf && (
+                      <div className="flex items-center gap-1.5 pb-1">
+                        <button type="button" onClick={onEditProfile} className="btn btn-primary btn-sm whitespace-nowrap"><Pencil className="h-4 w-4" /> <span className="max-[359px]:sr-only">Edit profile</span></button>
+                        {onOpenProfileSettings && <button type="button" onClick={onOpenProfileSettings} aria-label="Profile settings" title="Profile settings" data-testid="profile-settings-button" className="btn btn-secondary btn-sm !px-2.5"><Settings className="h-4 w-4" /></button>}
+                        <button type="button" onClick={() => void share()} aria-label="Share profile" title="Share profile" className="btn btn-secondary btn-sm !px-2.5"><Share2 className="h-4 w-4" /></button>
                       </div>
-                    ))}
-                  </dl>
-                </Section>
-              )}
-
-              {member.interests.length > 0 && (
-                <Section title="Interests">
-                  <div className="flex flex-wrap gap-1.5">
-                    {member.interests.map((interest) => <span key={interest} className="tag">#{interest}</span>)}
+                    )}
                   </div>
-                </Section>
-              )}
+                  <h1 className="mt-3.5 text-[length:calc(26px_*_var(--fs,1))] font-bold leading-tight tracking-tight text-fg [overflow-wrap:anywhere]">{name}</h1>
+                  {(line || member.location) && (
+                    <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[length:calc(14px_*_var(--fs,1))] text-muted">
+                      {line && <span>{line}</span>}
+                      {line && member.location && <span aria-hidden="true" className="text-line-strong">·</span>}
+                      {member.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" aria-hidden="true" /> {member.location}</span>}
+                    </p>
+                  )}
+                  {member.about && <p className="mt-3 whitespace-pre-wrap text-[length:calc(15px_*_var(--fs,1))] leading-relaxed text-fg [overflow-wrap:anywhere]">{member.about}</p>}
 
-              <ProfilePosts memberId={memberId} />
-              <ProfileLookingFor posts={posts} isSelf={isSelf} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onRequest={setRequestPost} />
+                  {(joined || stardustTotal !== null) && (
+                    // Member since and the Stardust earned: two small, quiet chips (they wrap on a narrow screen).
+                    <ul className="mt-3.5 flex flex-wrap items-center gap-2 text-[length:calc(12px_*_var(--fs,1))]">
+                      {joined && (
+                        <li className="rounded-full bg-raised/60 px-2.5 py-1 text-subtle" title={`Member since ${joined.since}`}>
+                          <span aria-hidden="true">✦ </span>Member since {joined.since}<span aria-hidden="true"> · </span><span className="sr-only">, </span>{joined.duration.replace('Member for ', '')}
+                        </li>
+                      )}
+                      {stardustTotal !== null && (
+                        <li className="inline-flex items-center gap-1 rounded-full bg-raised/60 px-2.5 py-1 text-lavender" aria-label={`${stardustTotal} Stardust earned`}>
+                          <Sparkles className="h-3 w-3" aria-hidden="true" />
+                          <span className="tabular-nums font-semibold">{stardustTotal}</span> Stardust
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  {details.length > 0 && (
+                    <Section title="About">
+                      <dl className="divide-y divide-line/50 overflow-hidden rounded-2xl border border-line bg-raised/50">
+                        {details.map((row) => (
+                          <div key={row.label} className="flex items-baseline justify-between gap-4 px-3.5 py-2">
+                            <dt className="text-[length:calc(13px_*_var(--fs,1))] text-subtle">{row.label}</dt>
+                            <dd className="text-right text-[length:calc(14px_*_var(--fs,1))] text-fg [overflow-wrap:anywhere]">{row.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </Section>
+                  )}
+
+                  {member.interests.length > 0 && (
+                    <Section title="Interests">
+                      <div className="flex flex-wrap gap-1.5">
+                        {member.interests.map((interest) => <span key={interest} className="tag">#{interest}</span>)}
+                      </div>
+                    </Section>
+                  )}
+
+                  <ProfilePosts memberId={memberId} />
+                  <ProfileLookingFor posts={posts} isSelf={isSelf} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onRequest={setRequestPost} />
+                </div>
+              </div>
             </div>
           ) : (
             // Not reachable for a validated answer, but a profile page must never be blank: say so and offer a way out.
