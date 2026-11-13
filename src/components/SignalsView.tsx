@@ -5,8 +5,6 @@ import { InboxSkeleton } from './Skeleton.tsx';
 import { Sheet } from './Sheet.tsx';
 import { SignalsConversation } from './SignalsConversation.tsx';
 import { ConnectionRequestsPanel } from './ConnectionRequestsPanel.tsx';
-import { AccountRecoverySheet } from './AccountRecoverySheet.tsx';
-import { accountStatus } from '../services/accountLinking.ts';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import type { SignalsInboxState } from '../hooks/useSignalsInbox.ts';
@@ -140,9 +138,6 @@ export const SignalsView: React.FC<{
   const [notice, setNotice] = useState<string | null>(null);
   const [openPairId, setOpenPairId] = useState<string | null>(initialPairId);
   const [privacyOpen, setPrivacyOpen] = useState(false);
-  const [recoveryOpen, setRecoveryOpen] = useState(false);
-  // Anonymous members are told, once on this screen, that their conversations live only in this browser session.
-  const unsavedAccount = accountStatus(auth?.currentUser).anonymous;
   const [selectedInvitationId, setSelectedInvitationId] = useState<string | null>(null);
   const [invitationError, setInvitationError] = useState<string | null>(null);
   const [invitationAction, setInvitationAction] = useState<'accept' | 'decline' | null>(null);
@@ -415,12 +410,6 @@ export const SignalsView: React.FC<{
         </button>
       </div>
 
-      {unsavedAccount && (
-        <div data-testid="save-account-banner" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-line bg-raised/60 px-3 py-2 text-xs text-muted">
-          <span>Keep your conversations safe if you clear data or change phone.</span>
-          <button type="button" onClick={() => setRecoveryOpen(true)} className="shrink-0 font-semibold text-berry underline underline-offset-4">Save account</button>
-        </div>
-      )}
       <div role="tablist" aria-label="Signals sections" className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1">
         {([['inbox', 'Inbox'], ['requests', 'Requests']] as const).map(([id, label]) => (
           <button key={id} role="tab" aria-selected={section === id} onClick={() => setSection(id)} className={`h-9 rounded-full text-[length:calc(13px_*_var(--fs,1))] font-semibold transition-colors cursor-pointer ${section === id ? 'bg-raised text-fg ring-1 ring-berry/40' : 'text-muted hover:text-fg'}`}>
@@ -620,7 +609,6 @@ export const SignalsView: React.FC<{
           {invitationError && <p role="alert" className="mt-3 text-sm text-danger">{invitationError}</p>}
         </Sheet>
       )}
-      {recoveryOpen && <AccountRecoverySheet onClose={() => setRecoveryOpen(false)} />}
       {privacyOpen && (
         <Sheet title="Private connections" size="sm" icon={<ShieldCheck className="h-5 w-5" />} onClose={() => setPrivacyOpen(false)}>
           <p className="text-sm leading-relaxed text-muted">Only you can view your connections. Ending a connection closes it here; no message is sent.</p>

@@ -143,13 +143,11 @@ test('a failed live connection shows a message with Retry that starts the listen
   await waitFor(() => assert.ok(calls.length > before), { timeout: 2000 });
 });
 
-test('while the connection is being re-established the screen says so, and an anonymous member is offered a way to keep their conversations', async () => {
+test('while the connection is being re-established the screen says so, and there is no "save account" prompt (members stay anonymous)', async () => {
   immediate = { pairs: [], nextCursor: null };
   render(<SignalsView inbox={inboxState({ live: false, reconnecting: true })} />);
   assert.ok(await screen.findByTestId('inbox-reconnecting'));
-  assert.ok(screen.getByTestId('save-account-banner'));
-  fireEvent.click(screen.getByRole('button', { name: 'Save account' }));
-  const sheet = await screen.findByTestId('account-recovery');
-  assert.match(sheet.textContent ?? '', /can’t be recovered/, 'says plainly what is lost if nothing is saved');
-  assert.equal(screen.queryByText(/we can restore/i), null);
+  assert.equal(screen.queryByTestId('save-account-banner'), null);
+  assert.equal(screen.queryByRole('button', { name: 'Save account' }), null);
+  assert.equal(screen.queryByText(/Keep your conversations/i), null);
 });

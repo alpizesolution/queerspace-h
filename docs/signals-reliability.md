@@ -23,7 +23,7 @@ What was wrong, what changed, and what has to be done by hand.
 | Listener | `useSignalsInbox` re-establishes the listener after a temporary failure with 1s, 2s, 4s, 8s, 16s pauses (5 tries), retries a permission refusal once, then reports it. Retry button, and coming back online starts again. One listener at a time; unmount cancels timers. |
 | Inbox query | Missing index now returns 503 `inbox_index_missing` with a clear message, and logs the fix. The unordered fallback is gone. The un-paged list is the newest 100, ordered. Members with more than 100 conversations use the cursor pages (tested with 110). |
 | Invitations | Accepting a direct invitation reuses an existing active conversation between the two members (as Looking For requests already did). A repeated accept is refused (409), changing nothing. |
-| Accounts | `src/services/accountLinking.ts` and `AccountRecoverySheet`: link email and password or Google to the anonymous account (same uid), explicit "Sign in to a saved account" that warns it switches the device's session, refuses collisions without merging, and requests durable browser storage. A "Save account" banner shows on the Signals screen for anonymous members. |
+| Accounts | **Not offered in the app.** Members stay anonymous. The linking service and sheet (`accountLinking.ts`, `AccountRecoverySheet.tsx`) exist and are tested but nothing in the app opens them, so no email or Google linking is exposed to members. The app still asks the browser for durable storage (best effort). |
 
 Not changed: Firestore security rules (no republish needed), the message, photo, GIF, card and game paths, and the Cloudflare R2 media code.
 
@@ -33,7 +33,7 @@ A send writes the message and **both** members' inbox entries (`last`, and the r
 
 ## Manual steps before this works in production
 
-1. **Firebase console, Authentication, Sign-in method:** enable **Email/Password** and **Google** (Anonymous stays on). Check **Settings, Authorized domains** includes the production domain. Until then, "Save account" shows "That sign-in option isn't available right now."
+1. *(Only if account linking is ever surfaced again.)* Firebase console, Authentication, Sign-in method: enable Email/Password and Google. Not needed while members stay anonymous.
 2. **Firestore index.** `firestore.indexes.json` already declares `signalsPairs (participants array-contains, createdAt desc)`. It is not proven to be deployed. There is no automated index deployment on `main`, so deploy it by hand: `firebase deploy --only firestore:indexes --project <the production project>`. Check in the Firebase console, Firestore, Indexes, that it is "Enabled". Until then the inbox returns 503 `inbox_index_missing` instead of a short list. This now also applies to an older app that asks for the whole list with no page size (it used to work without the index, by an unordered read capped at 100, which is the behaviour that was removed).
 3. No rules change. Do not republish rules for this work.
 4. Deploy order: the server (`api/`) and the app can go out together. An older app against the new server still works (see "Compatibility"); a new app against an older server gets `limit` and `before` ignored and the old oldest-100 behaviour, so deploy the server first if they cannot go together.
@@ -54,6 +54,6 @@ A send writes the message and **both** members' inbox entries (`last`, and the r
 - An anonymous account whose session is already gone cannot be recovered. This fix protects members who save their account **before** that happens. Members who already lost a session lose reach to the old conversations (the data is still stored under the old uid).
 - Linking a Google account changes the token's sign-in provider to `google.com`. Admin access still needs the hand-made `admins/{uid}` document (`api/_lib.js` `requireAdmin`, and `isAdmin()` in the rules), so no member becomes an admin by linking.
 - Browser eviction cannot be fully prevented. `navigator.storage.persist()` is best effort.
-- The "Save account" banner shows on the Signals screen for every anonymous member, with no way to dismiss it, until they save.
+- There is no way for a member to save or link their account, by design. An anonymous account whose browser session is lost cannot be reached again.
 - Two members who already have two separate active conversations (created before this change) keep both; nothing merges or deletes them.
 - The `LF-06` Firestore rules test failed once during a full run under load and passed on every re-run (it expects an update with no fresh timestamp to be refused). It is unrelated to this change; watch for it if it appears in CI.
