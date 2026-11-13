@@ -248,7 +248,7 @@ test('phones: compact rows, a single scrolling column with room for the safe are
 
 test('the app offers the gear only on the member\'s own profile, saves the background through the same profile save, and cleans up', () => {
   const app = fs.readFileSync('src/App.tsx', 'utf8');
-  assert.match(app, /onOpenProfileSettings=\{\(\) => setProfileSettingsOpen\(true\)\}/);
+  assert.match(app, /onOpenProfileSettings=\{openProfileSettings\}/);
   assert.match(app, /\{profileSettingsOpen && profileMemberId && !ageGateOpen && !ageRestricted && \(\s*<ProfileSettingsPage/);
   const handler = app.slice(app.indexOf('const handleSaveBackground'), app.indexOf('const handleOpenSetup'));
   assert.match(handler, /const next = \{ \.\.\.userPrefs, background \};/);

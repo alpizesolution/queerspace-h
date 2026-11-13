@@ -206,7 +206,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
             <li>
               <button className={rowClass} onClick={then(onOpenProfile)}>
                 <UserRound className="w-[18px] h-[18px] text-lavender shrink-0" />
-                Edit profile
+                My profile
               </button>
             </li>
           </Group>

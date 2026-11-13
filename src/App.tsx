@@ -35,7 +35,6 @@ import { clearProfileCache } from './services/profileViewService.ts';
 import { clearBackgroundImageCache, pruneBackgroundImages } from './services/profileBackgroundService.ts';
 import { applyFilters, applyProfile, FilterFields, matchPrefsForMode, ProfileFields } from './utils/preferences.ts';
 import { ProfileEditorSheet } from './components/ProfileEditorSheet.tsx';
-import { ProfilePageSheet } from './components/ProfilePageSheet.tsx';
 import { hasUnreadSupportReply } from './services/supportService.ts';
 import { getMySuspension } from './services/suspensionService.ts';
 import { SuspendedNotice } from './components/SuspendedNotice.tsx';
@@ -81,7 +80,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [profileOpen, setProfileOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   // Another member's (or the member's own) profile page, opened by tapping an avatar or a shared link.
@@ -119,7 +117,9 @@ export default function App() {
   }, []);
   useEffect(() => {
     const onPop = (event: PopStateEvent) => {
-      const state = event.state as { qsProfile?: unknown; qsPost?: unknown } | null;
+      const state = event.state as { qsProfile?: unknown; qsPost?: unknown; qsSettings?: unknown } | null;
+      // Profile settings have their own history entry, so Back closes just the settings and lands on the profile.
+      setProfileSettingsOpen(state?.qsSettings === true);
       if (typeof state?.qsPost === 'string') {
         setProfileMemberId(null);
         setFocusPostId(state.qsPost);
@@ -395,7 +395,8 @@ export default function App() {
     const next = { ...applyProfile(userPrefs, profile), profileComplete: true };
     setUserPrefs(next);
     setProfileEditOpen(false);
-    setProfileOpen(true);
+    const ownId = auth?.currentUser?.uid;
+    if (ownId) openProfile(ownId);
     const { feedback, cloudChanged } = await persistPrefs(next);
     // The profile page asks the server again (a changed background must show now), and uploaded pictures that are no longer used are deleted.
     clearProfileCache();
@@ -413,6 +414,38 @@ export default function App() {
     clearBackgroundImageCache();
     if (feedback.savedToCloud) void pruneBackgroundImages();
     showToast(feedback.savedToCloud || !cloudChanged ? 'Background saved.' : feedback.userMessage);
+  };
+
+  /**
+   * The profile button (header and menu) goes straight to the member's own full profile page, the same page other members see, with
+   * Edit profile and the settings gear in its header. A profile that has not been saved yet has nothing to show, so that case
+   * starts in the editor.
+   */
+  const openOwnProfile = () => {
+    const ownId = auth?.currentUser?.uid;
+    if (!ownId) { showToast('Your profile isn’t ready yet. Please try again in a moment.'); return; }
+    if (userPrefs.profileComplete !== true) { setProfileEditOpen(true); showToast('Save your anonymous profile to see it here.'); return; }
+    openProfile(ownId);
+  };
+
+  /** Profile settings get their own history entry, so Back closes them and returns to the profile (not out of the app). */
+  const openProfileSettings = () => {
+    if (profileMemberId) {
+      // A profile opened from a shared link has no history entry of its own yet; give it one so Back from settings lands on it.
+      if (!window.history.state?.qsProfile) window.history.replaceState({ qsProfile: profileMemberId }, '');
+      window.history.pushState({ qsProfile: profileMemberId, qsSettings: true }, '');
+    }
+    setProfileSettingsOpen(true);
+  };
+  const closeProfileSettings = () => {
+    if (window.history.state?.qsSettings) window.history.back();
+    else setProfileSettingsOpen(false);
+  };
+  /** Leaves both settings and the profile page (to open an editor), undoing both history entries. */
+  const leaveProfileFromSettings = () => {
+    setProfileSettingsOpen(false);
+    if (window.history.state?.qsSettings) window.history.go(-2);
+    else closeProfile();
   };
 
   const handleOpenSetup = (mode: 'quick' | 'custom' = 'quick') => {
@@ -633,7 +666,7 @@ export default function App() {
           isSoundMuted={isSoundMuted}
           onToggleSound={handleToggleSound}
           onOpenSafetyModal={() => setActiveInfoModal('guidelines')}
-          onOpenProfile={() => setProfileOpen(true)}
+          onOpenProfile={openOwnProfile}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenWhatsNew={() => setWhatsNewOpen(true)}
           onOpenInfo={(modal) => setActiveInfoModal(modal)}
@@ -731,13 +764,6 @@ export default function App() {
         />
       )}
 
-      {profileOpen && !ageGateOpen && !ageRestricted && (
-        <ProfilePageSheet currentPrefs={userPrefs} onClose={() => setProfileOpen(false)}
-          onEditProfile={() => { setProfileOpen(false); setProfileEditOpen(true); }}
-          onEditPreferences={() => { setProfileOpen(false); setSetupInitialMode('custom'); setSetupModalOpen(true); }}
-          onViewPublicProfile={auth?.currentUser?.uid ? () => { const id = auth!.currentUser!.uid; setProfileOpen(false); openProfile(id); } : undefined} />
-      )}
-
       {profileEditOpen && !ageGateOpen && !ageRestricted && (
         <ProfileEditorSheet currentPrefs={userPrefs} onClose={() => setProfileEditOpen(false)} onSave={handleSaveProfile} />
       )}
@@ -784,7 +810,7 @@ export default function App() {
           onOpenConversation={(conversationId) => { closeProfile(); setSignalsOpenPairId(conversationId); handleNavigate('signals'); }}
           onOpenRequests={() => { closeProfile(); setSignalsStartSection('requests'); handleNavigate('signals'); }}
           onEditProfile={() => { closeProfile(); setProfileEditOpen(true); }}
-          onOpenProfileSettings={() => setProfileSettingsOpen(true)}
+          onOpenProfileSettings={openProfileSettings}
           onBlockMember={handleBlockMember}
           onOpenSettings={() => setSettingsOpen(true)}
         />
@@ -796,9 +822,9 @@ export default function App() {
           nsfwPreference={nsfwPreference}
           onChangeNsfwPreference={chooseNsfwPreference}
           hasUnreadUpdates={hasUnreadUpdates}
-          onClose={() => setProfileSettingsOpen(false)}
-          onEditProfile={() => { setProfileSettingsOpen(false); closeProfile(); setProfileEditOpen(true); }}
-          onEditPreferences={() => { setProfileSettingsOpen(false); closeProfile(); setSetupInitialMode('custom'); setSetupModalOpen(true); }}
+          onClose={closeProfileSettings}
+          onEditProfile={() => { leaveProfileFromSettings(); setProfileEditOpen(true); }}
+          onEditPreferences={() => { leaveProfileFromSettings(); setSetupInitialMode('custom'); setSetupModalOpen(true); }}
           onSaveBackground={handleSaveBackground}
           onOpenAppAppearance={() => setSettingsOpen(true)}
           onOpenWhatsNew={() => setWhatsNewOpen(true)}

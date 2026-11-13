@@ -132,7 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={onOpenProfile}
           className="ml-0.5 sm:ml-1 rounded-full ring-1 ring-line hover:ring-berry transition-shadow cursor-pointer"
           title="Your profile"
-          aria-label="Edit your profile"
+          aria-label="Your profile"
         >
           <AnimalAvatar avatar={profile.avatar} seed={profile.displayName || 'guest'} className="w-8 h-8" />
         </button>

@@ -17,7 +17,7 @@ thing and is unchanged.)
 - **Public profile page** (opened by tapping a member's name or avatar, or a shared profile link): the bubble floats at the top right
   of the avatar. On your own page with no status, a small dashed "Add status" pill sits in the same spot. On someone else's page with
   no status, nothing is shown at all.
-- **My profile** (the Profile button in the header and menu): the same bubble, or the "Add status" pill, under your name.
+- **Your own profile** (the Profile button in the header and menu opens your full profile page directly): the same bubble, or the "Add status" pill, beside your avatar.
 - **Seek and Signals headers:** a small chip beside the partner's name (the emoji and a cut-off message). Never on messages.
 - **Not** in Cosmos, Galaxy, on posts, or in matching.
 
