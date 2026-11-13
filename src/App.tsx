@@ -819,15 +819,11 @@ export default function App() {
       {profileSettingsOpen && profileMemberId && !ageGateOpen && !ageRestricted && (
         <ProfileSettingsPage
           userPrefs={userPrefs}
-          nsfwPreference={nsfwPreference}
-          onChangeNsfwPreference={chooseNsfwPreference}
-          hasUnreadUpdates={hasUnreadUpdates}
           onClose={closeProfileSettings}
           onEditProfile={() => { leaveProfileFromSettings(); setProfileEditOpen(true); }}
           onEditPreferences={() => { leaveProfileFromSettings(); setSetupInitialMode('custom'); setSetupModalOpen(true); }}
           onSaveBackground={handleSaveBackground}
           onOpenAppAppearance={() => setSettingsOpen(true)}
-          onOpenWhatsNew={() => setWhatsNewOpen(true)}
           onOpenSupport={openSupport}
         />
       )}

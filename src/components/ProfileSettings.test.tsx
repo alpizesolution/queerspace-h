@@ -69,13 +69,10 @@ const settings = (prefs: Record<string, unknown> = {}, over: Partial<React.Compo
   render(
     <ProfileSettingsPage
       userPrefs={{ displayName: 'Luna', pronouns: 'she/her', showLocationOnProfile: true, ...prefs } as never}
-      nsfwPreference={'hide' as never}
-      onChangeNsfwPreference={(v) => calls.push(`nsfw:${v}`)}
       onEditProfile={() => calls.push('edit')}
       onEditPreferences={() => calls.push('prefs')}
       onSaveBackground={(b) => { calls.push(`bg:${JSON.stringify(b)}`); }}
       onOpenAppAppearance={() => calls.push('appearance')}
-      onOpenWhatsNew={() => calls.push('whatsnew')}
       onOpenSupport={() => calls.push('support')}
       onClose={() => calls.push('close')}
       {...over}
@@ -199,7 +196,7 @@ test('Appearance: theme and text size reuse the existing settings', () => {
   assert.deepEqual(calls, ['appearance']);
 });
 
-test('Privacy & visibility: shows what others can see, points to the editor to change it, and holds the existing NSFW choice', () => {
+test('Privacy & visibility: shows what others can see and points to the editor to change it (no NSFW option here)', () => {
   settings({ showAgeOnProfile: true, showLocationOnProfile: false, showGenderIdentityOnProfile: true });
   const box = screen.getByTestId('settings-privacy');
   assert.match(box.textContent ?? '', /What others can see/);
@@ -207,28 +204,38 @@ test('Privacy & visibility: shows what others can see, points to the editor to c
   assert.match(box.textContent ?? '', /Shown to people you’re connected with/);
   assert.match(box.textContent ?? '', /Location[\s\S]*Hidden/);
   fireEvent.click(within(box).getByRole('button', { name: 'Change' }));
-  fireEvent.click(within(box).getByRole('radio', { name: /Ask before revealing/ }));
-  assert.deepEqual(calls, ['edit', 'nsfw:ask']);
-  assert.equal(within(box).getByRole('radio', { name: /Always hide/ }).getAttribute('aria-checked'), 'true');
+  assert.deepEqual(calls, ['edit']);
+  assert.equal(within(box).queryByRole('radio'), null);
+  assert.doesNotMatch(screen.getByTestId('profile-settings').textContent ?? '', /NSFW|mature/i);
 });
 
-test('Account: keep conversations (the existing account saving), what\'s new, support, and the birthday correction only when there is a birthday', async () => {
+test('Account: only support, and the birthday correction when there is a birthday. No What\'s New, no email, no saved-account row', () => {
   settings({});
   assert.equal(screen.queryByTestId('row-birthday'), null);
-  fireEvent.click(screen.getByTestId('row-whats-new'));
+  assert.equal(screen.queryByTestId('row-whats-new'), null);
+  assert.doesNotMatch(screen.getByTestId('settings-account').textContent ?? '', /What’s New/);
   fireEvent.click(screen.getByTestId('row-support'));
-  assert.deepEqual(calls, ['whatsnew', 'support']);
-  assert.match(screen.getByTestId('row-account').textContent ?? '', /Keep your conversations/);
-  fireEvent.click(screen.getByTestId('row-account'));
-  assert.match((await screen.findByTestId('account-recovery')).textContent ?? '', /can’t be recovered/);
+  assert.deepEqual(calls, ['support']);
+  const account = screen.getByTestId('settings-account');
+  assert.equal(screen.queryByTestId('row-account'), null);
+  assert.doesNotMatch(account.textContent ?? '', /Saved account|Saved with|@|email|Keep your conversations|Google/i);
   cleanup();
   settings({ birthDate: '1990-01-01' });
   assert.ok(screen.getByTestId('row-birthday'));
 });
 
+test('no email address is shown anywhere in Profile settings, even if the signed-in account carries one', () => {
+  settings({});
+  assert.doesNotMatch(screen.getByTestId('profile-settings').textContent ?? '', /@[a-z0-9.-]+\.[a-z]{2,}/i);
+  const source = fs.readFileSync('src/components/ProfileSettingsPage.tsx', 'utf8');
+  for (const forbidden of ['accountStatus', 'AccountRecoverySheet', 'status.email', 'Saved account', 'linkEmail', 'EmailAuthProvider']) {
+    assert.equal(source.includes(forbidden), false, `${forbidden} is not used in Profile settings`);
+  }
+});
+
 test('no dead options: every row and button on the page does something', () => {
   settings({ birthDate: '1990-01-01' });
-  const rows = ['row-edit-profile', 'row-avatar', 'row-discovery', 'row-app-appearance', 'row-whats-new', 'row-support'];
+  const rows = ['row-edit-profile', 'row-avatar', 'row-discovery', 'row-app-appearance', 'row-support'];
   rows.forEach((id) => fireEvent.click(screen.getByTestId(id)));
   assert.equal(calls.length, rows.length, 'each row reached its action');
   for (const button of screen.getAllByRole('button')) assert.equal((button as HTMLButtonElement).disabled, false);
@@ -259,10 +266,14 @@ test('the app offers the gear only on the member\'s own profile, saves the backg
   assert.match(page, /\{isSelf && \(\s*<div className="flex items-center gap-1\.5 pb-1">/, 'the gear is inside the owner block');
 });
 
-test('the NSFW choice is one shared control, used by both the settings page and the (larger-screen) appearance settings', () => {
+test('the NSFW and What\'s New options are not in Profile settings (the NSFW control stays only in the larger-screen appearance settings)', () => {
   const modal = fs.readFileSync('src/components/AppearanceSettingsModal.tsx', 'utf8');
   const settingsSource = fs.readFileSync('src/components/ProfileSettingsPage.tsx', 'utf8');
+  for (const forbidden of ['NsfwPreferenceControl', 'nsfwPreference', 'What’s New', 'onOpenWhatsNew', 'hasUnreadUpdates']) {
+    assert.equal(settingsSource.includes(forbidden), false, `${forbidden} is not in Profile settings`);
+  }
   assert.match(modal, /<NsfwPreferenceControl[^>]*hidden sm:block/);
-  assert.match(settingsSource, /<NsfwPreferenceControl/);
-  assert.doesNotMatch(modal, /NSFW_PREFERENCE_OPTIONS/, 'no second copy of the options');
+  const app = fs.readFileSync('src/App.tsx', 'utf8');
+  const block = app.slice(app.indexOf('<ProfileSettingsPage'), app.indexOf('/>', app.indexOf('<ProfileSettingsPage')));
+  assert.doesNotMatch(block, /nsfw|WhatsNew|hasUnread/i);
 });

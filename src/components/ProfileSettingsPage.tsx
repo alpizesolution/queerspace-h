@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Cake, Check, ChevronRight, Compass, Eye, KeyRound, LifeBuoy, Palette, Sparkles, SquarePen, SunMoon, UserRound } from 'lucide-react';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
-import { AccountRecoverySheet } from './AccountRecoverySheet.tsx';
 import { BackgroundStudio } from './BackgroundStudio.tsx';
 import { BirthdayCorrectionSheet } from './BirthdayCorrectionSheet.tsx';
 import { CosmicBackground } from './CosmicBackground.tsx';
-import { NsfwPreferenceControl } from './NsfwPreferenceControl.tsx';
 import { auth } from '../lib/firebase.ts';
 import { useBackgroundImage } from '../hooks/useBackgroundImage.ts';
-import { accountStatus } from '../services/accountLinking.ts';
 import type { UserPreferences } from '../types.ts';
-import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 import { describeBackground, type ProfileBackground } from '../utils/profileBackground.ts';
 import { ownerVisibility } from '../utils/profileView.ts';
 
@@ -25,9 +21,6 @@ export const SETTINGS_SECTIONS: { id: SettingsSection; label: string; icon: Reac
 
 interface Props {
   userPrefs: UserPreferences;
-  nsfwPreference: NsfwPreference;
-  onChangeNsfwPreference: (value: NsfwPreference) => void;
-  hasUnreadUpdates?: boolean;
   /** Opens the existing profile editor (name, pronouns, about, vibe, style, avatar, and what is shown). */
   onEditProfile: () => void;
   /** Opens the existing discovery preferences (My Type). */
@@ -36,7 +29,6 @@ interface Props {
   onSaveBackground: (background: ProfileBackground | null) => void | Promise<void>;
   /** Opens the existing theme and text size settings. */
   onOpenAppAppearance: () => void;
-  onOpenWhatsNew: () => void;
   onOpenSupport: () => void;
   onClose: () => void;
 }
@@ -84,16 +76,14 @@ const BackgroundPreview: React.FC<{ background: ProfileBackground | null; member
  * the left and one group at a time on the right.
  */
 export const ProfileSettingsPage: React.FC<Props> = ({
-  userPrefs, nsfwPreference, onChangeNsfwPreference, hasUnreadUpdates = false,
-  onEditProfile, onEditPreferences, onSaveBackground, onOpenAppAppearance, onOpenWhatsNew, onOpenSupport, onClose,
+  userPrefs,
+  onEditProfile, onEditPreferences, onSaveBackground, onOpenAppAppearance, onOpenSupport, onClose,
 }) => {
   const [section, setSection] = useState<SettingsSection>('profile');
   const [studioOpen, setStudioOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
   const [correcting, setCorrecting] = useState(false);
   const memberId = auth?.currentUser?.uid ?? null;
   const background = userPrefs.background ?? null;
-  const status = accountStatus(auth?.currentUser);
   const visibility = ownerVisibility(userPrefs);
   const name = userPrefs.displayName || 'Anonymous member';
   // Larger screens show one group at a time; phones show every group in one scroll.
@@ -184,25 +174,13 @@ export const ProfileSettingsPage: React.FC<Props> = ({
                   </ul>
                   <p className="mt-2.5 text-xs text-subtle">Your birthday and exact location are never shown. Each field above is switched on or off in Edit profile.</p>
                 </div>
-                <div className="rounded-2xl border border-line bg-raised/40 p-3.5">
-                  <NsfwPreferenceControl value={nsfwPreference} onChange={onChangeNsfwPreference} />
-                </div>
               </div>
             </section>
 
             <section aria-labelledby="settings-account" className={panel('account')} data-testid="settings-account">
               <h2 id="settings-account" className="mb-2 px-1 text-[length:calc(13px_*_var(--fs,1))] font-semibold text-fg md:text-[length:calc(16px_*_var(--fs,1))]">Account</h2>
               <Group>
-                <Row
-                  icon={<KeyRound className="h-[18px] w-[18px]" aria-hidden="true" />}
-                  title={status.anonymous ? 'Keep your conversations' : 'Saved account'}
-                  hint={status.anonymous ? 'Save your account so chats survive clearing data or a new phone' : status.email ? `Saved with ${status.email}` : 'Your account is saved'}
-                  onClick={() => setAccountOpen(true)}
-                  badge={status.anonymous}
-                  testId="row-account"
-                />
                 {userPrefs.birthDate && <Row icon={<Cake className="h-[18px] w-[18px]" aria-hidden="true" />} title="Correct my birthday" hint="Reviewed by the team. Never shown to others." onClick={() => setCorrecting(true)} testId="row-birthday" />}
-                <Row icon={<Sparkles className="h-[18px] w-[18px]" aria-hidden="true" />} title="What’s New" hint="Recent updates to QUEERSPACE" onClick={onOpenWhatsNew} badge={hasUnreadUpdates} testId="row-whats-new" />
                 <Row icon={<LifeBuoy className="h-[18px] w-[18px]" aria-hidden="true" />} title="Help and support" hint="Talk to the team" onClick={onOpenSupport} testId="row-support" />
               </Group>
             </section>
@@ -220,7 +198,6 @@ export const ProfileSettingsPage: React.FC<Props> = ({
           onApply={(next) => { setStudioOpen(false); void onSaveBackground(next); }}
         />
       )}
-      {accountOpen && <AccountRecoverySheet onClose={() => setAccountOpen(false)} />}
       {correcting && <BirthdayCorrectionSheet onClose={() => setCorrecting(false)} />}
     </div>
   );
