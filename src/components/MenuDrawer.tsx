@@ -12,6 +12,7 @@ import {
   UserRound,
   Settings2,
   Sparkles,
+  HeartHandshake,
   Volume2,
   VolumeX,
   LayoutDashboard,
@@ -24,6 +25,7 @@ interface MenuDrawerProps {
   onClose: () => void;
   onOpenInfo: (modal: MenuInfoModal) => void;
   onOpenSupport: () => void;
+  onOpenAbout: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onOpenWhatsNew: () => void;
@@ -55,6 +57,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   onClose,
   onOpenInfo,
   onOpenSupport,
+  onOpenAbout,
   onOpenProfile,
   onOpenSettings,
   onOpenWhatsNew,
@@ -153,6 +156,12 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
               </button>
             </li>
             {info('about', 'About', Info)}
+            <li>
+              <button className={rowClass} onClick={then(onOpenAbout)}>
+                <HeartHandshake className="w-[18px] h-[18px] text-lavender shrink-0" />
+                About the Developer
+              </button>
+            </li>
             {info('faq', 'FAQ', CircleHelp)}
           </Group>
 

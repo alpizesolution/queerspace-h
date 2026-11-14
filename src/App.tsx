@@ -53,11 +53,17 @@ import { useEchoNotifications } from './hooks/useEchoNotifications.ts';
 import { totalUnread } from './services/signalsInbox.ts';
 import { useUnreadUpdates } from './hooks/useUnreadUpdates.ts';
 import { WhatsNewSheet } from './components/WhatsNewSheet.tsx';
+import { AboutDeveloperPage } from './components/AboutDeveloperPage.tsx';
+
+type AppView = 'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community' | 'signals' | 'about';
+const ABOUT_PATH = /^\/about\/?$/;
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community' | 'signals'>(() =>
-    /^\/signals\/?$/.test(window.location.pathname) ? 'signals' : 'home'
+  const [currentView, setCurrentView] = useState<AppView>(() =>
+    /^\/signals\/?$/.test(window.location.pathname) ? 'signals' : ABOUT_PATH.test(window.location.pathname) ? 'about' : 'home'
   );
+  // Where Back on the About the Developer page returns to.
+  const aboutReturnRef = useRef<AppView>('home');
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
@@ -120,6 +126,9 @@ export default function App() {
       const state = event.state as { qsProfile?: unknown; qsPost?: unknown; qsSettings?: unknown } | null;
       // Profile settings have their own history entry, so Back closes just the settings and lands on the profile.
       setProfileSettingsOpen(state?.qsSettings === true);
+      // The About the Developer page has its own history entry (/about), so Back leaves it and Forward returns to it.
+      const onAbout = (state as { qsAbout?: unknown } | null)?.qsAbout === true;
+      setCurrentView((view) => (onAbout ? 'about' : view === 'about' ? aboutReturnRef.current : view));
       if (typeof state?.qsPost === 'string') {
         setProfileMemberId(null);
         setFocusPostId(state.qsPost);
@@ -184,6 +193,8 @@ export default function App() {
     const onSignalsPath = /^\/signals\/?$/.test(window.location.pathname);
     if (currentView === 'signals' && !onSignalsPath) window.history.replaceState(null, '', '/signals');
     else if (currentView !== 'signals' && onSignalsPath) window.history.replaceState(null, '', '/');
+    // Leaving About the Developer by any other route (a tab, the logo) drops /about from the address bar too.
+    else if (currentView !== 'about' && ABOUT_PATH.test(window.location.pathname)) window.history.replaceState(null, '', '/');
   }, [currentView]);
   const signalsInbox = useSignalsInbox(
     () => {
@@ -479,6 +490,21 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
 
+  /** About the Developer lives at /about with its own history entry, so the phone's back gesture returns to the app. */
+  const openAbout = () => {
+    if (currentView === 'about') return;
+    aboutReturnRef.current = currentView === 'searching' || currentView === 'chat' ? 'home' : currentView;
+    window.history.pushState({ qsAbout: true }, '', '/about');
+    setCurrentView('about');
+    window.scrollTo({ top: 0 });
+  };
+  // Not history.back(): once the Buy Me a Coffee panel has been opened, its frame adds history entries of its own, and
+  // going back would step through those instead of leaving the page. The address bar is put right by the effect above.
+  const closeAbout = () => {
+    setCurrentView(aboutReturnRef.current);
+    window.scrollTo({ top: 0 });
+  };
+
   const handleStartMatching = async (mode: 'quick' | 'custom', filters: FilterFields) => {
     if (!isAdultBirthDate(userPrefs.birthDate) || userPrefs.profileComplete !== true) {
       setSetupModalOpen(false);
@@ -587,7 +613,9 @@ export default function App() {
     >
       <FloatingCatsBackground />
 
-      {(ageGateOpen || (ageRestricted && !supportOpen)) && (
+      {/* About the Developer has nothing age-limited on it, so a first-time visitor can read it before the birthday step.
+          A device already marked under 18 stays behind the gate everywhere. */}
+      {((ageGateOpen && currentView !== 'about') || (ageRestricted && !supportOpen)) && (
         <AgeEligibilityGate initialBirthDate={userPrefs.birthDate} restricted={ageRestricted} reviewSubmitted={ageReviewSubmitted}
           onSubmit={async (birthDate) => {
             const age = calculateAge(birthDate);
@@ -671,6 +699,7 @@ export default function App() {
           onOpenWhatsNew={() => setWhatsNewOpen(true)}
           onOpenInfo={(modal) => setActiveInfoModal(modal)}
           onOpenSupport={openSupport}
+          onOpenAbout={openAbout}
           hasSupportReply={hasSupportReply}
           hasUnreadUpdates={hasUnreadUpdates}
           profile={userPrefs}
@@ -736,12 +765,15 @@ export default function App() {
         {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={() => setSettingsOpen(true)} onBlockMember={handleBlockMember} onViewRequests={() => { setSignalsStartSection('requests'); handleNavigate('signals'); }} focusPostId={focusPostId} onCloseFocus={closePost} />}
 
         {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} initialPairId={signalsResumePairId} onConversationState={({ openPairId, visible }) => { setSignalsResumePairId(openPairId); setSignalsChatVisible(visible); }} requestedPairId={signalsOpenPairId} onRequestedPairHandled={() => setSignalsOpenPairId(null)} initialSection={signalsStartSection} onInitialSectionHandled={() => setSignalsStartSection('inbox')} onBlockMember={handleBlockMember} nsfwPreference={nsfwPreference} onOpenSettings={() => setSettingsOpen(true)} />}
+
+        {currentView === 'about' && <AboutDeveloperPage onBack={closeAbout} />}
       </main>
 
       {showChrome && currentView !== 'public' && (
         <Footer
           onOpenModal={(modal) => setActiveInfoModal(modal)}
           onOpenSupport={openSupport}
+          onOpenAbout={openAbout}
           onOpenWhatsNew={() => setWhatsNewOpen(true)}
           hasUnreadUpdates={hasUnreadUpdates}
           hasSupportReply={hasSupportReply}

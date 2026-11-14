@@ -5,13 +5,15 @@ import { isAdminDevice } from '../utils/adminDevice.ts';
 // On phones the header has no room, so the admin shortcut lives here.
 const SHOW_ADMIN_LINK = isAdminDevice();
 
-/** Buy Me a Coffee page, styled like their official button (their embed script can't run in this app). */
+/** Buy Me a Coffee page, styled like their official button. Their floating widget loads on /about only (utils/bmcWidget.ts). */
 export const BMC_URL = 'https://www.buymeacoffee.com/donotdm';
 
 interface FooterProps {
   onOpenModal: (modal: 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact') => void;
   onOpenSupport: () => void;
   onOpenWhatsNew: () => void;
+  /** Opens the About the Developer page (/about). */
+  onOpenAbout: () => void;
   /** Published What's New updates the member has not opened. */
   hasUnreadUpdates?: boolean;
   /** The team replied and the member hasn't read it yet. */
@@ -27,7 +29,7 @@ const LINKS = [
   { id: 'terms', label: 'Terms' },
 ] as const;
 
-export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, onOpenWhatsNew, hasUnreadUpdates = false, hasSupportReply = false, className = '' }) => (
+export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, onOpenWhatsNew, onOpenAbout, hasUnreadUpdates = false, hasSupportReply = false, className = '' }) => (
   <footer className={`border-t border-line text-subtle ${className}`}>
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-6 flex flex-col items-center text-center gap-4 sm:flex-row sm:text-left sm:gap-6">
       <div className="sm:mr-auto">
@@ -61,6 +63,10 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, onOp
             </button>
           </React.Fragment>
         ))}
+        <span aria-hidden="true" className="w-0.5 h-0.5 rounded-full bg-subtle/60" />
+        <button onClick={onOpenAbout} className="px-2 sm:px-2.5 py-2 rounded-md hover:text-fg transition-colors cursor-pointer">
+          About the Developer
+        </button>
       </nav>
 
       <div className="flex items-center gap-2">

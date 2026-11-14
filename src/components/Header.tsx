@@ -23,6 +23,7 @@ interface HeaderProps {
   onOpenWhatsNew: () => void;
   onOpenInfo: (modal: MenuInfoModal) => void;
   onOpenSupport: () => void;
+  onOpenAbout: () => void;
   hasSupportReply?: boolean;
   hasUnreadUpdates?: boolean;
   profile: { avatar?: string; displayName?: string };
@@ -40,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenWhatsNew,
   onOpenInfo,
   onOpenSupport,
+  onOpenAbout,
   hasSupportReply = false,
   hasUnreadUpdates = false,
   profile,
@@ -143,6 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
         onClose={() => setMenuOpen(false)}
         onOpenInfo={onOpenInfo}
         onOpenSupport={onOpenSupport}
+        onOpenAbout={onOpenAbout}
         onOpenProfile={onOpenProfile}
         onOpenSettings={onOpenSettings}
         onOpenWhatsNew={onOpenWhatsNew}

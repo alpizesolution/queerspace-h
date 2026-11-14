@@ -17,7 +17,7 @@ const header = (calls: string[]) => render(
   <Header
     onNavigate={() => {}} currentView="home" isSoundMuted={false} onToggleSound={() => {} }
     onOpenSafetyModal={() => {}} onOpenProfile={() => calls.push('profile')} onOpenSettings={() => {}} onOpenWhatsNew={() => {}}
-    onOpenInfo={() => {}} onOpenSupport={() => {}} profile={{ avatar: undefined, displayName: 'Luna' }}
+    onOpenInfo={() => {}} onOpenSupport={() => {}} onOpenAbout={() => {}} profile={{ avatar: undefined, displayName: 'Luna' }}
   />
 );
 

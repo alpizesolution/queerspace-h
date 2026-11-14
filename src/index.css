@@ -502,3 +502,12 @@ body {
   to { opacity: 1; transform: none; }
 }
 .anim-reveal { animation: qs-reveal 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Buy Me a Coffee widget (utils/bmcWidget.ts): shown on the About the Developer page only, and lifted above the phone tab bar. */
+html:not(.bmc-widget-visible) #bmc-wbtn,
+html:not(.bmc-widget-visible) div:has(> #bmc-iframe) {
+  display: none !important;
+}
+#bmc-wbtn {
+  bottom: calc(var(--tabbar-h) + 18px) !important;
+}
