@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ArrowLeft, Code2, Heart, Sparkles, Users } from 'lucide-react';
+import { ArrowLeft, Code2, Heart, Users } from 'lucide-react';
 import { BMC_URL } from './Footer.tsx';
 import { hideBmcWidget, showBmcWidget } from '../utils/bmcWidget.ts';
 
@@ -42,9 +42,13 @@ export const AboutDeveloperPage: React.FC<AboutDeveloperPageProps> = ({ onBack }
       </button>
 
       <header className="mt-6 sm:mt-8 text-center">
-        <span className="mx-auto w-14 h-14 rounded-2xl bg-raised border border-line text-lavender flex items-center justify-center">
-          <Sparkles className="w-6 h-6" />
-        </span>
+        <img
+          src="/assets/cha-avatar.gif"
+          alt="Illustrated portrait of Cha"
+          width={112}
+          height={112}
+          className="mx-auto w-28 h-28 rounded-full object-cover bg-raised border border-line-strong ring-4 ring-plum/30"
+        />
         <p className="mt-5 text-[length:calc(11px_*_var(--fs,1))] sm:text-xs font-semibold uppercase tracking-[0.18em] text-lavender">
           About the Developer
         </p>

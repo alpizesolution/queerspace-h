@@ -31,6 +31,9 @@ test('the page introduces the developer, the project and the thank-you, and Back
   assert.ok(screen.getByRole('heading', { name: 'Independently maintained' }));
   assert.ok(screen.getByRole('heading', { name: 'Thank you for being here' }));
   assert.ok(screen.getByRole('heading', { name: /Help Keep QueerSpace Alive/ }));
+  const portrait = screen.getByRole('img', { name: 'Illustrated portrait of Cha' });
+  assert.equal(portrait.getAttribute('src'), '/assets/cha-avatar.gif');
+  assert.ok(fs.existsSync('public/assets/cha-avatar.gif'), 'the portrait ships with the app');
   fireEvent.click(screen.getByRole('button', { name: 'Back' }));
   assert.equal(backs, 1);
 });
