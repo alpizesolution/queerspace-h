@@ -148,8 +148,9 @@ const sheet = read('src/components/ConnectionRequestSheet.tsx');
 const board = read('src/components/LookingForView.tsx');
 
 test('Signals gets Inbox and Requests, with Incoming and Sent inside Requests, and the inbox is untouched', () => {
-  assert.match(view, /\[\['inbox', 'Inbox'\], \['requests', 'Requests'\]\]/);
+  assert.match(view, /\[\['inbox', 'Inbox'\], \['requests', 'Requests'\], \['tests', 'Tests'\]\]/, 'Inbox and Requests, with the Tests section added after them');
   assert.match(view, /section === 'requests' \? \(\s*<ConnectionRequestsPanel/);
+  assert.match(view, /section === 'tests' \? \(\s*<TestsPanel/);
   for (const kept of ['Invitations', 'Active', 'Past', 'SignalsConversation', 'respondToInvitation', 'answerFromDialog']) assert.ok(view.includes(kept), kept);
   assert.match(panel, /\['incoming', 'Incoming'/);
   assert.match(panel, /\['sent', 'Sent'/);

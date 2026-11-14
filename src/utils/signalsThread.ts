@@ -5,6 +5,7 @@
 
 import { parseGifInfo, type GifInfo } from './gif.ts';
 import { cardById, parseCard } from './comfortCards.ts';
+import { parseTestInvite, testById, testInviteText } from './testCatalog.ts';
 import { NSFW_CARD_TEXT, nsfwCardById, parseNsfwCard } from './nsfwCards.ts';
 import type { PhotoInfo } from './timedPhoto.ts';
 import { GAME_TEXT, parseGame, type Challenge, type GameCard } from './twoTruths.ts';
@@ -19,9 +20,11 @@ export type ThreadMessage = {
   replyTo?: { messageId: string; senderId: string; text: string } | null;
   reactions?: Reaction[];
   /** A timed photo: its timer and state. The picture itself is never part of the thread. */
-  kind?: 'photo' | 'gif' | 'card' | 'game';
+  kind?: 'photo' | 'gif' | 'card' | 'game' | 'test';
   photo?: PhotoInfo;
   /** A Comfort Card: only its id and category; the question is always read from the approved list in the app. */
+  /** A Test Invitation: only the test's id; its name, description and link always come from the app's catalog. */
+  test?: { id: string };
   card?: { id: string; category: string; /** Set for an NSFW Card: its words are never in `text`. */ deck?: 'nsfw' };
   /** A GIPHY GIF: the approved addresses and size. Sent by id; the server supplies the rest. */
   gif?: GifInfo;
@@ -66,6 +69,16 @@ export function checkedGif(message: ThreadMessage): ThreadMessage {
   return rest;
 }
 
+/** A Test Invitation is shown as one only if its id is in the catalog; otherwise it is plain text, so a bad record can never show a link. */
+export function checkedTest(message: ThreadMessage): ThreadMessage {
+  if (message.kind !== 'test') return message;
+  const invite = parseTestInvite(message.test);
+  const test = invite ? testById(invite.id) : null;
+  if (invite && test) return { ...message, text: testInviteText(test), test: { id: invite.id } };
+  const { kind: _kind, test: _test, ...rest } = message;
+  return rest;
+}
+
 /**
  * A Comfort Card message is shown as a card only if its id is on the approved list; then its words come from that list. A record
  * that fails the check is shown as ordinary text, so a wrong record can never put unapproved words in a card.
@@ -100,7 +113,7 @@ export function checkedGame(message: ThreadMessage): ThreadMessage {
  */
 export function mergeMessages(current: ThreadMessage[], received: ThreadMessage[]): ThreadMessage[] {
   if (!received.length) return current;
-  const incoming = received.map((m) => checkedGame(checkedCard(checkedGif(m))));
+  const incoming = received.map((m) => checkedTest(checkedGame(checkedCard(checkedGif(m)))));
   const next = current.slice();
   const index = new Map(next.map((m, i) => [m.id, i]));
   let changed = false;

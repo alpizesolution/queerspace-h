@@ -108,7 +108,7 @@ test('Signals no longer prints a second timestamp on the bubble for a card: the 
   const convo = fs.readFileSync('src/components/SignalsConversation.tsx', 'utf8').replace(/\r\n/g, '\n');
   assert.match(convo, /time=\{formatTime\(message\.createdAt\)\}/);
   assert.match(convo, /pending=\{unsent\}/);
-  assert.match(convo, /\{message\.createdAt && !\(message\.kind === 'card' && message\.card\) && !\(message\.kind === 'game' && message\.game\) && <span/);
+  assert.match(convo, /\{message\.createdAt && !\(message\.kind === 'card' && message\.card\) && !\(message\.kind === 'test' && message\.test\) && !\(message\.kind === 'game' && message\.game\) && <span/);
 });
 
 test('a long question wraps inside the card', () => {

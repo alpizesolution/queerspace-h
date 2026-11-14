@@ -15,6 +15,7 @@ import { ReplyQuote } from './ReplyQuote.tsx';
 import { ComfortCardBubble, ComfortCardPicker, ComfortCardsIcon } from './ComfortCards.tsx';
 import type { ComfortCard } from '../utils/comfortCards.ts';
 import { NsfwCardBubble } from './NsfwCards.tsx';
+import { TestInviteBubble } from './TestInvites.tsx';
 import { NSFW_CARD_TEXT, type NsfwCard } from '../utils/nsfwCards.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 import { TwoTruthsCard, TwoTruthsCreator, TwoTruthsIcon } from './TwoTruthsGame.tsx';
@@ -868,6 +869,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                               time={formatTime(message.createdAt)}
                               onGuess={(index) => void guessGame(message, index)}
                             />
+                          ) : message.kind === 'test' && message.test ? (
+                            <TestInviteBubble messageId={message.id} testId={message.test.id} mine={mine} invitedBy={mine ? 'you' : partnerName} time={formatTime(message.createdAt)} />
                           ) : message.kind === 'card' && message.card?.deck === 'nsfw' ? (
                             <NsfwCardBubble
                               card={message.card}
@@ -899,7 +902,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           ) : (
                           <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-[length:calc(15px_*_var(--fs,1))] leading-snug">{message.text}</p>
                           )}
-                          {message.createdAt && !(message.kind === 'card' && message.card) && !(message.kind === 'game' && message.game) && <span className={`${bareGif ? '' : 'ml-auto translate-y-px'} select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${bareGif ? 'text-muted' : mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
+                          {message.createdAt && !(message.kind === 'card' && message.card) && !(message.kind === 'test' && message.test) && !(message.kind === 'game' && message.game) && <span className={`${bareGif ? '' : 'ml-auto translate-y-px'} select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${bareGif ? 'text-muted' : mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
                         </div>
                       </div>
                       </SwipeToReply>
