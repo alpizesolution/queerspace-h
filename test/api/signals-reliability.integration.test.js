@@ -218,3 +218,95 @@ test('accepting an invitation for two members with no conversation creates one, 
   }
   assert.ok(((await db.doc(`signalsInbox/${x.uid}`).get()).data().rev ?? 0) > before, 'the sender\'s live inbox was bumped');
 });
+
+test('a catch-up poll that finds more than 100 changes never skips the newest ones: it says there is more and the next poll continues', { skip }, async () => {
+  const { a, load, seed } = await setup();
+  const ids = await seed(150);
+  // The reader last looked well before all 150 messages (a tab that was hidden for a while).
+  const longAgo = new Date(Date.now() - 400_000).toISOString();
+  const seen = [];
+  let cursor = longAgo;
+  let rounds = 0;
+  while (rounds++ < 10) {
+    const poll = await load(a, { after: cursor });
+    assert.equal(poll.statusCode, 200);
+    seen.push(...poll.body.messages.map((m) => m.id));
+    cursor = poll.body.cursor;
+    if (!poll.body.more) break;
+  }
+  assert.deepEqual([...new Set(seen)].sort(), ids, 'every message arrived, including the newest 50');
+  const after = await load(a, { after: cursor });
+  assert.deepEqual(after.body.messages, [], 'and then there is nothing left to fetch');
+});
+
+test('both participants can walk the complete history of a long conversation, and paging back never changes anyone\'s unread count', { skip }, async () => {
+  const { a, b, load, seed, inboxOf, pairId, db } = await setup();
+  const ids = await seed(260, 'a');
+  // Seed the inbox counters the way real sends would have left them: B has 3 unread, A none.
+  await db.doc(`signalsInbox/${b.uid}`).set({ unread: { [pairId]: 3 } }, { merge: true });
+  const before = { a: await inboxOf(a), b: await inboxOf(b) };
+  const forA = await walk(load, a, 50);
+  const forB = await walk(load, b, 50);
+  assert.deepEqual(forA.all, ids);
+  assert.deepEqual(forB.all, ids, 'the other member sees exactly the same complete history');
+  assert.deepEqual({ a: await inboxOf(a), b: await inboxOf(b) }, before, 'reading old pages changed no unread count and no inbox record');
+  assert.equal((await db.collection(`signalsPairs/${pairId}/messages`).get()).size, 260, 'nothing was deleted');
+});
+
+/** Writes `count` messages that ALL share one timestamp (createdAt and updatedAt), ids in order. Returns the ids. */
+async function seedTied(db, Timestamp, pairId, senderId, count, atMs) {
+  const ids = [];
+  for (let start = 0; start < count; start += 400) {
+    const batch = db.batch();
+    for (let i = start; i < Math.min(count, start + 400); i += 1) {
+      const id = `tie-${String(i).padStart(6, '0')}`;
+      const at = Timestamp.fromMillis(atMs);
+      batch.set(db.doc(`signalsPairs/${pairId}/messages/${id}`), { senderId, text: `t${i}`, createdAt: at, updatedAt: at });
+      ids.push(id);
+    }
+    await batch.commit();
+  }
+  return ids;
+}
+
+for (const limit of [50, 100]) {
+  test(`history: 250 messages sharing ONE timestamp page back with no gap and no duplicate (page size ${limit}), for both members`, { skip }, async () => {
+    const { a, b, load, db, Timestamp, pairId } = await setup();
+    const ids = await seedTied(db, Timestamp, pairId, a.uid, 250, Date.now() - 60_000);
+    for (const member of [a, b]) {
+      const { all, first } = await walk(load, member, limit);
+      assert.equal(first.body.messages.at(-1).id, ids.at(-1), 'the newest (by id, on a tie) is in the first page');
+      assert.deepEqual(all, ids, 'every message exactly once, in a stable order');
+    }
+  });
+}
+
+test('catch-up: 250 changes sharing ONE updatedAt are fetched in order with no gap and no duplicate across the 100-change pages', { skip }, async () => {
+  const { a, load, db, Timestamp, pairId } = await setup();
+  const ids = await seedTied(db, Timestamp, pairId, a.uid, 250, Date.now() - 120_000);
+  const seen = [];
+  let cursor = new Date(Date.now() - 400_000).toISOString();
+  let rounds = 0;
+  let sawMore = 0;
+  while (rounds++ < 10) {
+    const poll = await load(a, { after: cursor });
+    assert.equal(poll.statusCode, 200);
+    seen.push(...poll.body.messages.map((m) => m.id));
+    cursor = poll.body.cursor;
+    if (!poll.body.more) break;
+    sawMore += 1;
+  }
+  assert.equal(sawMore, 2, 'two full pages, then the last 50');
+  assert.deepEqual(seen, ids, 'all 250, once each, in order');
+  assert.deepEqual((await load(a, { after: cursor })).body.messages, [], 'and nothing is left');
+});
+
+test('catch-up: a forged continuation position is refused', { skip }, async () => {
+  const { a, load, seed } = await setup();
+  await seed(5);
+  for (const after of ['12.5.short', '12.1000000000.msg-000001', '12.5.../../x', '-1.5.msg-000001']) {
+    const res = await load(a, { after });
+    assert.ok([400].includes(res.statusCode) || Array.isArray(res.body?.messages), `${after}: refused or treated as a plain (empty) poll, never an error leak`);
+    assert.equal(res.statusCode === 200 ? JSON.stringify(res.body).includes('stack') : false, false);
+  }
+});

@@ -155,10 +155,18 @@ export function applyMyReaction(reactions: Reaction[] | undefined, emoji: string
 /** How many messages a conversation loads at a time: the newest page on opening, then one older page each time the reader scrolls up. */
 export const MESSAGE_PAGE_SIZE = 50;
 
-/** The newer of two cursors (ISO strings); null counts as "nothing yet". */
+/** A continuation position ("seconds.nanos.id") from a catch-up that was cut at its page size, as opposed to an ISO time. */
+export const isPositionCursor = (value: string): boolean => /^\d+\.\d+\./.test(value);
+
+/**
+ * The cursor to keep after a poll. Ordinary cursors are ISO times and only ever move forward. A continuation position always
+ * replaces the cursor it continues, and an ordinary cursor replaces a position (it comes from a later, finished catch-up). A
+ * response that arrives late can at worst make the next poll repeat messages, which the thread merges by id; it can never skip any.
+ */
 export function newerCursor(current: string | null, next: string | null | undefined): string | null {
   if (!next) return current;
   if (!current) return next;
+  if (isPositionCursor(next) || isPositionCursor(current)) return next;
   return Date.parse(next) > Date.parse(current) ? next : current;
 }
 

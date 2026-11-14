@@ -226,7 +226,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
       // since the cursor. Older messages come from loadOlder, a page at a time.
       const since = quiet && cursor.current ? `&after=${encodeURIComponent(cursor.current)}` : '';
       const size = since ? '' : `&limit=${MESSAGE_PAGE_SIZE}`;
-      const result = await request<{ messages: SignalMessage[]; cursor?: string | null; olderCursor?: string | null }>(
+      const result = await request<{ messages: SignalMessage[]; cursor?: string | null; olderCursor?: string | null; more?: boolean }>(
         `/api/signals?view=messages&pairId=${encodeURIComponent(pairId)}${since}${size}`
       );
       if (activePair.current !== pairId) return;
@@ -243,6 +243,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
       setMessages((current) => (loadedOnce.current && current.length ? mergeMessages(current, next) : next));
       setError(null);
       setEnded(false);
+      // A catch-up that found a lot of changes says there is more: ask again at once instead of waiting for the next poll.
+      if (result.more === true && since) void loadMessages(true);
     } catch (err) {
       if ((err as { code?: string } | null)?.code === 'conversation_unavailable') { markUnavailable(); return; }
       const message = err instanceof Error ? err.message : 'Could not load messages.';
@@ -407,6 +409,15 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     else setHasUnseen(true);
     lastOwnSend.current = false;
   }, [thread.length, scrollToBottom]);
+
+  // The older-page bookkeeping is only for the render that adds those messages. If that render added nothing new (the page held only
+  // messages already on screen), the thread did not grow and the effect above did not run, so clear it here: a stale flag would
+  // otherwise swallow the scroll handling and the "New messages" notice of the next message that really arrives. (It runs after the
+  // effect above, which has already used the flag when the thread did grow.)
+  useLayoutEffect(() => {
+    prepended.current = false;
+    restoreScroll.current = null;
+  }, [messages]);
 
   // Opening the keyboard shrinks the list; keep the newest message in view if the reader was there.
   useEffect(() => {

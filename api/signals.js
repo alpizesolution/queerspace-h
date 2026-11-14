@@ -11,7 +11,7 @@ import { clearCurrentVibe, setCurrentVibe, vibeView } from './_vibe.js';
 import { backgroundImageView, pruneBackgroundImages, setBackgroundImage } from './_background.js';
 import { GAME_TEXT, isGuess, parseChallenge, shapeStoredGame } from './_game.js';
 import { GIF_TEXT, sharedGiphy, isGifId, limitGifSearches, limitGifSends, parseGifQuery, shapeStoredGif } from './_giphy.js';
-import { listMessagesPage, parseMessageLimit } from './_messages.js';
+import { decodeMessageCursor, encodeMessageCursor, listChangesAfterPosition, listMessagesPage, parseMessageLimit } from './_messages.js';
 import { createPartnerCache, getOnePair, listPairsLegacy, listPairsPage, parsePageLimit, partnerSummaries, shapePair } from './_inbox.js';
 
 const giphy = sharedGiphy;
@@ -47,6 +47,9 @@ function safeId(value) {
  * is sent at most twice and a quiet conversation costs nothing.
  */
 export const DELTA_OVERLAP_MS = 3000;
+
+/** The most changes one catch-up poll returns. When it returns this many, `more` is set and the app asks again. */
+export const DELTA_PAGE_LIMIT = 100;
 
 /** Cat-themed reactions shared with the MATCHING chat (src/utils/reactions.ts), plus the earlier set so old reactions still show and can be removed. */
 export const ALLOWED_REACTIONS = ['😻', '😹', '😽', '🙀', '😿', '❤️', '💜', '🥹', '😂', '✨'];
@@ -196,7 +199,9 @@ export default async function handler(req, res) {
         // After the first load the client sends `after` (the cursor it was given) and only gets messages that are new or
         // changed (a reaction) since then, instead of the whole history every few seconds.
         const afterParam = req.query?.after || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('after');
-        const afterMs = typeof afterParam === 'string' ? Date.parse(afterParam) : Number.NaN;
+        // `after` is either a time (an ordinary poll) or an exact position "seconds.nanos.id" (the continuation of a catch-up that was cut).
+        const afterPosition = typeof afterParam === 'string' && decodeMessageCursor(afterParam) ? afterParam : null;
+        const afterMs = afterPosition === null && typeof afterParam === 'string' ? Date.parse(afterParam) : Number.NaN;
         const pollStartedAt = Date.now();
         const messagesRef = db.collection('signalsPairs').doc(pairId).collection('messages');
         // A poll asks only for what changed since its cursor. Opening a conversation (or asking for earlier messages with `before`)
@@ -204,14 +209,25 @@ export default async function handler(req, res) {
         const messageParam = name => req.query?.[name] || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get(name);
         let olderCursor = null;
         let messageSnap;
-        if (Number.isFinite(afterMs)) {
-          messageSnap = await messagesRef.where('updatedAt', '>', Timestamp.fromMillis(afterMs - DELTA_OVERLAP_MS)).orderBy('updatedAt', 'asc').limit(100).get();
+        if (afterPosition !== null) {
+          messageSnap = await listChangesAfterPosition(messagesRef, afterPosition, DELTA_PAGE_LIMIT);
+        } else if (Number.isFinite(afterMs)) {
+          messageSnap = await messagesRef.where('updatedAt', '>', Timestamp.fromMillis(afterMs - DELTA_OVERLAP_MS)).orderBy('updatedAt', 'asc').limit(DELTA_PAGE_LIMIT).get();
         } else {
           const page = await listMessagesPage(messagesRef, { limit: parseMessageLimit(messageParam('limit')), before: messageParam('before') });
           if (page.invalid) return send(res, 400, { error: 'invalid_request' });
           messageSnap = { docs: page.docs };
           olderCursor = page.olderCursor;
         }
+        // A catch-up that hit the 100 limit must not move its cursor past what it did not return (a tab that was away while a long run of
+        // messages arrived would otherwise lose the newest ones for good). The cursor then stops at the last change returned, and
+        // `more` tells the app to ask again straight away.
+        const isDelta = afterPosition !== null || Number.isFinite(afterMs);
+        const truncated = isDelta && messageSnap.docs.length >= DELTA_PAGE_LIMIT;
+        // Where to continue: the exact position (full-precision time and id) of the last change returned.
+        const lastDoc = truncated ? messageSnap.docs[messageSnap.docs.length - 1] : null;
+        const lastStamp = lastDoc?.data().updatedAt;
+        const continuation = lastDoc && lastStamp instanceof Timestamp ? encodeMessageCursor(lastStamp, lastDoc.id) : null;
         const photos = await media.photoViews(db, uid, messageSnap.docs);
         const messages = messageSnap.docs.map(snap => {
           const data = snap.data();
@@ -243,7 +259,8 @@ export default async function handler(req, res) {
             ),
           };
         });
-        return send(res, 200, { messages, cursor: deltaCursor(pollStartedAt), ...(Number.isFinite(afterMs) ? {} : { olderCursor }) });
+        const cursor = continuation ?? deltaCursor(pollStartedAt);
+        return send(res, 200, { messages, cursor, ...(continuation ? { more: true } : {}), ...(isDelta ? {} : { olderCursor }) });
       }
       if (view === 'requests') return send(res, 200, await connectionRequests.list(db, uid));
       if (view === 'background-image') {

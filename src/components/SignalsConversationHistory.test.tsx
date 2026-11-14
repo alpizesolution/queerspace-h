@@ -174,3 +174,79 @@ test('loading older messages never chimes, never shows "New messages", and never
   assert.equal(marks().length, before, 'no further mark-read: the unread count is exactly what it was');
   assert.equal(screen.queryByRole('button', { name: /New messages/ }), null);
 });
+
+test('sending a message after older pages were loaded works: it appears at the bottom once, and the history above is untouched', async () => {
+  open();
+  await screen.findByRole('button', { name: /message: text-149/ });
+  fireEvent.click(screen.getByTestId('load-earlier'));
+  await waitFor(() => assert.equal(shown().length, 100));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init?: { method?: string; body?: string }) => {
+    if (init?.method === 'POST') {
+      const body = JSON.parse(String(init.body ?? '{}'));
+      if (body.action === 'send-message') return { ok: true, status: 201, json: async () => ({ id: body.messageId, senderId: 'alice', text: body.text, createdAt: new Date(BASE + 999_000).toISOString(), replyTo: null, reactions: [] }) };
+    }
+    return (originalFetch as unknown as (u: string, i?: unknown) => Promise<Response>)(url, init);
+  }) as unknown as typeof fetch;
+  fireEvent.change(screen.getByPlaceholderText('Message...'), { target: { value: 'sent after paging' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+  await screen.findByRole('button', { name: /message: sent after paging/ });
+  assert.equal(screen.getAllByRole('button', { name: /message: sent after paging/ }).length, 1, 'once, not duplicated');
+  assert.deepEqual(shown().slice(0, 100), Array.from({ length: 100 }, (_, i) => 50 + i), 'the loaded history is unchanged and in order');
+});
+
+test('a catch-up that says there is more is followed up at once, so a long run of missed messages is fully fetched', async () => {
+  const view = render(<SignalsConversation pairId="pair-12345678" partner={{ displayName: 'Luna', avatar: null }} liveAt={null} onBack={() => {}} />);
+  await screen.findByRole('button', { name: /message: text-149/ });
+  const originalFetch = globalThis.fetch;
+  const afters: string[] = [];
+  globalThis.fetch = (async (url: string, init?: unknown) => {
+    const text = String(url);
+    if (/view=messages/.test(text) && /after=/.test(text)) {
+      afters.push(text);
+      if (afters.length === 1) return { ok: true, status: 200, json: async () => ({ messages: [message(150)], cursor: new Date(Date.now() - 5000).toISOString(), more: true }) };
+      return { ok: true, status: 200, json: async () => ({ messages: [message(151)], cursor: new Date().toISOString() }) };
+    }
+    return (originalFetch as unknown as (u: string, i?: unknown) => Promise<Response>)(url, init);
+  }) as unknown as typeof fetch;
+  // The inbox listener reports new activity from the other member: the open conversation reads the changes now.
+  view.rerender(<SignalsConversation pairId="pair-12345678" partner={{ displayName: 'Luna', avatar: null }} liveAt={Date.now()} onBack={() => {}} />);
+  await waitFor(() => assert.ok(screen.queryByRole('button', { name: /message: text-151/ }), 'the second batch arrived without waiting for the next poll'));
+  assert.ok(screen.getByRole('button', { name: /message: text-150/ }));
+  assert.equal(afters.length >= 2, true, 'it asked again straight away');
+});
+
+test('an older page holding only messages that are already on screen leaves no stale state: the next new message is still announced to a reader who scrolled up', async () => {
+  const view = render(<SignalsConversation pairId="pair-12345678" partner={{ displayName: 'Luna', avatar: null }} liveAt={null} onBack={() => {}} />);
+  await screen.findByRole('button', { name: /message: text-149/ });
+  const originalFetch = globalThis.fetch;
+  let polled = 0;
+  let deliver = false;
+  globalThis.fetch = (async (url: string, init?: unknown) => {
+    const text = String(url);
+    if (/before=/.test(text)) {
+      // The "older" page is made only of messages that are already shown (for example a poll brought them in first).
+      return { ok: true, status: 200, json: async () => ({ messages: Array.from({ length: 5 }, (_, k) => message(145 + k)), cursor: new Date().toISOString(), olderCursor: null }) };
+    }
+    if (/after=/.test(text)) {
+      if (deliver) polled += 1;
+      return { ok: true, status: 200, json: async () => ({ messages: deliver ? [message(150)] : [], cursor: new Date().toISOString() }) };
+    }
+    return (originalFetch as unknown as (u: string, i?: unknown) => Promise<Response>)(url, init);
+  }) as unknown as typeof fetch;
+  fireEvent.click(screen.getByTestId('load-earlier'));
+  await waitFor(() => assert.equal(screen.queryByTestId('load-earlier') === null, true, 'the older page finished loading'));
+  assert.equal(shown().length, 50, 'nothing new was added by that page');
+  // The reader scrolls up, away from the newest message.
+  const list = document.querySelector('[aria-live="polite"]') as HTMLElement;
+  Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 3000 });
+  Object.defineProperty(list, 'clientHeight', { configurable: true, value: 500 });
+  Object.defineProperty(list, 'scrollTop', { configurable: true, value: 400, writable: true });
+  fireEvent.scroll(list);
+  // A new message arrives from the other member.
+  deliver = true;
+  view.rerender(<SignalsConversation pairId="pair-12345678" partner={{ displayName: 'Luna', avatar: null }} liveAt={Date.now()} onBack={() => {}} />);
+  await screen.findByLabelText(/message: text-150/);
+  assert.ok(polled >= 1);
+  assert.ok(screen.getByText('New messages'), 'the reader is told there is a new message (it was not swallowed by the older-page bookkeeping)');
+});

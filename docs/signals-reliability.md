@@ -47,7 +47,29 @@ A send writes the message and **both** members' inbox entries (`last`, and the r
 ## Verification status
 
 - **Verified on the Firebase emulators and in unit and component tests:** pagination at 50, 100, 150, 500 and 1,100 messages, cursor safety, both members' inboxes, concurrent sends, blocked and suspended chats, duplicate acceptance, more than 100 conversations, the missing-index error, account linking with email and with a Google test credential (the same uid is kept), collisions, listener retries, refresh races.
-- **Not verified against production or a real device:** that the `signalsPairs` index is deployed; that the messages query (`createdAt` desc, then document id desc) is served by Firestore's automatic index (expected, but the emulator does not enforce indexes); that Email/Password and Google sign-in are enabled; the real Google popup (only its wrapper is tested, with the popup call replaced); scroll position in a real browser (tested with fake layout sizes); behaviour on a real phone or PWA.
+- **Not verified against production or a real device:** that the message queries (see "Firestore queries and indexes") are served by Firestore's automatic single-field indexes (expected, but the emulator does not enforce indexes; the `signalsPairs` composite index was seen in the project's index list); that Email/Password and Google sign-in are enabled; the real Google popup (only its wrapper is tested, with the popup call replaced); scroll position in a real browser (tested with fake layout sizes); behaviour on a real phone or PWA.
+
+## Catch-up polling and equal timestamps
+
+A poll after the first load asks for what changed since its cursor (`after`). It returns at most 100 changes. When it hits that limit the reply carries `more: true` and a **continuation position** (`seconds.nanos.id`, the full-precision `updatedAt` and the message id of the last change returned) instead of a time, and the app asks again at once with that position. The continuation query orders by `(updatedAt, document id)` and starts strictly after that pair, so any number of changes sharing one timestamp are returned once each, with no gap and no repeat. The history pages (`before`) use the same kind of compound `(createdAt, id)` cursor. Both are covered by emulator tests with 250 messages that share a single timestamp.
+
+## Firestore queries and indexes
+
+Every query the Signals code runs, and what it needs. **No composite index was added by this work, and `firestore.indexes.json` is unchanged.**
+
+| Query | Needs |
+| --- | --- |
+| Inbox page: `signalsPairs` where `participants` array-contains, order by `createdAt` desc then document id desc, optional start-after, limit | The composite index `signalsPairs (participants CONTAINS, createdAt DESC)`, **declared** in `firestore.indexes.json`. The project's index list (read with `firebase firestore:indexes`) showed it present. If it is missing the inbox answers 503 `inbox_index_missing`. |
+| Accept: `signalsPairs` where `participants ==` the two ids and `status == 'active'`, limit 1 | Equality filters only, no composite index. |
+| Invitations: `signalsInvitations` where `recipientId` (or `senderId`) `==` the member, optionally `status == 'pending'`, limit 50 | Equality filters only, no composite index. |
+| Messages, newest page and older pages: order by `createdAt` desc then document id desc, optional start-after, limit | Single-field indexes (automatic): `createdAt` descending, with the document name ordered the same way. Expected to need no composite index. |
+| Messages, catch-up: `updatedAt >` a time, order by `updatedAt` asc, limit | Single-field index on `updatedAt` (automatic). |
+| Messages, catch-up continuation: order by `updatedAt` asc then document id asc, start-after, limit | Single-field index on `updatedAt` (automatic), document name ascending. |
+| Mark read: `createdAt >` a time, order by `createdAt` asc, limit 100 | Single-field index on `createdAt` (automatic). |
+
+The automatic single-field indexes exist unless a `fieldOverrides` entry disables them. The only override in `firestore.indexes.json` is for the `public` collection group, so none of the message queries are affected.
+
+**Not verified against production.** The emulator does not enforce indexes, and no production query was run. The composite index for the inbox was seen in the project's index list; the single-field indexes behind the message queries are assumed from how Firestore works, not confirmed. The first real check is to open a long conversation on the deployed build: a missing index shows as a failed request, and the server log line says "The query requires an index" with a link to create it. Deploy nothing for these queries unless that happens.
 
 ## Limits that remain
 

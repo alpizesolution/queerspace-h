@@ -53,3 +53,16 @@ export async function listMessagesPage(messagesRef, { limit, before }) {
     olderCursor: hasMore && oldest && stamp instanceof Timestamp ? encodeMessageCursor(stamp, oldest.id) : null,
   };
 }
+
+/**
+ * One page of what changed after an exact position (a catch-up that was cut at its page size): the changes in (updatedAt, id) order,
+ * starting strictly after the last change already returned. The position carries the full-precision time AND the message id, so
+ * any number of changes sharing one timestamp are returned once each, with no gap and no repeat.
+ */
+export async function listChangesAfterPosition(messagesRef, position, limit) {
+  const cursor = decodeMessageCursor(position);
+  if (!cursor) return null;
+  const snap = await messagesRef.orderBy('updatedAt', 'asc').orderBy(FieldPath.documentId(), 'asc')
+    .startAfter(new Timestamp(cursor.seconds, cursor.nanos), cursor.id).limit(limit).get();
+  return snap;
+}

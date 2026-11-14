@@ -71,3 +71,16 @@ test('failures are explained, and only the ones a retry can fix are retryable', 
   assert.equal(describeSendFailure(new DOMException('aborted', 'AbortError')).retryable, true);
   assert.equal(describeSendFailure(new Error('Signals is temporarily unavailable. Please try again.')).retryable, true);
 });
+
+test('a continuation position replaces the cursor it continues, a later ordinary cursor replaces a position, and ordinary cursors still only move forward', async () => {
+  const { isPositionCursor } = await import('./signalsThread.ts');
+  const position = '1767225600.123456789.msg-000100';
+  const iso = (ms: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, 0) + ms).toISOString();
+  assert.equal(isPositionCursor(position), true);
+  assert.equal(isPositionCursor(iso(0)), false, 'an ISO time is not a position');
+  assert.equal(isPositionCursor('2026-01-01T00:00:00.123Z'), false);
+  assert.equal(newerCursor(iso(5000), position), position, 'a continuation always moves on from where it started');
+  assert.equal(newerCursor(position, iso(9000)), iso(9000), 'a finished catch-up ends the continuation');
+  assert.equal(newerCursor(position, '1767225601.5.msg-000200'), '1767225601.5.msg-000200');
+  assert.equal(newerCursor(iso(5000), iso(3000)), iso(5000), 'ordinary cursors never go back');
+});
