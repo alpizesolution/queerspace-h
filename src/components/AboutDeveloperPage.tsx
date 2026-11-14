@@ -20,7 +20,7 @@ const SECTIONS = [
   },
 ] as const;
 
-/** About the Developer and Support QueerSpace, at /about. Open to everyone, with or without a profile. */
+/** Our Story and Support QueerSpace, at /about. Open to everyone, with or without a profile. */
 export const AboutDeveloperPage: React.FC<AboutDeveloperPageProps> = ({ onBack }) => {
   // The floating Buy Me a Coffee widget shows on this page only, so it never sits on top of the other screens' controls.
   useEffect(() => {
@@ -30,7 +30,7 @@ export const AboutDeveloperPage: React.FC<AboutDeveloperPageProps> = ({ onBack }
 
   useEffect(() => {
     const previous = document.title;
-    document.title = 'About the Developer · QUEERSPACE PH';
+    document.title = 'Our Story · QUEERSPACE PH';
     return () => { document.title = previous; };
   }, []);
 
@@ -50,7 +50,7 @@ export const AboutDeveloperPage: React.FC<AboutDeveloperPageProps> = ({ onBack }
           className="mx-auto w-28 h-28 rounded-full object-cover bg-raised border border-line-strong ring-4 ring-plum/30"
         />
         <p className="mt-5 text-[length:calc(11px_*_var(--fs,1))] sm:text-xs font-semibold uppercase tracking-[0.18em] text-lavender">
-          About the Developer
+          Our Story
         </p>
         <h1 className="mt-3 font-serif text-[clamp(1.75rem,8vw,2.25rem)] sm:text-5xl leading-[1.12] font-semibold tracking-tight text-fg text-balance">
           Your Space. Your People. <em className="text-berry">Built with Love.</em>
@@ -66,9 +66,10 @@ export const AboutDeveloperPage: React.FC<AboutDeveloperPageProps> = ({ onBack }
               safe digital haven: <span className="text-fg">Your space. Your people.</span>
             </p>
             <p>
-              I manage and develop this platform independently. Every feature, improvement, and update is part of my
-              effort to create a digital space where our community can connect, express themselves, and feel at home.
+              I manage and develop this platform independently. If you’d like to support ongoing development, help cover
+              server and hosting costs, or just say thanks with a cup of coffee, it would mean the world!
             </p>
+            <p>Thank you for backing independent WLW tech in the Philippines! 🏳️‍🌈✨</p>
           </div>
         </article>
 
@@ -103,10 +104,6 @@ export const AboutDeveloperPage: React.FC<AboutDeveloperPageProps> = ({ onBack }
                 Help Keep QueerSpace Alive&nbsp;💜
               </h2>
               <div className="mt-3 space-y-3 text-[length:calc(15px_*_var(--fs,1))] leading-relaxed text-muted">
-                <p>
-                  If you’d like to support ongoing development, help cover server and hosting costs, or just say thanks
-                  with a cup of coffee, it would mean the world!
-                </p>
                 <p>Every contribution helps keep this independent WLW platform growing.</p>
               </div>
             </div>

@@ -10,7 +10,7 @@ import { MenuDrawer } from './MenuDrawer.tsx';
 import { hideBmcWidget, resetBmcWidgetForTests, showBmcWidget } from '../utils/bmcWidget.ts';
 
 /**
- * About the Developer (/about) and its Buy Me a Coffee support.
+ * Our Story (/about) and its Buy Me a Coffee support.
  * The page is open to everyone, its button opens the developer's Buy Me a Coffee page safely in a new tab, and the official
  * floating widget is loaded once however many times the page is opened.
  */
@@ -28,6 +28,8 @@ test('the page introduces the developer, the project and the thank-you, and Back
   render(<AboutDeveloperPage onBack={() => { backs++; }} />);
   assert.ok(screen.getByRole('heading', { level: 1, name: 'Your Space. Your People. Built with Love.' }));
   assert.ok(screen.getByRole('heading', { name: 'Hey there! I’m Cha, creator of QueerSpace PH.' }));
+  assert.ok(screen.getByText('Our Story'));
+  assert.ok(screen.getByText(/Thank you for backing independent WLW tech in the Philippines!/));
   assert.ok(screen.getByRole('heading', { name: 'Independently maintained' }));
   assert.ok(screen.getByRole('heading', { name: 'Thank you for being here' }));
   assert.ok(screen.getByRole('heading', { name: /Help Keep QueerSpace Alive/ }));
@@ -68,17 +70,19 @@ test('the widget script is added once with the official settings, however often 
 test('the page is reachable from the footer and the phone menu, not from the main tabs', () => {
   const opened: string[] = [];
   render(<Footer onOpenModal={() => {}} onOpenSupport={() => {}} onOpenWhatsNew={() => {}} onOpenAbout={() => opened.push('footer')} />);
-  fireEvent.click(screen.getByRole('button', { name: 'About the Developer' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Our Story' }));
   cleanup();
   let closed = 0;
   render(
     <MenuDrawer onClose={() => { closed++; }} onOpenInfo={() => {}} onOpenSupport={() => {}} onOpenAbout={() => opened.push('menu')}
       onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenWhatsNew={() => {}} isSoundMuted={false} onToggleSound={() => {}} showAdmin={false} />,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'About the Developer' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Our Story' }));
   assert.deepEqual(opened, ['footer', 'menu']);
   assert.equal(closed, 1, 'the menu closes as the page opens');
-  assert.doesNotMatch(read('src/components/BottomNavigation.tsx'), /about/i);
+  assert.doesNotMatch(read('src/components/BottomNavigation.tsx'), /about|our story/i);
+  assert.match(read('src/components/MenuDrawer.tsx'), /What’s New[\s\S]*info\('about', 'About', Info\)[\s\S]*Our Story[\s\S]*info\('faq', 'FAQ', CircleHelp\)/, 'Information reads What’s New, About, Our Story, FAQ');
+  assert.equal(fs.readdirSync('src/components').filter((f) => !f.includes('.test.')).some((f) => /About the Developer/.test(read(`src/components/${f}`))), false, 'the old name is gone');
 });
 
 test('/about opens directly, and the security policy allows only the hosts the widget needs', () => {
@@ -96,5 +100,8 @@ test('/about opens directly, and the security policy allows only the hosts the w
   assert.match(read('src/App.tsx'), /\(ageGateOpen && currentView !== 'about'\) \|\| \(ageRestricted && !supportOpen\)/, 'a new visitor can read the page; an under-18 device stays gated');
   const css = read('src/index.css');
   assert.match(css, /html:not\(\.bmc-widget-visible\) #bmc-wbtn/, 'hidden everywhere but the About page');
+  assert.match(css, /@media \(max-width: 479\.98px\) \{\s*[^@]*#bmc-iframe \{[^}]*width: calc\(100vw - 24px\) !important;/, 'the panel fits a phone screen instead of overflowing it');
+  assert.doesNotMatch(css, /#bmc-iframe[^}]*\{[^}]*(100vw|100dvh) !important/, 'as a card, never full screen');
+  assert.match(css, /#bmc-iframe\[style\*="opacity: 1"\]\) #bmc-close-btn \{\s*visibility: visible !important;/, 'and can always be closed');
   assert.match(css, /#bmc-wbtn \{\s*bottom: calc\(var\(--tabbar-h\) \+ 18px\) !important;/, 'clear of the phone tab bar');
 });

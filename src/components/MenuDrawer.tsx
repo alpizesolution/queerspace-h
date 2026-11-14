@@ -159,7 +159,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
             <li>
               <button className={rowClass} onClick={then(onOpenAbout)}>
                 <HeartHandshake className="w-[18px] h-[18px] text-lavender shrink-0" />
-                About the Developer
+                Our Story
               </button>
             </li>
             {info('faq', 'FAQ', CircleHelp)}

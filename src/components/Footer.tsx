@@ -12,7 +12,7 @@ interface FooterProps {
   onOpenModal: (modal: 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms' | 'contact') => void;
   onOpenSupport: () => void;
   onOpenWhatsNew: () => void;
-  /** Opens the About the Developer page (/about). */
+  /** Opens the Our Story page (/about). */
   onOpenAbout: () => void;
   /** Published What's New updates the member has not opened. */
   hasUnreadUpdates?: boolean;
@@ -65,7 +65,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, onOp
         ))}
         <span aria-hidden="true" className="w-0.5 h-0.5 rounded-full bg-subtle/60" />
         <button onClick={onOpenAbout} className="px-2 sm:px-2.5 py-2 rounded-md hover:text-fg transition-colors cursor-pointer">
-          About the Developer
+          Our Story
         </button>
       </nav>
 

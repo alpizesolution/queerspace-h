@@ -62,7 +62,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<AppView>(() =>
     /^\/signals\/?$/.test(window.location.pathname) ? 'signals' : ABOUT_PATH.test(window.location.pathname) ? 'about' : 'home'
   );
-  // Where Back on the About the Developer page returns to.
+  // Where Back on the Our Story page returns to.
   const aboutReturnRef = useRef<AppView>('home');
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -126,7 +126,7 @@ export default function App() {
       const state = event.state as { qsProfile?: unknown; qsPost?: unknown; qsSettings?: unknown } | null;
       // Profile settings have their own history entry, so Back closes just the settings and lands on the profile.
       setProfileSettingsOpen(state?.qsSettings === true);
-      // The About the Developer page has its own history entry (/about), so Back leaves it and Forward returns to it.
+      // The Our Story page has its own history entry (/about), so Back leaves it and Forward returns to it.
       const onAbout = (state as { qsAbout?: unknown } | null)?.qsAbout === true;
       setCurrentView((view) => (onAbout ? 'about' : view === 'about' ? aboutReturnRef.current : view));
       if (typeof state?.qsPost === 'string') {
@@ -193,7 +193,7 @@ export default function App() {
     const onSignalsPath = /^\/signals\/?$/.test(window.location.pathname);
     if (currentView === 'signals' && !onSignalsPath) window.history.replaceState(null, '', '/signals');
     else if (currentView !== 'signals' && onSignalsPath) window.history.replaceState(null, '', '/');
-    // Leaving About the Developer by any other route (a tab, the logo) drops /about from the address bar too.
+    // Leaving Our Story by any other route (a tab, the logo) drops /about from the address bar too.
     else if (currentView !== 'about' && ABOUT_PATH.test(window.location.pathname)) window.history.replaceState(null, '', '/');
   }, [currentView]);
   const signalsInbox = useSignalsInbox(
@@ -490,7 +490,7 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
 
-  /** About the Developer lives at /about with its own history entry, so the phone's back gesture returns to the app. */
+  /** Our Story lives at /about with its own history entry, so the phone's back gesture returns to the app. */
   const openAbout = () => {
     if (currentView === 'about') return;
     aboutReturnRef.current = currentView === 'searching' || currentView === 'chat' ? 'home' : currentView;
@@ -613,7 +613,7 @@ export default function App() {
     >
       <FloatingCatsBackground />
 
-      {/* About the Developer has nothing age-limited on it, so a first-time visitor can read it before the birthday step.
+      {/* Our Story has nothing age-limited on it, so a first-time visitor can read it before the birthday step.
           A device already marked under 18 stays behind the gate everywhere. */}
       {((ageGateOpen && currentView !== 'about') || (ageRestricted && !supportOpen)) && (
         <AgeEligibilityGate initialBirthDate={userPrefs.birthDate} restricted={ageRestricted} reviewSubmitted={ageReviewSubmitted}
