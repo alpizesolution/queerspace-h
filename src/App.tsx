@@ -735,7 +735,7 @@ export default function App() {
 
         {currentView === 'community' && <CommunityFeedView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={() => setSettingsOpen(true)} onBlockMember={handleBlockMember} onViewRequests={() => { setSignalsStartSection('requests'); handleNavigate('signals'); }} focusPostId={focusPostId} onCloseFocus={closePost} />}
 
-        {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} initialPairId={signalsResumePairId} onConversationState={({ openPairId, visible }) => { setSignalsResumePairId(openPairId); setSignalsChatVisible(visible); }} requestedPairId={signalsOpenPairId} onRequestedPairHandled={() => setSignalsOpenPairId(null)} initialSection={signalsStartSection} onInitialSectionHandled={() => setSignalsStartSection('inbox')} onBlockMember={handleBlockMember} />}
+        {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} initialPairId={signalsResumePairId} onConversationState={({ openPairId, visible }) => { setSignalsResumePairId(openPairId); setSignalsChatVisible(visible); }} requestedPairId={signalsOpenPairId} onRequestedPairHandled={() => setSignalsOpenPairId(null)} initialSection={signalsStartSection} onInitialSectionHandled={() => setSignalsStartSection('inbox')} onBlockMember={handleBlockMember} nsfwPreference={nsfwPreference} onOpenSettings={() => setSettingsOpen(true)} />}
       </main>
 
       {showChrome && currentView !== 'public' && (

@@ -29,7 +29,7 @@ test('text, GIF, card and photo sends all use the same inbox writes, in the same
   const signals = read('api/signals.js');
   const send = signals.slice(signals.indexOf("if (action === 'send-message')"), signals.indexOf("if (action === 'mark-read')"));
   assert.ok(send.includes('batch.create(messageRef,'));
-  assert.ok(send.includes("inboxWritesForMessage({ pairId, preview: previewText(text, isGif ? 'gif' : isCard ? 'card' : isGame ? 'game' : 'text'), ...(isGame ? { senderPreview: '✨ You sent a Two Truths and a Lie challenge.' } : {}), stamp, increment: FieldValue.increment })"));
+  assert.ok(send.includes("inboxWritesForMessage({ pairId, preview: previewText(text, isGif ? 'gif' : isCard ? (cardDeck === 'nsfw' ? 'nsfw-card' : 'card') : isGame ? 'game' : 'text'), ...(isGame ? { senderPreview: '✨ You sent a Two Truths and a Lie challenge.' } : {}), stamp, increment: FieldValue.increment })"));
   assert.ok(send.includes('batch.set(db.doc(`signalsInbox/${otherUid}`), writes.recipient, { merge: true });'));
   assert.ok(send.includes('batch.set(db.doc(`signalsInbox/${uid}`), writes.sender, { merge: true });'));
   assert.ok(send.indexOf('writes.sender') < send.indexOf('await batch.commit()'), 'committed together');

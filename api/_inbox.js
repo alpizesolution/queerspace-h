@@ -15,6 +15,8 @@ export const PREVIEW_MAX = 80;
  */
 export function previewText(text, kind) {
   if (kind === 'gif') return 'GIF';
+  // An NSFW Card never puts its question in a preview: whether the reader may see mature content is their own device's setting.
+  if (kind === 'nsfw-card') return '🖤 Mature Card';
   if (kind === 'guess') return '✨ Someone guessed your Two Truths and a Lie!';
   if (kind === 'game') return '✨ Sent you a Two Truths and a Lie challenge.';
   const flat = String(text ?? '').replace(/\s+/g, ' ').trim();

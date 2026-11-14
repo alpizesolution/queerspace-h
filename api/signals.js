@@ -6,6 +6,7 @@ import { createRequestHandlers } from './_requests.js';
 import { profileView } from './_profiles.js';
 import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
 import { cardById, shapeStoredCard } from './_cards.js';
+import { NSFW_CARD_TEXT, nsfwCardById, shapeStoredNsfwCard } from './_nsfwCards.js';
 import { inboxWritesForMessage, previewText } from './_inbox.js';
 import { clearCurrentVibe, setCurrentVibe, vibeView } from './_vibe.js';
 import { backgroundImageView, pruneBackgroundImages, setBackgroundImage } from './_background.js';
@@ -233,18 +234,19 @@ export default async function handler(req, res) {
           const data = snap.data();
           const reactions = data.reactions && typeof data.reactions === 'object' ? data.reactions : {};
           // A Comfort Card: the question always comes from the approved list, never from what is stored on the message.
-          const card = data.kind === 'card' ? shapeStoredCard(data.card) : null;
+          // An NSFW Card carries only its id and category: its question is never sent (the app shows it only if the member's own setting allows).
+          const card = data.kind === 'card' ? (shapeStoredCard(data.card) ?? shapeStoredNsfwCard(data.card)) : null;
           // Two Truths and a Lie: the answer is part of this only once the recipient's guess has been recorded.
           const game = data.kind === 'game' ? shapeStoredGame(data.game, uid, data.senderId) : null;
           return {
             id: snap.id,
             senderId: data.senderId,
-            text: card ? card.question : game ? GAME_TEXT : data.text,
+            text: card ? (card.deck === 'nsfw' ? NSFW_CARD_TEXT : card.question) : game ? GAME_TEXT : data.text,
             // A timed photo: its timer and state only, never where the image is kept.
             ...(data.kind === 'photo' ? { kind: 'photo', photo: photos.get(snap.id) ?? { durationSec: data.durationSec, status: 'expired', mine: data.senderId === uid } } : {}),
             // A GIF: only the approved GIPHY addresses saved with it. A record that fails the check is shown as plain text.
             ...(data.kind === 'gif' && shapeStoredGif(data.gif) ? { kind: 'gif', gif: shapeStoredGif(data.gif) } : {}),
-            ...(card ? { kind: 'card', card: { id: card.id, category: card.category } } : {}),
+            ...(card ? { kind: 'card', card: { id: card.id, category: card.category, ...(card.deck ? { deck: card.deck } : {}) } } : {}),
             ...(game ? { kind: 'game', game } : {}),
             createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
             replyTo: data.replyTo && typeof data.replyTo === 'object' ? {
@@ -487,7 +489,11 @@ export default async function handler(req, res) {
       }
       if (!isGame && req.body?.game !== undefined) return send(res, 400, { error: 'invalid_message' });
       // A Comfort Card is sent by its id alone. The question comes from the approved list on the server; any other field is refused.
-      const card = isCard ? cardById(req.body?.cardId) : null;
+      // Either deck: a Comfort Card, or an NSFW Card (a separate list, for adults who have chosen to see mature content).
+      const nsfwCard = isCard ? nsfwCardById(req.body?.cardId) : null;
+      const card = isCard ? (nsfwCard ?? cardById(req.body?.cardId)) : null;
+      const cardDeck = nsfwCard ? 'nsfw' : null;
+      const cardView = card ? { id: card.id, category: card.category, ...(cardDeck ? { deck: cardDeck } : {}) } : null;
       if (isCard && (!card || ['text', 'card', 'question', 'gifId', 'gif', 'category'].some(field => req.body[field] !== undefined))) {
         return send(res, 400, { error: 'invalid_card' });
       }
@@ -498,7 +504,7 @@ export default async function handler(req, res) {
         return send(res, 400, { error: 'invalid_gif' });
       }
       if (!isGif && req.body?.gifId !== undefined) return send(res, 400, { error: 'invalid_message' });
-      const text = isGif ? GIF_TEXT : isCard ? card.question : isGame ? GAME_TEXT : typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      const text = isGif ? GIF_TEXT : isCard ? (cardDeck === 'nsfw' ? NSFW_CARD_TEXT : card.question) : isGame ? GAME_TEXT : typeof req.body?.text === 'string' ? req.body.text.trim() : '';
       const replyToInput = req.body?.replyTo;
       // The app picks the message id up front, so a retry after a dropped connection can't create a second copy.
       const requestedId = req.body?.messageId;
@@ -557,7 +563,7 @@ export default async function handler(req, res) {
         // The answer goes in its own document, which no client can read, in the same commit as the card.
         if (isGame) batch.create(pairRef.collection('gameSecrets').doc(messageRef.id), { senderId: uid, lie: challenge.lie, createdAt: stamp });
         // The recipient's unread counter, and the latest-message line for both people's inbox rows, in the same write.
-        const writes = inboxWritesForMessage({ pairId, preview: previewText(text, isGif ? 'gif' : isCard ? 'card' : isGame ? 'game' : 'text'), ...(isGame ? { senderPreview: '✨ You sent a Two Truths and a Lie challenge.' } : {}), stamp, increment: FieldValue.increment });
+        const writes = inboxWritesForMessage({ pairId, preview: previewText(text, isGif ? 'gif' : isCard ? (cardDeck === 'nsfw' ? 'nsfw-card' : 'card') : isGame ? 'game' : 'text'), ...(isGame ? { senderPreview: '✨ You sent a Two Truths and a Lie challenge.' } : {}), stamp, increment: FieldValue.increment });
         batch.set(db.doc(`signalsInbox/${otherUid}`), writes.recipient, { merge: true });
         batch.set(db.doc(`signalsInbox/${uid}`), writes.sender, { merge: true });
         await batch.commit();
@@ -571,7 +577,7 @@ export default async function handler(req, res) {
           senderId: uid,
           text: stored.text,
           ...(stored.kind === 'gif' && shapeStoredGif(stored.gif) ? { kind: 'gif', gif: shapeStoredGif(stored.gif) } : {}),
-          ...(isCard ? { kind: 'card', card: { id: card.id, category: card.category } } : {}),
+          ...(isCard ? { kind: 'card', card: cardView } : {}),
           ...(isGame ? { kind: 'game', game: shapeStoredGame(stored.game, uid, uid) } : {}),
           replyTo: replyBody(stored),
           reactions: [],
@@ -583,7 +589,7 @@ export default async function handler(req, res) {
         senderId: uid,
         text,
         ...(gif ? { kind: 'gif', gif } : {}),
-        ...(isCard ? { kind: 'card', card: { id: card.id, category: card.category } } : {}),
+        ...(isCard ? { kind: 'card', card: cardView } : {}),
         ...(isGame ? { kind: 'game', game: shapeStoredGame({ statements: challenge.statements, intro: challenge.intro, status: 'open' }, uid, uid) } : {}),
         replyTo: replyTo ? { ...replyTo, senderId: replyTo.sender === 'self' ? uid : otherUid } : null,
         reactions: [],

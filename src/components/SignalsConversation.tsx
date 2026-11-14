@@ -14,6 +14,9 @@ import { GifBubble, GifIcon, GifPicker } from './GifPicker.tsx';
 import { ReplyQuote } from './ReplyQuote.tsx';
 import { ComfortCardBubble, ComfortCardPicker, ComfortCardsIcon } from './ComfortCards.tsx';
 import type { ComfortCard } from '../utils/comfortCards.ts';
+import { NsfwCardBubble } from './NsfwCards.tsx';
+import { NSFW_CARD_TEXT, type NsfwCard } from '../utils/nsfwCards.ts';
+import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 import { TwoTruthsCard, TwoTruthsCreator, TwoTruthsIcon } from './TwoTruthsGame.tsx';
 import { VibeChip } from './CurrentVibe.tsx';
 import { useMemberVibe } from '../hooks/useMemberVibe.ts';
@@ -50,6 +53,10 @@ type SignalsConversationProps = {
   onBack: () => void;
   /** The other member's id, so their avatar can open their profile. */
   partnerId?: string;
+  /** This member's own NSFW setting (on this device): it decides whether NSFW Cards can be sent or read here. Defaults to hidden. */
+  nsfwPreference?: NsfwPreference;
+  /** Opens the app's settings (from a hidden NSFW Card or the locked NSFW deck). */
+  onOpenSettings?: () => void;
   /**
    * When the other member's latest activity landed, from the live listener on the member's own inbox document (null when the latest
    * line is their own). A change means something new is waiting (a message, or a guess at a Two Truths and a Lie), so the open
@@ -128,7 +135,7 @@ const PhotoBubble: React.FC<{ photo: NonNullable<SignalMessage['photo']>; clock:
   return <p className="flex min-h-9 items-center gap-1.5 text-[length:calc(14px_*_var(--fs,1))]"><Camera className="h-4 w-4" aria-hidden="true" /> {card.label}</p>;
 };
 
-export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, partnerId, liveAt = null, isSoundMuted = false, onBack, onEnd }) => {
+export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId, partner, partnerId, liveAt = null, isSoundMuted = false, nsfwPreference = 'hide', onOpenSettings, onBack, onEnd }) => {
   const [messages, setMessages] = useState<SignalMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -595,6 +602,31 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     enqueue(item);
   };
 
+  /** Sends the chosen NSFW Card. Same outbox as a Comfort Card; its text is the neutral line, never the question. */
+  const sendNsfwCard = (card: NsfwCard) => {
+    if (ended || nsfwPreference === 'hide') return;
+    const reply = replyingTo;
+    const item: PendingMessage = {
+      id: crypto.randomUUID(),
+      text: NSFW_CARD_TEXT,
+      cardId: card.id,
+      replyTo: reply
+        ? { messageId: reply.id, text: reply.text, sender: reply.senderId === userId ? 'self' : 'partner', senderId: reply.senderId }
+        : null,
+      status: 'sending',
+      retryable: true,
+      createdAt: Date.now(),
+    };
+    lastOwnSend.current = true;
+    stickToBottom.current = true;
+    if (!soundMutedRef.current) soundEffects.playMessageSent();
+    setCardsOpen(false);
+    setPending((list) => [...list, item]);
+    setReplyingTo(null);
+    setError(null);
+    enqueue(item);
+  };
+
   /** Records the recipient's one guess. The server answers with the finished card (the answer is only sent back with it). */
   const guessGame = async (message: SignalMessage, index: number) => {
     if (ended || guessBusy.current.has(message.id)) return;
@@ -836,6 +868,17 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                               time={formatTime(message.createdAt)}
                               onGuess={(index) => void guessGame(message, index)}
                             />
+                          ) : message.kind === 'card' && message.card?.deck === 'nsfw' ? (
+                            <NsfwCardBubble
+                              card={message.card}
+                              preference={nsfwPreference}
+                              mine={mine}
+                              canAnswer={!ended}
+                              pending={unsent}
+                              time={formatTime(message.createdAt)}
+                              onOpenSettings={onOpenSettings}
+                              onAnswer={() => { setReplyingTo(message); setActiveId(null); composerFocus.requestFocus(); }}
+                            />
                           ) : message.kind === 'card' && message.card ? (
                             <ComfortCardBubble
                               card={{ category: message.card.category as ComfortCard['category'], question: message.text }}
@@ -989,7 +1032,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
         <TimedPhotoComposer file={photoFile} sending={photoSending} error={photoError} onSend={(timer) => void sendPhoto(timer)} onClose={() => { photoMessageId.current = null; setPhotoFile(null); }} />
       )}
       {gifOpen && !ended && <GifPicker onSend={sendGif} onClose={() => setGifOpen(false)} />}
-      {cardsOpen && !ended && <ComfortCardPicker onSend={sendCard} onClose={() => setCardsOpen(false)} />}
+      {cardsOpen && !ended && <ComfortCardPicker onSend={sendCard} onClose={() => setCardsOpen(false)} nsfwPreference={nsfwPreference} onSendNsfw={sendNsfwCard} onOpenSettings={onOpenSettings ? () => { setCardsOpen(false); onOpenSettings(); } : undefined} />}
       {gameOpen && !ended && <TwoTruthsCreator onSend={sendGame} onClose={() => setGameOpen(false)} />}
       {viewingPhoto && (
         <TimedPhotoViewer

@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Check, Layers, Reply, Shuffle } from 'lucide-react';
 import { Sheet } from './Sheet.tsx';
 import { CARD_CATEGORIES, cardsInCategory, categoryLabel, randomCard, type CardCategoryId, type ComfortCard } from '../utils/comfortCards.ts';
+import { NsfwCardsIcon, NsfwDeck, NsfwSendButton } from './NsfwCards.tsx';
+import { NSFW_CATEGORIES, type NsfwCard, type NsfwCategoryId } from '../utils/nsfwCards.ts';
+import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 
 /**
  * Comfort Cards in the Signals and Seek composers: a compact picker (a featured random question, six coloured categories, the
@@ -44,9 +47,23 @@ interface PickerProps {
   /** Called once with the chosen card when the member taps Send. */
   onSend: (card: ComfortCard) => void;
   onClose: () => void;
+  /**
+   * Signals only: when given, the picker has a second deck, NSFW Cards, shown according to this member's own NSFW setting. Without
+   * it (the Seek chat) the picker is exactly the Comfort Cards picker.
+   */
+  nsfwPreference?: NsfwPreference;
+  /** Called once with the chosen NSFW card when the member taps Send. */
+  onSendNsfw?: (card: NsfwCard) => void;
+  /** Opens the app's settings, from the locked NSFW deck. */
+  onOpenSettings?: () => void;
 }
 
-export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) => {
+export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose, nsfwPreference, onSendNsfw, onOpenSettings }) => {
+  const [deck, setDeck] = useState<'comfort' | 'nsfw'>('comfort');
+  const [nsfwCategory, setNsfwCategory] = useState<NsfwCategoryId>(NSFW_CATEGORIES[0].id);
+  const [nsfwSelected, setNsfwSelected] = useState<NsfwCard | null>(null);
+  const hasDecks = nsfwPreference !== undefined && onSendNsfw !== undefined;
+  const inNsfw = hasDecks && deck === 'nsfw';
   const [category, setCategory] = useState<CardCategoryId>(CARD_CATEGORIES[0].id);
   const [selected, setSelected] = useState<ComfortCard | null>(null);
   /** Set the instant Send is chosen, so a quick second tap cannot send it twice. */
@@ -66,6 +83,12 @@ export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) =>
     onSend(selected);
   };
 
+  const sendNsfw = () => {
+    if (!nsfwSelected || nsfwPreference === 'hide' || sent.current) return;
+    sent.current = true;
+    onSendNsfw?.(nsfwSelected);
+  };
+
   /** Shuffle: a random question from the whole collection, never the one already chosen; its category opens so it can be seen. */
   const shuffle = () => {
     const next = randomCard({ not: selected?.id });
@@ -76,11 +99,13 @@ export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) =>
 
   return (
     <Sheet
-      title="Comfort Cards"
+      title={inNsfw ? 'NSFW Cards' : 'Comfort Cards'}
       onClose={onClose}
-      icon={<ComfortCardsIcon className="h-4 w-4 text-lavender" />}
+      icon={inNsfw ? <NsfwCardsIcon className="h-4 w-4 text-berry" /> : <ComfortCardsIcon className="h-4 w-4 text-lavender" />}
       footer={
-        selected ? (
+        inNsfw ? (
+          nsfwSelected && nsfwPreference !== 'hide' ? <NsfwSendButton card={nsfwSelected} onSend={sendNsfw} onCancel={() => setNsfwSelected(null)} /> : undefined
+        ) : selected ? (
           <div className="flex gap-2">
             <button type="button" onClick={() => setSelected(null)} className="btn btn-secondary flex-1">Cancel</button>
             <button
@@ -96,6 +121,15 @@ export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) =>
       }
     >
       <div className="flex min-w-0 flex-col gap-3 text-fg">
+        {hasDecks && (
+          <div role="tablist" aria-label="Card decks" className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1">
+            <button type="button" role="tab" aria-selected={deck === 'comfort'} onClick={() => setDeck('comfort')} className={`h-9 rounded-full text-[length:calc(13px_*_var(--fs,1))] font-semibold transition-colors ${deck === 'comfort' ? 'bg-raised text-fg ring-1 ring-lavender/40' : 'text-muted hover:text-fg'}`}>Comfort</button>
+            <button type="button" role="tab" aria-selected={deck === 'nsfw'} onClick={() => setDeck('nsfw')} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-full text-[length:calc(13px_*_var(--fs,1))] font-semibold transition-colors ${deck === 'nsfw' ? 'bg-raised text-fg ring-1 ring-berry/50' : 'text-muted hover:text-fg'}`}><NsfwCardsIcon className="h-3.5 w-3.5" /> NSFW</button>
+          </div>
+        )}
+        {inNsfw ? (
+          <NsfwDeck preference={nsfwPreference!} category={nsfwCategory} onCategory={setNsfwCategory} selected={nsfwSelected} onSelect={setNsfwSelected} onOpenSettings={onOpenSettings} />
+        ) : (<>
         <p className="-mt-1 flex items-center gap-1.5 text-[length:calc(13px_*_var(--fs,1))] text-muted">
           <Star className="text-[length:calc(10px_*_var(--fs,1))]" /> Little questions, meaningful connections. <Star className="text-[length:calc(8px_*_var(--fs,1))]" />
         </p>
@@ -177,6 +211,7 @@ export const ComfortCardPicker: React.FC<PickerProps> = ({ onSend, onClose }) =>
             );
           })}
         </ul>
+        </>)}
       </div>
     </Sheet>
   );

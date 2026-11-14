@@ -5,6 +5,7 @@
 
 import { parseGifInfo, type GifInfo } from './gif.ts';
 import { cardById, parseCard } from './comfortCards.ts';
+import { NSFW_CARD_TEXT, nsfwCardById, parseNsfwCard } from './nsfwCards.ts';
 import type { PhotoInfo } from './timedPhoto.ts';
 import { GAME_TEXT, parseGame, type Challenge, type GameCard } from './twoTruths.ts';
 
@@ -21,7 +22,7 @@ export type ThreadMessage = {
   kind?: 'photo' | 'gif' | 'card' | 'game';
   photo?: PhotoInfo;
   /** A Comfort Card: only its id and category; the question is always read from the approved list in the app. */
-  card?: { id: string; category: string };
+  card?: { id: string; category: string; /** Set for an NSFW Card: its words are never in `text`. */ deck?: 'nsfw' };
   /** A GIPHY GIF: the approved addresses and size. Sent by id; the server supplies the rest. */
   gif?: GifInfo;
   /** A Two Truths and a Lie challenge. The answer is part of it only once the recipient has guessed. */
@@ -71,6 +72,10 @@ export function checkedGif(message: ThreadMessage): ThreadMessage {
  */
 export function checkedCard(message: ThreadMessage): ThreadMessage {
   if (message.kind !== 'card') return message;
+  // An NSFW Card keeps the neutral line as its text (so a reply quote or a preview never carries the question); the card itself
+  // shows the words only when the member's own setting allows it.
+  const mature = parseNsfwCard(message.card);
+  if (mature) return { ...message, text: NSFW_CARD_TEXT, card: { id: mature.id, category: mature.category, deck: 'nsfw' } };
   const card = parseCard(message.card);
   if (card) return { ...message, text: card.question, card: { id: card.id, category: card.category } };
   const { kind: _kind, card: _card, ...rest } = message;
@@ -127,6 +132,7 @@ export function visibleThread(server: ThreadMessage[], pending: PendingMessage[]
       ...(p.gif ? { kind: 'gif' as const, gif: p.gif } : {}),
       ...(p.challenge ? { kind: 'game' as const, game: { statements: p.challenge.statements, intro: p.challenge.intro, status: 'open' as const, canGuess: false } } : {}),
       ...(p.cardId && cardById(p.cardId) ? { kind: 'card' as const, card: { id: p.cardId, category: cardById(p.cardId)!.category } } : {}),
+      ...(p.cardId && nsfwCardById(p.cardId) ? { kind: 'card' as const, text: NSFW_CARD_TEXT, card: { id: p.cardId, category: nsfwCardById(p.cardId)!.category, deck: 'nsfw' as const } } : {}),
       createdAt: new Date(p.createdAt).toISOString(),
       replyTo: p.replyTo ? { messageId: p.replyTo.messageId, senderId: p.replyTo.senderId, text: p.replyTo.text } : null,
       reactions: [],

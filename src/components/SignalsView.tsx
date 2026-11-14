@@ -8,6 +8,7 @@ import { ConnectionRequestsPanel } from './ConnectionRequestsPanel.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import type { SignalsInboxState } from '../hooks/useSignalsInbox.ts';
+import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 import { formatUnread, sortByActivity } from '../services/signalsInbox.ts';
 import {
   fetchPair,
@@ -113,7 +114,11 @@ export const SignalsView: React.FC<{
   initialSection?: 'inbox' | 'requests';
   onInitialSectionHandled?: () => void;
   onBlockMember?: (memberId: string) => void;
-}> = ({ inbox, isSoundMuted = false, requestedPairId = null, initialPairId = null, onConversationState, onRequestedPairHandled, initialSection = 'inbox', onInitialSectionHandled, onBlockMember }) => {
+  /** The member's own NSFW setting, passed to the conversation (it decides whether NSFW Cards can be sent or read). */
+  nsfwPreference?: NsfwPreference;
+  /** Opens the app's settings. */
+  onOpenSettings?: () => void;
+}> = ({ inbox, isSoundMuted = false, requestedPairId = null, initialPairId = null, onConversationState, onRequestedPairHandled, initialSection = 'inbox', onInitialSectionHandled, onBlockMember, nsfwPreference = 'hide', onOpenSettings }) => {
   const [section, setSection] = useState<'inbox' | 'requests'>(initialSection);
   useEffect(() => {
     onInitialSectionHandled?.();
@@ -367,7 +372,7 @@ export const SignalsView: React.FC<{
   if (openPairId) {
     const selectedPair = pairs.find((pair) => pair.id === openPairId);
     if (selectedPair?.status === 'active') {
-      return <SignalsConversation pairId={openPairId} partnerId={selectedPair.participants?.find((id) => id !== auth?.currentUser?.uid)} partner={selectedPair.partner} liveAt={inbox?.last[openPairId] && !inbox.last[openPairId].mine ? inbox.last[openPairId].at : null} isSoundMuted={isSoundMuted} onBack={() => setOpenPairId(null)} onEnd={() => endPair(openPairId)} />;
+      return <SignalsConversation pairId={openPairId} partnerId={selectedPair.participants?.find((id) => id !== auth?.currentUser?.uid)} partner={selectedPair.partner} liveAt={inbox?.last[openPairId] && !inbox.last[openPairId].mine ? inbox.last[openPairId].at : null} isSoundMuted={isSoundMuted} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onBack={() => setOpenPairId(null)} onEnd={() => endPair(openPairId)} />;
     }
   }
 

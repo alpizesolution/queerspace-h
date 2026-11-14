@@ -167,7 +167,7 @@ test('a card is sent by its id alone through the same outbox, and an answer is a
   assert.match(convo, /item\.cardId \? \{ kind: 'card', cardId: item\.cardId \}/);
   assert.equal(/kind: 'card'[^}]*text/.test(convo), false, 'no free text goes with a card');
   const answers = convo.match(/onAnswer=\{\(\) => \{ setReplyingTo\(message\);/g) || [];
-  assert.equal(answers.length, 1);
+  assert.equal(answers.length, 2, 'one for the Comfort card bubble and one for the NSFW card bubble: each answer is an ordinary reply');
   assert.match(convo, /enqueue\(item\)/);
 });
 
