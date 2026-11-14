@@ -1,3 +1,4 @@
+import { SupportImage, SupportImageAttach } from '../components/SupportImage.tsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUp } from 'lucide-react';
 import { AnimalAvatar } from '../components/AnimalAvatar.tsx';
@@ -153,6 +154,7 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
   const [messages, setMessages] = useState<SupportMessage[] | null>(null);
   const [text, setText] = useState('');
   const [failed, setFailed] = useState(false);
+  const [imageProblem, setImageProblem] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   // Phones: fill the screen between the admin header and tab bar, shrinking with the on-screen keyboard.
   const viewportHeight = useVisualViewportHeight();
@@ -217,7 +219,7 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
                   m.from === 'team' ? 'bg-plum text-fg rounded-br-md' : 'bg-raised text-fg rounded-bl-md'
                 }`}
               >
-                {m.text}
+                {m.image ? <SupportImage threadId={thread.id} messageId={m.id} width={m.image.width} height={m.image.height} /> : m.text}
               </div>
             </div>
           ))
@@ -230,7 +232,9 @@ const SupportConversation: React.FC<{ thread: SupportThread; onBack: () => void 
           Couldn’t send the reply. Try again.
         </p>
       )}
-      <form onSubmit={send} className="flex shrink-0 items-end gap-2 p-3 border-t border-line">
+      {imageProblem && <p className="px-4 pb-1 text-[length:calc(12px_*_var(--fs,1))] text-danger" role="alert">{imageProblem}</p>}
+      <form onSubmit={send} className="flex shrink-0 flex-wrap items-end gap-2 p-3 border-t border-line">
+        <SupportImageAttach threadId={thread.id} onProblem={setImageProblem} />
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

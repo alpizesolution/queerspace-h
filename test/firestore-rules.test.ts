@@ -3208,3 +3208,19 @@ test('BG-06: the rules list the same eight presets as the app', async () => {
   const app = fs.readFileSync('./src/utils/profileBackground.ts', 'utf8');
   assert.deepEqual([...app.matchAll(/\{ id: '([a-z-]+)', name:/g)].map((m) => m[1]), BG_PRESETS);
 });
+
+test('S-IMG: a browser can NEVER write a picture into a support message (pictures are written only by the server), but members and admins can still read them', async () => {
+  await seedAdmin();
+  const ivy = testEnv.authenticatedContext('ivy').firestore();
+  const withImage = (from: 'user' | 'team', fs: ReturnType<typeof adminDb>, uid = 'ivy') =>
+    fs.collection(`support_threads/${uid}/messages`).doc().set({ from, text: '📷 Photo', image: { type: 'image/png', width: 8, height: 8 }, timestamp: now() });
+  await assertFails(withImage('user', ivy));
+  await assertFails(withImage('team', adminDb()));
+  // A server-written picture message (Admin SDK) is readable by that member and by admins, and by nobody else.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('support_threads/ivy/messages/pic-1').set({ from: 'user', text: '📷 Photo', image: { type: 'image/png', width: 8, height: 8 }, timestamp: new Date() });
+  });
+  await assertSucceeds(ivy.doc('support_threads/ivy/messages/pic-1').get());
+  await assertSucceeds(adminDb().doc('support_threads/ivy/messages/pic-1').get());
+  await assertFails(testEnv.authenticatedContext('eve').firestore().doc('support_threads/ivy/messages/pic-1').get());
+});

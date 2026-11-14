@@ -10,6 +10,7 @@ import { NSFW_CARD_TEXT, nsfwCardById, shapeStoredNsfwCard } from './_nsfwCards.
 import { shapeStoredTest, testById, testInviteText } from './_tests.js';
 import { inboxWritesForMessage, previewText } from './_inbox.js';
 import { clearCurrentVibe, setCurrentVibe, vibeView } from './_vibe.js';
+import { sendSupportImage, supportImageView } from './_supportImages.js';
 import { backgroundImageView, pruneBackgroundImages, setBackgroundImage } from './_background.js';
 import { GAME_TEXT, isGuess, parseChallenge, shapeStoredGame } from './_game.js';
 import { GIF_TEXT, sharedGiphy, isGifId, limitGifSearches, limitGifSends, parseGifQuery, shapeStoredGif } from './_giphy.js';
@@ -163,7 +164,7 @@ export default async function handler(req, res) {
       const view = req.query?.view || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('view');
       // No view means the invitations list, as always. A view this server does not know is an error, never that list, so a
       // newer app talking to an older server (or a typo) cannot be mistaken for a real answer.
-      if (view && !['messages', 'pairs', 'requests', 'profile', 'gifs', 'vibe', 'background-image'].includes(view)) return send(res, 400, { error: 'invalid_view' });
+      if (view && !['messages', 'pairs', 'requests', 'profile', 'gifs', 'vibe', 'background-image', 'support-image'].includes(view)) return send(res, 400, { error: 'invalid_view' });
       if (view === 'gifs') {
         // GIF search and trending for the picker. The key stays here; a suspended member gets nothing.
         if ((await db.doc(`suspensions/${uid}`).get()).exists) return send(res, 403, { error: 'account_unavailable' });
@@ -269,6 +270,13 @@ export default async function handler(req, res) {
         return send(res, 200, { messages, cursor, ...(continuation ? { more: true } : {}), ...(isDelta ? {} : { olderCursor }) });
       }
       if (view === 'requests') return send(res, 200, await connectionRequests.list(db, uid));
+      if (view === 'support-image') {
+        // A picture in a support conversation, for that thread's member or an admin only (never a public link).
+        const param = name => req.query?.[name] || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get(name);
+        const found = await supportImageView(db, uid, decoded, { threadId: param('threadId'), messageId: param('messageId') });
+        setNoStoreHeaders(res);
+        return send(res, 200, found);
+      }
       if (view === 'background-image') {
         // A member's saved profile background picture, for a viewer who may see that profile (same rules as opening the profile).
         const memberId = req.query?.memberId || new URL(req.url || '/api/signals', 'http://localhost').searchParams.get('memberId');
@@ -433,6 +441,11 @@ export default async function handler(req, res) {
     }
 
     // Profile background: store a new picture, and tidy up after the profile is saved. Only ever the signed-in member's own.
+    // Support Chat pictures: no timer, kept in the conversation, for the member and the team. See api/_supportImages.js.
+    if (action === 'support-image-send') {
+      const sent = await sendSupportImage(db, uid, decoded, req.body || {});
+      return send(res, sent.replayed ? 200 : 201, sent);
+    }
     if (action === 'bg-image-set') return send(res, 200, await setBackgroundImage(db, uid, req.body || {}));
     if (action === 'bg-image-prune') return send(res, 200, await pruneBackgroundImages(db, uid));
 

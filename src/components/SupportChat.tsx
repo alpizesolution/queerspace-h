@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUp, LifeBuoy } from 'lucide-react';
+import { SupportImage, SupportImageAttach } from './SupportImage.tsx';
 import { Sheet } from './Sheet.tsx';
 import { UserPreferences } from '../types.ts';
 import { formatChatTime } from '../utils/matching-logic.ts';
@@ -26,6 +27,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,6 +39,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
         setStatus('error');
         return;
       }
+      setThreadId(uid);
       unsubscribe = subscribeToSupportMessages(
         uid,
         (next) => {
@@ -88,7 +91,8 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
               {notice}
             </p>
           )}
-          <form onSubmit={handleSend} className="flex items-center gap-2">
+          <form onSubmit={handleSend} className="flex flex-wrap items-center gap-2">
+            <SupportImageAttach disabled={status === 'error'} onProblem={setNotice} />
             <input
               type="text"
               value={text}
@@ -148,7 +152,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
                   <span className="text-subtle"> · {formatChatTime(msg.timestamp)}</span>
                 </p>
                 <div className="px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-bl-md bg-raised text-fg [overflow-wrap:anywhere] whitespace-pre-wrap">
-                  {msg.text}
+                  {msg.image && threadId ? <SupportImage threadId={threadId} messageId={msg.id} width={msg.image.width} height={msg.image.height} /> : msg.text}
                 </div>
               </div>
             </div>
@@ -156,7 +160,7 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
             <div key={msg.id} className="flex flex-col items-end">
               <p className="mb-1 px-1 text-[length:calc(12px_*_var(--fs,1))] text-subtle">{formatChatTime(msg.timestamp)}</p>
               <div className="min-w-0 max-w-[85%] px-3.5 py-2 text-[length:calc(14.5px_*_var(--fs,1))] leading-snug rounded-[20px] rounded-br-md bg-plum text-fg [overflow-wrap:anywhere] whitespace-pre-wrap">
-                {msg.text}
+                {msg.image && threadId ? <SupportImage threadId={threadId} messageId={msg.id} width={msg.image.width} height={msg.image.height} /> : msg.text}
               </div>
             </div>
           )

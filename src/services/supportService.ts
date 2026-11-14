@@ -38,6 +38,8 @@ export interface SupportMessage {
   from: 'user' | 'team';
   text: string;
   timestamp: number;
+  /** Set when this message is a picture (no timer, it stays). The bytes come from the permission-checked image request. */
+  image?: { width?: number; height?: number };
 }
 
 export interface SupportThread {
@@ -61,6 +63,7 @@ export function toSupportMessage(id: string, data: Record<string, unknown>): Sup
     from: data.from === 'team' ? 'team' : 'user',
     text: String(data.text ?? ''),
     timestamp: toMillis(data.timestamp),
+    ...(data.image && typeof data.image === 'object' ? { image: { width: Number((data.image as { width?: unknown }).width) || undefined, height: Number((data.image as { height?: unknown }).height) || undefined } } : {}),
   };
 }
 
