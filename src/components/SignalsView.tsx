@@ -5,7 +5,6 @@ import { InboxSkeleton } from './Skeleton.tsx';
 import { Sheet } from './Sheet.tsx';
 import { SignalsConversation } from './SignalsConversation.tsx';
 import { ConnectionRequestsPanel } from './ConnectionRequestsPanel.tsx';
-import { TestsPanel } from './TestInvites.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isValidAvatar } from '../utils/avatar.ts';
 import type { SignalsInboxState } from '../hooks/useSignalsInbox.ts';
@@ -114,7 +113,7 @@ export const SignalsView: React.FC<{
   onConversationState?: (state: { openPairId: string | null; visible: boolean }) => void;
   onRequestedPairHandled?: () => void;
   /** Which area to open first: the usual inbox, or Requests (from a Looking For shortcut or a request banner). */
-  initialSection?: 'inbox' | 'requests' | 'tests';
+  initialSection?: 'inbox' | 'requests';
   onInitialSectionHandled?: () => void;
   onBlockMember?: (memberId: string) => void;
   /** The member's own NSFW setting, passed to the conversation (it decides whether NSFW Cards can be sent or read). */
@@ -122,7 +121,7 @@ export const SignalsView: React.FC<{
   /** Opens the app's settings. */
   onOpenSettings?: () => void;
 }> = ({ inbox, isSoundMuted = false, requestedPairId = null, initialPairId = null, onConversationState, onRequestedPairHandled, initialSection = 'inbox', onInitialSectionHandled, onBlockMember, nsfwPreference = 'hide', onOpenSettings }) => {
-  const [section, setSection] = useState<'inbox' | 'requests' | 'tests'>(initialSection);
+  const [section, setSection] = useState<'inbox' | 'requests'>(initialSection);
   useEffect(() => {
     onInitialSectionHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -418,8 +417,8 @@ export const SignalsView: React.FC<{
         </button>
       </div>
 
-      <div role="tablist" aria-label="Signals sections" className="mb-4 grid grid-cols-3 gap-1 rounded-full border border-line bg-surface p-1">
-        {([['inbox', 'Inbox'], ['requests', 'Requests'], ['tests', 'Tests']] as const).map(([id, label]) => (
+      <div role="tablist" aria-label="Signals sections" className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1">
+        {([['inbox', 'Inbox'], ['requests', 'Requests']] as const).map(([id, label]) => (
           <button key={id} role="tab" aria-selected={section === id} onClick={() => setSection(id)} className={`h-9 rounded-full text-[length:calc(13px_*_var(--fs,1))] font-semibold transition-colors cursor-pointer ${section === id ? 'bg-raised text-fg ring-1 ring-berry/40' : 'text-muted hover:text-fg'}`}>
             {label}
             {id === 'requests' && (inbox?.requestIds.length ?? 0) > 0 && <span className="ml-1.5 text-berry" aria-label={`${inbox?.requestIds.length} waiting`}>{inbox?.requestIds.length}</span>}
@@ -450,21 +449,7 @@ export const SignalsView: React.FC<{
         </div>
       )}
 
-      {section === 'tests' ? (
-        <TestsPanel
-          pairs={activePairs}
-          onOpenConversation={openPair}
-          onInvite={async (pairId, testId, messageId) => {
-            try {
-              // The same send-message path as every other message: the invitation is an ordinary message of kind "test".
-              await signalsRequest('/api/signals', { action: 'send-message', pairId, kind: 'test', testId, messageId });
-              return null;
-            } catch (err) {
-              return err instanceof Error ? err.message : 'Could not send the invitation. Please try again.';
-            }
-          }}
-        />
-      ) : section === 'requests' ? (
+      {section === 'requests' ? (
         <ConnectionRequestsPanel rev={inbox?.rev ?? 0} onChanged={() => void loadPairs(true, true)} onOpenConversation={openPair} onBlockMember={onBlockMember} />
       ) : loading ? (
         <InboxSkeleton />

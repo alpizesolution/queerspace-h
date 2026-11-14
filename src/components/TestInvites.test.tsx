@@ -24,7 +24,7 @@ let pairs = [activePair('pair-aaaaaaaa', 'Ana'), activePair('pair-bbbbbbbb', 'Be
 mock.module('../services/signalsListService.ts', {
   namedExports: { ...realService, fetchPairsPage: async () => ({ pairs, nextCursor: null }), fetchPendingInvitations: async () => [], fetchPair: async () => null },
 });
-const { TestInviteBubble, TestsPanel } = await import('./TestInvites.tsx');
+const { TestInviteBubble, TestPicker } = await import('./TestInvites.tsx');
 const { SignalsView } = await import('./SignalsView.tsx');
 const { SignalsConversation } = await import('./SignalsConversation.tsx');
 
@@ -103,106 +103,117 @@ test('an id that is not in the catalog renders nothing at all (never a link)', (
   assert.equal(screen.queryAllByRole('link').length, 0);
 });
 
-// ------------------------------------------------------------------ the Tests section
+// ------------------------------------------------------------------ the composer picker
 
-test('the section lists the three tests with their descriptions, an Invite action and "Take it myself" (a plain link) for each', () => {
-  render(<TestsPanel pairs={[]} onInvite={async () => null} />);
+const picker = (onInvite: (t: string, m: string) => Promise<string | null>) => render(<TestPicker partnerName="Luna" onInvite={onInvite} onClose={noop} />);
+
+test('the picker lists exactly the three tests, compactly, with the privacy note, and opens nothing by itself', () => {
+  picker(async () => null);
+  const box = screen.getByTestId('test-picker');
   for (const t of TEST_CATALOG) {
-    const card = screen.getByTestId(`test-${t.id}`);
-    assert.match(card.textContent ?? '', new RegExp(t.name));
-    assert.match(card.textContent ?? '', new RegExp(t.description.replace('.', '\\.')));
-    assert.ok(within(card).getByRole('button', { name: /Invite/ }));
-    const own = within(card).getByRole('link', { name: /Take it myself/ }) as HTMLAnchorElement;
-    assert.equal(own.getAttribute('href'), t.url);
-    assert.equal(own.getAttribute('target'), '_blank');
+    const row = within(box).getByRole('button', { name: `Invite to ${t.name}` });
+    assert.match(row.textContent ?? '', new RegExp(t.description.replace('.', '\\.')));
   }
-  assert.match(screen.getByTestId('tests-panel').textContent ?? '', /never sees your answers or results/);
+  assert.equal(within(box).getAllByRole('listitem').length, 3);
+  assert.equal(document.querySelectorAll('a[href], iframe').length, 0, 'no link and no frame in the picker: nothing opens from here');
+  assert.match(box.textContent ?? '', /never sees your answers or results/);
+  assert.match(box.textContent ?? '', /Pick a test to invite Luna/);
 });
 
-test('Invite lets you choose an existing conversation and sends one invitation with a stable message id, however many times it is clicked', async () => {
-  const calls: Array<[string, string, string]> = [];
+test('choosing a test sends ONE invitation into this conversation with a stable id, however many times it is tapped', async () => {
+  const calls: Array<[string, string]> = [];
   let release: () => void = noop;
   const gate = new Promise<void>((resolve) => { release = resolve; });
-  render(<TestsPanel pairs={pairs} onInvite={async (p, t, m) => { calls.push([p, t, m]); await gate; return null; }} />);
-  fireEvent.click(within(screen.getByTestId('test-rice-purity-test')).getByRole('button', { name: /Invite/ }));
-  const sheet = screen.getByRole('dialog', { name: /Invite to the Rice Purity Test/ });
-  const ana = within(sheet).getByRole('button', { name: 'Invite Ana' });
-  fireEvent.click(ana);
-  fireEvent.click(ana);
-  fireEvent.click(within(sheet).getByRole('button', { name: 'Invite Bea' }));
-  assert.equal(calls.length, 1, 'a second click, or another choice, while one is sending does nothing');
+  picker(async (t, m) => { calls.push([t, m]); await gate; return null; });
+  const row = screen.getByRole('button', { name: 'Invite to Rice Purity Test' });
+  fireEvent.click(row);
+  fireEvent.click(row);
+  fireEvent.click(screen.getByRole('button', { name: 'Invite to BDSM Test' }));
+  assert.equal(calls.length, 1, 'a second tap, or another choice, while one is sending does nothing');
   await act(async () => { release(); });
-  await waitFor(() => assert.ok(within(sheet).getByRole('button', { name: 'Invited Ana' })));
-  fireEvent.click(within(sheet).getByRole('button', { name: 'Invited Ana' }));
+  await waitFor(() => assert.ok(screen.getByRole('button', { name: 'Invited to Rice Purity Test' })));
+  fireEvent.click(screen.getByRole('button', { name: 'Invited to Rice Purity Test' }));
   assert.equal(calls.length, 1, 'an invitation already sent is not sent again');
-  assert.deepEqual(calls[0].slice(0, 2), ['pair-aaaaaaaa', 'rice-purity-test']);
-  assert.ok(calls[0][2].length >= 8);
+  assert.equal(calls[0][0], 'rice-purity-test');
+  assert.ok(calls[0][1].length >= 8);
 });
 
-test('a failed send shows the reason, keeps the sheet open, and a retry reuses the same message id (so it can never double)', async () => {
-  const calls: string[] = [];
+test('a failed send shows the reason and a retry reuses the same message id (so it can never double)', async () => {
+  const ids: string[] = [];
   let fail = true;
-  render(<TestsPanel pairs={pairs} onInvite={async (_p, _t, m) => { calls.push(m); return fail ? 'Could not send the invitation. Please try again.' : null; }} />);
-  fireEvent.click(within(screen.getByTestId('test-bdsm-test')).getByRole('button', { name: /Invite/ }));
-  const sheet = screen.getByRole('dialog');
-  fireEvent.click(within(sheet).getByRole('button', { name: 'Invite Ana' }));
-  await within(sheet).findByRole('alert');
+  picker(async (_t, m) => { ids.push(m); return fail ? 'Could not send the invitation. Please try again.' : null; });
+  fireEvent.click(screen.getByRole('button', { name: 'Invite to BDSM Test' }));
+  await screen.findByRole('alert');
   fail = false;
-  fireEvent.click(within(sheet).getByRole('button', { name: 'Invite Ana' }));
-  await waitFor(() => assert.ok(within(sheet).getByRole('button', { name: 'Invited Ana' })));
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0], calls[1], 'the same id on the retry');
+  fireEvent.click(screen.getByRole('button', { name: 'Invite to BDSM Test' }));
+  await waitFor(() => assert.ok(screen.getByRole('button', { name: 'Invited to BDSM Test' })));
+  assert.equal(ids.length, 2);
+  assert.equal(ids[0], ids[1]);
 });
 
-test('with no active conversation there is a clear empty state and nothing to send to', () => {
-  render(<TestsPanel pairs={[]} onInvite={async () => null} />);
-  fireEvent.click(within(screen.getByTestId('test-bdsm-test')).getByRole('button', { name: /Invite/ }));
-  assert.match(screen.getByTestId('no-conversations').textContent ?? '', /no active conversations/);
-});
+// ------------------------------------------------------------------ the composer and the inbox
 
-// ------------------------------------------------------------------ in the inbox and the conversation
-
-test('the Signals inbox has a Tests section beside Inbox and Requests, and inviting sends an ordinary send-message of kind "test"', async () => {
-  const posts: Record<string, unknown>[] = [];
-  globalThis.fetch = (async (_url: string, init?: { method?: string; body?: string }) => {
-    if (init?.method === 'POST') { posts.push(JSON.parse(String(init.body))); return { ok: true, status: 201, json: async () => ({}) }; }
-    return { ok: true, status: 200, json: async () => ({}) };
-  }) as unknown as typeof fetch;
-  render(<SignalsView inbox={{ rev: 1, pendingIds: [], unread: {}, last: {}, acceptedUnread: [], requestIds: [], live: true, error: null }} />);
-  const tabs = screen.getByRole('tablist', { name: 'Signals sections' });
-  assert.deepEqual(within(tabs).getAllByRole('tab').map((t) => t.textContent?.trim()), ['Inbox', 'Requests', 'Tests']);
-  await screen.findByText('Ana');
-  fireEvent.click(within(tabs).getByRole('tab', { name: 'Tests' }));
-  assert.ok(screen.getByTestId('tests-panel'));
-  fireEvent.click(within(screen.getByTestId('test-attachment-style-quiz')).getByRole('button', { name: /Invite/ }));
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Invite Bea' }));
-  await waitFor(() => assert.equal(posts.length, 1));
-  assert.equal(posts[0].action, 'send-message');
-  assert.equal(posts[0].kind, 'test');
-  assert.equal(posts[0].testId, 'attachment-style-quiz');
-  assert.equal(posts[0].pairId, 'pair-bbbbbbbb');
-  for (const forbidden of ['text', 'url', 'name', 'description']) assert.equal(forbidden in posts[0], false, `${forbidden} is not sent`);
-});
-
-test('a received invitation appears in the conversation as the distinct card, and the original conversation stays after tapping Take Test', async () => {
+const setupFetch = (posts: Record<string, unknown>[], messages: unknown[] = []) => {
   (Element.prototype as unknown as { scrollTo: () => void }).scrollTo = () => {};
   (window as unknown as { matchMedia: unknown }).matchMedia ??= () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  globalThis.fetch = (async (url: string) => ({
-    ok: true, status: 200,
-    json: async () => (String(url).includes('view=messages')
-      ? { messages: [
-        { id: 'm0', senderId: 'bob', text: 'hello', createdAt: '2026-01-01T10:00:00.000Z', replyTo: null, reactions: [] },
-        { id: 'm1', senderId: 'bob', text: 'Test invitation: Rice Purity Test', kind: 'test', test: { id: 'rice-purity-test' }, createdAt: '2026-01-01T10:01:00.000Z', replyTo: null, reactions: [] },
-      ], cursor: new Date().toISOString(), olderCursor: null }
-      : {}),
-  })) as unknown as typeof fetch;
+  globalThis.fetch = (async (url: string, init?: { method?: string; body?: string }) => {
+    if (init?.method === 'POST') {
+      const body = JSON.parse(String(init.body));
+      posts.push(body);
+      if (body.kind === 'test') return { ok: true, status: 201, json: async () => ({ id: body.messageId, senderId: 'alice', text: 'Test invitation: Rice Purity Test', kind: 'test', test: { id: body.testId }, createdAt: new Date().toISOString(), replyTo: null, reactions: [] }) };
+      return { ok: true, status: 200, json: async () => ({}) };
+    }
+    return { ok: true, status: 200, json: async () => (String(url).includes('view=messages') ? { messages: String(url).includes('after=') ? [] : messages, cursor: new Date().toISOString(), olderCursor: null } : {}) };
+  }) as unknown as typeof fetch;
+};
+
+test('the composer has a Tests button beside the other actions, which opens the picker; the other actions are all still there', async () => {
+  setupFetch([]);
+  render(<SignalsConversation pairId="pair-12345678" partner={{ displayName: 'Luna', avatar: null }} onBack={noop} />);
+  const tests = await screen.findByRole('button', { name: 'Tests' });
+  const row = tests.parentElement!;
+  const names = within(row).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+  for (const kept of ['Send a timed photo', 'Send a GIF', 'Comfort Cards', 'Two Truths and a Lie']) assert.ok(names.includes(kept), `${kept} is still in the toolbar`);
+  assert.ok(names.indexOf('Tests') > names.indexOf('Comfort Cards') && names.indexOf('Tests') < names.indexOf('Two Truths and a Lie'), 'beside the cards, in the same toolbar');
+  assert.match(tests.className, /h-10 w-10/, 'the same size as its neighbours');
+  fireEvent.click(tests);
+  assert.ok(screen.getByRole('dialog', { name: /Invite to a test/ }));
+});
+
+test('inviting from the composer sends an ordinary send-message of kind "test" for this conversation, and the card appears in it', async () => {
+  const posts: Record<string, unknown>[] = [];
+  setupFetch(posts, [{ id: 'm0', senderId: 'bob', text: 'hello', createdAt: '2026-01-01T10:00:00.000Z', replyTo: null, reactions: [] }]);
+  render(<SignalsConversation pairId="pair-12345678" partner={{ displayName: 'Luna', avatar: null }} onBack={noop} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Tests' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Invite to Rice Purity Test' }));
+  await waitFor(() => assert.equal(posts.filter((p) => p.kind === 'test').length, 1));
+  const sent = posts.find((p) => p.kind === 'test')!;
+  assert.deepEqual(Object.keys(sent).sort(), ['action', 'kind', 'messageId', 'pairId', 'testId']);
+  assert.equal(sent.pairId, 'pair-12345678');
+  assert.equal(sent.testId, 'rice-purity-test');
+  const card = await screen.findByTestId('test-invite');
+  assert.match(card.textContent ?? '', /Invited by you/);
+  assert.ok(await screen.findByLabelText(/message: hello/), 'the conversation is unchanged');
+});
+
+test('there is no Tests tab in the inbox any more: only Inbox and Requests', async () => {
+  render(<SignalsView inbox={{ rev: 1, pendingIds: [], unread: {}, last: {}, acceptedUnread: [], requestIds: [], live: true, error: null }} />);
+  const tabs = screen.getByRole('tablist', { name: 'Signals sections' });
+  assert.deepEqual(within(tabs).getAllByRole('tab').map((t) => t.textContent?.trim()), ['Inbox', 'Requests']);
+  assert.equal(screen.queryAllByTestId('tests-panel').length, 0);
+});
+
+test('a received invitation appears as the distinct card, and the original conversation stays after tapping Take Test', async () => {
+  setupFetch([], [
+    { id: 'm0', senderId: 'bob', text: 'hello', createdAt: '2026-01-01T10:00:00.000Z', replyTo: null, reactions: [] },
+    { id: 'm1', senderId: 'bob', text: 'Test invitation: Rice Purity Test', kind: 'test', test: { id: 'rice-purity-test' }, createdAt: '2026-01-01T10:01:00.000Z', replyTo: null, reactions: [] },
+  ]);
   render(<SignalsConversation pairId="pair-12345678" partner={{ displayName: 'Luna', avatar: null }} onBack={noop} />);
   const card = await screen.findByTestId('test-invite');
-  assert.match(card.textContent ?? '', /Rice Purity Test/);
   assert.match(card.textContent ?? '', /Invited by Luna/);
   const link = within(card).getByRole('link', { name: /Take Test/ }) as HTMLAnchorElement;
   assert.equal(link.href, testById('rice-purity-test')!.url);
   fireEvent.click(link);
-  assert.ok(await screen.findByLabelText(/message: hello/), 'the conversation is still on screen');
+  assert.ok(await screen.findByLabelText(/message: hello/));
   assert.equal(document.querySelectorAll('iframe').length, 0);
 });

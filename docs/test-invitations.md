@@ -1,6 +1,6 @@
 # Tests (Signals): invite someone to an outside online test
 
-The Signals inbox has a third section, **Tests**, beside Inbox and Requests. It lists three external tests and lets a member invite someone they are already connected with, or take a test themselves.
+The message composer in a Signals conversation has a **Tests** button (a clipboard icon) beside the other action buttons. It opens a compact picker with three external tests; choosing one invites the other person in that conversation. There is no Tests tab in the inbox.
 
 ## The catalog (one place)
 `src/utils/testCatalog.ts` holds each test's id, name, description, icon and **link**. Change a link there and nowhere else (a test fails if a component repeats one). The server keeps only ids, names and descriptions in `api/_tests.js` (a test checks they match); it never holds the links.
@@ -26,7 +26,7 @@ Shows the test's icon and name, its description, "Invited by <pseudonym>" and **
 QUEERSPACE only sends the invitation. It does not collect, read or store answers, scores or results, does not access the outside sites, and does not share anything with the inviter. The card and the section say so, and that the tests are not a diagnosis or a measure of compatibility. Identities stay anonymous pseudonyms.
 
 ## Limits
-- Invitations go only to existing active conversations (the same rule as every message). There is no way to invite a stranger.
+- Invitations go only into the conversation you are in (the same rule as every message). There is no way to invite a stranger.
 - The invited member sees the card whatever their NSFW setting; the BDSM Test is an adult topic, so the cards are shown to adult members only (the same age rules as Signals), and the invitation text names the test plainly.
 - "Maybe later" is per device, and the app cannot know whether the link was opened.
 - The outside sites are not controlled by QUEERSPACE and can change or disappear.

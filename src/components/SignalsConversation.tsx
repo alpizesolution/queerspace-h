@@ -15,7 +15,7 @@ import { ReplyQuote } from './ReplyQuote.tsx';
 import { ComfortCardBubble, ComfortCardPicker, ComfortCardsIcon } from './ComfortCards.tsx';
 import type { ComfortCard } from '../utils/comfortCards.ts';
 import { NsfwCardBubble } from './NsfwCards.tsx';
-import { TestInviteBubble } from './TestInvites.tsx';
+import { TestInviteBubble, TestPicker, TestsIcon } from './TestInvites.tsx';
 import { NSFW_CARD_TEXT, type NsfwCard } from '../utils/nsfwCards.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 import { TwoTruthsCard, TwoTruthsCreator, TwoTruthsIcon } from './TwoTruthsGame.tsx';
@@ -174,6 +174,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [gifOpen, setGifOpen] = useState(false);
   const [cardsOpen, setCardsOpen] = useState(false);
+  const [testsOpen, setTestsOpen] = useState(false);
   const [gameOpen, setGameOpen] = useState(false);
   /** Games with a guess on its way, and the reason a guess did not go through. */
   const [guessing, setGuessing] = useState<Set<string>>(() => new Set());
@@ -1023,6 +1024,9 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 <button type="button" onClick={() => setCardsOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Comfort Cards" title="Comfort Cards" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lavender transition hover:bg-raised hover:brightness-125 active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
                   <ComfortCardsIcon className="h-5 w-5" />
                 </button>
+                <button type="button" onClick={() => setTestsOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Tests" title="Tests" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lavender transition hover:bg-raised hover:brightness-125 active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
+                  <TestsIcon className="h-5 w-5" />
+                </button>
                 <button type="button" onClick={() => setGameOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Two Truths and a Lie" title="Two Truths and a Lie" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lavender transition hover:bg-raised hover:brightness-125 active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
                   <TwoTruthsIcon className="h-5 w-5" />
                 </button>
@@ -1035,6 +1039,24 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
         <TimedPhotoComposer file={photoFile} sending={photoSending} error={photoError} onSend={(timer) => void sendPhoto(timer)} onClose={() => { photoMessageId.current = null; setPhotoFile(null); }} />
       )}
       {gifOpen && !ended && <GifPicker onSend={sendGif} onClose={() => setGifOpen(false)} />}
+      {testsOpen && !ended && (
+        <TestPicker
+          partnerName={partnerName}
+          onClose={() => setTestsOpen(false)}
+          onInvite={async (testId, messageId) => {
+            try {
+              // The same send-message path as every other message; the invitation then appears in this conversation like any message.
+              const result = await request<SignalMessage>('/api/signals', { action: 'send-message', pairId, kind: 'test', testId, messageId });
+              setMessages((current) => mergeMessages(current, [result]));
+              lastOwnSend.current = true;
+              stickToBottom.current = true;
+              return null;
+            } catch (err) {
+              return err instanceof Error ? err.message : 'Could not send the invitation. Please try again.';
+            }
+          }}
+        />
+      )}
       {cardsOpen && !ended && <ComfortCardPicker onSend={sendCard} onClose={() => setCardsOpen(false)} nsfwPreference={nsfwPreference} onSendNsfw={sendNsfwCard} onOpenSettings={onOpenSettings ? () => { setCardsOpen(false); onOpenSettings(); } : undefined} />}
       {gameOpen && !ended && <TwoTruthsCreator onSend={sendGame} onClose={() => setGameOpen(false)} />}
       {viewingPhoto && (

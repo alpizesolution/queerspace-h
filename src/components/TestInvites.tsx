@@ -1,11 +1,10 @@
 import React, { useRef, useState } from 'react';
-import { Check, ExternalLink, LoaderCircle, Send } from 'lucide-react';
+import { Check, ClipboardCheck, ExternalLink, LoaderCircle } from 'lucide-react';
 import { Sheet } from './Sheet.tsx';
-import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { TEST_CATALOG, TEST_PRIVACY_NOTE, testById, type CatalogTest } from '../utils/testCatalog.ts';
 
 /**
- * Tests: invite another member to an outside online test, or take one yourself. QUEERSPACE only sends the invitation. The test
+ * Tests: invite the other member of a conversation to an outside online test, from the composer. QUEERSPACE only sends the invitation. The test
  * opens as a plain link in a new tab (never inside QUEERSPACE, never in a frame), and nothing about answers or results is collected,
  * read or shared. The only addresses that can ever open are the ones in the catalog (src/utils/testCatalog.ts).
  */
@@ -80,97 +79,75 @@ export const TestInviteBubble: React.FC<BubbleProps> = ({ messageId, testId, min
   );
 };
 
-// ------------------------------------------------------------------------------------------------ the Tests section
+// ------------------------------------------------------------------------------------------------ the composer picker
 
-export interface InvitablePair { id: string; partner?: { displayName: string | null; avatar: string | null } }
+/** The composer button's icon: a clipboard with a check, for tests and quizzes. */
+export const TestsIcon: React.FC<{ className?: string }> = ({ className }) => <ClipboardCheck className={className} aria-hidden="true" />;
 
-interface PanelProps {
-  /** The member's active conversations: the only places an invitation can be sent. */
-  pairs: InvitablePair[];
-  /** Sends one invitation. `messageId` is stable per (conversation, test), so a repeated click can never make a second one. Resolves to null on success, or words for the member. */
-  onInvite: (pairId: string, testId: string, messageId: string) => Promise<string | null>;
-  /** Opens a conversation (after an invitation was sent). */
-  onOpenConversation?: (pairId: string) => void;
+interface PickerProps {
+  /** The other member of this conversation, for the wording. */
+  partnerName: string;
+  /** Sends one invitation into THIS conversation. `messageId` is stable per test, so a repeated click can never make a second one. Resolves to null on success, or words for the member. */
+  onInvite: (testId: string, messageId: string) => Promise<string | null>;
+  onClose: () => void;
 }
 
-const nameOf = (pair: InvitablePair) => pair.partner?.displayName?.trim() || 'Anonymous member';
-
-export const TestsPanel: React.FC<PanelProps> = ({ pairs, onInvite, onOpenConversation }) => {
-  const [inviting, setInviting] = useState<CatalogTest | null>(null);
+/**
+ * A compact picker opened from the composer: the three tests, tap one to invite the other person here. The invitation arrives as a
+ * card in this same conversation. Nothing opens or loads from here; the outside site opens only when the invited person taps Take Test.
+ */
+export const TestPicker: React.FC<PickerProps> = ({ partnerName, onInvite, onClose }) => {
   const [busy, setBusy] = useState<string | null>(null);
   const [sent, setSent] = useState<Set<string>>(() => new Set());
   const [problem, setProblem] = useState<string | null>(null);
-  /** One message id per (conversation, test), kept for the life of the page: repeating a click repeats the same send, never a new one. */
+  /** One message id per test for the life of the picker: repeating a click repeats the same send, never makes a new one. */
   const ids = useRef(new Map<string, string>());
   const busyNow = useRef(false);
 
-  const invite = async (pair: InvitablePair) => {
-    if (!inviting || busyNow.current) return;
-    const key = `${pair.id}:${inviting.id}`;
-    if (sent.has(key)) return;
+  const invite = async (test: CatalogTest) => {
+    if (busyNow.current || sent.has(test.id)) return;
     busyNow.current = true;
-    setBusy(pair.id);
+    setBusy(test.id);
     setProblem(null);
-    if (!ids.current.has(key)) ids.current.set(key, crypto.randomUUID());
-    const failure = await onInvite(pair.id, inviting.id, ids.current.get(key)!);
+    if (!ids.current.has(test.id)) ids.current.set(test.id, crypto.randomUUID());
+    const failure = await onInvite(test.id, ids.current.get(test.id)!);
     busyNow.current = false;
     setBusy(null);
     if (failure) setProblem(failure);
-    else setSent((current) => new Set(current).add(key));
+    else setSent((current) => new Set(current).add(test.id));
   };
 
   return (
-    <section aria-label="Tests" data-testid="tests-panel" className="space-y-3">
-      <p className="text-[length:calc(13px_*_var(--fs,1))] leading-snug text-muted">Invite someone to an outside online test, or take one yourself. {TEST_PRIVACY_NOTE}</p>
-      <ul className="space-y-3">
-        {TEST_CATALOG.map((test) => (
-          <li key={test.id} data-testid={`test-${test.id}`} className="rounded-2xl border p-4" style={{ backgroundImage: `linear-gradient(135deg, ${TEST_LOOK.bg}, ${TEST_LOOK.bg2})`, borderColor: TEST_LOOK.border, color: TEST_LOOK.text }}>
-            <div className="flex items-start gap-3">
-              <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ backgroundColor: 'rgba(243,201,105,0.14)' }}>{test.icon}</span>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-[length:calc(16px_*_var(--fs,1))] font-semibold leading-snug">{test.name}</h3>
-                <p className="text-[length:calc(13.5px_*_var(--fs,1))] leading-snug" style={{ color: TEST_LOOK.meta }}>{test.description}</p>
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => { setProblem(null); setInviting(test); }} className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-4 text-[length:calc(13px_*_var(--fs,1))] font-semibold transition hover:brightness-110 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2" style={{ backgroundColor: TEST_LOOK.accent, color: TEST_LOOK.btnText }}>
-                <Send className="h-3.5 w-3.5" aria-hidden="true" /> Invite<span className="sr-only"> someone to the {test.name}</span>
-              </button>
-              <TestLink test={test} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-[length:calc(13px_*_var(--fs,1))] font-semibold transition hover:brightness-125" style={{ borderColor: TEST_LOOK.border, color: TEST_LOOK.text }}>
-                Take it myself <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /><span className="sr-only"> ({test.name}, opens an outside website in a new tab)</span>
-              </TestLink>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      {inviting && (
-        <Sheet title={`Invite to the ${inviting.name}`} onClose={() => setInviting(null)} size="sm">
-          <div className="space-y-3 text-fg">
-            <p className="text-sm text-muted">Choose a conversation. They get a card with the test and a Take Test button; it is their choice whether to open it.</p>
-            {pairs.length === 0 ? (
-              <p data-testid="no-conversations" className="rounded-xl border border-line px-3 py-4 text-center text-sm text-muted">You have no active conversations yet. Once you connect with someone, you can invite them here.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {pairs.map((pair) => {
-                  const done = sent.has(`${pair.id}:${inviting.id}`);
-                  return (
-                    <li key={pair.id}>
-                      <button type="button" disabled={busy !== null || done} onClick={() => void invite(pair)} aria-label={`${done ? 'Invited' : 'Invite'} ${nameOf(pair)}`} className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-line px-3 text-left transition hover:bg-raised disabled:cursor-default disabled:opacity-80">
-                        <AnimalAvatar avatar={pair.partner?.avatar ?? undefined} seed={pair.id} className="h-8 w-8 shrink-0" />
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{nameOf(pair)}</span>
-                        {busy === pair.id ? <LoaderCircle className="h-4 w-4 animate-spin text-berry" aria-hidden="true" /> : done ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-lavender"><Check className="h-3.5 w-3.5" aria-hidden="true" /> Invited</span> : <span className="text-xs font-semibold text-berry">Invite</span>}
-                      </button>
-                      {done && onOpenConversation && <button type="button" onClick={() => { setInviting(null); onOpenConversation(pair.id); }} className="ml-1 mt-1 text-xs font-semibold text-berry underline underline-offset-4">Open the conversation</button>}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {problem && <p role="alert" className="text-xs text-danger">{problem}</p>}
-          </div>
-        </Sheet>
-      )}
-    </section>
+    <Sheet title="Invite to a test" onClose={onClose} size="sm" icon={<TestsIcon className="h-4 w-4 text-lavender" />}>
+      <div data-testid="test-picker" className="space-y-2 text-fg">
+        <p className="text-[length:calc(13px_*_var(--fs,1))] leading-snug text-muted">Pick a test to invite {partnerName}. They get a card here and choose whether to open it.</p>
+        <ul className="space-y-1.5">
+          {TEST_CATALOG.map((test) => {
+            const done = sent.has(test.id);
+            return (
+              <li key={test.id}>
+                <button
+                  type="button"
+                  disabled={busy !== null || done}
+                  onClick={() => void invite(test)}
+                  aria-label={`${done ? 'Invited to' : 'Invite to'} ${test.name}`}
+                  className="flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition hover:brightness-110 disabled:cursor-default disabled:opacity-80 focus-visible:outline-none focus-visible:ring-2"
+                  style={{ backgroundImage: `linear-gradient(135deg, ${TEST_LOOK.bg}, ${TEST_LOOK.bg2})`, borderColor: TEST_LOOK.border, color: TEST_LOOK.text }}
+                >
+                  <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg" style={{ backgroundColor: 'rgba(243,201,105,0.14)' }}>{test.icon}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[length:calc(14.5px_*_var(--fs,1))] font-semibold leading-snug">{test.name}</span>
+                    <span className="block truncate text-[length:calc(12.5px_*_var(--fs,1))]" style={{ color: TEST_LOOK.meta }}>{test.description}</span>
+                  </span>
+                  {busy === test.id ? <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" /> : done ? <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold" style={{ color: TEST_LOOK.accent }}><Check className="h-3.5 w-3.5" aria-hidden="true" /> Invited</span> : <span className="shrink-0 text-xs font-semibold" style={{ color: TEST_LOOK.accent }}>Invite</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        {problem && <p role="alert" className="text-xs text-danger">{problem}</p>}
+        <p className="text-[length:calc(11.5px_*_var(--fs,1))] leading-snug text-subtle">{TEST_PRIVACY_NOTE}</p>
+      </div>
+    </Sheet>
   );
 };
