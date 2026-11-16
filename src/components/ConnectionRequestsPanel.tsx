@@ -8,11 +8,11 @@ import {
   orderRequests,
   pendingCount,
   postReference,
+  requestPostLabel,
   STATUS_LABELS,
   type ConnectionRequest,
   type RequestLists,
 } from '../utils/connectionRequests.ts';
-import { INTENTION_LABELS } from '../utils/lookingFor.ts';
 import { formatRelativeTime } from '../utils/relativeTime.ts';
 import { answerConnectionRequest, fetchConnectionRequests, reportRequestMember } from '../services/connectionRequestsService.ts';
 import { REPORT_REASONS } from '../services/lookingForService.ts';
@@ -137,7 +137,7 @@ export const ConnectionRequestsPanel: React.FC<Props> = ({ rev, onChanged, onOpe
   };
 
   const card = (request: ConnectionRequest, direction: 'incoming' | 'sent') => {
-    const ref = postReference(request, INTENTION_LABELS[request.intention] ?? 'Looking For');
+    const ref = postReference(request, requestPostLabel(request));
     const busy = busyId === request.id;
     const pending = request.status === 'pending';
     return (

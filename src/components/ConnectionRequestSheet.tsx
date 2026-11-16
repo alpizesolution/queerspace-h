@@ -3,22 +3,23 @@ import { CheckCircle2 } from 'lucide-react';
 import { Sheet } from './Sheet.tsx';
 import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
-import { REQUEST_MESSAGE_MAX } from '../utils/connectionRequests.ts';
-import { INTENTION_LABELS, type LookingForPost } from '../utils/lookingFor.ts';
+import { REQUEST_MESSAGE_MAX, lookingForSubject, type RequestSubject } from '../utils/connectionRequests.ts';
+import type { LookingForPost } from '../utils/lookingFor.ts';
 import { answerConnectionRequest, createConnectionRequest } from '../services/connectionRequestsService.ts';
 
-interface Props {
-  post: LookingForPost;
+/** What the request is about: a Looking For post (`post`), or any post already described as a subject (`subject`, used for Cosmos posts). */
+type Props = ({ post: LookingForPost; subject?: undefined } | { subject: RequestSubject; post?: undefined }) & {
   onClose: () => void;
   /** Takes the member to Signals → Requests to see the request. */
   onViewRequests?: () => void;
-}
+};
 
 /**
  * The request composer: who it goes to, an optional hello, and a plain explanation of what accepting means. After
  * sending it shows "Request sent" with a way to view or withdraw it. Sending goes through the Signals API.
  */
-export const ConnectionRequestSheet: React.FC<Props> = ({ post, onClose, onViewRequests }) => {
+export const ConnectionRequestSheet: React.FC<Props> = ({ post: lookingForPost, subject, onClose, onViewRequests }) => {
+  const post = subject ?? lookingForSubject(lookingForPost!);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +96,7 @@ export const ConnectionRequestSheet: React.FC<Props> = ({ post, onClose, onViewR
         <AnimalAvatar avatar={post.authorAvatar} seed={post.authorId || post.author} className="w-10 h-10" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg">{post.author}</p>
-          <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">About their {INTENTION_LABELS[post.intention]} post</p>
+          <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle">About their {post.about} post</p>
         </div>
       </div>
       <p className="mb-3">

@@ -2,7 +2,8 @@
  * Pure helpers for connection requests: how they are ordered, named and explained. Kept free of React and the network so
  * they can be tested. The server (api/_requests.js) decides everything that matters; this only shapes what is shown.
  */
-import type { LookingForIntention } from './lookingFor.ts';
+import { INTENTION_LABELS, type LookingForIntention, type LookingForPost } from './lookingFor.ts';
+import type { CommunityPost } from '../types.ts';
 
 export type RequestStatus = 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'expired';
 export type PostState = 'active' | 'paused' | 'removed';
@@ -11,7 +12,8 @@ export interface ConnectionRequest {
   id: string;
   status: RequestStatus;
   message: string;
-  intention: LookingForIntention;
+  /** The Looking For intention the request is about; null when it is about a regular Cosmos post. */
+  intention: LookingForIntention | null;
   createdAt: string | null;
   respondedAt: string | null;
   expiresAt: string | null;
@@ -19,7 +21,8 @@ export interface ConnectionRequest {
   /** The other member: who sent an incoming request, or who a sent one went to. */
   memberId: string;
   partner: { displayName: string | null; avatar: string | null; pronouns: string | null; about: string | null };
-  post: { status: PostState; title: string | null; sensitive: boolean };
+  /** `kind` is absent on answers from an older server, which only knew Looking For posts. */
+  post: { kind?: 'looking_for' | 'community'; status: PostState; title: string | null; sensitive: boolean };
 }
 
 export interface RequestLists {
@@ -28,6 +31,29 @@ export interface RequestLists {
 }
 
 export const EMPTY_REQUESTS: RequestLists = { incoming: [], sent: [] };
+
+/** The post a new request is about, and who wrote it: all the request sheet and the API need, for either kind of post. */
+export interface RequestSubject {
+  id: string;
+  kind: 'looking_for' | 'community';
+  authorId: string;
+  author: string;
+  authorAvatar?: string;
+  /** How the post is named in "About their … post". */
+  about: string;
+}
+
+export const lookingForSubject = (post: LookingForPost): RequestSubject => ({
+  id: post.id, kind: 'looking_for', authorId: post.authorId, author: post.author, authorAvatar: post.authorAvatar, about: INTENTION_LABELS[post.intention],
+});
+
+/** A regular Cosmos post as the subject of a request, or null for an old post with no known author. */
+export const communitySubject = (post: CommunityPost): RequestSubject | null =>
+  post.authorId ? { id: post.id, kind: 'community', authorId: post.authorId, author: post.author, authorAvatar: post.authorAvatar, about: 'Cosmos' } : null;
+
+/** The name of the kind of post a request is about: its Looking For intention, or "Cosmos" for a regular post. */
+export const requestPostLabel = (request: Pick<ConnectionRequest, 'post' | 'intention'>): string =>
+  request.post.kind === 'community' ? 'Cosmos' : (request.intention && INTENTION_LABELS[request.intention]) || 'Looking For';
 
 export const STATUS_LABELS: Record<RequestStatus, string> = {
   pending: 'Pending',

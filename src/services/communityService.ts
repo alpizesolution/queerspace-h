@@ -61,6 +61,7 @@ export function toCommunityPost(id: string, data: Record<string, unknown>): Comm
     replyCount: Math.max(0, Number(data.replyCount) || 0),
     replies: [],
     tags: Array.isArray(data.tags) ? data.tags.map(String).slice(0, 4) : [],
+    requestsPaused: data.requestsPaused === true,
   };
 }
 

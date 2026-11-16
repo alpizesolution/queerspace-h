@@ -25,7 +25,7 @@ test('connection requests are started from exactly one place, and only ever ask:
   const starters = sourceFiles('src').filter((file) => /action: 'request-create'/.test(fs.readFileSync(file, 'utf8')));
   assert.deepEqual(starters.map((f) => path.basename(f)), ['connectionRequestsService.ts']);
   const service = fs.readFileSync('src/services/connectionRequestsService.ts', 'utf8');
-  assert.match(service, /action: 'request-create',\s*recipientId: post\.authorId,\s*lookingForPostId: post\.id/);
+  assert.match(service, /action: 'request-create',\s*recipientId: post\.authorId,\s*\.\.\.\(post\.kind === 'community' \? \{ communityPostId: post\.id \} : \{ lookingForPostId: post\.id \}\)/, 'always about one post: a Cosmos post or a Looking For post');
   assert.doesNotMatch(service, /convId/);
 });
 

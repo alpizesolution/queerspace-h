@@ -1,5 +1,7 @@
-// Connection requests for the Cosmos "Looking For" board. A member who is interested in someone's post asks to connect;
-// the post's author decides. Accepting opens a private Signals conversation (a signalsPairs doc), nothing more.
+// Connection requests for Cosmos. A member who is interested in someone's post asks to connect; the post's author decides.
+// Accepting opens a private Signals conversation (a signalsPairs doc), nothing more. A request is always about one post:
+// a "Looking For" post (lookingForPostId) or a regular Cosmos post (communityPostId). Both kinds go through the same
+// checks, limits and lifecycle; the author can pause requests on either kind of post.
 //
 // Everything here runs on the server with the Admin SDK. Clients can read none of these collections (firestore.rules),
 // so status changes only ever come from this file:
@@ -53,6 +55,18 @@ export function effectiveStatus(data, nowMs) {
 export function postAvailability(post) {
   if (!post) return 'removed';
   return post.requestsPaused === true ? 'paused' : 'active';
+}
+
+/**
+ * Which post a request is about, from the request body or a stored request. Exactly one of the two ids must be given.
+ * Returns null when neither, both, or an unusable id is given.
+ */
+export function requestSubject(source) {
+  const lookingFor = source?.lookingForPostId;
+  const community = source?.communityPostId;
+  if ((lookingFor === undefined || lookingFor === null) === (community === undefined || community === null)) return null;
+  if (community !== undefined && community !== null) return safeId(community) ? { kind: 'community', postId: community, path: `community_posts/${community}` } : null;
+  return safeId(lookingFor) ? { kind: 'looking_for', postId: lookingFor, path: `looking_for_posts/${lookingFor}` } : null;
 }
 
 /*
@@ -152,9 +166,10 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
     });
 
   async function create(db, uid, body) {
-    const { recipientId, lookingForPostId, message, idempotencyKey } = body;
+    const { recipientId, message, idempotencyKey } = body;
     if (!safeId(recipientId) || recipientId === uid) throw fail(400, 'invalid_recipient');
-    if (!safeId(lookingForPostId)) throw fail(400, 'invalid_post');
+    const subject = requestSubject(body);
+    if (!subject) throw fail(400, 'invalid_post');
     if (typeof idempotencyKey !== 'string' || idempotencyKey.length < 8 || idempotencyKey.length > 128) throw fail(400, 'invalid_idempotency_key');
     if (message !== undefined && (typeof message !== 'string' || message.trim().length > REQUEST_MAX_MESSAGE)) throw fail(400, 'invalid_message');
 
@@ -173,7 +188,7 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
         tx.get(db.doc(`users/${recipientId}/private/settings`)),
         tx.get(db.doc(`suspensions/${uid}`)),
         tx.get(db.doc(`suspensions/${recipientId}`)),
-        tx.get(db.doc(`looking_for_posts/${lookingForPostId}`)),
+        tx.get(db.doc(subject.path)),
         tx.get(lockRef),
         tx.get(db.collection('connection_requests').where('senderId', '==', uid).where('status', '==', 'pending').limit(REQUEST_PENDING_SENT_LIMIT + 1)),
         tx.get(db.collection('signalsPairs').where('participants', '==', [uid, recipientId].sort()).where('status', '==', 'active').limit(1)),
@@ -208,8 +223,10 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
       tx.create(requestRef, {
         senderId: uid,
         recipientId,
-        lookingForPostId,
-        intention: post.intention,
+        // What the request is about. A regular Cosmos post has no intention.
+        ...(subject.kind === 'community'
+          ? { communityPostId: subject.postId, source: 'community_post', intention: null }
+          : { lookingForPostId: subject.postId, intention: post.intention }),
         message: typeof message === 'string' ? message.trim() : '',
         status: 'pending',
         createdAt: FieldValue.serverTimestamp(),
@@ -365,7 +382,25 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
     return null;
   }
 
-  const actions = { 'request-create': create, 'request-accept': accept, 'request-decline': decline, 'request-withdraw': withdraw };
+  /**
+   * The author pauses or resumes requests on one of their regular Cosmos posts. Cosmos posts cannot be edited from a
+   * client (firestore.rules), so this one switch is set here. Requests already sent are untouched and can still be answered.
+   * Looking For posts keep their own switch, set by their author directly.
+   */
+  async function pausePost(db, uid, body) {
+    const subject = requestSubject({ communityPostId: body.communityPostId });
+    if (!subject || typeof body.paused !== 'boolean') throw fail(400, 'invalid_request');
+    const ref = db.doc(subject.path);
+    return once(db, async tx => {
+      const snap = await tx.get(ref);
+      // Someone else's post answers exactly like a missing one.
+      if (!snap.exists || snap.data().authorId !== uid) throw fail(404, 'post_unavailable');
+      if ((snap.data().requestsPaused === true) !== body.paused) tx.update(ref, { requestsPaused: body.paused });
+      return { paused: body.paused };
+    });
+  }
+
+  const actions = { 'request-create': create, 'request-accept': accept, 'request-decline': decline, 'request-withdraw': withdraw, 'request-pause-post': pausePost };
 
   const queue = createKeyedQueue();
 
@@ -417,10 +452,11 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
       ...sent.docs.map(snap => ({ snap, direction: 'sent' })),
     ];
     const memberIds = [...new Set(rows.map(({ snap, direction }) => (direction === 'incoming' ? snap.data().senderId : snap.data().recipientId)))];
-    const postIds = [...new Set(rows.map(({ snap }) => snap.data().lookingForPostId))];
+    // Each request is about one post, of either kind; a stored request with no usable post id is treated as a removed post.
+    const postPaths = [...new Set(rows.map(({ snap }) => requestSubject(snap.data())?.path).filter(Boolean))];
     const [profiles, posts] = await Promise.all([
       Promise.all(memberIds.map(async id => [id, profilePreview((await db.doc(`users/${id}/public/profile`).get()).data())])),
-      Promise.all(postIds.map(async id => [id, (await db.doc(`looking_for_posts/${id}`).get()).data() ?? null])),
+      Promise.all(postPaths.map(async path => [path, (await db.doc(path).get()).data() ?? null])),
     ]);
     const profileById = new Map(profiles);
     const postById = new Map(posts);
@@ -428,7 +464,11 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
     const shape = ({ snap, direction }) => {
       const data = snap.data();
       const other = direction === 'incoming' ? data.senderId : data.recipientId;
-      const post = postById.get(data.lookingForPostId);
+      const subject = requestSubject(data);
+      const post = subject ? postById.get(subject.path) : null;
+      const community = subject?.kind === 'community';
+      // A Looking For title may be generated from age and flair; a Cosmos post's title is used as written.
+      const title = !post || post.isNsfw === true || typeof post.title !== 'string' ? null : (community ? post.title.trim() : displayTitle(post)).slice(0, 130);
       return {
         id: snap.id,
         status: effectiveStatus(data, nowMs),
@@ -441,7 +481,7 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
         memberId: other,
         partner: profileById.get(other) ?? profilePreview(null),
         // A sensitive post's title is never repeated here.
-        post: { status: postAvailability(post), title: post && post.isNsfw !== true && typeof post.title === 'string' ? displayTitle(post).slice(0, 130) : null, sensitive: post?.isNsfw === true },
+        post: { kind: community ? 'community' : 'looking_for', status: postAvailability(post), title, sensitive: post?.isNsfw === true },
       };
     };
     return {

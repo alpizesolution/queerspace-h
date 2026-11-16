@@ -360,7 +360,8 @@ export default async function handler(req, res) {
       return send(res, outcome.status, outcome.body);
     }
 
-    // Connection requests from the Looking For board: sent, accepted, declined and withdrawn through one set of checks.
+    // Connection requests about a Looking For post or a regular Cosmos post: sent, accepted, declined and withdrawn through
+    // one set of checks, plus the author's pause switch for a Cosmos post.
     if (typeof action === 'string' && action.startsWith('request-')) {
       const outcome = await connectionRequests.handle(action, req.body || {}, uid, db);
       return send(res, outcome.status, outcome.body);

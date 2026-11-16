@@ -367,6 +367,91 @@ test('requests expire, are shown as expired, and cannot be accepted', { skip }, 
   assert.equal((await ask(sender)).statusCode, 201, 'an expired request no longer blocks a new one');
 });
 
+/** A regular Cosmos post by `author`, written the way the app writes one. */
+const cosmosPost = (db, Timestamp, author, id, extra = {}) =>
+  db.doc(`community_posts/${id}`).set({ authorId: author.uid, authorName: 'Author', authorPronouns: 'she/her', title: 'Rainy day reads', content: 'What are you reading?', category: 'media', tags: [], likes: 0, replyCount: 0, timestamp: Timestamp.now(), ...extra });
+
+test('a regular Cosmos post takes connection requests exactly like a Looking For post', { skip }, async () => {
+  const { db, Timestamp, member, author, ask, act, getRequest, list, inbox, events } = await setup();
+  await cosmosPost(db, Timestamp, author, 'cosmos-post-0001');
+  const sender = await member();
+  const sent = await ask(sender, { lookingForPostId: undefined, communityPostId: 'cosmos-post-0001' });
+  assert.equal(sent.statusCode, 201);
+  const stored = await getRequest(sent.body.requestId);
+  assert.equal(stored.communityPostId, 'cosmos-post-0001');
+  assert.equal(stored.source, 'community_post');
+  assert.equal(stored.intention, null);
+  assert.equal('lookingForPostId' in stored, false);
+  assert.equal(stored.senderId, sender.uid);
+  assert.equal(stored.recipientId, author.uid);
+  assert.ok(sent.body.requestId in ((await inbox(author)).requests ?? {}), 'the author is notified the same way');
+  const incoming = (await list(author)).incoming[0];
+  assert.deepEqual(incoming.post, { kind: 'community', status: 'active', title: 'Rainy day reads', sensitive: false });
+  assert.equal(incoming.intention, null);
+  assert.equal((await list(sender)).sent[0].post.kind, 'community');
+  // One waiting request per pair, whichever post it is about.
+  const again = await ask(sender);
+  assert.equal(again.statusCode, 409);
+  assert.equal(again.body.error, 'already_pending');
+  const accepted = await act(author, 'request-accept', sent.body.requestId);
+  assert.equal(accepted.body.status, 'accepted');
+  assert.ok((await db.doc(`signalsPairs/${accepted.body.conversationId}`).get()).exists, 'accepting opens the private conversation');
+  assert.deepEqual(await events(sent.body.requestId), ['accept', 'create']);
+});
+
+test('a Cosmos request needs a real post by that author, one post id only, and the same safety checks', { skip }, async () => {
+  const { db, Timestamp, member, author, ask } = await setup();
+  await cosmosPost(db, Timestamp, author, 'cosmos-post-0002');
+  const cosmos = (extra = {}) => ({ lookingForPostId: undefined, communityPostId: 'cosmos-post-0002', ...extra });
+  const sender = await member();
+  const stranger = await member();
+  assert.equal((await ask(sender, cosmos(), { to: stranger })).statusCode, 404, 'someone else cannot be asked through this post');
+  assert.equal((await ask(sender, cosmos({ communityPostId: 'cosmos-post-none' }))).statusCode, 404, 'a missing post');
+  assert.equal((await ask(sender, cosmos({ communityPostId: 'bad id!' }))).statusCode, 400);
+  assert.equal((await ask(sender, { communityPostId: 'cosmos-post-0002' })).statusCode, 400, 'both kinds of post at once is refused');
+  assert.equal((await ask(sender, { lookingForPostId: undefined })).statusCode, 400, 'no post at all is refused');
+  const blocker = await member({ blockedPartnerIds: [author.uid] });
+  assert.equal((await ask(blocker, cosmos())).statusCode, 403, 'a block in either direction');
+  const young = await member({ birthDate: Timestamp.fromMillis(Date.now() - 16 * 365.25 * 86400000) });
+  assert.equal((await ask(young, cosmos())).statusCode, 403, 'adults only');
+  await db.doc(`suspensions/${stranger.uid}`).set({ reason: 'test' });
+  assert.equal((await ask(stranger, cosmos())).statusCode, 403, 'a suspended sender');
+  assert.equal((await ask(sender, cosmos())).statusCode, 201, 'and a normal member gets through');
+});
+
+test('the author can pause and resume requests on their own Cosmos post; nobody else can', { skip }, async () => {
+  const { db, Timestamp, member, call, author, ask, act, list } = await setup();
+  await cosmosPost(db, Timestamp, author, 'cosmos-post-0003');
+  const cosmos = { lookingForPostId: undefined, communityPostId: 'cosmos-post-0003' };
+  const pause = (user, paused, id = 'cosmos-post-0003') => call(user, 'POST', { action: 'request-pause-post', communityPostId: id, paused });
+  const first = await member();
+  const { body: { requestId } } = await ask(first, cosmos);
+  const stranger = await member();
+  assert.equal((await pause(stranger, true)).statusCode, 404, 'not their post');
+  assert.equal((await pause(author, true, 'cosmos-post-none')).statusCode, 404);
+  assert.equal((await pause(author, 'yes')).statusCode, 400);
+  const paused = await pause(author, true);
+  assert.equal(paused.statusCode, 200);
+  assert.deepEqual(paused.body, { paused: true });
+  assert.equal((await db.doc('community_posts/cosmos-post-0003').get()).data().requestsPaused, true);
+  assert.equal((await pause(author, true)).statusCode, 200, 'safe to repeat');
+  const refused = await ask(await member(), cosmos);
+  assert.equal(refused.statusCode, 409);
+  assert.equal(refused.body.error, 'post_paused');
+  // A request sent before the pause is still there, says so, and can still be answered.
+  assert.equal((await list(author)).incoming[0].post.status, 'paused');
+  assert.equal((await act(author, 'request-accept', requestId)).body.status, 'accepted');
+  assert.equal((await pause(author, false)).body.paused, false);
+  assert.equal((await ask(await member(), cosmos)).statusCode, 201, 'resuming reopens it');
+  // Nothing else on the post was touched.
+  const post = (await db.doc('community_posts/cosmos-post-0003').get()).data();
+  assert.equal(post.title, 'Rainy day reads');
+  assert.equal(post.replyCount, 0);
+  // A deleted post takes no new requests and shows as removed.
+  await db.doc('community_posts/cosmos-post-0003').delete();
+  assert.equal((await ask(await member(), cosmos)).statusCode, 404);
+});
+
 test('pausing or deleting a post keeps its requests: they stay visible, with the post state, and can still be answered', { skip }, async () => {
   const { db, member, author, postId, post, ask, act, list } = await setup();
   const sender = await member();

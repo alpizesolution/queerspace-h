@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowUp, Info, Check, CheckCircle2, MessageCircle, Plus, Share, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Info, Check, CheckCircle2, MessageCircle, Plus, SatelliteDish, Share, Trash2, X } from 'lucide-react';
 import { MemberAvatar, MemberName } from './ProfileNav.tsx';
 import { StardustButton } from './StardustButton.tsx';
 import { useStardust } from '../hooks/useStardust.ts';
@@ -22,6 +22,9 @@ import {
 } from '../services/communityService.ts';
 import { whileActive } from '../utils/whileActive.ts';
 import { LookingForView } from './LookingForView.tsx';
+import { ConnectionRequestSheet } from './ConnectionRequestSheet.tsx';
+import { setCommunityRequestsPaused } from '../services/connectionRequestsService.ts';
+import { communitySubject, type RequestSubject } from '../utils/connectionRequests.ts';
 import { ExpandableText } from './ExpandableText.tsx';
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, FILTER_CATEGORIES } from '../utils/communityCategories.ts';
 import { ChipScroller } from './ChipScroller.tsx';
@@ -174,6 +177,20 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
+  // Connection requests about a regular post, the same flow as on the Looking For board: who is being asked, and which
+  // of the member's own posts is having its requests paused or resumed right now.
+  const [requestSubject, setRequestSubject] = useState<RequestSubject | null>(null);
+  const [pausingId, setPausingId] = useState<string | null>(null);
+  const toggleRequestsPaused = async (post: CommunityPost) => {
+    if (pausingId) return;
+    setPausingId(post.id);
+    const result = await setCommunityRequestsPaused(post.id, !post.requestsPaused);
+    setPausingId(null);
+    // The post itself updates through its live listener; this only says what happened.
+    setToast(result.ok
+      ? { text: result.paused ? 'Requests paused on this post. Ones already sent can still be answered.' : 'This post is taking requests again.', ok: true }
+      : { text: result.message, ok: false });
+  };
 
   const available = isCommunityAvailable();
 
@@ -405,6 +422,8 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
           {listed.map((post) => {
             const isRepliesExpanded = expandedReplies[post.id] ?? focusMode;
             const replyCount = post.replyCount ?? 0;
+            const mine = Boolean(uid) && post.authorId === uid;
+            const subject = mine ? null : communitySubject(post);
             return (
               <article key={post.id} className="scroll-mt-[calc(var(--header-h)+0.5rem)] rounded-3xl border border-line bg-gradient-to-b from-raised/60 to-surface p-4 sm:p-5">
                 <header className="flex items-center gap-2.5 mb-3">
@@ -449,7 +468,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                   </div>
                 )}
 
-                <div className="flex items-center gap-1 mt-3 -ml-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
+                <div className="flex flex-wrap items-center gap-1 mt-3 -ml-2 text-[length:calc(13px_*_var(--fs,1))] text-muted">
                   <StardustButton
                     variant="compact"
                     count={stardust.countFor(post.id, post.stardustCount)}
@@ -483,6 +502,28 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                       <Share className="w-[18px] h-[18px]" />
                     )}
                   </button>
+                  {/* Connection requests, as on the Looking For board: the author pauses or resumes them, everyone else can ask. */}
+                  {mine ? (
+                    <button
+                      type="button"
+                      onClick={() => void toggleRequestsPaused(post)}
+                      disabled={pausingId === post.id}
+                      aria-pressed={post.requestsPaused === true}
+                      title={post.requestsPaused ? 'Let members send you connection signals from this post again' : 'Stop new connection signals from this post'}
+                      className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full hover:bg-raised hover:text-fg transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <SatelliteDish className="w-[18px] h-[18px] shrink-0" aria-hidden="true" />
+                      {post.requestsPaused ? 'Resume requests' : 'Pause requests'}
+                    </button>
+                  ) : subject && (post.requestsPaused
+                    ? <button type="button" disabled className="btn btn-secondary btn-sm" title="This member is not taking new requests right now">Requests paused</button>
+                    : (
+                      <button type="button" onClick={() => setRequestSubject(subject)} aria-label="Send connection signal" title="Send a connection signal to this member" className="btn btn-primary btn-sm !gap-1.5 !px-3">
+                        <SatelliteDish className="w-4 h-4 shrink-0" aria-hidden="true" />
+                        <span className="sm:hidden" aria-hidden="true">Signal</span>
+                        <span className="hidden sm:inline" aria-hidden="true">Send Signal</span>
+                      </button>
+                    ))}
                 </div>
 
                 {isRepliesExpanded && (
@@ -601,6 +642,8 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
           </form>
         </Sheet>
       )}
+
+      {requestSubject && <ConnectionRequestSheet subject={requestSubject} onClose={() => setRequestSubject(null)} onViewRequests={onViewRequests} />}
 
       {pendingDelete && (
         <ConfirmDialog

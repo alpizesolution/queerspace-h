@@ -270,7 +270,7 @@ test('only retryable failures are retried; anything else is raised at once', asy
 
 test('every transaction is one SDK attempt, so the SDK cannot multiply the wait behind the retry\'s back', () => {
   assert.match(server, /db\.runTransaction\(update, \{ maxAttempts: 1 \}\)/);
-  assert.equal((server.match(/return once\(db, async tx =>/g) || []).length, 4, 'create, accept, decline and withdraw');
+  assert.equal((server.match(/return once\(db, async tx =>/g) || []).length, 5, 'create, accept, decline, withdraw, and the pause switch for a Cosmos post');
   assert.doesNotMatch(server, /return db\.runTransaction\(/, 'no transaction is left on the SDK default of 5 attempts');
 });
 

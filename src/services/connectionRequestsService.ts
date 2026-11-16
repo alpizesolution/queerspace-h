@@ -1,6 +1,6 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase.ts';
-import { REQUEST_MESSAGE_MAX, requestErrorMessage, type ConnectionRequest, type RequestLists, type RequestStatus } from '../utils/connectionRequests.ts';
+import { REQUEST_MESSAGE_MAX, requestErrorMessage, type ConnectionRequest, type RequestLists, type RequestStatus, type RequestSubject } from '../utils/connectionRequests.ts';
 
 /**
  * Connection requests go through the Signals API (api/signals.js): it alone writes them, checks every status change,
@@ -33,20 +33,29 @@ export async function fetchConnectionRequests(): Promise<{ ok: true; lists: Requ
   return { ok: true, lists: { incoming: requestList(result.data.incoming), sent: requestList(result.data.sent) } };
 }
 
-/** Asks the author of a Looking For post to connect. A retry with the same key is answered with the same request. */
+/**
+ * Asks the author of a post to connect: a Looking For post, or a regular Cosmos post (`kind: 'community'`).
+ * A retry with the same key is answered with the same request.
+ */
 export async function createConnectionRequest(
-  post: { id: string; authorId: string },
+  post: Pick<RequestSubject, 'id' | 'authorId'> & { kind?: RequestSubject['kind'] },
   message: string,
   idempotencyKey: string = crypto.randomUUID()
 ): Promise<{ ok: true; requestId: string } | { ok: false; message: string }> {
   const result = await call<{ requestId: string }>({
     action: 'request-create',
     recipientId: post.authorId,
-    lookingForPostId: post.id,
+    ...(post.kind === 'community' ? { communityPostId: post.id } : { lookingForPostId: post.id }),
     idempotencyKey,
     message: message.trim().slice(0, REQUEST_MESSAGE_MAX),
   });
   return result.ok ? { ok: true, requestId: result.data.requestId } : result;
+}
+
+/** The author pauses or resumes connection requests on one of their own Cosmos posts. Requests already sent are kept. */
+export async function setCommunityRequestsPaused(postId: string, paused: boolean): Promise<{ ok: true; paused: boolean } | { ok: false; message: string }> {
+  const result = await call<{ paused: boolean }>({ action: 'request-pause-post', communityPostId: postId, paused });
+  return result.ok ? { ok: true, paused: result.data.paused === true } : result;
 }
 
 export async function answerConnectionRequest(

@@ -170,7 +170,7 @@ test('the server builds the same display title as the app, and leaves posts with
   assert.equal(displayTitle({ title: 'Old post' }), 'Old post');
   assert.equal(displayTitle({ age: 20, flair: 'bogus', title: 'Old post' }), 'Old post');
   assert.equal(displayTitle(null), '');
-  assert.match(read('api/_requests.js'), /displayTitle\(post\)\.slice\(0, 130\)/, 'request lists show the generated title');
+  assert.match(read('api/_requests.js'), /\(community \? post\.title\.trim\(\) : displayTitle\(post\)\)\.slice\(0, 130\)/, 'request lists show the generated title for a Looking For post, and a Cosmos post title as written');
 });
 
 test('the composer asks for the flair with compact pills, previews the generated title, and no longer lets the age be chosen', () => {

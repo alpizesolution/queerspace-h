@@ -140,6 +140,8 @@ export interface CommunityPost {
   replyCount?: number;
   replies: CommunityReply[];
   tags: string[];
+  /** The author paused connection requests on this post (set through the Signals API). */
+  requestsPaused?: boolean;
 }
 
 export interface PublicRoomMessage {
