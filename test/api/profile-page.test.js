@@ -256,7 +256,8 @@ test('the app opens a post with history, so Back returns to the profile, and a s
   assert.match(app, /const postId = postIdFromSearch\(window\.location\.search\);/);
   assert.match(app, /focusPostId=\{focusPostId\} onCloseFocus=\{closePost\}/);
   assert.match(app, /const profileNav = useMemo\(\(\) => \(\{ openProfile, openPost \}\)/);
-  assert.match(feedView, /postLink\(window\.location\.origin, post\.id\)/, 'sharing a post gives a link that opens that post');
+  // Cosmos posts no longer have a Share button; a post link (from a profile, or one shared earlier) still opens that post.
+  assert.doesNotMatch(feedView, /postLink\(|navigator\.share/);
 });
 
 test('no rules, API or schema changed to open a post', () => {

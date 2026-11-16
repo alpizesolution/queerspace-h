@@ -46,7 +46,8 @@ test('the Community card shows avatar, name, category badge, relative time, titl
   assert.match(community, /formatRelativeTime\(post\.timestamp\)/);
   assert.match(community, /CATEGORY_LABELS\[post\.category\]/);
   assert.match(community, /\{post\.title\}/);
-  for (const kept of ['handleStardust', 'setExpandedReplies', 'handleShare', 'aria-label={`${replyCount} replies`}']) assert.ok(community.includes(kept), kept);
+  for (const kept of ['handleStardust', 'setExpandedReplies', 'aria-label={`${replyCount} replies`}']) assert.ok(community.includes(kept), kept);
+  assert.doesNotMatch(community, /handleShare|Share post|navigator\.share/, 'Cosmos posts have no Share button');
 });
 
 test('a Looking For card previews: three-line intro, short Looking for summary, three interests, Send Signal in reach', () => {

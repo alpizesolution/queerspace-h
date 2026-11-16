@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowUp, Info, Check, CheckCircle2, MessageCircle, Plus, SatelliteDish, Share, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Info, CheckCircle2, MessageCircle, Plus, SatelliteDish, Trash2, X } from 'lucide-react';
 import { MemberAvatar, MemberName } from './ProfileNav.tsx';
 import { StardustButton } from './StardustButton.tsx';
 import { useStardust } from '../hooks/useStardust.ts';
@@ -29,7 +29,7 @@ import { ExpandableText } from './ExpandableText.tsx';
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, FILTER_CATEGORIES } from '../utils/communityCategories.ts';
 import { ChipScroller } from './ChipScroller.tsx';
 import { CosmosGuidelines } from './CosmosGuidelines.tsx';
-import { postLink, postVisibleTo, type PostLoad } from '../utils/communityPostLink.ts';
+import { postVisibleTo, type PostLoad } from '../utils/communityPostLink.ts';
 import { formatRelativeTime } from '../utils/relativeTime.ts';
 import type { NsfwPreference } from '../utils/nsfwPreference.ts';
 
@@ -172,7 +172,6 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
-  const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -314,22 +313,6 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
     setTagsList(['Sapphic']);
     setPostError(null);
     setShowCreateModal(false);
-  };
-
-  const handleShare = async (post: CommunityPost) => {
-    const text = `${post.title}\n\n${post.content}`;
-    const url = postLink(window.location.origin, post.id);
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: post.title, text, url });
-        return;
-      }
-      await navigator.clipboard.writeText(`${text}\n\n${url}`);
-      setCopiedPostId(post.id);
-      setTimeout(() => setCopiedPostId(null), 2000);
-    } catch {
-      // Share sheet dismissed or clipboard unavailable: nothing to do.
-    }
   };
 
   const filteredPosts =
@@ -488,21 +471,8 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                     <MessageCircle className="w-[18px] h-[18px]" />
                     {replyCount}
                   </button>
-                  <button
-                    onClick={() => handleShare(post)}
-                    className="ml-auto inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full hover:bg-raised hover:text-fg transition-colors cursor-pointer"
-                    aria-label="Share post"
-                  >
-                    {copiedPostId === post.id ? (
-                      <>
-                        <Check className="w-[18px] h-[18px] text-emerald-400" />
-                        <span className="text-emerald-400">Copied</span>
-                      </>
-                    ) : (
-                      <Share className="w-[18px] h-[18px]" />
-                    )}
-                  </button>
                   {/* Connection requests, as on the Looking For board: the author pauses or resumes them, everyone else can ask. */}
+                  <span className="ml-auto inline-flex items-center">
                   {mine ? (
                     <button
                       type="button"
@@ -524,6 +494,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
                         <span className="hidden sm:inline" aria-hidden="true">Send Signal</span>
                       </button>
                     ))}
+                  </span>
                 </div>
 
                 {isRepliesExpanded && (
