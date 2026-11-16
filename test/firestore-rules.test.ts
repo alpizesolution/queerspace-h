@@ -2069,6 +2069,24 @@ test('P-03: Birthday is set once; a client CANNOT change it afterwards, and cann
   await assertSucceeds(ref('zed').update({ exactLocation: 'Manila', updatedAt: new Date() }));
 });
 
+test('P-03b: The birthday can be saved on its own (saveBirthDateOnly), with no profile: a new record, or added to an existing one', async () => {
+  const ref = (uid: string) => testEnv.authenticatedContext(uid).firestore().doc(`users/${uid}/private/settings`);
+  const stamp = () => firebase.firestore.FieldValue.serverTimestamp();
+  const adult = new Date(Date.now() - 30 * 365 * 86400000);
+  // A brand-new account with nothing in the cloud: exactly what the app writes.
+  await assertSucceeds(ref('solo').set({ birthDate: adult, blockedPartnerIds: [], createdAt: stamp(), updatedAt: stamp() }));
+  assert.equal((await ref('solo').get()).data()?.birthDate.toMillis(), adult.getTime());
+  await assertFails(ref('solokid').set({ birthDate: new Date(Date.now() - 15 * 365 * 86400000), blockedPartnerIds: [], createdAt: stamp(), updatedAt: stamp() }));
+  // A record that exists without a birthday gets one by merge; other fields stay as they were.
+  await testEnv.withSecurityRulesDisabled((ctx) => ctx.firestore().doc('users/half/private/settings').set({ exactLocation: 'Cebu', blockedPartnerIds: ['x'], createdAt: new Date(), updatedAt: new Date() }));
+  await assertSucceeds(ref('half').set({ birthDate: adult, updatedAt: stamp() }, { merge: true }));
+  const half = (await ref('half').get()).data();
+  assert.equal(half?.exactLocation, 'Cebu');
+  assert.deepEqual(half?.blockedPartnerIds, ['x']);
+  // Nobody else can do this for the member.
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('users/other/private/settings').set({ birthDate: adult, blockedPartnerIds: [], createdAt: stamp(), updatedAt: stamp() }));
+});
+
 test('P-04: Private birthdays, age ranges, corrections, audit entries and rate limits are unreadable and unwritable from clients', async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();

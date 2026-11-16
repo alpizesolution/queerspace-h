@@ -15,7 +15,7 @@ import { toLookingForPost } from './lookingForService.ts';
 
 export type ProfileLoad =
   | { ok: true; data: ProfileResponse }
-  | { ok: false; reason: 'unavailable' | 'forbidden' | 'rate_limited' | 'unsupported' | 'failed' };
+  | { ok: false; reason: 'unavailable' | 'forbidden' | 'suspended' | 'rate_limited' | 'unsupported' | 'failed' };
 
 /** A request that has not answered in this long fails, so a profile can never sit on its skeleton forever. */
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -101,7 +101,11 @@ export function fetchMemberProfile(memberId: string, force = false, now: number 
       const response = await authed(`/api/signals?view=profile&memberId=${encodeURIComponent(memberId)}`);
       if (!response) return { ok: false, reason: 'failed' };
       if (response.status === 404) return { ok: false, reason: 'unavailable' };
-      if (response.status === 403) return { ok: false, reason: 'forbidden' };
+      // 403 has two meanings: this account is paused for review, or the server has no adult birthday for the viewer.
+      if (response.status === 403) {
+        const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+        return { ok: false, reason: body?.error === 'account_unavailable' ? 'suspended' : 'forbidden' };
+      }
       if (response.status === 429) return { ok: false, reason: 'rate_limited' };
       // A server that does not know the profile view answers 400, or with another view's data: never treated as a profile.
       if (response.status === 400) return { ok: false, reason: 'unsupported' };

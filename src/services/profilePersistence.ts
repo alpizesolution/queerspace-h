@@ -16,6 +16,8 @@ export interface ProfileLoadResult {
   blockedPartnerIds?: string[];
   /** True when the cloud already holds the member's birthday (which is then never rewritten from the client). */
   cloudHasBirthDate?: boolean;
+  /** True when the cloud holds a public profile. False for an account that so far only has its private record (a birthday). */
+  cloudHasProfile?: boolean;
   /** The name on a COMPLETED cloud profile: an existing pseudonym, usable as it is without being reserved again. */
   cloudDisplayName?: string;
 }
@@ -244,6 +246,33 @@ export async function saveAnonymousProfile(
 }
 
 /**
+ * Puts the birthday on the member's private cloud record by itself, without the profile.
+ *
+ * Profiles, connection requests and other adult-only features are decided on the server from this one field. It used to be
+ * sent only as part of a full profile save, so a save that failed or was skipped (a name that is taken, no connection, a new
+ * anonymous account on a device that still holds the old profile) left the member an adult on their phone and unknown to the
+ * server, with no way out. This writes just the birthday. A birthday the cloud already holds is never touched (the rules
+ * forbid changing it), and anything under 18 is refused by the rules.
+ * Returns true when the cloud holds a birthday afterwards.
+ */
+export async function saveBirthDateOnly(birthDate: string | undefined): Promise<boolean> {
+  const currentUser = auth?.currentUser;
+  if (!isFirebaseConfigured || !db || !currentUser || !birthDate) return false;
+  try {
+    const privateRef = doc(db, 'users', currentUser.uid, 'private', 'settings');
+    const existing = await getDoc(privateRef);
+    if (existing.exists() && existing.data()?.birthDate instanceof Timestamp) return true;
+    const stamp = Timestamp.fromDate(new Date(`${birthDate}T00:00:00.000Z`));
+    if (existing.exists()) await setDoc(privateRef, { birthDate: stamp, updatedAt: serverTimestamp() }, { merge: true });
+    else await setDoc(privateRef, { birthDate: stamp, blockedPartnerIds: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    return true;
+  } catch (err: unknown) {
+    console.warn('[ProfilePersistence] Birthday sync notice:', err instanceof Error ? err.message : String(err));
+    return false;
+  }
+}
+
+/**
  * Restores the user profile for the current anonymous session UID, falling back to local storage
  */
 export async function loadAnonymousProfile(): Promise<ProfileLoadResult> {
@@ -306,6 +335,7 @@ export async function loadAnonymousProfile(): Promise<ProfileLoadResult> {
       fromCloudSuccess: true,
       blockedPartnerIds: strings(privateData.blockedPartnerIds) ?? [],
       cloudHasBirthDate: privateData.birthDate instanceof Timestamp,
+      cloudHasProfile: publicSnap.exists(),
       cloudDisplayName: publicData.profileComplete === true ? text(publicData.displayName) : undefined,
     };
   } catch (err: unknown) {

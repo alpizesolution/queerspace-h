@@ -54,20 +54,27 @@ interface Props {
   onOpenSettings: () => void;
 }
 
-const RETRYABLE_REASONS: string[] = ['failed', 'rate_limited', 'unsupported'];
+// 'forbidden' is retryable: the app sends a missing birthday to the server by itself, so a second try often succeeds.
+const RETRYABLE_REASONS: string[] = ['failed', 'rate_limited', 'unsupported', 'forbidden'];
+/** Problems the member fixes by saving their own profile, so the page offers the editor. */
+const needsOwnProfileSave = (reason: string, own: boolean): boolean => reason === 'forbidden' || (own && reason === 'unavailable');
 
-const failureTitle = (reason: string): string =>
-  reason === 'unavailable' ? 'This profile isn’t available'
-    : reason === 'forbidden' ? 'Profiles are for adult members'
-      : reason === 'rate_limited' ? 'You’re opening profiles quickly'
-        : reason === 'unsupported' ? 'Profiles aren’t ready yet'
-          : 'Couldn’t open this profile';
+/** `own`: the member is looking at their own profile. Each message says what is actually wrong, and whose side it is on. */
+const failureTitle = (reason: string, own = false): string =>
+  reason === 'unavailable' ? (own ? 'Your profile isn’t saved yet' : 'This profile isn’t available')
+    : reason === 'forbidden' ? 'Finish setting up your account'
+      : reason === 'suspended' ? 'Your account is paused'
+        : reason === 'rate_limited' ? 'You’re opening profiles quickly'
+          : reason === 'unsupported' ? 'Profiles aren’t ready yet'
+            : 'Couldn’t open this profile';
 
-const failureHint = (reason: string): string =>
-  reason === 'unavailable' || reason === 'forbidden' ? 'It may have been removed, or it isn’t shared with you.'
-    : reason === 'rate_limited' ? 'Wait a moment, then try again.'
-      : reason === 'unsupported' ? 'QUEERSPACE is updating. Refresh the page in a moment and try again.'
-        : 'Check your connection and try again.';
+const failureHint = (reason: string, own = false): string =>
+  reason === 'unavailable' ? (own ? 'Save your profile to see it here. If your name is taken, choose another or tap the dice.' : 'It may have been removed, or it isn’t shared with you.')
+    : reason === 'forbidden' ? 'We couldn’t confirm your birthday on this account yet, so profiles are closed for now. Save your profile, then try again.'
+      : reason === 'suspended' ? 'Profiles are unavailable while the team reviews a report on this account. Use “Chat with us” in the menu if you think this is a mistake.'
+        : reason === 'rate_limited' ? 'Wait a moment, then try again.'
+          : reason === 'unsupported' ? 'QUEERSPACE is updating. Refresh the page in a moment and try again.'
+            : 'Check your connection and try again.';
 
 const intentionLabel = (value: string | null): string | null => (value ? (INTENTION_LABELS as Record<string, string>)[value] ?? null : null);
 
@@ -231,10 +238,11 @@ export const ProfilePage: React.FC<Props> = ({
             <ProfileSkeleton />
           ) : !load.ok ? (
             <div className="px-6 py-14 text-center">
-              <p className="text-[length:calc(16px_*_var(--fs,1))] font-semibold text-fg">{failureTitle(load.reason)}</p>
-              <p className="mt-1 text-sm text-muted">{failureHint(load.reason)}</p>
-              <div className="mt-5 flex justify-center gap-2">
-                {RETRYABLE_REASONS.includes(load.reason) && <button type="button" onClick={() => void run(true)} className="btn btn-primary btn-sm">Try again</button>}
+              <p className="text-[length:calc(16px_*_var(--fs,1))] font-semibold text-fg">{failureTitle(load.reason, memberId === selfId)}</p>
+              <p className="mt-1 text-sm text-muted">{failureHint(load.reason, memberId === selfId)}</p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {needsOwnProfileSave(load.reason, memberId === selfId) && <button type="button" onClick={onEditProfile} className="btn btn-primary btn-sm">Save my profile</button>}
+                {RETRYABLE_REASONS.includes(load.reason) && <button type="button" onClick={() => void run(true)} className={`btn btn-sm ${load.reason === 'forbidden' ? 'btn-secondary' : 'btn-primary'}`}>Try again</button>}
                 <button type="button" onClick={onClose} className="btn btn-secondary btn-sm">Back</button>
               </div>
             </div>

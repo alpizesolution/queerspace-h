@@ -54,7 +54,10 @@ test('an age is requested only when the member shows one and the viewer is conne
 test('blocked, ineligible and hidden members are handled: no profile, clear words, and no contact action', () => {
   assert.match(page, /You blocked this member/);
   assert.match(page, /This profile isn’t available/);
-  assert.match(page, /Profiles are for adult members/);
+  // A refusal about the VIEWER's own account says so (no birthday on the server yet, or a paused account), never that the profile was removed.
+  assert.match(page, /Finish setting up your account/);
+  assert.match(page, /Your account is paused/);
+  assert.doesNotMatch(page, /Profiles are for adult members/);
   assert.match(read('src/utils/profileView.ts'), /if \(response\.blocked\) return \{ kind: 'blocked' \}/);
   assert.match(page, /onBlockMember\(memberId\); onClose\(\);/, 'blocking closes the page');
   assert.match(page, /<ReportMemberSheet/);

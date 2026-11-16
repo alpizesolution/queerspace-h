@@ -28,7 +28,7 @@ import { isMemberId, profileIdFromSearch } from './utils/profileView.ts';
 import { isPostId, postIdFromSearch } from './utils/communityPostLink.ts';
 import { recordDailyActivity } from './services/activityService.ts';
 import { executeHonestStorageWrite } from './utils/sync-feedback.ts';
-import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature } from './services/profilePersistence.ts';
+import { saveAnonymousProfile, loadAnonymousProfile, cloudProfileSignature, saveBirthDateOnly } from './services/profilePersistence.ts';
 import { requestDurableStorage } from './services/accountLinking.ts';
 import type { ProfileBackground } from './utils/profileBackground.ts';
 import { clearProfileCache } from './services/profileViewService.ts';
@@ -295,14 +295,20 @@ export default function App() {
         .then((user) => {
           if (user) {
             loadAnonymousProfile().then((res) => {
+              // An adult birthday that only lives on this device goes to the cloud now, on its own. The server decides who may
+              // open profiles from that one field, so it must not wait for a profile save that may never succeed.
+              if (!res.cloudHasBirthDate && isAdultBirthDate(res.prefs.birthDate) && getStorageItem('queerspace_age_restricted') !== 'true') {
+                void saveBirthDateOnly(res.prefs.birthDate).then((saved) => { if (saved) cloudHasBirthDateRef.current = true; });
+              }
               if (!res.fromCloudSuccess) return;
               setUserPrefs(res.prefs);
               nameGate.markHeld(res.cloudDisplayName ?? null);
               setAgeGateOpen(!isAdultBirthDate(res.prefs.birthDate));
               setAgeRestricted(false);
-              cloudSignatureRef.current = cloudProfileSignature(res.prefs, res.blockedPartnerIds ?? []);
-              // A birthday that only lives on this device is sent with the next profile save; the cloud copy is never overwritten.
-              cloudHasBirthDateRef.current = Boolean(res.cloudHasBirthDate);
+              // With no public profile in the cloud yet, nothing counts as already saved, so the next save writes it.
+              cloudSignatureRef.current = res.cloudHasProfile === false ? null : cloudProfileSignature(res.prefs, res.blockedPartnerIds ?? []);
+              // The cloud copy of a birthday is never overwritten.
+              if (res.cloudHasBirthDate) cloudHasBirthDateRef.current = true;
               // Never shrink the blocklist: keep this device's blocks and add any saved in the cloud.
               const cloudBlocked = res.blockedPartnerIds ?? [];
               setBlockedPartnerIds((current) => {
@@ -382,6 +388,8 @@ export default function App() {
     const withBirthDate = Boolean(options.withBirthDate || (!cloudHasBirthDateRef.current && isAdultBirthDate(toSave.birthDate)));
     const cloudChanged = withBirthDate || signature !== cloudSignatureRef.current;
     const feedback = await saveAnonymousProfile(toSave, blocked, cloudChanged && !nameProblem, { withBirthDate });
+    // The birthday does not wait for the rest: a refused name or a failed profile write must not leave the server without it.
+    if (withBirthDate && !feedback.savedToCloud && await saveBirthDateOnly(toSave.birthDate)) cloudHasBirthDateRef.current = true;
     if (nameProblem && cloudChanged) {
       return { feedback: { ...feedback, savedToCloud: false, userMessage: nameProblem }, cloudChanged };
     }
