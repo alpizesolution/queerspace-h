@@ -85,9 +85,10 @@ service cloud.firestore {
       return ['open', 'reviewing', 'resolved', 'dismissed', 'done'];
     }
 
-    // Valid categories for community posts
+    // Categories a NEW community post may use. Posts written before Community and Looking For were separated keep
+    // 'general', 'vents', 'friends' and 'advice' and stay readable; they just cannot be created any more.
     function isValidCategory(cat) {
-      return cat in ['general', 'media', 'vents', 'friends', 'advice'];
+      return cat in ['events', 'media', 'talk', 'experiences'];
     }
 
     // ====================================================
@@ -676,12 +677,12 @@ service cloud.firestore {
     // ====================================================
     // Kept apart from community_posts. Only adult members with a saved profile can read or write here, checked
     // from the private birthday (never from anything the client sends). A post's id is "{uid}_{intention}", so a
-    // member has at most one post per intention (five in total) and posting again edits that one. An age shown on a
+    // member has at most one post per intention and posting again edits that one. An age shown on a
     // post must match the private birthday. Contacting the author goes through Signals (api/signals.js), which
     // re-checks age, blocks and suspensions on the server.
 
     function lookingForIntentions() {
-      return ['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw'];
+      return ['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw', 'activity', 'travel'];
     }
 
     function lookingForPath(postId) {

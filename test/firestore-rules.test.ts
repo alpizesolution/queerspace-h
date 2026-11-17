@@ -826,6 +826,36 @@ test('C-01: Posts CAN be shared with everyone, but not spoofed or pre-liked', as
   await assertFails(testEnv.unauthenticatedContext().firestore().collection('community_posts').get());
 });
 
+test('C-01b: new Community posts use the four sharing categories; Friend Finder and Dating cannot be created, but older posts stay readable', async () => {
+  for (const category of ['events', 'media', 'talk', 'experiences']) {
+    await seedStamp('alice', 'communityPost', 60);
+    await assertSucceeds(stampedAdd('alice', 'community_posts', communityPost('alice', { category }), 'communityPost'));
+  }
+  for (const category of ['friends', 'advice', 'general', 'vents', 'dating', 'r4r']) {
+    await seedStamp('alice', 'communityPost', 60);
+    await assertFails(stampedAdd('alice', 'community_posts', communityPost('alice', { category }), 'communityPost'));
+  }
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('community_posts/old-friend').set(communityPost('alice', { category: 'friends' }));
+    await ctx.firestore().doc('community_posts/old-advice').set(communityPost('alice', { category: 'advice' }));
+  });
+  const read = await assertSucceeds(testEnv.authenticatedContext('bob').firestore().collection('community_posts').get());
+  const categories = read.docs.map((d) => d.data().category);
+  assert.ok(categories.includes('friends') && categories.includes('advice'), 'legacy posts are still readable');
+  assert.equal(read.size, 6, 'the four new posts and the two older ones');
+});
+
+test('LF-08: Activity buddy and Travel buddy are valid intentions with their own post ids; an unknown intention is still refused', async () => {
+  for (const intention of ['activity', 'travel']) {
+    await seedStamp('alice', 'lookingForPost', 60);
+    await assertSucceeds(lfCreate('alice', lfPost('alice', { intention })));
+  }
+  await seedStamp('alice', 'lookingForPost', 60);
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'hookup' })));
+  await seedStamp('alice', 'lookingForPost', 60);
+  await assertFails(lfCreate('alice', lfPost('alice', { intention: 'travel' }), lfId('alice', 'activity')));
+});
+
 test('C-02: Posting is limited to one every 30 seconds', async () => {
   await assertSucceeds(stampedAdd('alice', 'community_posts', communityPost('alice'), 'communityPost'));
   await assertFails(stampedAdd('alice', 'community_posts', communityPost('alice'), 'communityPost'));

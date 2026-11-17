@@ -36,7 +36,7 @@ test('a Cosmos post becomes the subject of a request; an old post with no known 
   assert.equal(communitySubject(post({ authorId: '' })), null);
   const lookingFor = lookingForSubject({ id: 'a_dating', authorId: 'a', author: 'Mara', intention: 'dating' } as never);
   assert.equal(lookingFor.kind, 'looking_for');
-  assert.equal(lookingFor.about, 'Dating');
+  assert.equal(lookingFor.about, 'Dating / R4R');
 });
 
 test('the request sheet for a Cosmos post names the member and the post kind, and sends the request about that post', async () => {
@@ -68,7 +68,7 @@ test('in the requests list a Cosmos request is named for Cosmos, with the same n
   const paused = request({ status: 'paused' });
   assert.equal(postReference(paused, requestPostLabel(paused)).notice, 'This post is not taking new requests right now.');
   // Looking For requests, and answers from a server that does not send `kind`, read as before.
-  assert.equal(requestPostLabel(request({ kind: 'looking_for' }, 'dating')), 'Dating');
+  assert.equal(requestPostLabel(request({ kind: 'looking_for' }, 'dating')), 'Dating / R4R');
   assert.equal(requestPostLabel(request({ kind: undefined }, 'friendship')), 'Friendship');
   assert.equal(requestPostLabel(request({ kind: undefined }, null)), 'Looking For');
 });

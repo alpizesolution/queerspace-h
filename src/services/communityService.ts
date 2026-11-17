@@ -33,7 +33,7 @@ export const COMMUNITY_POST_SLOW_MODE_SECONDS = 30;
 export const COMMUNITY_REPLY_SLOW_MODE_SECONDS = 5;
 export const COMMUNITY_REPLY_MAX_LENGTH = 500;
 
-const CATEGORIES: CommunityPost['category'][] = ['vents', 'media', 'friends', 'advice', 'general'];
+const CATEGORIES: CommunityPost['category'][] = ['events', 'media', 'talk', 'experiences', 'vents', 'friends', 'advice', 'general'];
 
 export const isCommunityAvailable = () => isFirebaseConfigured && Boolean(db);
 

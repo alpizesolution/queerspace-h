@@ -21,14 +21,15 @@ test('Cosmos gets a Community / Looking For switch under the heading, and the co
   assert.match(cosmos, /\['community', 'Community'\], \['lookingFor', 'Looking For'\]/);
   assert.match(cosmos, /section === 'lookingFor' && !focusMode \? \(\s*<LookingForView/);
   // Every community category, post action and the composer are still there.
-  for (const label of ['All', 'Cozy Vents', 'Books & Media', 'Friend Finder', 'Dating', 'General']) assert.ok(read('src/utils/communityCategories.ts').includes(`label: '${label}'`), label);
+  for (const label of ['All', 'Cozy Events', 'Books & Media', 'Community Talk', 'Experiences']) assert.ok(read('src/utils/communityCategories.ts').includes(`label: '${label}'`), label);
   for (const kept of ['subscribeToCommunity', 'replyToCommunityPost', 'createCommunityPost', 'adminDeleteCommunityPost', 'subscribeToReplies']) assert.ok(cosmos.includes(kept), kept);
   assert.match(cosmos, /useState<'community' \| 'lookingFor'>\('community'\)/, 'opens on Community');
 });
 
 test('Looking For has the six categories and the filters asked for', () => {
   const util = read('src/utils/lookingFor.ts');
-  for (const label of ['All', 'Dating', 'Friendship', 'Kausap', 'Gaming Buddies', 'Open to Connections']) assert.ok(util.includes(`label: '${label}'`), label);
+  for (const label of ['All', 'Friendship', 'Dating / R4R', 'Activity Buddy', 'Gaming Buddy', 'Travel Buddy']) assert.ok(util.includes(`label: '${label}'`), label);
+  // Older posts keep their intention and stay readable.
   for (const label of ['Someone to talk to', 'Gaming buddy', 'Open to connections']) assert.ok(util.includes(label), label);
   for (const filter of ['Age range', 'Location', 'Interests', 'Mature posts']) assert.ok(board.includes(filter), filter);
 });
@@ -196,7 +197,7 @@ test('NSFW Connection appears in the composer and on the board with its own subt
   assert.match(composer, /id === NSFW_INTENTION \? \(draft\.intention === id \? '!bg-danger\/20 !text-danger !border-danger\/60'/);
   assert.match(composer, /disabled=\{alwaysMature\}/, 'the NSFW switch is locked on for this intention');
   assert.match(board, /chipClass=\{\(id, on\) => \(id === 'nsfw' \?/, 'a distinct filter chip');
-  assert.match(lfRules, /return \['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw'\];/);
+  assert.match(lfRules, /return \['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw', 'activity', 'travel'\];/);
   assert.match(lfRules, /\(data\.intention != 'nsfw' \|\| data\.isNsfw == true\)/, 'the rules force it to be mature');
   assert.match(read('src/utils/lookingFor.ts'), /const isNsfw = draft\.isNsfw \|\| draft\.intention === NSFW_INTENTION;/);
 });
@@ -267,15 +268,15 @@ test('both category rows are one-line scrollers that never clip, hide the scroll
   assert.doesNotMatch(board, /-mx-4 px-4 sm:mx-0 sm:px-0 flex flex-1/, 'the Looking For row no longer overlaps the filter button');
 });
 
-test('the filter row lists exactly All, Cozy Vents, Books & Media, Friend Finder and Dating, and no user-facing text says R4R', () => {
+test('the Community filter row lists exactly All, Cozy Events, Books & Media, Community Talk and Experiences, and Community text never says R4R', () => {
   const categories = read('src/utils/communityCategories.ts');
-  const filter = categories.slice(categories.indexOf('export const FILTER_CATEGORIES'));
-  assert.match(filter, /CATEGORIES\.filter\(\(c\) => c\.id !== 'general'\)/);
-  assert.match(categories, /\{ id: 'advice', label: 'Dating' \}/, 'the stored value "advice" is unchanged; only the label is');
+  assert.match(categories, /export const FILTER_CATEGORIES = CATEGORIES;/);
+  assert.doesNotMatch(categories.slice(categories.indexOf('export const CATEGORIES'), categories.indexOf('export const COMPOSER_CATEGORIES')), /friends|advice|Friend Finder|Dating/, 'Friend Finder and Dating are not Community choices any more');
+  assert.match(categories, /advice: 'Dating'/, 'older posts keep their stored category and label');
   for (const file of ['src/components/CommunityFeedView.tsx', 'src/components/ProfileSections.tsx', 'src/utils/communityCategories.ts', 'src/components/Hero.tsx', 'src/components/InfoModals.tsx', 'scripts/seo/pages.mjs', 'public/sapphic-community-philippines.html']) {
     const text = read(file);
     assert.doesNotMatch(text, /R4R|Dating (&|&amp;) Advice|Dating (&|&amp;) R4R/i, file);
   }
-  assert.match(read('src/services/communityService.ts'), /\['vents', 'media', 'friends', 'advice', 'general'\]/, 'stored categories are untouched');
-  assert.match(rules, /cat in \['general', 'media', 'vents', 'friends', 'advice'\]/, 'the rules are untouched');
+  assert.match(read('src/services/communityService.ts'), /\['events', 'media', 'talk', 'experiences', 'vents', 'friends', 'advice', 'general'\]/, 'older stored categories still read');
+  assert.match(rules, /cat in \['events', 'media', 'talk', 'experiences'\]/, 'new posts use the four Community categories');
 });

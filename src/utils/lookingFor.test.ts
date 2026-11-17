@@ -242,8 +242,8 @@ test('posts from before flairs still read and show their title unchanged', () =>
 
 // ------------------------------------------------------------------------------------------- NSFW Connection
 test('NSFW Connection is a sixth intention, selectable, named and filterable like the others', () => {
-  assert.equal(INTENTIONS.length, 6);
-  assert.deepEqual([...INTENTIONS], ['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw']);
+  assert.equal(INTENTIONS.length, 8);
+  assert.deepEqual([...INTENTIONS], ['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw', 'activity', 'travel']);
   assert.equal(INTENTION_LABELS.nsfw, 'NSFW Connection');
   assert.equal(NSFW_INTENTION, 'nsfw');
   assert.ok(isIntention('nsfw'));

@@ -5,31 +5,40 @@
  */
 import type { NsfwPreference } from './nsfwPreference.ts';
 
-export type LookingForIntention = 'dating' | 'friendship' | 'talk' | 'gaming' | 'open' | 'nsfw';
+export type LookingForIntention = 'dating' | 'friendship' | 'talk' | 'gaming' | 'open' | 'nsfw' | 'activity' | 'travel';
 
-export const INTENTIONS: readonly LookingForIntention[] = ['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw'];
+export const INTENTIONS: readonly LookingForIntention[] = ['dating', 'friendship', 'talk', 'gaming', 'open', 'nsfw', 'activity', 'travel'];
+
+/**
+ * What a NEW post can be about, in the order the composer shows them. 'talk' and 'open' are older intentions: their posts
+ * stay on the board (under All) and can still be edited, but they are no longer offered for new posts. NSFW Connection is
+ * kept as it was.
+ */
+export const COMPOSER_INTENTIONS: readonly LookingForIntention[] = ['friendship', 'dating', 'activity', 'gaming', 'travel', 'nsfw'];
 
 /** The intention whose posts are always mature: they are concealed like any NSFW post and cannot be unmarked. */
 export const NSFW_INTENTION: LookingForIntention = 'nsfw';
 
 /** Names in the composer. */
 export const INTENTION_LABELS: Record<LookingForIntention, string> = {
-  dating: 'Dating',
+  dating: 'Dating / R4R',
   friendship: 'Friendship',
   talk: 'Someone to talk to',
   gaming: 'Gaming buddy',
+  activity: 'Activity buddy',
+  travel: 'Travel buddy',
   open: 'Open to connections',
   nsfw: 'NSFW Connection',
 };
 
-/** Names on the board's category chips (the same five intentions, plus All). */
+/** Names on the board's category chips. Older 'talk' and 'open' posts show under All only. */
 export const LOOKING_FOR_CATEGORIES: { id: 'all' | LookingForIntention; label: string }[] = [
   { id: 'all', label: 'All' },
-  { id: 'dating', label: 'Dating' },
   { id: 'friendship', label: 'Friendship' },
-  { id: 'talk', label: 'Kausap' },
-  { id: 'gaming', label: 'Gaming Buddies' },
-  { id: 'open', label: 'Open to Connections' },
+  { id: 'dating', label: 'Dating / R4R' },
+  { id: 'activity', label: 'Activity Buddy' },
+  { id: 'gaming', label: 'Gaming Buddy' },
+  { id: 'travel', label: 'Travel Buddy' },
   { id: 'nsfw', label: 'NSFW' },
 ];
 
