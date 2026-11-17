@@ -569,6 +569,15 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
               ))}
             </div>
 
+            {showLookingForHint && (
+              <div role="status" className="rounded-2xl border border-lavender/30 bg-plum/20 p-3 text-[length:calc(13px_*_var(--fs,1))] text-fg">
+                <p>{LOOKING_FOR_SUGGESTION}</p>
+                <div className="mt-2 flex gap-2">
+                  <button type="button" onClick={switchToLookingFor} className="btn btn-secondary btn-sm">Switch to Looking For</button>
+                  <button type="button" onClick={() => setHintDismissed(true)} className="btn btn-sm text-muted">Keep it in Community</button>
+                </div>
+              </div>
+            )}
             <input
               type="text"
               required
@@ -624,15 +633,6 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
               </div>
               <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-1.5">Up to 4 tags.</p>
             </div>
-            {showLookingForHint && (
-              <div role="status" className="rounded-2xl border border-lavender/30 bg-plum/20 p-3 text-[length:calc(13px_*_var(--fs,1))] text-fg">
-                <p>{LOOKING_FOR_SUGGESTION}</p>
-                <div className="mt-2 flex gap-2">
-                  <button type="button" onClick={switchToLookingFor} className="btn btn-secondary btn-sm">Switch to Looking For</button>
-                  <button type="button" onClick={() => setHintDismissed(true)} className="btn btn-sm text-muted">Keep it in Community</button>
-                </div>
-              </div>
-            )}
             {postError && (
               <p className="text-[length:calc(13px_*_var(--fs,1))] text-danger" role="alert">
                 {postError}
