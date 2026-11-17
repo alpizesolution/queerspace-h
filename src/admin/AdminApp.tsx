@@ -388,7 +388,7 @@ const Dashboard: React.FC = () => {
               </button>
             ))}
           </div>
-          {moderationView === 'birthdays' ? <BirthdayCorrectionsTab /> : <ModerationTab onConfirm={setConfirm} />}
+          {moderationView === 'birthdays' ? <BirthdayCorrectionsTab onConfirm={setConfirm} onOpenSupport={(uid) => { go('support'); setSupportFocus(uid); }} /> : <ModerationTab onConfirm={setConfirm} />}
         </>
       )}
       {tab === 'updates' && <AppUpdatesTab onConfirm={setConfirm} />}

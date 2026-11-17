@@ -177,9 +177,12 @@ test('birthday corrections: request, under-18 restriction, admin review, audit w
   await seedMember(db, minor.uid, { years: 30, queue: null });
   await seedMember(db, fresh.uid, { noBirthday: true, queue: null });
   const request = (u, requestedBirthDate, reason = 'typo') => call(age, { token: u.token, body: { action: 'request-correction', requestedBirthDate, reason } });
-  const decide = (u, requestId, decision) => call(age, { token: u.token, body: { action: 'decide-correction', requestId, decision } });
+  const decide = (u, requestId, decision) => call(age, { token: u.token, body: { action: 'decide-correction', requestId, decision, reason: 'Could not confirm' } });
 
-  assert.equal((await request(fresh, iso(birth(30)))).statusCode, 409, 'no birthday yet: use the age gate');
+  // No birthday on record (a legacy member): the request goes to review as an initial birthday, never approved automatically.
+  const initial = await request(fresh, iso(birth(30)));
+  assert.equal(initial.statusCode, 201);
+  assert.equal((await db.doc(`users/${fresh.uid}/private/settings`).get()).data().birthDate, undefined);
   assert.equal((await request(member, 'not-a-date')).statusCode, 400);
 
   // Under 18: rejected, account restricted pending review, no birthday kept.

@@ -1415,6 +1415,14 @@ service cloud.firestore {
     match /ageAudit/{entryId} {
       allow read, write: if false;
     }
+    // Under-18 birthday attempts and the correction history (original and previous birthdays, counts). Only the Admin SDK in
+    // api/age.js reads or writes them; no client, member or admin, can touch them directly.
+    match /ageAttempts/{userId} {
+      allow read, write: if false;
+    }
+    match /ageRecords/{userId} {
+      allow read, write: if false;
+    }
 
     match /signalsRateLimits/{userId} {
       allow read, write: if false;

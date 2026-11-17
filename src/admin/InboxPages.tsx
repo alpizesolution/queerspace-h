@@ -5,6 +5,7 @@ import type { AdminReport, AdminSuggestion, ReportStatus, SuggestionStatus } fro
 import { liftSuspension, loadSuspensions, suspendUser, type Suspension } from '../services/suspensionService.ts';
 import { needsCrisisSupport } from '../services/unsaidService.ts';
 import { grantAgeReviewClearance } from '../services/ageReviewService.ts';
+import { getReviewStates, type ReviewState } from '../services/birthdayCorrectionService.ts';
 import { isAgeReview } from '../utils/ageReview.ts';
 import { AgeReviewHelp, AgeReviewTag } from './AgeReviewMarks.tsx';
 
@@ -265,6 +266,8 @@ export const ReportsPage: React.FC<PageProps<AdminReport> & { onOpenSupport: (ui
   const [filter, setFilter] = useState<ReportStatus>('open');
   const [names, setNames] = useState<Record<string, string | null>>({});
   const [suspensions, setSuspensions] = useState<Record<string, Suspension>>({});
+  // What the server holds about each age-review member (undefined while loading, null when it could not be read).
+  const [reviews, setReviews] = useState<Record<string, ReviewState | null>>({});
   const { run, notice } = useActionError();
   useFocusItem(focusId, items, (r: AdminReport) => r.status, setFilter, onFocusHandled);
   const counts = useMemo(() => {
@@ -286,6 +289,17 @@ export const ReportsPage: React.FC<PageProps<AdminReport> & { onOpenSupport: (ui
   useEffect(() => {
     loadSuspensions().then(setSuspensions).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const ids = [...new Set(visible.filter((r) => r.targetType === 'user' && isAgeReview(r.reason)).map((r) => r.targetId))].filter((id) => !(id in reviews));
+    if (!ids.length) return;
+    getReviewStates(ids).then((found) => setReviews((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => { next[id] = found[id] ?? null; });
+      return next;
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible.map((r) => r.id).join()]);
 
   useEffect(() => {
     const missing = [...new Set(visible.filter((r) => r.targetType === 'user').map((r) => r.targetId))].filter((id) => !(id in names));
@@ -380,7 +394,7 @@ export const ReportsPage: React.FC<PageProps<AdminReport> & { onOpenSupport: (ui
                 <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle mt-1 font-mono break-all">
                   {r.targetType === 'user' ? 'user' : 'id'}: {r.targetId}
                 </p>
-                {r.targetType === 'user' && isAgeReview(r.reason) && <AgeReviewHelp onOpenSupport={() => onOpenSupport(r.targetId)} onAllow={() => confirmAllowRetry(r)} />}
+                {r.targetType === 'user' && isAgeReview(r.reason) && <AgeReviewHelp review={reviews[r.targetId]} onOpenSupport={() => onOpenSupport(r.targetId)} onAllow={() => confirmAllowRetry(r)} />}
                 <div className="flex flex-wrap gap-2 mt-3">
                   {r.status === 'open' && (
                     <button onClick={() => setStatus(r, 'reviewing')} className="btn btn-secondary btn-sm">

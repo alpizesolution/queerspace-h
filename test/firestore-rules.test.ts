@@ -2093,11 +2093,13 @@ test('P-04: Private birthdays, age ranges, corrections, audit entries and rate l
     await db.doc('matchPrefs/alice').set({ ageMin: 20, ageMax: 30 });
     await db.doc('birthdayCorrections/alice').set({ uid: 'alice', status: 'pending' });
     await db.doc('ageAudit/a1').set({ action: 'x' });
+    await db.doc('ageAttempts/alice').set({ uid: 'alice', attemptedBirthDate: '2012-01-01' });
+    await db.doc('ageRecords/alice').set({ originalBirthDate: '1990-01-01', correctionCount: 1 });
     await db.doc('apiRateLimits/alice_x').set({ start: 1, count: 1 });
   });
   for (const uid of ['alice', 'bob']) {
     const db = testEnv.authenticatedContext(uid).firestore();
-    for (const path of ['matchPrefs/alice', 'birthdayCorrections/alice', 'ageAudit/a1', 'apiRateLimits/alice_x']) {
+    for (const path of ['matchPrefs/alice', 'birthdayCorrections/alice', 'ageAudit/a1', 'ageAttempts/alice', 'ageRecords/alice', 'apiRateLimits/alice_x']) {
       await assertFails(db.doc(path).get());
       await assertFails(db.doc(path).set({ status: 'approved', ageMin: 18, ageMax: 99 }));
     }

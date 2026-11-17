@@ -8,7 +8,8 @@ const MESSAGES: Record<string, string> = {
   restricted:
     'This birthday would put you under 18, so it was not accepted and your account is paused for review. Contact support if this is a mistake.',
   'already-pending': 'You already have a request waiting for review.',
-  'no-birthday': 'Add your birthday first from the age check.',
+  'limit-reached': 'This account has used all of its birthday corrections. Contact support if something is wrong.',
+  'reason-required': 'Tell us briefly what went wrong.',
   invalid: 'Enter a valid date.',
   'too-many': 'Too many requests today. Try again tomorrow.',
   error: 'Could not send the request. Try again.',
@@ -49,9 +50,9 @@ export const BirthdayCorrectionSheet: React.FC<{ onClose: () => void }> = ({ onC
       }
     >
       <form id="qs-birthday-correction" onSubmit={submit} className="space-y-3 text-fg">
-        <p className="text-sm text-muted">Your birthday can’t be edited directly. Tell us the correct date and the team will review it.</p>
-        {status === 'pending' && result === null && (
-          <p role="status" className="text-sm text-lavender">A request is already waiting for review.</p>
+        <p className="text-sm text-muted">Your birthday can’t be edited directly. Tell us the correct date and the team will review it. An account can have up to 2 approved corrections.</p>
+        {(status === 'pending' || status === 'info-requested') && result === null && (
+          <p role="status" className="text-sm text-lavender">{status === 'info-requested' ? 'The team asked for more information. Check your support chat.' : 'A request is already waiting for review.'}</p>
         )}
         <div>
           <label htmlFor="qs-correct-birthday" className="label">Correct birthday</label>
@@ -68,7 +69,7 @@ export const BirthdayCorrectionSheet: React.FC<{ onClose: () => void }> = ({ onC
         </div>
         <div>
           <label htmlFor="qs-correct-reason" className="label">
-            What went wrong? <span className="font-normal text-subtle">· optional</span>
+            What went wrong? <span className="font-normal text-subtle">· required</span>
           </label>
           <input id="qs-correct-reason" value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} className="input" />
         </div>
