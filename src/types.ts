@@ -128,7 +128,8 @@ export interface CommunityPost {
   author: string;
   authorPronouns: string;
   authorAvatar?: string;
-  category: 'vents' | 'media' | 'friends' | 'advice' | 'general';
+  /** The first three groups are the current choices; the rest are on posts written before Community and Looking For were separated. */
+  category: 'events' | 'media' | 'talk' | 'experiences' | 'vents' | 'friends' | 'advice' | 'general';
   title: string;
   content: string;
   timestamp: number;

@@ -26,7 +26,9 @@ import { ConnectionRequestSheet } from './ConnectionRequestSheet.tsx';
 import { setCommunityRequestsPaused } from '../services/connectionRequestsService.ts';
 import { communitySubject, type RequestSubject } from '../utils/connectionRequests.ts';
 import { ExpandableText } from './ExpandableText.tsx';
-import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, FILTER_CATEGORIES } from '../utils/communityCategories.ts';
+import { PostTypeChooser } from './PostTypeChooser.tsx';
+import { communityToLookingFor, LOOKING_FOR_SUGGESTION, suggestsLookingFor } from '../utils/postIntent.ts';
+import { COMPOSER_CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, FILTER_CATEGORIES, matchesCategory } from '../utils/communityCategories.ts';
 import { ChipScroller } from './ChipScroller.tsx';
 import { CosmosGuidelines } from './CosmosGuidelines.tsx';
 import { postVisibleTo, type PostLoad } from '../utils/communityPostLink.ts';
@@ -166,11 +168,14 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
-  const [newCategory, setNewCategory] = useState<CommunityPost['category']>('general');
+  const [newCategory, setNewCategory] = useState<CommunityPost['category']>('talk');
   const [newTag, setNewTag] = useState('');
   const [tagsList, setTagsList] = useState<string[]>(['Sapphic']);
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
+  // Words carried over when a member switches from this composer to Looking For, and a dismissed suggestion.
+  const [lookingForStart, setLookingForStart] = useState<{ title: string; intro: string } | null>(null);
+  const [hintDismissed, setHintDismissed] = useState(false);
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -318,9 +323,15 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const filteredPosts =
     activeCategory === 'all'
       ? posts
-      : posts.filter((p) => p.category === activeCategory);
+      : posts.filter((p) => matchesCategory(p.category, activeCategory));
 
-  const openComposer = () => setShowCreateModal(true);
+  const openComposer = () => { setHintDismissed(false); setShowCreateModal(true); };
+  const switchToLookingFor = () => {
+    setLookingForStart(communityToLookingFor(newTitle, newContent));
+    setShowCreateModal(false);
+    setSection('lookingFor');
+  };
+  const showLookingForHint = !hintDismissed && suggestsLookingFor(newTitle, newContent);
 
   const isLoading = focusMode ? focus === null && available : loading;
   const hasError = focusMode ? focus?.status === 'failed' : feedError;
@@ -369,9 +380,16 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
           </button>
         ))}
       </div>}
+      {!focusMode && (
+        <p className="-mt-1.5 mb-3 px-1 text-center text-[length:calc(12px_*_var(--fs,1))] leading-snug text-subtle">
+          {section === 'lookingFor'
+            ? 'Find friends, dates, activity partners, or someone to connect with.'
+            : 'Share, discuss, recommend, and tell the community about events.'}
+        </p>
+      )}
 
       {section === 'lookingFor' && !focusMode ? (
-        <LookingForView userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onBlockMember={onBlockMember} onViewRequests={onViewRequests} />
+        <LookingForView startDraft={lookingForStart} onStartDraftUsed={() => setLookingForStart(null)} onSwitchToCommunity={(d) => { setNewTitle(d.title); setNewContent(d.content); setHintDismissed(true); setSection('community'); setShowCreateModal(true); }} userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onBlockMember={onBlockMember} onViewRequests={onViewRequests} />
       ) : (
       <>
       {!focusMode && <ChipScroller items={FILTER_CATEGORIES} active={activeCategory} onSelect={setActiveCategory} label="Categories" bleed className="mb-3" />}
@@ -534,8 +552,9 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
           }
         >
           <form id="qs-new-post" onSubmit={handleCreatePost} className="space-y-5 text-fg">
+            <PostTypeChooser value="community" onChange={switchToLookingFor} />
             <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Category">
-              {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => (
+              {COMPOSER_CATEGORIES.map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
@@ -550,6 +569,15 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
               ))}
             </div>
 
+            {showLookingForHint && (
+              <div role="status" className="rounded-2xl border border-lavender/30 bg-plum/20 p-3 text-[length:calc(13px_*_var(--fs,1))] text-fg">
+                <p>{LOOKING_FOR_SUGGESTION}</p>
+                <div className="mt-2 flex gap-2">
+                  <button type="button" onClick={switchToLookingFor} className="btn btn-secondary btn-sm">Switch to Looking For</button>
+                  <button type="button" onClick={() => setHintDismissed(true)} className="btn btn-sm text-muted">Keep it in Community</button>
+                </div>
+              </div>
+            )}
             <input
               type="text"
               required

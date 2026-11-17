@@ -45,6 +45,11 @@ interface Props {
   onBlockMember?: (memberId: string) => void;
   /** Opens Signals → Requests, where sent requests are managed. */
   onViewRequests?: () => void;
+  /** Words carried over from the Community composer; opens the Looking For composer with them. */
+  startDraft?: { title: string; intro: string } | null;
+  onStartDraftUsed?: () => void;
+  /** The member chose Community inside the Looking For composer; its words come along. */
+  onSwitchToCommunity?: (draft: { title: string; content: string }) => void;
 }
 
 const fieldClass = 'w-full px-4 rounded-xl bg-ink border border-line text-base sm:text-sm text-fg placeholder:text-subtle focus:outline-none focus:border-berry';
@@ -55,14 +60,14 @@ const Badge: React.FC<{ children: React.ReactNode; tone?: 'nsfw' | 'soft' }> = (
   </span>
 );
 
-export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, onBlockMember, onViewRequests }) => {
+export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, onBlockMember, onViewRequests, startDraft, onStartDraftUsed, onSwitchToCommunity }) => {
   const [filters, setFilters] = useState<LookingForFilters>(NO_FILTERS);
   const [posts, setPosts] = useState<LookingForPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<'denied' | 'failed' | null>(null);
   const [uid, setUid] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [composer, setComposer] = useState<{ editing: LookingForPost | null } | null>(null);
+  const [composer, setComposer] = useState<{ editing: LookingForPost | null; initial?: { title: string; intro: string } } | null>(null);
   const [requestPost, setRequestPost] = useState<LookingForPost | null>(null);
   const [reportPost, setReportPost] = useState<LookingForPost | null>(null);
   const [deletePost, setDeletePost] = useState<LookingForPost | null>(null);
@@ -148,13 +153,19 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
     setToast(ok ? { text: 'Post deleted.', ok: true } : { text: 'Couldn’t delete that. Please try again.', ok: false });
   };
 
-  const openComposer = (editing: LookingForPost | null) => {
+  const openComposer = (editing: LookingForPost | null, initial?: { title: string; intro: string }) => {
     if (!adult || userPrefs.profileComplete !== true) {
       setToast({ text: 'Save your profile with your birthday to post in Looking For.', ok: false });
       return;
     }
-    setComposer({ editing });
+    setComposer({ editing, initial });
   };
+  useEffect(() => {
+    if (!startDraft) return;
+    openComposer(null, startDraft);
+    onStartDraftUsed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDraft]);
 
   const setFilter = <K extends keyof LookingForFilters>(key: K, value: LookingForFilters[K]) => setFilters((f) => ({ ...f, [key]: value }));
 
@@ -332,6 +343,8 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
         <LookingForComposer
           userPrefs={userPrefs}
           editing={composer.editing}
+          initial={composer.initial}
+          onSwitchToCommunity={onSwitchToCommunity ? (d) => { setComposer(null); onSwitchToCommunity(d); } : undefined}
           ownPostIds={ownPostIds}
           uid={uid}
           onClose={() => setComposer(null)}

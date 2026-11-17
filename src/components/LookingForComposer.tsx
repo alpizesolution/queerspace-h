@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { Sheet } from './Sheet.tsx';
+import { PostTypeChooser } from './PostTypeChooser.tsx';
+import { lookingForToCommunity } from '../utils/postIntent.ts';
 import { PostMeta } from './LookingForBody.tsx';
 import type { UserPreferences } from '../types.ts';
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
@@ -9,7 +11,7 @@ import {
   cleanTag,
   draftFromPost,
   EMPTY_DRAFT,
-  INTENTIONS,
+  COMPOSER_INTENTIONS,
   INTENTION_LABELS,
   LIMITS,
   LOOKING_FOR_FLAIRS,
@@ -18,6 +20,7 @@ import {
   lookingForPostId,
   validateDraft,
   type LookingForDraft,
+  type LookingForIntention,
   type LookingForPost,
 } from '../utils/lookingFor.ts';
 import { ownAgeFrom, saveLookingForPost } from '../services/lookingForService.ts';
@@ -56,6 +59,10 @@ interface Props {
   userPrefs: UserPreferences;
   /** The member's post being edited, or null for a new one. */
   editing: LookingForPost | null;
+  /** Words to start from, carried over from the Community composer. */
+  initial?: { title: string; intro: string };
+  /** Lets a new post be switched to Community; the written words go with it. */
+  onSwitchToCommunity?: (draft: { title: string; content: string }) => void;
   /** Posts already on the board, to warn when a new post would replace one of the member's own. */
   ownPostIds: string[];
   uid: string | null;
@@ -63,8 +70,8 @@ interface Props {
   onSaved: (edited: boolean) => void;
 }
 
-export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPostIds, uid, onClose, onSaved }) => {
-  const [draft, setDraft] = useState<LookingForDraft>(() => (editing ? draftFromPost(editing) : { ...EMPTY_DRAFT, showPhoto: Boolean(userPrefs.avatar) }));
+export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, initial, onSwitchToCommunity, ownPostIds, uid, onClose, onSaved }) => {
+  const [draft, setDraft] = useState<LookingForDraft>(() => (editing ? draftFromPost(editing) : { ...EMPTY_DRAFT, ...(initial ?? {}), showPhoto: Boolean(userPrefs.avatar) }));
   const [tagInput, setTagInput] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,7 +80,7 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
   const errors = useMemo(() => validateDraft(draft, ownAge), [draft, ownAge]);
   const set = <K extends keyof LookingForDraft>(key: K, value: LookingForDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   // NSFW Connection is always mature; leaving it clears the mark it added.
-  const chooseIntention = (id: (typeof INTENTIONS)[number]) => setDraft((d) => ({ ...d, intention: id, isNsfw: id === NSFW_INTENTION ? true : d.intention === NSFW_INTENTION ? false : d.isNsfw }));
+  const chooseIntention = (id: LookingForIntention) => setDraft((d) => ({ ...d, intention: id, isNsfw: id === NSFW_INTENTION ? true : d.intention === NSFW_INTENTION ? false : d.isNsfw }));
   const alwaysMature = draft.intention === NSFW_INTENTION;
   const replacesOwn = !editing && uid && draft.intention && ownPostIds.includes(lookingForPostId(uid, draft.intention));
 
@@ -133,11 +140,16 @@ export const LookingForComposer: React.FC<Props> = ({ userPrefs, editing, ownPos
       }
     >
       <form id="qs-looking-for" onSubmit={submit} noValidate className="space-y-5">
+        {!editing && onSwitchToCommunity && (
+          <PostTypeChooser value="lookingFor" onChange={() => onSwitchToCommunity(lookingForToCommunity(draft))} />
+        )}
+
         <fieldset>
           <legend className="sr-only">What kind of connection</legend>
           <Label>What are you here for?</Label>
           <div role="radiogroup" aria-label="Relationship intention" className="flex flex-wrap gap-2">
-            {INTENTIONS.map((id) => (
+            {/* New posts choose from the current intentions; editing an older post also shows its own (retired) one. */}
+            {COMPOSER_INTENTIONS.concat(editing && !COMPOSER_INTENTIONS.includes(editing.intention) ? [editing.intention] : []).map((id) => (
               <button
                 key={id}
                 type="button"
