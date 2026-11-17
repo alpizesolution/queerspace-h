@@ -42,6 +42,7 @@ import { CheckCircle2, RadioTower } from 'lucide-react';
 import { AgeEligibilityGate } from './components/AgeEligibilityGate.tsx';
 import { calculateAge, isAdultBirthDate } from './utils/ageEligibility.ts';
 import { submitAgeEligibilityReview, watchAgeReviewClearance } from './services/ageReviewService.ts';
+import { submitUnderageAttempt } from './services/birthdayCorrectionService.ts';
 
 import { AppearanceSettingsModal } from './components/AppearanceSettingsModal.tsx';
 import { BottomNavigation, NavTarget } from './components/BottomNavigation.tsx';
@@ -629,6 +630,8 @@ export default function App() {
             const age = calculateAge(birthDate);
             if (age === null || age < 18) {
               const submitted = await submitAgeEligibilityReview();
+              // The date goes to a server-only record for the admin to review; it is never saved as the member's birthday.
+              if (age !== null) void submitUnderageAttempt(birthDate);
               setAgeReviewSubmitted(submitted || ageReviewSubmitted);
               if (submitted) setStorageItem('queerspace_age_review_requested', 'true');
               setAgeRestricted(true); setAgeGateOpen(true); setStorageItem('queerspace_age_restricted', 'true'); return;
