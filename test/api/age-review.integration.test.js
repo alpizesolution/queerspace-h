@@ -237,3 +237,28 @@ test('retention: a dry run only counts; the purge removes old attempts and decid
   assert.equal((await db.doc('birthdayCorrections/oldrejected').get()).exists, false);
   assert.equal((await db.doc('birthdayCorrections/oldopen1111').get()).exists, true);
 });
+
+test('concurrency: simultaneous requests make one request; competing admin decisions apply once; a large purge works', { skip }, async () => {
+  const { age, db, review } = await load();
+  const adminA = await newGoogleAdmin(db); const adminB = await newGoogleAdmin(db);
+  const member = await newUser();
+  await seedAdult(db, member.uid, 30);
+  const send = () => call(age, { token: member.token, body: { action: 'request-correction', requestedBirthDate: iso(birth(33)), reason: 'typo' } });
+  const results = await Promise.all([send(), send(), send()]);
+  assert.deepEqual(results.map((r) => r.statusCode).sort(), [201, 409, 409]);
+
+  const decide = (admin, decision) => call(age, { token: admin.token, body: { action: 'decide-correction', requestId: member.uid, decision, reason: 'because' } });
+  const decisions = await Promise.all([decide(adminA, 'approve'), decide(adminB, 'reject')]);
+  assert.deepEqual(decisions.map((r) => r.statusCode).sort(), [200, 409], 'exactly one decision wins');
+  const record = (await db.doc(`ageRecords/${member.uid}`).get()).data();
+  assert.ok((record.correctionCount || 0) + (record.rejectedCount || 0) === 1, 'the history records one outcome only');
+
+  // The purge handles more than one Firestore batch.
+  const old = Timestamp.fromMillis(Date.now() - 200 * 86400000);
+  const writer = db.bulkWriter();
+  for (let i = 0; i < 520; i++) writer.set(db.doc(`ageAttempts/bulkmember${String(i).padStart(4, '0')}`), { uid: `bulkmember${i}`, attemptedBirthDate: '2012-01-01', updatedAt: old });
+  await writer.close();
+  const done = await review.purgeExpiredAgeRecords(db, { dryRun: false });
+  assert.equal(done.attempts, 520);
+  assert.equal((await db.collection('ageAttempts').get()).size, 0);
+});

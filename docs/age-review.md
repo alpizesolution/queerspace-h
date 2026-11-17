@@ -31,5 +31,22 @@ An under-18 birthday is never written to `birthDate`, and approvals are re-valid
 Under-18 attempts and decided requests are removed after **90 days** (`AGE_RECORD_RETENTION_DAYS`). Open requests are never removed.
 Run it as an admin: `POST /api/age {"action":"purge-age-records"}` is a dry run that only counts; add `"dryRun": false` to delete.
 `ageRecords` (the correction history and counts) is kept for the life of the account so the 2-correction limit holds; `ageAudit` is
-kept as the audit trail. Nothing runs the purge automatically yet: schedule it (for example with the existing Vercel cron) once
-the retention period is agreed.
+kept as the audit trail. Nothing runs the purge automatically: it is **off** until someone schedules it.
+
+### What the purge touches
+
+- `ageAttempts` documents not updated for the retention period.
+- `birthdayCorrections` documents that were decided (approved, rejected or restricted) more than the retention period ago.
+- Never: open requests (`pending`, `info-requested`), `ageRecords`, `ageAudit`, `users/.../private/settings`, reports, support threads.
+- It only runs for a signed-in Google admin (`admins/{uid}`), defaults to a dry run, and deletes in chunks of 400.
+
+### Scheduling it (not enabled)
+
+The admin action above needs an admin's sign-in, so a cron cannot call it. The repo already has a secret-protected daily cron
+(`api/media-cleanup.js`, `crons` in `vercel.json`, `CRON_SECRET`), and the Hobby plan limits the number of functions
+(`test/api/function-limit.test.js`), so do not add a new route. To automate it:
+
+1. Agree the retention period and set `AGE_RECORD_RETENTION_DAYS` in the Vercel project settings.
+2. In `api/media-cleanup.js`, after its existing work and inside its time budget, call `purgeExpiredAgeRecords(db, { dryRun: false })`
+   from `api/_ageReview.js`, only when an explicit switch such as `AGE_PURGE_ENABLED=true` is set, and log the counts.
+3. Run it as a dry run first (`{ dryRun: true }`), compare the counts with the admin dry run, then switch it on.

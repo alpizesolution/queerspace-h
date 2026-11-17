@@ -154,9 +154,13 @@ export async function purgeExpiredAgeRecords(db, { dryRun = true, days = RETENTI
   const decided = await db.collection('birthdayCorrections').where('decidedAt', '<', cutoff).get();
   const stale = decided.docs.filter((d) => !OPEN_CORRECTION_STATUSES.includes(d.data().status));
   if (!dryRun) {
-    const batch = db.batch();
-    for (const d of [...attempts.docs, ...stale]) batch.delete(d.ref);
-    await batch.commit();
+    // A Firestore batch holds at most 500 writes, so delete in chunks.
+    const refs = [...attempts.docs, ...stale].map((d) => d.ref);
+    for (let i = 0; i < refs.length; i += 400) {
+      const batch = db.batch();
+      refs.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+      await batch.commit();
+    }
   }
   return { dryRun, retentionDays: days, attempts: attempts.size, requests: stale.length };
 }
