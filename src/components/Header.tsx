@@ -25,6 +25,7 @@ interface HeaderProps {
   onOpenSupport: () => void;
   onOpenAbout: () => void;
   hasSupportReply?: boolean;
+  supportUnreadCount?: number;
   hasUnreadUpdates?: boolean;
   profile: { avatar?: string; displayName?: string };
 }
@@ -43,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSupport,
   onOpenAbout,
   hasSupportReply = false,
+  supportUnreadCount = 0,
   hasUnreadUpdates = false,
   profile,
 }) => {
@@ -152,6 +154,7 @@ export const Header: React.FC<HeaderProps> = ({
         isSoundMuted={isSoundMuted}
         onToggleSound={onToggleSound}
         hasSupportReply={hasSupportReply}
+        supportUnreadCount={supportUnreadCount}
         hasUnreadUpdates={hasUnreadUpdates}
         showAdmin={SHOW_ADMIN_LINK}
       />

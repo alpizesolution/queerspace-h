@@ -69,7 +69,7 @@ export async function sendSupportImage(db, uid, decoded, body, getStore = curren
       lastMessage: SUPPORT_IMAGE_TEXT, lastFrom: 'user', updatedAt: FieldValue.serverTimestamp(), unreadForTeam: true,
     }, { merge: true });
   } else {
-    batch.set(threadRef, { lastMessage: SUPPORT_IMAGE_TEXT, lastFrom: 'team', updatedAt: FieldValue.serverTimestamp(), unreadForUser: true, unreadForTeam: false }, { merge: true });
+    batch.set(threadRef, { lastMessage: SUPPORT_IMAGE_TEXT, lastFrom: 'team', updatedAt: FieldValue.serverTimestamp(), unreadForUser: true, unreadForTeam: false, teamMessageCount: FieldValue.increment(1) }, { merge: true });
   }
   try {
     await batch.commit();

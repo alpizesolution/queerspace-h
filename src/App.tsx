@@ -35,7 +35,7 @@ import { clearProfileCache } from './services/profileViewService.ts';
 import { clearBackgroundImageCache, pruneBackgroundImages } from './services/profileBackgroundService.ts';
 import { applyFilters, applyProfile, FilterFields, matchPrefsForMode, ProfileFields } from './utils/preferences.ts';
 import { ProfileEditorSheet } from './components/ProfileEditorSheet.tsx';
-import { hasUnreadSupportReply } from './services/supportService.ts';
+import { subscribeToUnreadSupportReplies } from './services/supportService.ts';
 import { getMySuspension } from './services/suspensionService.ts';
 import { SuspendedNotice } from './components/SuspendedNotice.tsx';
 import { CheckCircle2, RadioTower } from 'lucide-react';
@@ -77,7 +77,9 @@ export default function App() {
   );
   const [donationModalOpen, setDonationModalOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
-  const [hasSupportReply, setHasSupportReply] = useState(false);
+  const [supportUnread, setSupportUnread] = useState(0);
+  const supportUnreadRef = useRef(0);
+  const supportOpenRef = useRef(false);
   const [suspended, setSuspended] = useState(false);
   const [setupInitialMode, setSetupInitialMode] = useState<'quick' | 'custom'>('quick');
   const [activePartner, setActivePartner] = useState<PartnerProfile | null>(null);
@@ -320,11 +322,6 @@ export default function App() {
               });
             });
             getMySuspension().then((s) => setSuspended(Boolean(s)));
-            hasUnreadSupportReply().then((unread) => {
-              if (!unread) return;
-              setHasSupportReply(true);
-              showToast('The QUEERSPACE Team replied. Open "Chat with us" in the menu or footer.');
-            });
           }
         })
         .catch((err) => {
@@ -362,9 +359,22 @@ export default function App() {
     );
   });
 
+  // Live count of unread team replies on this member's own support thread, the same on every device they use.
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    return subscribeToUnreadSupportReplies((count) => {
+      const before = supportUnreadRef.current;
+      supportUnreadRef.current = count;
+      setSupportUnread(count);
+      if (count > before && !supportOpenRef.current) {
+        showToast('The QUEERSPACE Team replied. Open "Chat with us" in the menu or footer.');
+      }
+    });
+  }, []);
+
   const openSupport = () => {
     setActiveInfoModal(null);
-    setHasSupportReply(false);
+    supportOpenRef.current = true;
     setSupportOpen(true);
   };
 
@@ -711,7 +721,8 @@ export default function App() {
           onOpenInfo={(modal) => setActiveInfoModal(modal)}
           onOpenSupport={openSupport}
           onOpenAbout={openAbout}
-          hasSupportReply={hasSupportReply}
+          hasSupportReply={supportUnread > 0}
+          supportUnreadCount={supportUnread}
           hasUnreadUpdates={hasUnreadUpdates}
           profile={userPrefs}
           badges={{ signals: signalsBadge, unsaid: echoNotifs.unread }}
@@ -787,7 +798,8 @@ export default function App() {
           onOpenAbout={openAbout}
           onOpenWhatsNew={() => setWhatsNewOpen(true)}
           hasUnreadUpdates={hasUnreadUpdates}
-          hasSupportReply={hasSupportReply}
+          hasSupportReply={supportUnread > 0}
+          supportUnreadCount={supportUnread}
           className="hidden desk:block"
         />
       )}
@@ -834,8 +846,9 @@ export default function App() {
       {supportOpen && (
         <SupportChat
           userPrefs={userPrefs}
-          onClose={() => setSupportOpen(false)}
+          onClose={() => { supportOpenRef.current = false; setSupportOpen(false); }}
           onOpenSuggestions={() => {
+            supportOpenRef.current = false;
             setSupportOpen(false);
             setActiveInfoModal('contact');
           }}

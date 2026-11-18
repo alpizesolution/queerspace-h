@@ -45,6 +45,8 @@ export const SupportChat: React.FC<SupportChatProps> = ({ userPrefs, onClose, on
         (next) => {
           setMessages(next);
           setStatus('ready');
+          // A reply that arrives while the chat is open is seen right away, so it does not leave a badge behind.
+          if (next[next.length - 1]?.from === 'team') void markSupportReadByUser();
         },
         () => setStatus('error')
       );

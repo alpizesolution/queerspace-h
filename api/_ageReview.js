@@ -64,7 +64,7 @@ export async function notifyMember(db, uid, { preview, text }) {
     batch.set(thread.collection('messages').doc(), { from: 'team', text: String(text).slice(0, 1000), timestamp: FieldValue.serverTimestamp() });
     batch.set(thread, {
       lastMessage: String(preview).slice(0, 140), lastFrom: 'team', updatedAt: FieldValue.serverTimestamp(),
-      unreadForUser: true, unreadForTeam: false,
+      unreadForUser: true, unreadForTeam: false, teamMessageCount: FieldValue.increment(1),
     }, { merge: true });
     await batch.commit();
     return true;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, MessageCircleHeart } from 'lucide-react';
 import { isAdminDevice } from '../utils/adminDevice.ts';
+import { SupportUnreadBadge } from './SupportUnreadBadge.tsx';
 
 // On phones the header has no room, so the admin shortcut lives here.
 const SHOW_ADMIN_LINK = isAdminDevice();
@@ -18,6 +19,8 @@ interface FooterProps {
   hasUnreadUpdates?: boolean;
   /** The team replied and the member hasn't read it yet. */
   hasSupportReply?: boolean;
+  /** Unread team replies, shown as a small count beside "Chat with us". */
+  supportUnreadCount?: number;
   className?: string;
 }
 
@@ -29,7 +32,7 @@ const LINKS = [
   { id: 'terms', label: 'Terms' },
 ] as const;
 
-export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, onOpenWhatsNew, onOpenAbout, hasUnreadUpdates = false, hasSupportReply = false, className = '' }) => (
+export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, onOpenWhatsNew, onOpenAbout, hasUnreadUpdates = false, hasSupportReply = false, supportUnreadCount = 0, className = '' }) => (
   <footer className={`border-t border-line text-subtle ${className}`}>
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-6 flex flex-col items-center text-center gap-4 sm:flex-row sm:text-left sm:gap-6">
       <div className="sm:mr-auto">
@@ -73,11 +76,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenModal, onOpenSupport, onOp
         <button onClick={onOpenSupport} className="chip relative h-8 px-3 text-[length:calc(12px_*_var(--fs,1))]">
           <MessageCircleHeart className="w-3.5 h-3.5" />
           Chat with us
-          {hasSupportReply && (
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-berry ring-2 ring-ink">
-              <span className="sr-only">New reply from the team</span>
-            </span>
-          )}
+          <SupportUnreadBadge count={supportUnreadCount} />
         </button>
         <a
           href={BMC_URL}

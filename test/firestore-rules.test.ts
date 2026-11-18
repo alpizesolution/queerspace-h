@@ -1613,6 +1613,7 @@ function teamReply(uid: string, text: string, fs = adminDb()) {
   batch.set(fs.collection(`support_threads/${uid}/messages`).doc(), { from: 'team', text, timestamp: now() });
   batch.update(fs.doc(`support_threads/${uid}`), {
     lastMessage: text.slice(0, 140), lastFrom: 'team', updatedAt: now(), unreadForUser: true, unreadForTeam: false,
+    teamMessageCount: firebase.firestore.FieldValue.increment(1),
   });
   return batch.commit();
 }
@@ -1654,6 +1655,36 @@ test('S-03: Admins CAN reply as the team and mark threads read; members see the 
   await assertFails(teamReply('ivy', 'not staff', eve));
   const msgs = await testEnv.authenticatedContext('ivy').firestore().collection('support_threads/ivy/messages').get();
   assert.equal(msgs.docs.filter((d) => d.data().from === 'team').length, 1);
+});
+
+test('S-03b: Unread reply counts: the team raises the count by one per reply, the member can only read up to what exists, nobody else can touch it', async () => {
+  await seedAdmin();
+  const ivy = testEnv.authenticatedContext('ivy').firestore();
+  const eve = testEnv.authenticatedContext('eve').firestore();
+  await assertSucceeds(supportSend('ivy', 'Help please'));
+  await assertSucceeds(teamReply('ivy', 'First reply'));
+  await assertSucceeds(teamReply('ivy', 'Second reply'));
+  const thread = await ivy.doc('support_threads/ivy').get();
+  assert.equal(thread.data()?.teamMessageCount, 2);
+  assert.equal(thread.data()?.readTeamCount ?? 0, 0);
+  // A member cannot touch either counter by sending a message (so their own messages can never count as unread replies).
+  await assertFails(ivy.doc('support_threads/ivy').set(
+    { lastMessage: 'Thanks!', lastFrom: 'user', updatedAt: now(), unreadForTeam: true, teamMessageCount: 0 }, { merge: true }));
+  await assertFails(ivy.doc('support_threads/ivy').update({ teamMessageCount: 0 }));
+  await assertFails(ivy.doc('support_threads/ivy').update({ unreadForUser: false, teamMessageCount: 0 }));
+  // Reading: forward only, never past the replies that exist.
+  await assertFails(ivy.doc('support_threads/ivy').update({ unreadForUser: false, readTeamCount: 3 }));
+  await assertSucceeds(ivy.doc('support_threads/ivy').update({ unreadForUser: false, readTeamCount: 1 }));
+  await assertFails(ivy.doc('support_threads/ivy').update({ unreadForUser: false, readTeamCount: 0 }));
+  await assertSucceeds(ivy.doc('support_threads/ivy').update({ unreadForUser: false, readTeamCount: 2 }));
+  // The team cannot skip numbers, and a different member can read or change nothing on this thread.
+  await assertFails(adminDb().doc('support_threads/ivy').update({
+    lastMessage: 'x', lastFrom: 'team', updatedAt: now(), unreadForUser: true, unreadForTeam: false,
+    teamMessageCount: firebase.firestore.FieldValue.increment(5),
+  }));
+  await assertFails(eve.doc('support_threads/ivy').get());
+  await assertFails(eve.doc('support_threads/ivy').update({ unreadForUser: false, readTeamCount: 2 }));
+  await assertFails(eve.doc('support_threads/ivy').update({ teamMessageCount: 99 }));
 });
 
 test('S-04: Only admins CAN post verified team messages in the Public Room', async () => {
