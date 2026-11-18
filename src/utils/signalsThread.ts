@@ -8,6 +8,7 @@ import { cardById, parseCard } from './comfortCards.ts';
 import { parseTestInvite, testById, testInviteText } from './testCatalog.ts';
 import { NSFW_CARD_TEXT, nsfwCardById, parseNsfwCard } from './nsfwCards.ts';
 import type { PhotoInfo } from './timedPhoto.ts';
+import { STICKER_TEXT, parseSticker } from './stickers.ts';
 import { GAME_TEXT, parseGame, type Challenge, type GameCard } from './twoTruths.ts';
 
 export type Reaction = { emoji: string; count: number; userReacted: boolean };
@@ -20,7 +21,7 @@ export type ThreadMessage = {
   replyTo?: { messageId: string; senderId: string; text: string } | null;
   reactions?: Reaction[];
   /** A timed photo: its timer and state. The picture itself is never part of the thread. */
-  kind?: 'photo' | 'gif' | 'card' | 'game' | 'test';
+  kind?: 'photo' | 'gif' | 'card' | 'game' | 'test' | 'sticker';
   photo?: PhotoInfo;
   /** A Comfort Card: only its id and category; the question is always read from the approved list in the app. */
   /** A Test Invitation: only the test's id; its name, description and link always come from the app's catalog. */
@@ -28,6 +29,8 @@ export type ThreadMessage = {
   card?: { id: string; category: string; /** Set for an NSFW Card: its words are never in `text`. */ deck?: 'nsfw' };
   /** A GIPHY GIF: the approved addresses and size. Sent by id; the server supplies the rest. */
   gif?: GifInfo;
+  /** A sticker: only its id and pack. The picture's address is always worked out in the app from the approved list. */
+  sticker?: { id: string; packId: string };
   /** A Two Truths and a Lie challenge. The answer is part of it only once the recipient has guessed. */
   game?: GameCard;
 };
@@ -40,6 +43,8 @@ export type PendingMessage = {
   text: string;
   /** Set for a GIF: it is sent by this GIF's id and shown as the GIF while it sends. */
   gif?: GifInfo;
+  /** Set for a sticker: it is sent by this id alone and shown as the sticker while it sends. */
+  stickerId?: string;
   /** Set for a Comfort Card: it is sent by this card's id alone and shown as the card while it sends. */
   cardId?: string;
   /** Set for a Two Truths and a Lie challenge being sent: the statements and the sender's own answer. */
@@ -67,6 +72,15 @@ export function checkedGif(message: ThreadMessage): ThreadMessage {
   if (gif) return { ...message, gif };
   const { kind: _kind, gif: _gif, ...rest } = message;
   return rest;
+}
+
+/** A sticker is shown as one only if its id is on the approved list; otherwise it is plain text ("Sticker"), so a bad record can never load another picture. */
+export function checkedSticker(message: ThreadMessage): ThreadMessage {
+  if (message.kind !== 'sticker') return message;
+  const sticker = parseSticker(message.sticker);
+  if (sticker) return { ...message, text: STICKER_TEXT, sticker };
+  const { kind: _kind, sticker: _sticker, ...rest } = message;
+  return { ...rest, text: STICKER_TEXT };
 }
 
 /** A Test Invitation is shown as one only if its id is in the catalog; otherwise it is plain text, so a bad record can never show a link. */
@@ -113,7 +127,7 @@ export function checkedGame(message: ThreadMessage): ThreadMessage {
  */
 export function mergeMessages(current: ThreadMessage[], received: ThreadMessage[]): ThreadMessage[] {
   if (!received.length) return current;
-  const incoming = received.map((m) => checkedTest(checkedGame(checkedCard(checkedGif(m)))));
+  const incoming = received.map((m) => checkedSticker(checkedTest(checkedGame(checkedCard(checkedGif(m))))));
   const next = current.slice();
   const index = new Map(next.map((m, i) => [m.id, i]));
   let changed = false;
@@ -143,6 +157,7 @@ export function visibleThread(server: ThreadMessage[], pending: PendingMessage[]
       senderId: selfId,
       text: p.text,
       ...(p.gif ? { kind: 'gif' as const, gif: p.gif } : {}),
+      ...(p.stickerId && parseSticker({ id: p.stickerId }) ? { kind: 'sticker' as const, sticker: parseSticker({ id: p.stickerId })! } : {}),
       ...(p.challenge ? { kind: 'game' as const, game: { statements: p.challenge.statements, intro: p.challenge.intro, status: 'open' as const, canGuess: false } } : {}),
       ...(p.cardId && cardById(p.cardId) ? { kind: 'card' as const, card: { id: p.cardId, category: cardById(p.cardId)!.category } } : {}),
       ...(p.cardId && nsfwCardById(p.cardId) ? { kind: 'card' as const, text: NSFW_CARD_TEXT, card: { id: p.cardId, category: nsfwCardById(p.cardId)!.category, deck: 'nsfw' as const } } : {}),

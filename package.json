@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "seo": "node scripts/generate-seo-pages.mjs",
+    "stickers": "node scripts/generate-stickers.mjs",
     "build": "node scripts/check-env.mjs && node scripts/generate-seo-pages.mjs && vite build",
     "deploy:firebase": "node scripts/deploy-firebase.mjs",
     "check:firebase": "node scripts/deploy-firebase.mjs --check",

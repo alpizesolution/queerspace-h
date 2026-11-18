@@ -11,6 +11,8 @@ import { SwipeToReply } from './SwipeToReply.tsx';
 import { TimedPhotoComposer } from './TimedPhotoComposer.tsx';
 import { TimedPhotoViewer } from './TimedPhotoViewer.tsx';
 import { GifBubble, GifIcon, GifPicker } from './GifPicker.tsx';
+import { StickerBubble, StickerPicker, StickersIcon } from './Stickers.tsx';
+import { rememberSticker, STICKER_TEXT, type Sticker } from '../utils/stickers.ts';
 import { ReplyQuote } from './ReplyQuote.tsx';
 import { ComfortCardBubble, ComfortCardPicker, ComfortCardsIcon } from './ComfortCards.tsx';
 import type { ComfortCard } from '../utils/comfortCards.ts';
@@ -173,6 +175,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [gifOpen, setGifOpen] = useState(false);
+  const [stickersOpen, setStickersOpen] = useState(false);
   const [cardsOpen, setCardsOpen] = useState(false);
   const [testsOpen, setTestsOpen] = useState(false);
   const [gameOpen, setGameOpen] = useState(false);
@@ -515,7 +518,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
         messageId: item.id,
         // A GIF goes by its GIPHY id only; the server finds the picture and its address itself.
         // A Comfort Card goes by its id alone; the server supplies the question.
-        ...(item.challenge ? { kind: 'game', game: item.challenge } : item.cardId ? { kind: 'card', cardId: item.cardId } : item.gif ? { kind: 'gif', gifId: item.gif.id } : { text: item.text }),
+        ...(item.challenge ? { kind: 'game', game: item.challenge } : item.cardId ? { kind: 'card', cardId: item.cardId } : item.stickerId ? { kind: 'sticker', stickerId: item.stickerId } : item.gif ? { kind: 'gif', gifId: item.gif.id } : { text: item.text }),
         ...(item.replyTo ? { replyTo: { messageId: item.replyTo.messageId, text: item.replyTo.text, sender: item.replyTo.sender } } : {}),
       });
       setMessages((current) => mergeMessages(current, [result]));
@@ -669,6 +672,32 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
     stickToBottom.current = true;
     if (!soundMutedRef.current) soundEffects.playMessageSent();
     setGifOpen(false);
+    setPending((list) => [...list, item]);
+    setReplyingTo(null);
+    setError(null);
+    enqueue(item);
+  };
+
+  /** Sends the chosen sticker by its id alone. It shows at once as the sticker, marked "Sending…", and goes through the same outbox as text. */
+  const sendSticker = (sticker: Sticker) => {
+    if (ended) return;
+    const reply = replyingTo;
+    const item: PendingMessage = {
+      id: crypto.randomUUID(),
+      text: STICKER_TEXT,
+      stickerId: sticker.id,
+      replyTo: reply
+        ? { messageId: reply.id, text: reply.text, sender: reply.senderId === userId ? 'self' : 'partner', senderId: reply.senderId }
+        : null,
+      status: 'sending',
+      retryable: true,
+      createdAt: Date.now(),
+    };
+    rememberSticker(sticker.id);
+    lastOwnSend.current = true;
+    stickToBottom.current = true;
+    if (!soundMutedRef.current) soundEffects.playMessageSent();
+    setStickersOpen(false);
     setPending((list) => [...list, item]);
     setReplyingTo(null);
     setError(null);
@@ -835,6 +864,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 // A GIF stands alone on the conversation background, with no coloured bubble. One that answers another message keeps its bubble,
                 // because the quoted message needs a surface to sit on.
                 const bareGif = message.kind === 'gif' && Boolean(message.gif) && !message.replyTo;
+                // A sticker stands alone the same way (transparent picture, no coloured bubble) unless it answers a message.
+                const bareSticker = message.kind === 'sticker' && Boolean(message.sticker) && !message.replyTo;
                 const toggleActive = () => setActiveId((current) => (current === message.id ? null : message.id));
                 return (
                   <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'} ${index === 0 ? '' : sameSenderAsPrev ? 'mt-0.5' : 'mt-2'}`}>
@@ -853,12 +884,12 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                         onKeyDown={(event) => {
                           if (!unsent && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggleActive(); }
                         }}
-                        className={`${unsent ? 'opacity-70' : ''} min-w-0 max-w-full cursor-pointer rounded-2xl text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${message.kind === 'game' && message.game ? 'w-full' : bareGif ? '' : `px-3 py-1.5 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}`}
+                        className={`${unsent ? 'opacity-70' : ''} min-w-0 max-w-full cursor-pointer rounded-2xl text-left outline-none focus-visible:ring-2 focus-visible:ring-berry/60 ${message.kind === 'game' && message.game ? 'w-full' : (bareGif || bareSticker) ? '' : `px-3 py-1.5 ${mine ? 'rounded-br-md bg-berry text-ink' : 'rounded-bl-md border border-line bg-raised text-fg'}`}`}
                       >
                         {message.replyTo && (
                           <ReplyQuote tone={mine ? 'accent' : 'raised'} author={message.replyTo.senderId === userId ? 'You' : partnerName} text={message.replyTo.text} />
                         )}
-                        <div className={bareGif ? `flex flex-col gap-0.5 ${mine ? 'items-end' : 'items-start'}` : 'flex flex-wrap items-end justify-end gap-x-2'}>
+                        <div className={(bareGif || bareSticker) ? `flex flex-col gap-0.5 ${mine ? 'items-end' : 'items-start'}` : 'flex flex-wrap items-end justify-end gap-x-2'}>
                           {message.kind === 'game' && message.game ? (
                             <TwoTruthsCard
                               game={message.game}
@@ -891,6 +922,8 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                               time={formatTime(message.createdAt)}
                               onAnswer={() => { setReplyingTo(message); setActiveId(null); composerFocus.requestFocus(); }}
                             />
+                          ) : message.kind === 'sticker' && message.sticker ? (
+                            <StickerBubble id={message.sticker.id} />
                           ) : message.kind === 'gif' && message.gif ? (
                             <GifBubble gif={message.gif} mine={mine} bare={bareGif} />
                           ) : message.photo ? (
@@ -903,7 +936,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                           ) : (
                           <p className="min-w-0 max-w-full flex-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-[length:calc(15px_*_var(--fs,1))] leading-snug">{message.text}</p>
                           )}
-                          {message.createdAt && !(message.kind === 'card' && message.card) && !(message.kind === 'test' && message.test) && !(message.kind === 'game' && message.game) && <span className={`${bareGif ? '' : 'ml-auto translate-y-px'} select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${bareGif ? 'text-muted' : mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
+                          {message.createdAt && !(message.kind === 'card' && message.card) && !(message.kind === 'test' && message.test) && !(message.kind === 'game' && message.game) && <span className={`${(bareGif || bareSticker) ? '' : 'ml-auto translate-y-px'} select-none text-[length:calc(10px_*_var(--fs,1))] leading-snug tabular-nums ${(bareGif || bareSticker) ? 'text-muted' : mine ? 'text-ink/60' : 'text-subtle'}`}>{formatTime(message.createdAt)}</span>}
                         </div>
                       </div>
                       </SwipeToReply>
@@ -1021,6 +1054,9 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
                 <button type="button" onClick={() => setGifOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Send a GIF" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-raised hover:text-fg active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
                   <GifIcon className="h-5 w-5" />
                 </button>
+                <button type="button" onClick={() => setStickersOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Send a sticker" title="Stickers" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-raised hover:text-fg active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
+                  <StickersIcon className="h-5 w-5" />
+                </button>
                 <button type="button" onClick={() => setCardsOpen(true)} onMouseDown={(event) => event.preventDefault()} aria-label="Comfort Cards" title="Comfort Cards" aria-haspopup="dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lavender transition hover:bg-raised hover:brightness-125 active:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg">
                   <ComfortCardsIcon className="h-5 w-5" />
                 </button>
@@ -1039,6 +1075,7 @@ export const SignalsConversation: React.FC<SignalsConversationProps> = ({ pairId
         <TimedPhotoComposer file={photoFile} sending={photoSending} error={photoError} onSend={(timer) => void sendPhoto(timer)} onClose={() => { photoMessageId.current = null; setPhotoFile(null); }} />
       )}
       {gifOpen && !ended && <GifPicker onSend={sendGif} onClose={() => setGifOpen(false)} />}
+      {stickersOpen && !ended && <StickerPicker onSend={sendSticker} onClose={() => setStickersOpen(false)} />}
       {testsOpen && !ended && (
         <TestPicker
           partnerName={partnerName}
