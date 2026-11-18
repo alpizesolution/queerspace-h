@@ -55,18 +55,16 @@ two packs. Tapping a sticker previews it, and sending is a second tap, like the 
 marked "Sending...", and goes through the same outbox as text (no duplicate image bubble). Recent (12) and Favorites (60) are kept on this
 device only, as ids in `localStorage`; ids that are no longer in the catalog are dropped when read.
 
-## Artwork status (needs correction before release)
+## Artwork status
 
-The artwork was imported unchanged. Inspection of the 40 regular files found problems in the art itself:
+The 40 PNGs were cleaned up before release (see `docs/sticker-artwork-cleanup.md` for every file): detached neighbour fragments (15 files) and
+baked-in white bars (`androgynous-sapphic` 06-10) were removed, background noise was cleared to true transparency, and every sticker was trimmed,
+centred and rescaled at one shared scale (about 1.61x) on a 512 x 512 canvas, so they fill 87-94% of the width with 16 px or more of margin.
+Characters and captions were not redrawn.
 
-- **A fixed crop window.** Every file's artwork sits inside the same box (about x 107-404, y 133-378 of the 512 x 512 canvas), and 37 of the 40
-  files have opaque pixels touching that box on one or more sides, so the art looks cut off at the left or right edge. This suggests the stickers
-  were cropped from a larger sheet. About 58% of the canvas width is empty, so stickers look smaller than they could.
-- **Detached fragments** (pieces of a neighbouring sticker): `sapphic-feelings` 08, 13, 19; `androgynous-sapphic` 02, 06, 07, 12, 17.
-- **A white bar baked into the artwork** near the top: `androgynous-sapphic` 06, 07 and 10 (`10_sana_all.png`, rows 133-140, x 107-338).
-- Transparency is fine (all files are RGBA with a fully transparent background).
-
-None of this was edited. Replacing a file with a corrected one of the same name needs no code change; run `npm run stickers` and the tests.
+Still needed from the artist: the original art was cropped from a larger sheet, so in 33 of 40 files part of the coloured artwork is cut off by a
+straight edge, and four androgynous stickers have faint residue attached to an outline. These are listed in the cleanup report and need a
+re-export of the un-cropped originals. Replacing a file with a corrected one of the same name needs no code change; run `npm run stickers` and the tests.
 
 ## After Dark (18+): disabled, requirements for later
 
