@@ -157,7 +157,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   focusPostId = null,
   onCloseFocus,
 }) => {
-  const [section, setSection] = useState<'community' | 'lookingFor'>('community');
+  const [section, setSection] = useState<'community' | 'lookingFor'>('lookingFor');
   const [showGuidelines, setShowGuidelines] = useState(false);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -368,7 +368,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
       )}
 
       {!focusMode && <div role="tablist" aria-label="Cosmos sections" className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-0.5 mb-3">
-        {([['community', 'Community'], ['lookingFor', 'Looking For']] as const).map(([id, label]) => (
+        {([['lookingFor', 'Looking For'], ['community', 'Community']] as const).map(([id, label]) => (
           <button
             key={id}
             role="tab"
