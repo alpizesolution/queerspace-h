@@ -7,6 +7,7 @@ import { profileView } from './_profiles.js';
 import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
 import { cardById, shapeStoredCard } from './_cards.js';
 import { NSFW_CARD_TEXT, nsfwCardById, shapeStoredNsfwCard } from './_nsfwCards.js';
+import { STICKER_TEXT, shapeStoredSticker, stickerById } from './_stickers.js';
 import { shapeStoredTest, testById, testInviteText } from './_tests.js';
 import { inboxWritesForMessage, previewText } from './_inbox.js';
 import { clearCurrentVibe, setCurrentVibe, vibeView } from './_vibe.js';
@@ -250,6 +251,8 @@ export default async function handler(req, res) {
             ...(data.kind === 'photo' ? { kind: 'photo', photo: photos.get(snap.id) ?? { durationSec: data.durationSec, status: 'expired', mine: data.senderId === uid } } : {}),
             // A GIF: only the approved GIPHY addresses saved with it. A record that fails the check is shown as plain text.
             ...(data.kind === 'gif' && shapeStoredGif(data.gif) ? { kind: 'gif', gif: shapeStoredGif(data.gif) } : {}),
+            // A sticker: only its id and pack, both re-read from the server's list. A record that is not on the list shows as plain text.
+            ...(data.kind === 'sticker' && shapeStoredSticker(data.sticker) ? { kind: 'sticker', sticker: shapeStoredSticker(data.sticker) } : {}),
             ...(card ? { kind: 'card', card: { id: card.id, category: card.category, ...(card.deck ? { deck: card.deck } : {}) } } : {}),
             ...(testInvite ? { kind: 'test', test: testInvite } : {}),
             ...(game ? { kind: 'game', game } : {}),
@@ -496,7 +499,7 @@ export default async function handler(req, res) {
     if (action === 'send-message') {
       const pairId = req.body?.pairId;
       const kind = req.body?.kind;
-      if (kind !== undefined && kind !== 'text' && kind !== 'gif' && kind !== 'card' && kind !== 'game' && kind !== 'test') return send(res, 400, { error: 'invalid_message' });
+      if (kind !== undefined && kind !== 'text' && kind !== 'gif' && kind !== 'card' && kind !== 'game' && kind !== 'test' && kind !== 'sticker') return send(res, 400, { error: 'invalid_message' });
       const isGif = kind === 'gif';
       const isCard = kind === 'card';
       const isGame = kind === 'game';
@@ -529,7 +532,14 @@ export default async function handler(req, res) {
         return send(res, 400, { error: 'invalid_gif' });
       }
       if (!isGif && req.body?.gifId !== undefined) return send(res, 400, { error: 'invalid_message' });
-      const text = isTest ? testInviteText(testItem) : isGif ? GIF_TEXT : isCard ? (cardDeck === 'nsfw' ? NSFW_CARD_TEXT : card.question) : isGame ? GAME_TEXT : typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      // A sticker is sent by its id alone. The picture, its pack and its words come from the server's list; any other field is refused.
+      const isSticker = kind === 'sticker';
+      const stickerItem = isSticker ? stickerById(req.body?.stickerId) : null;
+      if (isSticker && (!stickerItem || ['text', 'sticker', 'stickerPackId', 'packId', 'path', 'url', 'src', 'file', 'cardId', 'gifId', 'gif', 'card', 'game', 'testId'].some(field => req.body[field] !== undefined))) {
+        return send(res, 400, { error: 'invalid_sticker' });
+      }
+      if (!isSticker && req.body?.stickerId !== undefined) return send(res, 400, { error: 'invalid_message' });
+      const text = isSticker ? STICKER_TEXT : isTest ? testInviteText(testItem) : isGif ? GIF_TEXT : isCard ? (cardDeck === 'nsfw' ? NSFW_CARD_TEXT : card.question) : isGame ? GAME_TEXT : typeof req.body?.text === 'string' ? req.body.text.trim() : '';
       const replyToInput = req.body?.replyTo;
       // The app picks the message id up front, so a retry after a dropped connection can't create a second copy.
       const requestedId = req.body?.messageId;
@@ -584,7 +594,7 @@ export default async function handler(req, res) {
         // The message and the recipient's unread counter commit together. A retried send fails on create(), so the
         // whole batch is rejected and the counter is never incremented twice for one message.
         const batch = db.batch();
-        batch.create(messageRef, { senderId: uid, text, ...(gif ? { kind: 'gif', gif } : {}), ...(isCard ? { kind: 'card', card: { id: card.id } } : {}), ...(isTest ? { kind: 'test', test: { id: testItem.id } } : {}), ...(isGame ? { kind: 'game', game: { statements: challenge.statements, intro: challenge.intro, status: 'open' } } : {}), ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
+        batch.create(messageRef, { senderId: uid, text, ...(gif ? { kind: 'gif', gif } : {}), ...(isCard ? { kind: 'card', card: { id: card.id } } : {}), ...(isSticker ? { kind: 'sticker', sticker: { id: stickerItem.id, packId: stickerItem.packId } } : {}), ...(isTest ? { kind: 'test', test: { id: testItem.id } } : {}), ...(isGame ? { kind: 'game', game: { statements: challenge.statements, intro: challenge.intro, status: 'open' } } : {}), ...(replyTo ? { replyTo } : {}), createdAt: stamp, updatedAt: stamp });
         // The answer goes in its own document, which no client can read, in the same commit as the card.
         if (isGame) batch.create(pairRef.collection('gameSecrets').doc(messageRef.id), { senderId: uid, lie: challenge.lie, createdAt: stamp });
         // The recipient's unread counter, and the latest-message line for both people's inbox rows, in the same write.
@@ -596,13 +606,14 @@ export default async function handler(req, res) {
         // ALREADY_EXISTS: this exact send already went through (a retry). Answer with what was stored, never a copy.
         if (error?.code !== 6) throw error;
         const stored = (await messageRef.get()).data();
-        if (stored?.senderId !== uid || (isGif && stored.kind !== 'gif') || (isCard && (stored.kind !== 'card' || stored.card?.id !== card.id)) || (isGame && stored.kind !== 'game') || (isTest && (stored.kind !== 'test' || stored.test?.id !== testItem.id))) return send(res, 409, { error: 'invalid_message' });
+        if (stored?.senderId !== uid || (isGif && stored.kind !== 'gif') || (isCard && (stored.kind !== 'card' || stored.card?.id !== card.id)) || (isGame && stored.kind !== 'game') || (isSticker && (stored.kind !== 'sticker' || stored.sticker?.id !== stickerItem.id)) || (isTest && (stored.kind !== 'test' || stored.test?.id !== testItem.id))) return send(res, 409, { error: 'invalid_message' });
         return send(res, 200, {
           id: messageRef.id,
           senderId: uid,
           text: stored.text,
           ...(stored.kind === 'gif' && shapeStoredGif(stored.gif) ? { kind: 'gif', gif: shapeStoredGif(stored.gif) } : {}),
           ...(isCard ? { kind: 'card', card: cardView } : {}),
+          ...(isSticker ? { kind: 'sticker', sticker: { id: stickerItem.id, packId: stickerItem.packId } } : {}),
           ...(isTest ? { kind: 'test', test: { id: testItem.id } } : {}),
           ...(isGame ? { kind: 'game', game: shapeStoredGame(stored.game, uid, uid) } : {}),
           replyTo: replyBody(stored),
@@ -616,6 +627,7 @@ export default async function handler(req, res) {
         text,
         ...(gif ? { kind: 'gif', gif } : {}),
         ...(isCard ? { kind: 'card', card: cardView } : {}),
+        ...(isSticker ? { kind: 'sticker', sticker: { id: stickerItem.id, packId: stickerItem.packId } } : {}),
         ...(isTest ? { kind: 'test', test: { id: testItem.id } } : {}),
         ...(isGame ? { kind: 'game', game: shapeStoredGame({ statements: challenge.statements, intro: challenge.intro, status: 'open' }, uid, uid) } : {}),
         replyTo: replyTo ? { ...replyTo, senderId: replyTo.sender === 'self' ? uid : otherUid } : null,

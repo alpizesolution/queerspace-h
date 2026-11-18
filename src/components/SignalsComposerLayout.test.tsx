@@ -16,19 +16,20 @@ test('the input is one line by default and still auto-grows up to a cap', () => 
   assert.match(src, /Math\.min\(el\.scrollHeight, 112\)/);
 });
 
-test('attachments are one left-aligned, non-wrapping group in the order photo, GIF, Comfort Cards, Tests, Two Truths and a Lie', () => {
+test('attachments are one left-aligned, non-wrapping group in the order photo, GIF, Stickers, Comfort Cards, Tests, Two Truths and a Lie', () => {
   const group = form.slice(form.lastIndexOf('<div', form.indexOf('role="group"')));
   assert.match(group, /flex-nowrap/);
   const photo = group.indexOf('Send a timed photo');
   const gif = group.indexOf('Send a GIF');
+  const stickers = group.indexOf('aria-label="Send a sticker"');
   const cards = group.indexOf('aria-label="Comfort Cards"');
   const tests = group.indexOf('aria-label="Tests"');
   const game = group.indexOf('aria-label="Two Truths and a Lie"');
-  assert.ok(photo > 0 && gif > photo && cards > gif && tests > cards && game > tests);
+  assert.ok(photo > 0 && gif > photo && stickers > gif && cards > stickers && tests > cards && game > tests);
   assert.doesNotMatch(group, /rounded-full|border border-line/, 'no circular backgrounds around the icons');
-  assert.equal((group.match(/h-10 w-10/g) || []).length, 5, 'same 40px touch target');
-  assert.equal((group.match(/h-5 w-5/g) || []).length, 5, 'same icon size');
-  assert.equal((group.match(/focus-visible:ring-2/g) || []).length, 5);
+  assert.equal((group.match(/h-10 w-10/g) || []).length, 6, 'same 40px touch target');
+  assert.equal((group.match(/h-5 w-5/g) || []).length, 6, 'same icon size');
+  assert.equal((group.match(/focus-visible:ring-2/g) || []).length, 6);
 });
 
 test('the send button is separate from the attachments, beside the input, and keeps its disabled state', () => {
