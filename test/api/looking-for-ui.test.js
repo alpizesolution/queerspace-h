@@ -14,16 +14,16 @@ const app = read('src/App.tsx');
 const rules = read('firestore.rules');
 const lfRules = rules.slice(rules.indexOf('4b. COSMOS "LOOKING FOR" BOARD'), rules.indexOf('5. ABUSE & SAFETY REPORTS'));
 
-test('Cosmos gets a Community / Looking For switch under the heading, and the community feed is kept as it was', () => {
+test('Cosmos gets a Looking For / Community switch under the heading, and the community feed is kept as it was', () => {
   const heading = cosmos.indexOf('>COSMOS</h1>');
   const tabs = cosmos.indexOf('aria-label="Cosmos sections"');
   assert.ok(heading > 0 && tabs > heading, 'the switch sits below the Cosmos heading');
-  assert.match(cosmos, /\['community', 'Community'\], \['lookingFor', 'Looking For'\]/);
+  assert.match(cosmos, /\['lookingFor', 'Looking For'\], \['community', 'Community'\]/);
   assert.match(cosmos, /section === 'lookingFor' && !focusMode \? \(\s*<LookingForView/);
   // Every community category, post action and the composer are still there.
   for (const label of ['All', 'Cozy Events', 'Books & Media', 'Community Talk', 'Experiences']) assert.ok(read('src/utils/communityCategories.ts').includes(`label: '${label}'`), label);
   for (const kept of ['subscribeToCommunity', 'replyToCommunityPost', 'createCommunityPost', 'adminDeleteCommunityPost', 'subscribeToReplies']) assert.ok(cosmos.includes(kept), kept);
-  assert.match(cosmos, /useState<'community' \| 'lookingFor'>\('community'\)/, 'opens on Community');
+  assert.match(cosmos, /useState<'community' \| 'lookingFor'>\('lookingFor'\)/, 'opens on Looking For');
 });
 
 test('Looking For has the six categories and the filters asked for', () => {

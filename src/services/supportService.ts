@@ -4,6 +4,7 @@ import {
   FirestoreError,
   getCountFromServer,
   getDoc,
+  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -14,7 +15,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { auth, db, ensureAnonymousAuth } from '../lib/firebase.ts';
+import { auth, db, ensureAnonymousAuth, subscribeAuthState } from '../lib/firebase.ts';
 import { UserPreferences } from '../types.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 
@@ -30,8 +31,6 @@ export const SUPPORT_PREVIEW_LENGTH = 140;
 /** Seconds between member messages; must match slowMode('support', …) in firestore.rules. */
 export const SUPPORT_SLOW_MODE_SECONDS = 2;
 export const TEAM_NAME = 'QUEERSPACE Team';
-/** Set once a member has used support, so only they pay for the unread check on app open. */
-const SUPPORT_USED_KEY = 'qs_support_used';
 
 export interface SupportMessage {
   id: string;
@@ -51,6 +50,20 @@ export interface SupportThread {
   updatedAt: number;
   unreadForTeam: boolean;
   unreadForUser: boolean;
+  /** Team replies ever sent on this thread, and how many the member has read. The difference is the unread count. */
+  teamMessageCount: number;
+  readTeamCount: number;
+}
+
+/**
+ * How many team replies the member has not read. The two counters give the number; the older flag still counts as one for threads
+ * written before the counters existed. Never negative, and the member's own messages are never part of it.
+ */
+export function unreadReplyCount(data: Record<string, unknown> | undefined): number {
+  if (!data) return 0;
+  const total = Number.isFinite(data.teamMessageCount) ? Math.max(0, Math.trunc(data.teamMessageCount as number)) : 0;
+  const read = Number.isFinite(data.readTeamCount) ? Math.max(0, Math.trunc(data.readTeamCount as number)) : 0;
+  return Math.max(total - read, data.unreadForUser === true ? 1 : 0);
 }
 
 function toMillis(value: unknown): number {
@@ -77,23 +90,9 @@ export function toSupportThread(id: string, data: Record<string, unknown>): Supp
     updatedAt: toMillis(data.updatedAt),
     unreadForTeam: data.unreadForTeam === true,
     unreadForUser: data.unreadForUser === true,
+    teamMessageCount: Number.isFinite(data.teamMessageCount) ? Math.max(0, Math.trunc(data.teamMessageCount as number)) : 0,
+    readTeamCount: Number.isFinite(data.readTeamCount) ? Math.max(0, Math.trunc(data.readTeamCount as number)) : 0,
   };
-}
-
-function rememberSupportUsed() {
-  try {
-    localStorage.setItem(SUPPORT_USED_KEY, '1');
-  } catch {
-    // Only skips the unread check on the next visit.
-  }
-}
-
-function hasUsedSupport(): boolean {
-  try {
-    return localStorage.getItem(SUPPORT_USED_KEY) === '1';
-  } catch {
-    return false;
-  }
 }
 
 async function currentUid(): Promise<string | null> {
@@ -152,7 +151,6 @@ export async function sendSupportMessage(prefs: UserPreferences, text: string): 
     );
     batch.set(doc(db, 'rate_limits', uid), { support: serverTimestamp() }, { merge: true });
     await batch.commit();
-    rememberSupportUsed();
     return 'sent';
   } catch (err) {
     console.warn('[Support] Could not send:', err);
@@ -160,29 +158,56 @@ export async function sendSupportMessage(prefs: UserPreferences, text: string): 
   }
 }
 
-/** Clears the member's "team replied" flag after they've seen it. */
+/**
+ * Marks the team replies that exist right now as read: clears the member's flag and moves the read count up to the reply count it
+ * just saw. A reply that arrives afterwards raises the count again, so it is never hidden. Only the member's own thread is touched.
+ */
 export async function markSupportReadByUser(): Promise<void> {
   if (!db) return;
   try {
     const uid = await currentUid();
     if (!uid) return;
-    await updateDoc(doc(db, 'support_threads', uid), { unreadForUser: false });
+    const ref = doc(db, 'support_threads', uid);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const data = snap.data();
+    if (unreadReplyCount(data) === 0) return;
+    const { teamMessageCount: seen, readTeamCount } = toSupportThread(uid, data);
+    await updateDoc(ref, { unreadForUser: false, ...(seen > readTeamCount ? { readTeamCount: seen } : {}) });
   } catch {
     // No thread yet, or offline: nothing to clear.
   }
 }
 
-/** One read on app open, and only for members who have used support before. */
-export async function hasUnreadSupportReply(): Promise<boolean> {
-  if (!db || !hasUsedSupport()) return false;
-  try {
-    const uid = await currentUid();
-    if (!uid) return false;
-    const snap = await getDoc(doc(db, 'support_threads', uid));
-    return snap.exists() && snap.data().unreadForUser === true;
-  } catch {
-    return false;
-  }
+/**
+ * Live count of unread team replies on the member's own thread (one document listener, so a reconnect just re-delivers the current
+ * state and never double counts). A missing or deleted thread counts as zero.
+ */
+export function subscribeToUnreadSupportReplies(onCount: (count: number) => void): () => void {
+  if (!db) return () => {};
+  let unsubscribeThread = () => {};
+  // Follows whoever is signed in: on a brand-new session the app may replace its first anonymous user while starting up, and a
+  // listener tied to the first one would be refused. Each sign-in change re-attaches to that member's own thread.
+  const unsubscribeAuth = subscribeAuthState((user) => {
+    unsubscribeThread();
+    unsubscribeThread = () => {};
+    if (!user || !db) {
+      onCount(0);
+      return;
+    }
+    unsubscribeThread = onSnapshot(
+      doc(db, 'support_threads', user.uid),
+      (snap) => onCount(snap.exists() ? unreadReplyCount(snap.data()) : 0),
+      (err) => {
+        console.warn('[Support] Unread notice:', err);
+        onCount(0);
+      }
+    );
+  });
+  return () => {
+    unsubscribeAuth();
+    unsubscribeThread();
+  };
 }
 
 // ---------------------------------------------------------------- Admin side
@@ -233,6 +258,7 @@ export async function replyAsTeam(threadId: string, text: string): Promise<boole
       updatedAt: serverTimestamp(),
       unreadForUser: true,
       unreadForTeam: false,
+      teamMessageCount: increment(1),
     });
     await batch.commit();
     return true;

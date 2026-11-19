@@ -9,8 +9,8 @@ import { TEST_CATALOG, TEST_PRIVACY_NOTE, testById, type CatalogTest } from '../
  * read or shared. The only addresses that can ever open are the ones in the catalog (src/utils/testCatalog.ts).
  */
 
-/** Deep amber/teal identity, different from Comfort Cards (plum) and NSFW Cards (wine). Used for the invitation card and the panel. */
-export const TEST_LOOK = { bg: '#0f2430', bg2: '#13303a', border: '#2f6f7c', accent: '#f3c969', text: '#eef7f8', meta: '#a9ccd2', btnText: '#241a00' } as const;
+/** Plum/violet, taken from the QUEERSPACE theme tokens so light and dark both follow the theme. Used for the invitation card and the panel. */
+export const TEST_LOOK = { bg: 'var(--color-raised)', bg2: 'var(--color-raised)', border: 'var(--color-line-strong)', accent: 'var(--color-lavender)', text: 'var(--color-fg)', meta: 'var(--color-muted)', btnText: 'var(--color-ink)' } as const;
 
 /** The link that opens a test: exactly the catalog address, in a new tab, with no opener and no referrer. */
 export const TestLink: React.FC<{ test: CatalogTest; className?: string; style?: React.CSSProperties; children: React.ReactNode }> = ({ test, className, style, children }) => (
@@ -131,10 +131,9 @@ export const TestPicker: React.FC<PickerProps> = ({ partnerName, onInvite, onClo
                   disabled={busy !== null || done}
                   onClick={() => void invite(test)}
                   aria-label={`${done ? 'Invited to' : 'Invite to'} ${test.name}`}
-                  className="flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition hover:brightness-110 disabled:cursor-default disabled:opacity-80 focus-visible:outline-none focus-visible:ring-2"
-                  style={{ backgroundImage: `linear-gradient(135deg, ${TEST_LOOK.bg}, ${TEST_LOOK.bg2})`, borderColor: TEST_LOOK.border, color: TEST_LOOK.text }}
+                  className="flex min-h-14 w-full items-center gap-3 rounded-xl border border-line-strong bg-raised px-3 py-2 text-left text-fg transition-colors hover:border-lavender/50 hover:bg-plum/20 active:bg-plum/30 disabled:cursor-default disabled:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lavender/60"
                 >
-                  <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg" style={{ backgroundColor: 'rgba(243,201,105,0.14)' }}>{test.icon}</span>
+                  <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg" style={{ backgroundColor: 'color-mix(in srgb, var(--color-plum) 38%, var(--color-raised))' }}>{test.icon}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[length:calc(14.5px_*_var(--fs,1))] font-semibold leading-snug">{test.name}</span>
                     <span className="block truncate text-[length:calc(12.5px_*_var(--fs,1))]" style={{ color: TEST_LOOK.meta }}>{test.description}</span>

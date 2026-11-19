@@ -96,6 +96,7 @@ test('the team can send a picture into a member\'s thread, and the member can se
   const thread = (await db.doc(`support_threads/${member.uid}`).get()).data();
   assert.equal(thread.lastFrom, 'team');
   assert.equal(thread.unreadForUser, true);
+  assert.equal(thread.teamMessageCount, 1);
   assert.equal(thread.unreadForTeam, false);
   assert.equal((await view(member, member.uid, res.body.id)).statusCode, 200);
 });

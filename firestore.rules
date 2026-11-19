@@ -1181,7 +1181,9 @@ service cloud.firestore {
 
     function supportSummaryValid() {
       let d = request.resource.data;
-      return d.keys().hasOnly(['displayName', 'avatar', 'lastMessage', 'lastFrom', 'updatedAt', 'unreadForTeam', 'unreadForUser'])
+      return d.keys().hasOnly(['displayName', 'avatar', 'lastMessage', 'lastFrom', 'updatedAt', 'unreadForTeam', 'unreadForUser', 'teamMessageCount', 'readTeamCount'])
+        && (!('teamMessageCount' in d) || d.teamMessageCount is int)
+        && (!('readTeamCount' in d) || d.readTeamCount is int)
         && d.lastMessage is string && d.lastMessage.size() <= 140
         && (!('displayName' in d) || (d.displayName is string && d.displayName.size() <= 30))
         && (!('avatar' in d) || (d.avatar is string && d.avatar.size() <= 24));
@@ -1201,16 +1203,25 @@ service cloud.firestore {
         && request.resource.data.unreadForTeam == true
         && request.resource.data.updatedAt == request.time
         && !('unreadForUser' in supportChanged())
+        && !('teamMessageCount' in supportChanged())
+        && !('readTeamCount' in supportChanged())
         && slowMode('support', 2);
 
-      // Member opens the chat: clear their unread flag only.
+      // Member opens the chat: clear their unread flag and record how many team replies they have read. The read count can only
+      // move forward and never past the number of replies that exist, so it cannot hide a reply that has not arrived yet.
       allow update: if isOwner(userId)
-        && supportChanged().hasOnly(['unreadForUser'])
-        && request.resource.data.unreadForUser == false;
+        && supportChanged().hasOnly(['unreadForUser', 'readTeamCount'])
+        && request.resource.data.unreadForUser == false
+        && (!('readTeamCount' in supportChanged())
+            || (request.resource.data.readTeamCount is int
+                && request.resource.data.readTeamCount >= resource.data.get('readTeamCount', 0)
+                && request.resource.data.readTeamCount <= resource.data.get('teamMessageCount', 0)));
 
       // Team replies, or opens the thread (clears the team's unread flag only).
       allow update: if isAdmin() && supportSummaryValid() && (
-        (supportChanged().hasOnly(['lastMessage', 'lastFrom', 'updatedAt', 'unreadForUser', 'unreadForTeam'])
+        (supportChanged().hasOnly(['lastMessage', 'lastFrom', 'updatedAt', 'unreadForUser', 'unreadForTeam', 'teamMessageCount'])
+          && (!('teamMessageCount' in supportChanged())
+              || request.resource.data.teamMessageCount == resource.data.get('teamMessageCount', 0) + 1)
           && request.resource.data.lastFrom == 'team'
           && request.resource.data.unreadForUser == true
           && request.resource.data.updatedAt == request.time)

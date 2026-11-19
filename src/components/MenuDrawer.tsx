@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { SupportUnreadBadge } from './SupportUnreadBadge.tsx';
 import {
   X,
   Info,
@@ -32,6 +33,7 @@ interface MenuDrawerProps {
   isSoundMuted: boolean;
   onToggleSound: () => void;
   hasSupportReply?: boolean;
+  supportUnreadCount?: number;
   hasUnreadUpdates?: boolean;
   showAdmin: boolean;
 }
@@ -64,6 +66,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   isSoundMuted,
   onToggleSound,
   hasSupportReply = false,
+  supportUnreadCount = 0,
   hasUnreadUpdates = false,
   showAdmin,
 }) => {
@@ -176,11 +179,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
               <button className={rowClass} onClick={then(onOpenSupport)}>
                 <MessageCircleHeart className="w-[18px] h-[18px] text-lavender shrink-0" />
                 <span className="flex-1">Chat with us</span>
-                {hasSupportReply && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-berry">
-                    <span className="sr-only">New reply from the team</span>
-                  </span>
-                )}
+                <SupportUnreadBadge count={supportUnreadCount} />
               </button>
             </li>
             <li>
