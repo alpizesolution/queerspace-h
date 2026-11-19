@@ -26,6 +26,22 @@ test('Cosmos gets a Looking For / Community switch under the heading, and the co
   assert.match(cosmos, /useState<'community' \| 'lookingFor'>\('lookingFor'\)/, 'opens on Looking For');
 });
 
+test('one New post button in the COSMOS header serves both tabs; Looking For has none of its own below the filters', () => {
+  // The single header button (top right, same classes on both tabs) opens the composer of the tab you are on.
+  assert.equal((cosmos.match(/>\s*<Plus className="w-4 h-4" \/>\s*New post/g) ?? []).length, 1, 'one header button, not two');
+  assert.match(cosmos, /onClick=\{section === 'lookingFor' \? \(\) => setLookingForCompose\(\(n\) => n \+ 1\) : openComposer\}/);
+  assert.match(cosmos, /className="btn btn-primary btn-sm hidden sm:inline-flex"/);
+  const headerButton = cosmos.indexOf('<Plus className="w-4 h-4" />');
+  assert.ok(headerButton > cosmos.indexOf('>COSMOS</h1>') && headerButton < cosmos.indexOf('aria-label="Cosmos sections"'), 'in the header row, above the tabs');
+  assert.match(cosmos, /<LookingForView composeRequest=\{lookingForCompose\}/);
+  // Looking For no longer draws its own button beside the filters, but still opens its composer (with the same profile checks) and keeps the phone button.
+  assert.doesNotMatch(board, /New post\s*<\/button>/);
+  assert.match(board, /composeRequest = 0/);
+  assert.match(board, /if \(composeRequest > 0\) openComposer\(null\)/);
+  assert.match(board, /<FloatingAddButton onClick=\{\(\) => openComposer\(null\)\} label="New Looking For post" \/>/);
+  assert.match(cosmos, /<FloatingAddButton onClick=\{openComposer\} label="New post" \/>/);
+});
+
 test('Looking For has the six categories and the filters asked for', () => {
   const util = read('src/utils/lookingFor.ts');
   for (const label of ['All', 'Friendship', 'Dating / R4R', 'Activity Buddy', 'Gaming Buddy', 'Travel Buddy']) assert.ok(util.includes(`label: '${label}'`), label);
