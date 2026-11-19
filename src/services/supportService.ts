@@ -15,7 +15,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { auth, db, ensureAnonymousAuth } from '../lib/firebase.ts';
+import { auth, db, ensureAnonymousAuth, subscribeAuthState } from '../lib/firebase.ts';
 import { UserPreferences } from '../types.ts';
 import { isValidAvatar } from '../utils/avatar.ts';
 
@@ -185,12 +185,18 @@ export async function markSupportReadByUser(): Promise<void> {
  */
 export function subscribeToUnreadSupportReplies(onCount: (count: number) => void): () => void {
   if (!db) return () => {};
-  let unsubscribe = () => {};
-  let cancelled = false;
-  void currentUid().then((uid) => {
-    if (cancelled || !uid || !db) return;
-    unsubscribe = onSnapshot(
-      doc(db, 'support_threads', uid),
+  let unsubscribeThread = () => {};
+  // Follows whoever is signed in: on a brand-new session the app may replace its first anonymous user while starting up, and a
+  // listener tied to the first one would be refused. Each sign-in change re-attaches to that member's own thread.
+  const unsubscribeAuth = subscribeAuthState((user) => {
+    unsubscribeThread();
+    unsubscribeThread = () => {};
+    if (!user || !db) {
+      onCount(0);
+      return;
+    }
+    unsubscribeThread = onSnapshot(
+      doc(db, 'support_threads', user.uid),
       (snap) => onCount(snap.exists() ? unreadReplyCount(snap.data()) : 0),
       (err) => {
         console.warn('[Support] Unread notice:', err);
@@ -199,8 +205,8 @@ export function subscribeToUnreadSupportReplies(onCount: (count: number) => void
     );
   });
   return () => {
-    cancelled = true;
-    unsubscribe();
+    unsubscribeAuth();
+    unsubscribeThread();
   };
 }
 

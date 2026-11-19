@@ -1687,6 +1687,23 @@ test('S-03b: Unread reply counts: the team raises the count by one per reply, th
   await assertFails(eve.doc('support_threads/ivy').update({ teamMessageCount: 99 }));
 });
 
+test('S-03c: Threads from before the counters existed keep working: a reply without a counter, and a member clearing only the flag', async () => {
+  await seedAdmin();
+  const ivy = testEnv.authenticatedContext('ivy').firestore();
+  await assertSucceeds(supportSend('ivy', 'Old thread'));
+  // The older team reply shape (no counter) is still accepted...
+  const cha = adminDb();
+  const legacyReply = cha.batch();
+  legacyReply.set(cha.collection('support_threads/ivy/messages').doc(), { from: 'team', text: 'old style', timestamp: now() });
+  legacyReply.update(cha.doc('support_threads/ivy'), { lastMessage: 'old style', lastFrom: 'team', updatedAt: now(), unreadForUser: true, unreadForTeam: false });
+  await assertSucceeds(legacyReply.commit());
+  const thread = await ivy.doc('support_threads/ivy').get();
+  assert.equal(thread.data()?.teamMessageCount, undefined);
+  // ...the member clears just the flag like before, and cannot invent a read count when no replies are counted.
+  await assertFails(ivy.doc('support_threads/ivy').update({ unreadForUser: false, readTeamCount: 1 }));
+  await assertSucceeds(ivy.doc('support_threads/ivy').update({ unreadForUser: false }));
+});
+
 test('S-04: Only admins CAN post verified team messages in the Public Room', async () => {
   await seedAdmin();
   const teamMsg = (uid: string) => ({
