@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Flag, MapPin, Pause, Pencil, Plus, ShieldAlert, SlidersHorizontal, Trash2, UserX } from 'lucide-react';
+import { CheckCircle2, Flag, MapPin, Pause, Pencil, ShieldAlert, SlidersHorizontal, Trash2, UserX } from 'lucide-react';
 import { MemberAvatar, MemberName } from './ProfileNav.tsx';
 import { ChipScroller } from './ChipScroller.tsx';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
@@ -50,6 +50,8 @@ interface Props {
   onStartDraftUsed?: () => void;
   /** The member chose Community inside the Looking For composer; its words come along. */
   onSwitchToCommunity?: (draft: { title: string; content: string }) => void;
+  /** The shared COSMOS header's "New post" button: each increase opens the Looking For composer (same checks as any other opener). */
+  composeRequest?: number;
 }
 
 const fieldClass = 'w-full px-4 rounded-xl bg-ink border border-line text-base sm:text-sm text-fg placeholder:text-subtle focus:outline-none focus:border-berry';
@@ -60,7 +62,7 @@ const Badge: React.FC<{ children: React.ReactNode; tone?: 'nsfw' | 'soft' }> = (
   </span>
 );
 
-export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, onBlockMember, onViewRequests, startDraft, onStartDraftUsed, onSwitchToCommunity }) => {
+export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, onBlockMember, onViewRequests, startDraft, onStartDraftUsed, onSwitchToCommunity, composeRequest = 0 }) => {
   const [filters, setFilters] = useState<LookingForFilters>(NO_FILTERS);
   const [posts, setPosts] = useState<LookingForPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,6 +169,14 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDraft]);
 
+  const handledCompose = useRef(composeRequest);
+  useEffect(() => {
+    if (composeRequest === handledCompose.current) return;
+    handledCompose.current = composeRequest;
+    if (composeRequest > 0) openComposer(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composeRequest]);
+
   const setFilter = <K extends keyof LookingForFilters>(key: K, value: LookingForFilters[K]) => setFilters((f) => ({ ...f, [key]: value }));
 
   return (
@@ -183,10 +193,6 @@ export const LookingForView: React.FC<Props> = ({ userPrefs, blockedPartnerIds, 
         <button type="button" onClick={() => setFiltersOpen(true)} aria-label={filterCount ? `Filters, ${filterCount} on` : 'Filters'} className="chip shrink-0 !px-3">
           <SlidersHorizontal className="w-4 h-4" />
           {filterCount > 0 && <span className="text-berry font-semibold">{filterCount}</span>}
-        </button>
-        <button type="button" onClick={() => openComposer(null)} className="btn btn-primary btn-sm hidden sm:inline-flex shrink-0">
-          <Plus className="w-4 h-4" />
-          New post
         </button>
       </div>
 

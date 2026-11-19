@@ -174,6 +174,8 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   // Words carried over when a member switches from this composer to Looking For, and a dismissed suggestion.
+  // The header's New post button opens whichever composer belongs to the tab you are on; Looking For owns its own composer.
+  const [lookingForCompose, setLookingForCompose] = useState(0);
   const [lookingForStart, setLookingForStart] = useState<{ title: string; intro: string } | null>(null);
   const [hintDismissed, setHintDismissed] = useState(false);
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
@@ -353,12 +355,13 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
           </button>
           <h1 className="text-[length:calc(23px_*_var(--fs,1))] sm:text-[length:calc(28px_*_var(--fs,1))] leading-tight font-semibold tracking-tight text-fg">COSMOS</h1>
         </div>
-        {section === 'community' && (
-          <button onClick={openComposer} className="btn btn-primary btn-sm hidden sm:inline-flex">
-            <Plus className="w-4 h-4" />
-            New post
-          </button>
-        )}
+        <button
+          onClick={section === 'lookingFor' ? () => setLookingForCompose((n) => n + 1) : openComposer}
+          className="btn btn-primary btn-sm hidden sm:inline-flex"
+        >
+          <Plus className="w-4 h-4" />
+          New post
+        </button>
       </div>
 
       {focusMode && onCloseFocus && (
@@ -389,7 +392,7 @@ export const CommunityFeedView: React.FC<CommunityFeedViewProps> = ({
       )}
 
       {section === 'lookingFor' && !focusMode ? (
-        <LookingForView startDraft={lookingForStart} onStartDraftUsed={() => setLookingForStart(null)} onSwitchToCommunity={(d) => { setNewTitle(d.title); setNewContent(d.content); setHintDismissed(true); setSection('community'); setShowCreateModal(true); }} userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onBlockMember={onBlockMember} onViewRequests={onViewRequests} />
+        <LookingForView composeRequest={lookingForCompose} startDraft={lookingForStart} onStartDraftUsed={() => setLookingForStart(null)} onSwitchToCommunity={(d) => { setNewTitle(d.title); setNewContent(d.content); setHintDismissed(true); setSection('community'); setShowCreateModal(true); }} userPrefs={userPrefs} blockedPartnerIds={blockedPartnerIds} nsfwPreference={nsfwPreference} onOpenSettings={onOpenSettings} onBlockMember={onBlockMember} onViewRequests={onViewRequests} />
       ) : (
       <>
       {!focusMode && <ChipScroller items={FILTER_CATEGORIES} active={activeCategory} onSelect={setActiveCategory} label="Categories" bleed className="mb-3" />}
