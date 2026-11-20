@@ -508,3 +508,15 @@ test('the ATLAS layout does not move when a text field is focused: its height us
   const typing = css.slice(css.indexOf('Hide the tab bar while typing'), css.indexOf('Hide the tab bar while typing') + 600);
   assert.equal(typing.includes('--tabbar-h-steady'), false, 'the focus rule only changes --tabbar-h, never the steady one');
 });
+
+test('REGRESSION: the Community map shows the member\'s own public memory as a star (the page never filters records out), and opens it with the owner\'s controls', async () => {
+  community = [memory('own1', { mine: true, author: null, lat: 10.1, lng: 20.2, title: 'I published this', displayIdentity: 'anonymous', displayName: 'Nova', identity: { mode: 'anonymous' } }), memory('c1')];
+  render(<AtlasPage />);
+  const own = await screen.findByRole('button', { name: 'star:I published this' });
+  assert.ok(await screen.findByRole('button', { name: 'star:Title c1' }), 'and the other members\' stars are there too');
+  assert.equal(screen.getByRole('tab', { name: 'Community' }).getAttribute('aria-selected'), 'true');
+  fireEvent.click(own);
+  const card = await screen.findByTestId('memory-panel');
+  assert.ok(within(card).getByRole('button', { name: 'Edit' }), 'it is theirs, so they can edit it from Community');
+  assert.match(within(card).getByTestId('memory-identity').textContent ?? '', /Shown as Nova/);
+});
