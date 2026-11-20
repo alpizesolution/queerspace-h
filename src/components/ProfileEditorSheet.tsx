@@ -7,9 +7,18 @@ import { UserPreferences } from '../types.ts';
 import { MY_VIBE_OPTIONS, PERSONAL_STYLE_OPTIONS, PRONOUN_OPTIONS, SEXUAL_ORIENTATIONS, GENDER_IDENTITIES, GENDER_EXPRESSIONS } from '../utils/matching-logic.ts';
 import { suggestPseudonym } from '../services/pseudonymService.ts';
 import { ProfileFields } from '../utils/preferences.ts';
-interface ProfileEditorSheetProps { currentPrefs: UserPreferences; onClose: () => void; onSave: (profile: ProfileFields) => void; }
+interface ProfileEditorSheetProps {
+  currentPrefs: UserPreferences;
+  onClose: () => void;
+  /** May return a promise of a message when the save did not go through; it is shown here and the form stays open. */
+  onSave: (profile: ProfileFields) => unknown;
+  /** "setup": the required first-time profile. It cannot be closed, shows only the essentials and says "Save and continue". */
+  mode?: 'edit' | 'setup';
+}
 /** Anonymous profile: a pseudonym and illustrated avatar, never a required photo or real name. */
-export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentPrefs, onClose, onSave }) => {
+export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentPrefs, onClose, onSave, mode = 'edit' }) => {
+  const setup = mode === 'setup';
+  const [saving, setSaving] = useState(false);
   const [displayName, setDisplayName] = useState(currentPrefs.displayName || 'Sapphic Guest');
   const [avatar, setAvatar] = useState(() => isValidAvatar(currentPrefs.avatar) ? currentPrefs.avatar : randomAvatar());
   const [pronouns, setPronouns] = useState(currentPrefs.customPronouns ? 'Self-described' : currentPrefs.pronouns || 'she/her');
@@ -28,7 +37,8 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
   const [showGenderExpression, setShowGenderExpression] = useState(currentPrefs.showGenderExpressionOnProfile ?? false);
   const [showAge, setShowAge] = useState(currentPrefs.showAgeOnProfile ?? false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (saving) return;
     const name = displayName.trim();
     const pronounValue = pronouns === 'Self-described' ? customPronouns.trim() : pronouns;
     const next: ProfileFields = {
@@ -54,14 +64,25 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
     if (name.length > 25) validation.displayName = 'Your display name must be 25 characters or fewer.';
     if (pronouns === 'Self-described' && !customPronouns.trim()) validation.pronouns = 'Add your pronouns or choose another option.';
     if (Object.keys(validation).length) { setErrors(validation); return; }
-    setErrors({}); onSave(next);
+    setErrors({});
+    const outcome = onSave(next);
+    if (outcome && typeof (outcome as Promise<unknown>).then === 'function') {
+      setSaving(true);
+      try {
+        const problem = await outcome;
+        if (typeof problem === 'string' && problem) setErrors({ save: problem });
+      } finally {
+        setSaving(false);
+      }
+    }
   };
   const errorList = Object.values(errors).filter(Boolean);
-  return <Sheet title="Your profile" onClose={onClose} size="lg" footer={<>
+  return <Sheet title={setup ? 'Set up your profile' : 'Your profile'} onClose={setup ? () => {} : onClose} hideClose={setup} trapFocus={setup} size="lg" footer={<>
     {errorList.length > 0 && <p role="alert" className="mb-2 text-[length:calc(13px_*_var(--fs,1))] text-danger">{errorList[0]}</p>}
-    <button type="button" onClick={handleSubmit} className="btn btn-primary w-full h-12 text-[length:calc(15px_*_var(--fs,1))]">Save profile</button>
+    <button type="button" onClick={() => void handleSubmit()} disabled={saving} data-testid="profile-save" className="btn btn-primary w-full h-12 text-[length:calc(15px_*_var(--fs,1))]">{saving ? 'Saving…' : setup ? 'Save and continue' : 'Save profile'}</button>
   </>}>
     <div className="space-y-4 text-fg">
+      {setup && <p data-testid="profile-setup-intro" className="text-[length:calc(13px_*_var(--fs,1))] text-muted">One quick step before you explore. We made up a name for you: keep it or make it yours. No real name or photo needed.</p>}
       <section>
         <button type="button" onClick={() => setAvatar((current) => randomAvatar(current))} className="group flex items-center gap-3 mb-4 -ml-1 p-1 pr-3 rounded-full hover:bg-raised transition-colors" aria-label="Shuffle your anonymous avatar">
           <span className="relative"><AnimalAvatar key={avatar} avatar={avatar} seed={displayName} className="w-12 h-12 anim-pop" /><span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-raised border border-line flex items-center justify-center text-muted"><Shuffle className="w-3 h-3" /></span></span>
@@ -83,6 +104,7 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
         <textarea id="qs-about-me" value={aboutMe} onChange={(e) => setAboutMe(e.target.value.slice(0, 160))} maxLength={160} rows={2} placeholder="A little about your world…" className="input resize-none" aria-describedby="qs-about-hint" />
         <p id="qs-about-hint" className="mt-1.5 text-xs text-subtle">Keep it short, personal, and as anonymous as you like.</p>
       </section>
+      {!setup && <>
       <section><p className="label">My Vibe <span className="font-normal text-subtle">· optional</span></p><p className="mb-2 text-xs text-subtle">Pick a personality or interest, not a gender label.</p><div className="flex flex-wrap gap-2">
         {MY_VIBE_OPTIONS.map((vibe) => { const selected = myVibe === vibe; return <button key={vibe} type="button" aria-pressed={selected} onClick={() => setMyVibe((current) => current === vibe ? '' : vibe)} className="chip">{selected && <Check className="w-3.5 h-3.5 text-berry" />}{vibe}</button>; })}
       </div><p className="mt-2 text-xs text-subtle">Choose the label that feels right to you, or leave it blank.</p></section>
@@ -140,7 +162,8 @@ export const ProfileEditorSheet: React.FC<ProfileEditorSheetProps> = ({ currentP
         <label className="flex items-center justify-between gap-3 text-sm"><span className="font-medium">Show my age</span><input type="checkbox" className="check" checked={showAge} onChange={(e) => setShowAge(e.target.checked)} /></label>
         <p className="mt-1 text-xs text-subtle">Off by default. When on, people you chat with can see your age. Your birthday is never shown.</p>
       </section>
-      <p className="text-xs text-subtle">Your birthday and My Type preferences stay private. You never need to share your real name or photo.</p>
+      </>}
+      <p className="text-xs text-subtle">{setup && 'You can add more later from your profile. '}Your birthday and My Type preferences stay private. You never need to share your real name or photo.</p>
     </div>
   </Sheet>;
 };

@@ -1704,6 +1704,32 @@ test('S-03c: Threads from before the counters existed keep working: a reply with
   await assertSucceeds(ivy.doc('support_threads/ivy').update({ unreadForUser: false }));
 });
 
+test('ATLAS-01: Nobody CAN read or write atlas memories directly: not the author, not another member, not an admin (the server decides who sees what)', async () => {
+  await seedAdmin();
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('atlasMemories/m1').set({ ownerId: 'ivy', title: 'Pier', visibility: 'private', lat: 14.6, lng: 120.98, createdAt: new Date() });
+  });
+  const ivy = testEnv.authenticatedContext('ivy').firestore();
+  const eve = testEnv.authenticatedContext('eve').firestore();
+  for (const db of [ivy, eve, adminDb()]) {
+    await assertFails(db.doc('atlasMemories/m1').get());
+    await assertFails(db.collection('atlasMemories').get());
+    await assertFails(db.doc('atlasMemories/m1').update({ visibility: 'public' }));
+    await assertFails(db.doc('atlasMemories/m1').delete());
+    await assertFails(db.doc('atlasMemories/m2').set({ ownerId: 'ivy', title: 'x', visibility: 'public', lat: 1, lng: 2 }));
+  }
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('atlasMemories/m1').get());
+  // The moderation audit trail keeps the real owner id, so it is server-only too.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('atlasModerationLog/e1').set({ action: 'delete', memoryId: 'm1', ownerId: 'ivy', adminId: 'cha', at: new Date() });
+  });
+  for (const db of [ivy, eve, adminDb()]) {
+    await assertFails(db.doc('atlasModerationLog/e1').get());
+    await assertFails(db.collection('atlasModerationLog').get());
+    await assertFails(db.doc('atlasModerationLog/e2').set({ action: 'delete', ownerId: 'ivy' }));
+  }
+});
+
 test('S-04: Only admins CAN post verified team messages in the Public Room', async () => {
   await seedAdmin();
   const teamMsg = (uid: string) => ({
@@ -1881,6 +1907,31 @@ test('A-02: Birthday CANNOT be set to an underage date, and others CANNOT read i
   await assertFails(alice.doc('users/newbie/private/settings').set({ ...base, birthDate: new Date() }));
   await assertSucceeds(testEnv.authenticatedContext('newbie').firestore().doc('users/newbie/private/settings').set({ ...base, birthDate: new Date(Date.now() - 25 * 365 * 86400000) }));
   await assertFails(testEnv.authenticatedContext('bob').firestore().doc('users/newbie/private/settings').get());
+});
+
+test('A-02b: a private record with no creation stamp can still be saved by its owner, but createdAt can only ever be set to "now" and never changed', async () => {
+  const adult = new Date(Date.now() - 30 * 365 * 86400000);
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('users/legacy/private/settings').set({ birthDate: adult });
+    await ctx.firestore().doc('users/stamped/private/settings').set({ birthDate: adult, createdAt: new Date('2024-01-01T00:00:00Z'), updatedAt: new Date() });
+  });
+  const now = () => firebase.firestore.FieldValue.serverTimestamp();
+  const legacy = testEnv.authenticatedContext('legacy').firestore().doc('users/legacy/private/settings');
+  // The birthday-less-stamp record: an ordinary save (no createdAt in it) is accepted, as is receiving the stamp once, set to "now".
+  await assertSucceeds(legacy.set({ exactLocation: 'Manila', blockedPartnerIds: [], updatedAt: now() }, { merge: true }));
+  await assertSucceeds(legacy.set({ createdAt: now(), updatedAt: now() }, { merge: true }));
+  // Once stamped it is fixed like any other.
+  await assertFails(legacy.set({ createdAt: new Date('2001-01-01T00:00:00Z'), updatedAt: now() }, { merge: true }));
+  // A stamp can never be back-dated or forged, on a record that has none or one.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => { await ctx.firestore().doc('users/legacy2/private/settings').set({ birthDate: adult }); });
+  await assertFails(testEnv.authenticatedContext('legacy2').firestore().doc('users/legacy2/private/settings').set({ createdAt: new Date('2001-01-01T00:00:00Z'), updatedAt: now() }, { merge: true }));
+  const stamped = testEnv.authenticatedContext('stamped').firestore().doc('users/stamped/private/settings');
+  await assertFails(stamped.set({ createdAt: now(), updatedAt: now() }, { merge: true }));
+  await assertSucceeds(stamped.set({ exactLocation: 'Cebu', updatedAt: now() }, { merge: true }));
+  // Nobody else can touch it, and the birthday still cannot be changed by a client.
+  await assertFails(testEnv.authenticatedContext('bob').firestore().doc('users/legacy/private/settings').set({ updatedAt: now() }, { merge: true }));
+  await assertFails(testEnv.unauthenticatedContext().firestore().doc('users/legacy/private/settings').set({ updatedAt: now() }, { merge: true }));
+  await assertFails(legacy.set({ birthDate: new Date(Date.now() - 40 * 365 * 86400000), updatedAt: now() }, { merge: true }));
 });
 
 test('A-03: Incomplete public profiles are hidden from other members but not from their owner', async () => {

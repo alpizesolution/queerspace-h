@@ -80,7 +80,13 @@ test('API rejects unauthenticated requests and wrong methods', { skip }, async (
 test('private age range: validated, stored server-side only, rate limited', { skip }, async () => {
   const { match, db } = await load();
   const u = await newUser();
+  // Bad input is refused before anything else; only a member (an adult with a saved profile) can store a range.
   assert.equal((await call(match, { token: u.token, body: { action: 'prefs', ageMin: 30, ageMax: 20 } })).statusCode, 400);
+  assert.equal((await call(match, { token: u.token, body: { action: 'prefs', ageMin: 22, ageMax: 35 } })).statusCode, 403, 'no birthday and no profile: not a member');
+  await seedMember(db, u.uid, { profileComplete: false, queue: null });
+  assert.equal((await call(match, { token: u.token, body: { action: 'prefs', ageMin: 22, ageMax: 35 } })).statusCode, 403, 'an adult whose profile is not saved yet');
+  assert.equal((await db.doc(`matchPrefs/${u.uid}`).get()).exists, false, 'nothing was stored');
+  await seedMember(db, u.uid, { profileComplete: true, queue: null });
   assert.equal((await call(match, { token: u.token, body: { action: 'prefs', ageMin: 17, ageMax: 30 } })).statusCode, 400);
   const ok = await call(match, { token: u.token, body: { action: 'prefs', ageMin: 22, ageMax: 35 } });
   assert.equal(ok.statusCode, 200);

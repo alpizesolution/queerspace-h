@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, User, connectAuthEmulator } from 'firebase/auth';
+import { getAuth, signInAnonymously, signOut, onAuthStateChanged, User, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { Analytics, getAnalytics, isSupported as isAnalyticsSupported, logEvent } from 'firebase/analytics';
@@ -108,6 +108,19 @@ export async function ensureAnonymousAuth(): Promise<User | null> {
   }
 }
 
+
+/**
+ * Ends this device's session and forgets what it kept locally (profile, blocked list, preferences), then reloads so the app starts
+ * clean. Members are anonymous accounts, so there is no password to come back with: callers must have asked first.
+ */
+export async function signOutMember(): Promise<void> {
+  try { if (auth) await signOut(auth); } catch (err) { console.warn('Sign-out failed:', err); }
+  try {
+    const store = window.localStorage;
+    for (const key of Object.keys(store)) if (/^(queerspace|hiraya|vespera)_/.test(key)) store.removeItem(key);
+  } catch { /* storage may be blocked; the new session is still separate */ }
+  window.location.assign('/');
+}
 
 export function subscribeAuthState(callback: (user: User | null) => void): () => void {
   if (!auth) {

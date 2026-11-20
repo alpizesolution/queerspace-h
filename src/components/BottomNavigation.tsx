@@ -1,8 +1,10 @@
 import React from 'react';
-import { Home, MessageCircle, Users, MessagesSquare, Feather, RadioTower } from 'lucide-react';
+import { Home, MessageCircle, Users, MessagesSquare, Feather, MapPinned } from 'lucide-react';
 import { formatUnread } from '../services/signalsInbox.ts';
 
-export type NavTarget = 'home' | 'setup' | 'public' | 'unsaid' | 'community' | 'signals';
+export type NavTarget = 'home' | 'setup' | 'public' | 'unsaid' | 'community' | 'atlas' | 'signals';
+
+/** Signals is not a tab: it is opened from the Inbox icon in the header, so it is a valid target but has no entry below. */
 
 /** Single source of truth for primary navigation (bottom tab bar on mobile, header tabs on desktop). */
 export const NAV_ITEMS: { id: NavTarget; label: string; icon: React.ElementType }[] = [
@@ -11,7 +13,7 @@ export const NAV_ITEMS: { id: NavTarget; label: string; icon: React.ElementType 
   { id: 'public', label: 'Galaxy', icon: Users },
   { id: 'unsaid', label: 'Echoes', icon: Feather },
   { id: 'community', label: 'Cosmos', icon: MessagesSquare },
-  { id: 'signals', label: 'Signals', icon: RadioTower },
+  { id: 'atlas', label: 'Atlas', icon: MapPinned },
 ];
 
 export const isNavActive = (id: NavTarget, currentView: string) =>

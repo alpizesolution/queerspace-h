@@ -36,7 +36,7 @@ test('only real endpoints live in api/: no tests, specs or helpers that Vercel w
   const stray = files.filter((file) => /\.(test|spec)\.[a-z]+$/.test(file));
   assert.deepEqual(stray, [], `Move these out of api/ (tests belong in test/api/): ${stray.join(', ')}`);
   // Shared code is prefixed with "_" so it is imported, not deployed.
-  assert.deepEqual(files, ['api/admin-growth.js', 'api/age.js', 'api/firebase-auth.js', 'api/match.js', 'api/media-cleanup.js', 'api/pseudonym.js', 'api/room.js', 'api/signals.js', 'api/stardust.js']);
+  assert.deepEqual(files, ['api/admin-growth.js', 'api/age.js', 'api/atlas.js', 'api/firebase-auth.js', 'api/match.js', 'api/media-cleanup.js', 'api/pseudonym.js', 'api/room.js', 'api/signals.js', 'api/stardust.js']);
 });
 
 test('the public API addresses are unchanged', () => {
@@ -45,5 +45,5 @@ test('the public API addresses are unchanged', () => {
   assert.ok(rewrites.includes('/__/auth/:path* -> /api/firebase-auth?p=__/auth/:path*'));
   assert.ok(rewrites.includes('/__/firebase/:path* -> /api/firebase-auth?p=__/firebase/:path*'));
   // The app calls these by name; each must still have its own file.
-  for (const name of ['admin-growth', 'age', 'match', 'pseudonym', 'signals']) assert.ok(fs.existsSync(`api/${name}.js`), name);
+  for (const name of ['admin-growth', 'age', 'atlas', 'match', 'pseudonym', 'signals']) assert.ok(fs.existsSync(`api/${name}.js`), name);
 });

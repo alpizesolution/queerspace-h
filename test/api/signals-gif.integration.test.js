@@ -56,11 +56,16 @@ async function setup() {
   await realFetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${process.env.GCLOUD_PROJECT}/databases/(default)/documents`, { method: 'DELETE' });
   const { default: handler } = await import('../../api/signals.js');
   const { getAdminApp } = await import('../../api/_lib.js');
-  const { getFirestore } = await import('firebase-admin/firestore');
+  const { getFirestore, Timestamp } = await import('firebase-admin/firestore');
   const db = getFirestore(getAdminApp());
   const a = await newUser();
   const b = await newUser();
   const outsider = await newUser();
+  // Members: an adult with a saved profile (the minimum for anything that spends GIF quota or messages).
+  for (const m of [a, b, outsider]) {
+    await db.doc(`users/${m.uid}/private/settings`).set({ birthDate: Timestamp.fromDate(new Date('1990-05-05T00:00:00Z')), blockedPartnerIds: [] });
+    await db.doc(`users/${m.uid}/public/profile`).set({ displayName: 'Member', pronouns: 'she/her', profileComplete: true });
+  }
   const pairId = `pair-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await db.doc(`signalsPairs/${pairId}`).set({ participants: [a.uid, b.uid].sort(), status: 'active', createdAt: new Date() });
   const call = async (user, method, body, query) => {
@@ -260,14 +265,14 @@ test('GIF messages cannot bypass the conversation rules: outsiders, blocks, susp
   assert.equal(giphyCalls.length, 0, 'GIPHY is not asked for someone who may not send');
 
   // I blocked them / they blocked me.
-  await db.doc(`users/${a.uid}/private/settings`).set({ blockedPartnerIds: [b.uid] });
+  await db.doc(`users/${a.uid}/private/settings`).set({ blockedPartnerIds: [b.uid] }, { merge: true });
   assert.equal((await sendGif(a, GOOD)).statusCode, 403);
   assert.equal((await sendGif(b, GOOD)).statusCode, 403);
-  await db.doc(`users/${a.uid}/private/settings`).set({ blockedPartnerIds: [] });
-  await db.doc(`users/${b.uid}/private/settings`).set({ blockedPartnerIds: [a.uid] });
+  await db.doc(`users/${a.uid}/private/settings`).set({ blockedPartnerIds: [] }, { merge: true });
+  await db.doc(`users/${b.uid}/private/settings`).set({ blockedPartnerIds: [a.uid] }, { merge: true });
   assert.equal((await sendGif(a, GOOD)).statusCode, 403);
   assert.equal((await sendGif(b, GOOD)).statusCode, 403);
-  await db.doc(`users/${b.uid}/private/settings`).set({ blockedPartnerIds: [] });
+  await db.doc(`users/${b.uid}/private/settings`).set({ blockedPartnerIds: [] }, { merge: true });
 
   // Either member suspended.
   await db.doc(`suspensions/${a.uid}`).set({ reason: 'test' });

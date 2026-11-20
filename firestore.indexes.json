@@ -17,6 +17,30 @@
       ]
     },
     {
+      "collectionGroup": "atlasMemories",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "atlasMemories",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "lat", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "atlasMemories",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "looking_for_posts",
       "queryScope": "COLLECTION",
       "fields": [
