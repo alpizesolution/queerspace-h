@@ -136,4 +136,26 @@ test('an optional labels-only layer: used when it is a real https template, igno
   assert.deepEqual(filters, ["[data-atlas-tone='light'] .leaflet-tile-pane"], 'only a LIGHT provider is recoloured; a dark one is shown as it is');
   const map = fs.readFileSync('src/components/AtlasMap.tsx', 'utf8');
   assert.match(map, /tiles\.labelsUrl && <TileLayer url=\{tiles\.labelsUrl\}[^>]*className="atlas-labels"/);
+  // labels are light but not stark white
+  const bright = Number(css.match(/\.atlas-labels \{ filter: brightness\(([\d.]+)\)/)![1]);
+  assert.ok(bright >= 1.3 && bright <= 1.7, `label brightness ${bright} should be readable but not pure white`);
+});
+
+test('memory stars: golden with a dark outline and glow, a clearer selected state, same size and anchor, no per-marker filter', () => {
+  const css = fs.readFileSync('src/index.css', 'utf8').replace(/\r\n/g, '\n');
+  // every declaration block whose selector list ends with (or is) this selector, joined (the edge and core share a grouped rule)
+  const rule = (sel: string) => [...css.matchAll(new RegExp(`^${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`, 'gm'))].map((m) => m[1]).join(' ');
+  const core = rule('.atlas-star__core');
+  assert.match(core, /width: 17px; height: 17px/, 'marker size is unchanged');
+  assert.match(core, /#ffd34f/i, 'warm golden yellow');
+  assert.doesNotMatch(core, /#fff 0%|e9ddff/i, 'no longer white / lavender');
+  assert.doesNotMatch(core, /filter:/, 'no CSS filter on each marker (performance)');
+  assert.match(rule('.atlas-star__edge'), /background: #1b1008/, 'a dark outline');
+  assert.match(rule('.atlas-star__halo'), /rgb\(255 205 90/, 'a soft golden glow');
+  const selected = rule('.atlas-star--selected .atlas-star__halo');
+  assert.match(selected, /box-shadow:[^;]*2px/, 'the selected star has a clear ring');
+  assert.match(selected, /rgb\(255 214 100 \/ 0\.85\)/, 'and a stronger glow than an idle star');
+  const map = fs.readFileSync('src/components/AtlasMap.tsx', 'utf8');
+  assert.equal((map.match(/atlas-star__edge/g) ?? []).length, 2, 'normal markers and the pin marker both carry the outline');
+  assert.equal((map.match(/iconSize: \[36, 36\],\s*iconAnchor: \[18, 18\]/g) ?? []).length, 2, 'size and anchor are unchanged');
 });
