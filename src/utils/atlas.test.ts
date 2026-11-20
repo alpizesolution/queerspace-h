@@ -117,3 +117,23 @@ test('production CSP lets the ATLAS map tiles load from CARTO (tiles are <img> r
   assert.ok(imgSrc.includes('https://*.giphy.com') && imgSrc.includes('https://cdn.buymeacoffee.com'), 'the existing image hosts are unchanged');
   assert.match(csp, /default-src 'self'/, 'the default stays closed');
 });
+
+test('an optional labels-only layer: used when it is a real https template, ignored otherwise, never invented, and the base layer is never filtered', () => {
+  const base = 'https://basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png?key=pub';
+  const labels = 'https://basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png?key=pub';
+  assert.equal(resolveTileConfig({ VITE_ATLAS_TILE_URL: base, VITE_ATLAS_TILE_TONE: 'dark' }, false)?.labelsUrl, null, 'no labels layer unless one is configured');
+  assert.equal(resolveTileConfig({ VITE_ATLAS_TILE_URL: base, VITE_ATLAS_LABELS_URL: labels, VITE_ATLAS_TILE_TONE: 'dark' }, false)?.labelsUrl, labels);
+  assert.equal(resolveTileConfig({ VITE_ATLAS_TILE_URL: base, VITE_ATLAS_LABELS_URL: `  ${labels}  ` }, false)?.labelsUrl, labels, 'trimmed');
+  for (const bad of ['http://insecure.test/{z}/{x}/{y}.png', 'https://tiles.test/labels.png', '', '   ']) assert.equal(resolveTileConfig({ VITE_ATLAS_TILE_URL: base, VITE_ATLAS_LABELS_URL: bad }, false)?.labelsUrl, null, `ignored: ${JSON.stringify(bad)}`);
+  assert.equal(resolveTileConfig({ VITE_ATLAS_LABELS_URL: labels }, false), null, 'labels alone never make a map: the base tiles are still required');
+  assert.equal(resolveTileConfig({}, true)?.labelsUrl, null, 'the local-development fallback has no labels layer');
+  // {r} in the template is what gives sharp tiles on a high-density phone: it must be accepted as a template
+  assert.equal(isTileTemplate(base), true);
+  // the style: the labels layer is brightened on its own; the base tile pane is never filtered for a dark style
+  const css = fs.readFileSync('src/index.css', 'utf8').replace(/\r\n/g, '\n');
+  assert.match(css, /\.atlas-labels \{ filter: brightness\([\d.]+\) contrast\([\d.]+\); \}/);
+  const filters = [...css.matchAll(/([^{}\n]*tile-pane[^{}\n]*)\{[^}]*filter:/g)].map((m) => m[1].trim());
+  assert.deepEqual(filters, ["[data-atlas-tone='light'] .leaflet-tile-pane"], 'only a LIGHT provider is recoloured; a dark one is shown as it is');
+  const map = fs.readFileSync('src/components/AtlasMap.tsx', 'utf8');
+  assert.match(map, /tiles\.labelsUrl && <TileLayer url=\{tiles\.labelsUrl\}[^>]*className="atlas-labels"/);
+});

@@ -81,7 +81,18 @@ Set these in Vercel (Settings → Environment Variables). They are build-time an
 | `VITE_ATLAS_TILE_URL` | **Required for production.** An OSM-based tile provider's URL template with `{z}/{x}/{y}` (https). |
 | `VITE_ATLAS_TILE_ATTRIBUTION` | Extra credit the provider requires (OpenStreetMap's credit is always shown). |
 | `VITE_ATLAS_TILE_TONE` | `dark` if the tiles are already dark; otherwise they are darkened in CSS to fit the app. |
+| `VITE_ATLAS_LABELS_URL` | Optional second template for a labels-only layer drawn above the base tiles and brightened in the app (`.atlas-labels` in `index.css`), so street and town names are easy to read on a dark map. |
 
+- **Recommended dark setup (CARTO, chosen after comparing Dark Matter, Voyager and Positron):** the base without labels and the labels on their own
+  layer, both with `{r}` so phones get sharp `@2x` tiles (same number of requests):
+  - `VITE_ATLAS_TILE_URL=https://basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png?key=<key>`
+  - `VITE_ATLAS_LABELS_URL=https://basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png?key=<key>`
+  - `VITE_ATLAS_TILE_TONE=dark`, and `VITE_ATLAS_TILE_ATTRIBUTION=&copy; CARTO` (the OpenStreetMap credit is always added by the app).
+  - Why: the plain Dark Matter style draws its labels in dim grey, which is hard to read. Roads and buildings stay exactly as CARTO draws
+    them (no CSS filter on the base); only the label layer is brightened. **Cost:** two tile requests per tile instead of one, so the
+    free CARTO allowance (about 1 million tile requests a month) covers about half as many map views.
+  - A transparent layer shows the previous zoom level's labels, scaled up, until the new tiles arrive (normal Leaflet behaviour); on a slow
+    connection that can look like a brief blurry double image after zooming.
 - Without `VITE_ATLAS_TILE_URL`, a **production** build shows "The map isn't available right now" instead of quietly using
   `tile.openstreetmap.org`, which is not a production tile service. Local development falls back to it.
   Move to a provider with proper terms before heavy use.

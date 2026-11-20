@@ -556,6 +556,9 @@ html:not(.bmc-widget-visible) div:has(> #bmc-iframe) {
 .atlas-map.leaflet-container { background: #0f0a16; font-family: inherit; outline: none; }
 /* Standard (light) OpenStreetMap-style tiles are inverted into a deep violet night map; a provider that already serves a dark
    style sets VITE_ATLAS_TILE_TONE=dark and is shown as it is. */
+/* The labels-only layer (VITE_ATLAS_LABELS_URL) is brightened on its own: a dark basemap's labels are dim grey, and this makes them crisp
+   light text while the roads and buildings below it are shown exactly as the provider draws them (no filter on the base). */
+.atlas-labels { filter: brightness(1.9) contrast(1.15); }
 [data-atlas-tone='light'] .leaflet-tile-pane { filter: invert(1) hue-rotate(205deg) saturate(0.55) brightness(0.8) contrast(1.05); }
 .atlas-map .leaflet-top.leaflet-left { left: auto; right: 0; }
 .atlas-map .leaflet-bar { border: 1px solid var(--color-line); box-shadow: 0 4px 14px rgb(0 0 0 / 0.4); }

@@ -125,6 +125,8 @@ export const AtlasMap: React.FC<AtlasMapProps> = ({ groups, selectedKey, tiles, 
       className="atlas-map h-full w-full"
     >
       <TileLayer url={tiles.url} attribution={tiles.attribution} maxZoom={tiles.maxZoom} />
+      {/* Street and town names on their own transparent layer, so they can be made brighter without recolouring the roads under them. */}
+      {tiles.labelsUrl && <TileLayer url={tiles.labelsUrl} maxZoom={tiles.maxZoom} zIndex={2} className="atlas-labels" />}
       <KeepSize />
       <ViewReporter onViewChange={onViewChange} />
       <FlyTo target={flyTo} />

@@ -7,12 +7,18 @@
  *    while developing locally; a production build without this setting shows "map unavailable" instead of quietly using them.
  *  - VITE_ATLAS_TILE_ATTRIBUTION: extra credit the provider requires, shown next to the OpenStreetMap credit (which is always shown).
  *  - VITE_ATLAS_TILE_TONE: "dark" if the tiles are already a dark style; anything else (the default) darkens them to fit the app.
+ *  - VITE_ATLAS_LABELS_URL (optional): a second template for a transparent LABELS-ONLY layer drawn above the base tiles. A dark style's own
+ *    labels are dim; serving the base without labels and the labels separately lets the labels be brightened (see .atlas-labels in
+ *    index.css) without touching roads or buildings. With CARTO: base `dark_nolabels`, labels `dark_only_labels`. Add `{r}` to both templates
+ *    for sharp text on high-density phone screens (Leaflet fills it with "@2x" there; the number of requests does not change).
  */
 export interface TileConfig {
   url: string;
   attribution: string;
   maxZoom: number;
   tone: 'dark' | 'light';
+  /** A labels-only layer drawn over the base tiles, or null when the base style carries its own labels. */
+  labelsUrl: string | null;
 }
 
 type Env = Record<string, string | undefined>;
@@ -36,6 +42,7 @@ export function resolveTileConfig(env: Env, dev: boolean): TileConfig | null {
     attribution: extra ? `${OSM_ATTRIBUTION} · ${extra}` : OSM_ATTRIBUTION,
     maxZoom: 18,
     tone: env.VITE_ATLAS_TILE_TONE === 'dark' ? 'dark' : 'light',
+    labelsUrl: isTileTemplate(env.VITE_ATLAS_LABELS_URL?.trim()) ? env.VITE_ATLAS_LABELS_URL!.trim() : null,
   };
 }
 
