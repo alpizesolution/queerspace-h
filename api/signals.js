@@ -3,6 +3,7 @@ import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { createRequestHandlers } from './_requests.js';
+import { isEligibleMember } from './_adult.js';
 import { profileView } from './_profiles.js';
 import { createMediaHandlers, setNoStoreHeaders } from './_media.js';
 import { cardById, shapeStoredCard } from './_cards.js';
@@ -168,7 +169,12 @@ export default async function handler(req, res) {
       if (view && !['messages', 'pairs', 'requests', 'profile', 'gifs', 'vibe', 'background-image', 'support-image'].includes(view)) return send(res, 400, { error: 'invalid_view' });
       if (view === 'gifs') {
         // GIF search and trending for the picker. The key stays here; a suspended member gets nothing.
-        if ((await db.doc(`suspensions/${uid}`).get()).exists) return send(res, 403, { error: 'account_unavailable' });
+        const [gifSuspension, gifSettings, gifProfile] = await Promise.all([
+          db.doc(`suspensions/${uid}`).get(), db.doc(`users/${uid}/private/settings`).get(), db.doc(`users/${uid}/public/profile`).get(),
+        ]);
+        if (gifSuspension.exists) return send(res, 403, { error: 'account_unavailable' });
+        // Only someone who can message (an adult with a saved profile) may spend the GIF quota.
+        if (!isEligibleMember(gifSettings.data(), gifProfile.data())) return send(res, 403, { error: 'not_allowed' });
         const param = name => req.query?.[name] ?? new URL(req.url || '/api/signals', 'http://localhost').searchParams.get(name);
         const query = parseGifQuery({ q: param('q'), limit: param('limit'), offset: param('offset') });
         await limitGifSearches(db, uid);

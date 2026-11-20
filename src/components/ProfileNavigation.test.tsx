@@ -16,15 +16,20 @@ const read = (f: string) => fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
 const header = (calls: string[]) => render(
   <Header
     onNavigate={() => {}} currentView="home" isSoundMuted={false} onToggleSound={() => {} }
-    onOpenSafetyModal={() => {}} onOpenProfile={() => calls.push('profile')} onOpenSettings={() => {}} onOpenWhatsNew={() => {}}
+    onOpenProfile={() => calls.push('profile')} onOpenSettings={() => {}} onOpenWhatsNew={() => {}}
     onOpenInfo={() => {}} onOpenSupport={() => {}} onOpenAbout={() => {}} profile={{ avatar: undefined, displayName: 'Luna' }}
   />
 );
 
-test('the avatar button in the header opens the profile directly (one action, no intermediate screen)', () => {
+test('the profile card at the top of the menu opens the profile directly (one action, no intermediate screen); the header has no avatar', () => {
   const calls: string[] = [];
   header(calls);
-  fireEvent.click(screen.getByRole('button', { name: 'Your profile' }));
+  assert.equal(screen.queryByRole('button', { name: 'Your profile' }), null);
+  fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+  const card = screen.getByTestId('menu-profile');
+  assert.match(card.textContent ?? '', /Luna/);
+  assert.match(card.textContent ?? '', /My profile/);
+  fireEvent.click(card);
   assert.deepEqual(calls, ['profile']);
 });
 
@@ -32,7 +37,7 @@ test('the menu entry goes to the same place and is named for what it opens', () 
   const calls: string[] = [];
   header(calls);
   fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
-  fireEvent.click(screen.getByRole('button', { name: 'My profile' }));
+  fireEvent.click(screen.getByTestId('menu-profile'));
   assert.deepEqual(calls, ['profile']);
   assert.equal(screen.queryByRole('button', { name: 'Edit profile' }), null);
 });

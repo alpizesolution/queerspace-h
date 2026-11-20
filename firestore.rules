@@ -174,7 +174,11 @@ service cloud.firestore {
 
       allow update: if isOwner(userId)
         && hasNoPrivilegedFields()
-        && request.resource.data.createdAt == resource.data.createdAt
+        // createdAt is set once and never changed. An older record that never got one may receive it once, set to "now" (as the
+        // public profile does), instead of locking its owner out of every later save.
+        && ('createdAt' in resource.data
+            ? request.resource.data.createdAt == resource.data.createdAt
+            : (!('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time))
         && request.resource.data.keys().hasOnly([
              'exactLocation', 'sexualOrientation', 'genderIdentity', 'genderExpression', 
              'preferredGenderExpressions', 'birthDate', 'blockedPartnerIds', 'createdAt', 'updatedAt'
@@ -1437,6 +1441,16 @@ service cloud.firestore {
     }
 
     match /signalsRateLimits/{userId} {
+      allow read, write: if false;
+    }
+
+    // ATLAS memories (api/atlas.js). Only the Admin SDK reads or writes them: who may see a memory (private, connections, public, blocks)
+    // is decided on the server, and the stored location is already rounded to a ~1 km grid. Clients get no access at all.
+    match /atlasMemories/{memoryId} {
+      allow read, write: if false;
+    }
+    // The audit trail of an administrator removing a memory (keeps the real owner id). Server-only as well.
+    match /atlasModerationLog/{entryId} {
       allow read, write: if false;
     }
 

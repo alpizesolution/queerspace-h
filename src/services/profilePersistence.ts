@@ -20,6 +20,8 @@ export interface ProfileLoadResult {
   cloudHasProfile?: boolean;
   /** The name on a COMPLETED cloud profile: an existing pseudonym, usable as it is without being reserved again. */
   cloudDisplayName?: string;
+  /** True when the cloud could not be read at all, so "no profile found" is not known. Not the same as an account with no profile. */
+  cloudError?: boolean;
 }
 
 /**
@@ -344,6 +346,7 @@ export async function loadAnonymousProfile(): Promise<ProfileLoadResult> {
       prefs: defaultLocal,
       source: 'local',
       fromCloudSuccess: false,
+      cloudError: true,
     };
   }
 }

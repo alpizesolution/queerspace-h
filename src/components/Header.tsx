@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Volume2, VolumeX, Shield, Menu, Settings2 } from 'lucide-react';
+import { LayoutDashboard, Volume2, VolumeX, Menu, RadioTower } from 'lucide-react';
 import { MenuDrawer, MenuInfoModal } from './MenuDrawer.tsx';
 import { formatUnread } from '../services/signalsInbox.ts';
 import { AnimatedBrandTitle } from './AnimatedBrandTitle.tsx';
 import { AuthStatusBadge } from './AuthStatusBadge.tsx';
 import { NAV_ITEMS, NavTarget, isNavActive } from './BottomNavigation.tsx';
-import { AnimalAvatar } from './AnimalAvatar.tsx';
 import { isAdminDevice } from '../utils/adminDevice.ts';
 
 // Read once per page load; set when an admin signs in at /admin on this device.
@@ -17,7 +16,6 @@ interface HeaderProps {
   currentView: string;
   isSoundMuted: boolean;
   onToggleSound: () => void;
-  onOpenSafetyModal: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onOpenWhatsNew: () => void;
@@ -36,7 +34,6 @@ export const Header: React.FC<HeaderProps> = ({
   currentView,
   isSoundMuted,
   onToggleSound,
-  onOpenSafetyModal,
   onOpenProfile,
   onOpenSettings,
   onOpenWhatsNew,
@@ -49,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
   profile,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const inboxCount = badges.signals ?? 0;
   return (
   <header data-app-header className="sticky top-0 z-40 bg-ink/85 backdrop-blur-xl border-b border-line pt-safe">
     <div className="max-w-6xl mx-auto px-3 sm:px-6 h-[var(--header-h)] flex items-center gap-2 sm:gap-3">
@@ -86,6 +84,19 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="flex items-center gap-0.5 ml-auto desk:ml-0 shrink-0">
         <AuthStatusBadge className="sm:mr-1.5" />
+        <button
+          onClick={() => onNavigate('signals')}
+          className="icon-btn relative !w-9 sm:!w-10"
+          title="Inbox"
+          aria-label={inboxCount > 0 ? `Open inbox, ${inboxCount} unread` : 'Open inbox'}
+          aria-current={currentView === 'signals' ? 'page' : undefined}
+          data-testid="header-inbox"
+        >
+          <RadioTower className="w-[18px] h-[18px]" />
+          {inboxCount > 0 && (
+            <span aria-hidden="true" className="absolute -right-0.5 top-0.5 min-w-[16px] rounded-full bg-berry px-1 text-center text-[length:calc(10px_*_var(--fs,1))] font-bold leading-4 text-ink ring-2 ring-ink">{formatUnread(inboxCount)}</span>
+          )}
+        </button>
         {SHOW_ADMIN_LINK && (
           <a href="/admin" className="icon-btn text-berry hidden desk:inline-flex" title="Admin dashboard" aria-label="Open admin dashboard">
             <LayoutDashboard className="w-[18px] h-[18px]" />
@@ -101,25 +112,8 @@ export const Header: React.FC<HeaderProps> = ({
           {isSoundMuted ? <VolumeX className="w-[18px] h-[18px]" /> : <Volume2 className="w-[18px] h-[18px]" />}
         </button>
         <button
-          onClick={onOpenSettings}
-          className="icon-btn relative hidden desk:inline-flex"
-          title="Settings"
-          aria-label={hasUnreadUpdates ? 'Open settings, new updates available' : 'Open settings'}
-        >
-          <Settings2 className="w-[18px] h-[18px]" />
-          {hasUnreadUpdates && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-berry" aria-hidden="true" />}
-        </button>
-        <button
-          onClick={onOpenSafetyModal}
-          className="icon-btn !w-9 sm:!w-10"
-          title="Safety & guidelines"
-          aria-label="Safety and community guidelines"
-        >
-          <Shield className="w-[18px] h-[18px]" />
-        </button>
-        <button
           onClick={() => setMenuOpen(true)}
-          className="icon-btn relative !w-9 sm:!w-10 desk:hidden"
+          className="icon-btn relative !w-9 sm:!w-10"
           title="Menu"
           aria-label="Open menu"
           aria-haspopup="dialog"
@@ -131,14 +125,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="sr-only">{hasSupportReply ? 'New reply from the team' : 'New updates'}</span>
             </span>
           )}
-        </button>
-        <button
-          onClick={onOpenProfile}
-          className="ml-0.5 sm:ml-1 rounded-full ring-1 ring-line hover:ring-berry transition-shadow cursor-pointer"
-          title="Your profile"
-          aria-label="Your profile"
-        >
-          <AnimalAvatar avatar={profile.avatar} seed={profile.displayName || 'guest'} className="w-8 h-8" />
         </button>
       </div>
     </div>
@@ -157,6 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
         supportUnreadCount={supportUnreadCount}
         hasUnreadUpdates={hasUnreadUpdates}
         showAdmin={SHOW_ADMIN_LINK}
+        profile={profile}
       />
     )}
   </header>

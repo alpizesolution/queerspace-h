@@ -9,3 +9,12 @@ export function isAdultMember(settings, nowMs = Date.now()) {
   const at = typeof birth?.toMillis === 'function' ? birth.toMillis() : null;
   return at !== null && at <= nowMs - EIGHTEEN_YEARS_IN_DAYS * 24 * 60 * 60 * 1000;
 }
+
+/**
+ * The server's twin of isEligibleMember in firestore.rules: an adult whose profile has been saved (profileComplete). A member who has
+ * only passed the birthday step has an account but is not yet a participant: they may browse, but not post, pin, request or search.
+ * `profile` is the data of users/{uid}/public/profile (or undefined when there is none).
+ */
+export function isEligibleMember(settings, profile, nowMs = Date.now()) {
+  return isAdultMember(settings, nowMs) && profile?.profileComplete === true;
+}

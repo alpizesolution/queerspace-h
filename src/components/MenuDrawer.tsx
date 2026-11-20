@@ -1,16 +1,17 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { SupportUnreadBadge } from './SupportUnreadBadge.tsx';
 import {
   X,
   Info,
   CircleHelp,
-  BookHeart,
+  Shield,
   Lock,
   FileText,
   MessageCircleHeart,
   Coffee,
-  UserRound,
+  ChevronRight,
+  LogOut,
   Settings2,
   Sparkles,
   HeartHandshake,
@@ -19,6 +20,8 @@ import {
   LayoutDashboard,
 } from 'lucide-react';
 import { BMC_URL } from './Footer.tsx';
+import { AnimalAvatar } from './AnimalAvatar.tsx';
+import { signOutMember } from '../lib/firebase.ts';
 
 export type MenuInfoModal = 'about' | 'faq' | 'guidelines' | 'privacy' | 'terms';
 
@@ -36,6 +39,7 @@ interface MenuDrawerProps {
   supportUnreadCount?: number;
   hasUnreadUpdates?: boolean;
   showAdmin: boolean;
+  profile?: { avatar?: string; displayName?: string };
 }
 
 const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -69,7 +73,10 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   supportUnreadCount = 0,
   hasUnreadUpdates = false,
   showAdmin,
+  profile = {},
 }) => {
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -124,7 +131,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
 
   return createPortal(
     <div
-      className="desk:hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm anim-fade"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm anim-fade"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -146,6 +153,20 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={then(onOpenProfile)}
+            data-testid="menu-profile"
+            className="mb-2 flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-line-strong bg-gradient-to-br from-raised to-surface p-3 text-left transition-colors hover:border-lavender/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lavender/60"
+          >
+            <AnimalAvatar avatar={profile.avatar} seed={profile.displayName || 'guest'} className="h-11 w-11 shrink-0 rounded-full ring-1 ring-line-strong" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg">{profile.displayName || 'Your profile'}</span>
+              <span className="block text-[length:calc(12.5px_*_var(--fs,1))] text-lavender">My profile</span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
+          </button>
+
           <Group title="Information">
             <li>
               <button className={rowClass} onClick={then(onOpenWhatsNew)}>
@@ -169,7 +190,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
           </Group>
 
           <Group title="Safety & Privacy">
-            {info('guidelines', 'Guidelines', BookHeart)}
+            {info('guidelines', 'Community Guidelines', Shield)}
             {info('privacy', 'Privacy', Lock)}
             {info('terms', 'Terms', FileText)}
           </Group>
@@ -212,11 +233,20 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
 
           <Group title="Account">
             <li>
-              <button className={rowClass} onClick={then(onOpenProfile)}>
-                <UserRound className="w-[18px] h-[18px] text-lavender shrink-0" />
-                My profile
+              <button className={rowClass} onClick={() => setConfirmingSignOut(true)} aria-expanded={confirmingSignOut} data-testid="menu-signout">
+                <LogOut className="w-[18px] h-[18px] text-lavender shrink-0" />
+                Sign out
               </button>
             </li>
+            {confirmingSignOut && (
+              <li role="alertdialog" aria-label="Confirm sign out" className="mx-1 mb-1 rounded-xl border border-berry/40 bg-berry/10 p-3 text-[length:calc(13px_*_var(--fs,1))] text-fg/90">
+                <p>Your QUEERSPACE account lives on this device and has no password. Signing out removes your profile and connections from it, and they can’t be brought back.</p>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" onClick={() => setConfirmingSignOut(false)} className="btn btn-ghost flex-1" autoFocus>Stay signed in</button>
+                  <button type="button" disabled={signingOut} onClick={() => { setSigningOut(true); void signOutMember(); }} className="btn btn-danger flex-1" data-testid="menu-signout-confirm">Sign out</button>
+                </div>
+              </li>
+            )}
           </Group>
 
           {showAdmin && (

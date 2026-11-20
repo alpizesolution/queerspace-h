@@ -6,6 +6,7 @@
 //   - both people's ranges must fit the other's age (inclusive); a range needs a known age;
 //   - everything is checked again inside the transaction that creates the match, so a range, birthday, block or
 //     suspension that changed a moment ago can never be missed.
+import { isEligibleMember } from './_adult.js';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { MINIMUM_AGE, HttpError, ageFromTimestamp, authenticate, rateLimit, safeId, send, sendError } from './_lib.js';
 import { STALE_AFTER_MS, agesCompatible, isFreshQueueEntry, orderCandidates, sameRange, storedRange, validAgeRange } from './_matching.js';
@@ -103,6 +104,9 @@ export default async function handler(req, res) {
         return send(res, 200, { ok: true });
       }
       if (!validAgeRange(ageMin, ageMax)) throw new HttpError(400, 'invalid_age_range');
+      // Only a member (an adult with a saved profile) stores a range. A light check on purpose: a damaged stored range must stay fixable.
+      const [prefsSettings, prefsProfile] = await db.getAll(db.doc(`users/${uid}/private/settings`), db.doc(`users/${uid}/public/profile`));
+      if (!isEligibleMember(prefsSettings.data(), prefsProfile.data())) throw new HttpError(403, 'not_eligible');
       await ref.set({ ageMin, ageMax, updatedAt: FieldValue.serverTimestamp() });
       return send(res, 200, { ok: true });
     }

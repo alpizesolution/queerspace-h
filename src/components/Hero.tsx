@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, ChevronRight, Feather, MessagesSquare, SlidersHorizontal, Users } from 'lucide-react';
+import { ArrowRight, ChevronRight, Feather, MapPinned, MessagesSquare, SlidersHorizontal, Users } from 'lucide-react';
 
 interface HeroProps {
   onStartChat: () => void;
@@ -7,6 +7,8 @@ interface HeroProps {
   onOpenPublicRoom: () => void;
   onOpenCommunity: () => void;
   onOpenUnsaid: () => void;
+  /** ATLAS, the shared map of memories: the first featured section, above Galaxy, Echoes and Cosmos. */
+  onOpenAtlas: () => void;
 }
 
 const DESTINATIONS = [
@@ -21,6 +23,7 @@ export const Hero: React.FC<HeroProps> = ({
   onOpenPublicRoom,
   onOpenCommunity,
   onOpenUnsaid,
+  onOpenAtlas,
 }) => {
   const open = { public: onOpenPublicRoom, unsaid: onOpenUnsaid, community: onOpenCommunity };
 
@@ -68,7 +71,25 @@ export const Hero: React.FC<HeroProps> = ({
         </div>
       </div>
 
-      <div className="mt-8 sm:mt-12 grid sm:grid-cols-3 gap-3">
+      <button
+        type="button"
+        onClick={onOpenAtlas}
+        data-testid="home-atlas"
+        className="atlas-feature group relative mt-8 sm:mt-12 flex w-full items-center gap-4 overflow-hidden rounded-3xl border border-line p-5 sm:p-6 text-left transition-colors hover:border-lavender/50 cursor-pointer"
+      >
+        <span aria-hidden="true" className="atlas-feature__stars" />
+        <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-lavender/30 bg-lavender/10 text-lavender">
+          <MapPinned className="h-6 w-6" />
+        </span>
+        <span className="relative min-w-0 flex-1">
+          <span className="block text-[length:calc(11px_*_var(--fs,1))] font-semibold uppercase tracking-[0.18em] text-lavender">New · Shared map of memories</span>
+          <span className="mt-0.5 block text-[length:calc(20px_*_var(--fs,1))] sm:text-[length:calc(22px_*_var(--fs,1))] font-semibold tracking-tight text-fg">ATLAS</span>
+          <span className="mt-0.5 block font-serif text-[length:calc(14px_*_var(--fs,1))] sm:text-[length:calc(15px_*_var(--fs,1))] italic text-muted">Every place has a story. Every story leaves a mark.</span>
+        </span>
+        <ChevronRight className="relative h-5 w-5 shrink-0 text-subtle transition-colors group-hover:text-fg" />
+      </button>
+
+      <div className="mt-3 grid sm:grid-cols-3 gap-3">
         {DESTINATIONS.map(({ key, icon: Icon, title, text }) => (
           <button
             key={key}

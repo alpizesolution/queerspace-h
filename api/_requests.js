@@ -12,7 +12,7 @@
 // Underscore-prefixed files in api/ are not deployed as separate functions.
 import { randomUUID, createHash } from 'node:crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { isAdultMember } from './_adult.js';
+import { isAdultMember, isEligibleMember } from './_adult.js';
 import { displayTitle } from './_flair.js';
 
 export const REQUEST_MAX_MESSAGE = 500;
@@ -181,11 +181,13 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
     const nowMs = now.toMillis();
 
     return once(db, async tx => {
-      const [prior, rateSnap, senderSettings, recipientSettings, senderSuspension, recipientSuspension, postSnap, lockSnap, pendingSent, existingPair] = await Promise.all([
+      const [prior, rateSnap, senderSettings, recipientSettings, senderProfile, recipientProfile, senderSuspension, recipientSuspension, postSnap, lockSnap, pendingSent, existingPair] = await Promise.all([
         tx.get(idemRef),
         tx.get(rateRef),
         tx.get(db.doc(`users/${uid}/private/settings`)),
         tx.get(db.doc(`users/${recipientId}/private/settings`)),
+        tx.get(db.doc(`users/${uid}/public/profile`)),
+        tx.get(db.doc(`users/${recipientId}/public/profile`)),
         tx.get(db.doc(`suspensions/${uid}`)),
         tx.get(db.doc(`suspensions/${recipientId}`)),
         tx.get(db.doc(subject.path)),
@@ -198,8 +200,8 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
         if (p?.action !== 'request-create' || p?.recipientId !== recipientId) throw fail(409, 'idempotency_conflict');
         return { requestId: p.requestId, status: 'pending', replayed: true };
       }
-      // Eligibility comes from the private account records, never from the request.
-      if (!isAdultMember(senderSettings.data()) || !isAdultMember(recipientSettings.data())) throw fail(403, 'not_allowed');
+      // Eligibility comes from the private account records, never from the request: an adult who has saved a profile, on both sides.
+      if (!isEligibleMember(senderSettings.data(), senderProfile.data()) || !isEligibleMember(recipientSettings.data(), recipientProfile.data())) throw fail(403, 'not_allowed');
       if (senderSuspension.exists || recipientSuspension.exists) throw fail(403, 'account_unavailable');
       if (blockedEither(senderSettings.data(), recipientSettings.data(), uid, recipientId)) throw fail(403, 'not_allowed');
       const post = postSnap.exists ? postSnap.data() : null;
@@ -281,16 +283,18 @@ export function createRequestHandlers({ touchInbox, acceptedNotification }) {
         return { status: 'expired' };
       }
       const pairRef = db.doc(`signalsPairs/${ref.id}`);
-      const [senderSettings, recipientSettings, senderSuspension, recipientSuspension, existingPair, ownPair] = await Promise.all([
+      const [senderSettings, recipientSettings, senderProfile, recipientProfile, senderSuspension, recipientSuspension, existingPair, ownPair] = await Promise.all([
         tx.get(db.doc(`users/${data.senderId}/private/settings`)),
         tx.get(db.doc(`users/${uid}/private/settings`)),
+        tx.get(db.doc(`users/${data.senderId}/public/profile`)),
+        tx.get(db.doc(`users/${uid}/public/profile`)),
         tx.get(db.doc(`suspensions/${data.senderId}`)),
         tx.get(db.doc(`suspensions/${uid}`)),
         tx.get(db.collection('signalsPairs').where('participants', '==', [data.senderId, uid].sort()).where('status', '==', 'active').limit(1)),
         tx.get(pairRef),
       ]);
       // Everything is checked again at the moment of acceptance: blocks, suspensions and age can change after a request.
-      if (!isAdultMember(senderSettings.data()) || !isAdultMember(recipientSettings.data())) throw fail(403, 'not_allowed');
+      if (!isEligibleMember(senderSettings.data(), senderProfile.data()) || !isEligibleMember(recipientSettings.data(), recipientProfile.data())) throw fail(403, 'not_allowed');
       if (senderSuspension.exists || recipientSuspension.exists) throw fail(403, 'account_unavailable');
       if (blockedEither(senderSettings.data(), recipientSettings.data(), data.senderId, uid)) throw fail(403, 'not_allowed');
 

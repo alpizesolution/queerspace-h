@@ -20,6 +20,8 @@
     { "source": "/admin/", "destination": "/" },
     { "source": "/signals", "destination": "/" },
     { "source": "/signals/", "destination": "/" },
+    { "source": "/atlas", "destination": "/" },
+    { "source": "/atlas/", "destination": "/" },
     { "source": "/about", "destination": "/" },
     { "source": "/about/", "destination": "/" }
   ],
@@ -57,6 +59,10 @@
     },
     {
       "source": "/signals",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+    },
+    {
+      "source": "/atlas",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     },
     {

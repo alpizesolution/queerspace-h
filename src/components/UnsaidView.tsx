@@ -1,3 +1,4 @@
+import { PageHeading } from './PageHeading.tsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { Bell, CheckCircle2, Flag, Info, MessageCircle, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog, Sheet } from './Sheet.tsx';
@@ -290,10 +291,7 @@ export const UnsaidView: React.FC<{ replyNotices?: EchoReplyNotices; notificatio
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-10 pb-[calc(var(--tabbar-h)+6rem)] desk:pb-16">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-[length:calc(28px_*_var(--fs,1))] font-semibold tracking-tight text-fg">Echoes</h1>
-          <p className="text-[length:calc(13px_*_var(--fs,1))] text-muted mt-0.5">Release, connect and uplift, anonymously.</p>
-        </div>
+        <PageHeading title="Echoes" tagline="Release, connect and uplift, anonymously." />
         {available && (
           <div className="flex items-center gap-2 shrink-0">
             {notifications && (

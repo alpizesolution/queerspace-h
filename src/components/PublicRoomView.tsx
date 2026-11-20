@@ -377,13 +377,13 @@ export const PublicRoomView: React.FC<PublicRoomViewProps> = ({
           : { height: `calc(${viewportHeight ? `${viewportHeight}px` : '100dvh'} - ${chrome})` }
       }
     >
-      <div className="px-4 sm:px-5 py-3 border-b border-line flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-raised border border-line flex items-center justify-center text-berry shrink-0">
-          <Users className="w-5 h-5" />
+      <div className="px-4 sm:px-5 py-2 border-b border-line flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-full bg-raised border border-line flex items-center justify-center text-berry shrink-0">
+          <Users className="w-4 h-4" />
         </div>
-        <div className="min-w-0">
-          <h1 className="text-[length:calc(15px_*_var(--fs,1))] font-semibold text-fg">Galaxy</h1>
-          <p className="text-[length:calc(12px_*_var(--fs,1))] text-subtle truncate">Everyone here can see what you write. Be kind.</p>
+        <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 leading-tight">
+          <h1 className="text-[length:calc(22px_*_var(--fs,1))] sm:text-[length:calc(26px_*_var(--fs,1))] font-semibold tracking-tight text-fg uppercase">Galaxy</h1>
+          <p className="min-w-0 text-[length:calc(12px_*_var(--fs,1))] sm:text-[length:calc(13px_*_var(--fs,1))] text-subtle">Everyone here can see what you write. Be kind.</p>
         </div>
       </div>
 

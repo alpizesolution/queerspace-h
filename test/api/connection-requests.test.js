@@ -92,8 +92,8 @@ test('every status change runs in a transaction, is checked on the server, and l
 
 test('accepting re-checks eligibility, blocks and suspension, reuses a conversation, and uses the existing accepted notification', () => {
   const accept = server.slice(server.indexOf('async function accept('), server.indexOf('async function decline('));
-  assert.match(accept, /isAdultMember\(senderSettings\.data\(\)\)/);
-  assert.match(accept, /isAdultMember\(recipientSettings\.data\(\)\)/);
+  assert.match(accept, /isEligibleMember\(senderSettings\.data\(\), senderProfile\.data\(\)\)/, 'an adult with a saved profile, checked again at acceptance');
+  assert.match(accept, /isEligibleMember\(recipientSettings\.data\(\), recipientProfile\.data\(\)\)/);
   assert.match(accept, /senderSuspension\.exists \|\| recipientSuspension\.exists/);
   assert.match(accept, /blockedEither\(/);
   assert.match(accept, /signalsPairs'\)\.where\('participants', '==', \[data\.senderId, uid\]\.sort\(\)\)/, 'an existing conversation is found first');
@@ -135,9 +135,9 @@ test('the new collections are server-only in the rules, with an admin-only audit
   assert.deepEqual(indexes.map((i) => i.fields.map((f) => `${f.fieldPath}:${f.order}`).join(',')).sort(), ['recipientId:ASCENDING,createdAt:DESCENDING', 'senderId:ASCENDING,createdAt:DESCENDING']);
 });
 
-test('no new serverless function and no new bottom-navigation destination', () => {
+test('no new serverless function from connection requests, and Signals is still a navigation target (reached from the header Inbox)', () => {
   assert.ok(fs.existsSync('api/_requests.js'), 'the new code lives in an underscore file, which is not deployed as a function');
-  assert.match(read('src/components/BottomNavigation.tsx'), /export type NavTarget = 'home' \| 'setup' \| 'public' \| 'unsaid' \| 'community' \| 'signals';/);
+  assert.match(read('src/components/BottomNavigation.tsx'), /export type NavTarget = 'home' \| 'setup' \| 'public' \| 'unsaid' \| 'community' \| 'atlas' \| 'signals';/);
 });
 
 // --------------------------------------------------------------------------------------------------- the screens

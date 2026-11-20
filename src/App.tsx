@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { Header } from './components/Header.tsx';
 import { Hero } from './components/Hero.tsx';
 import { SafetySection } from './components/SafetySection.tsx';
@@ -35,6 +35,7 @@ import { clearProfileCache } from './services/profileViewService.ts';
 import { clearBackgroundImageCache, pruneBackgroundImages } from './services/profileBackgroundService.ts';
 import { applyFilters, applyProfile, FilterFields, matchPrefsForMode, ProfileFields } from './utils/preferences.ts';
 import { ProfileEditorSheet } from './components/ProfileEditorSheet.tsx';
+import { ProfileSetupGate, type ProfileLoadState } from './components/ProfileSetupGate.tsx';
 import { subscribeToUnreadSupportReplies } from './services/supportService.ts';
 import { getMySuspension } from './services/suspensionService.ts';
 import { SuspendedNotice } from './components/SuspendedNotice.tsx';
@@ -56,12 +57,15 @@ import { useUnreadUpdates } from './hooks/useUnreadUpdates.ts';
 import { WhatsNewSheet } from './components/WhatsNewSheet.tsx';
 import { AboutDeveloperPage } from './components/AboutDeveloperPage.tsx';
 
-type AppView = 'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community' | 'signals' | 'about';
+type AppView = 'home' | 'searching' | 'chat' | 'public' | 'unsaid' | 'community' | 'signals' | 'about' | 'atlas';
 const ABOUT_PATH = /^\/about\/?$/;
+const ATLAS_PATH = /^\/atlas\/?$/;
+// ATLAS brings its own map library, so it is loaded only when a member opens it.
+const AtlasPage = lazy(() => import('./components/AtlasPage.tsx'));
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>(() =>
-    /^\/signals\/?$/.test(window.location.pathname) ? 'signals' : ABOUT_PATH.test(window.location.pathname) ? 'about' : 'home'
+    /^\/signals\/?$/.test(window.location.pathname) ? 'signals' : ABOUT_PATH.test(window.location.pathname) ? 'about' : ATLAS_PATH.test(window.location.pathname) ? 'atlas' : 'home'
   );
   // Where Back on the Our Story page returns to.
   const aboutReturnRef = useRef<AppView>('home');
@@ -198,6 +202,9 @@ export default function App() {
     else if (currentView !== 'signals' && onSignalsPath) window.history.replaceState(null, '', '/');
     // Leaving Our Story by any other route (a tab, the logo) drops /about from the address bar too.
     else if (currentView !== 'about' && ABOUT_PATH.test(window.location.pathname)) window.history.replaceState(null, '', '/');
+    // ATLAS keeps /atlas in the address bar while it is open, and drops it when leaving.
+    if (currentView === 'atlas' && !ATLAS_PATH.test(window.location.pathname)) window.history.replaceState(null, '', '/atlas');
+    else if (currentView !== 'atlas' && ATLAS_PATH.test(window.location.pathname)) window.history.replaceState(null, '', '/');
   }, [currentView]);
   const signalsInbox = useSignalsInbox(
     () => {
@@ -253,6 +260,8 @@ export default function App() {
     };
   });
 
+  // Whether this device's account has been read from the cloud yet. Only matters to a member with no saved profile (see profileSetupRequired).
+  const [profileLoad, setProfileLoad] = useState<ProfileLoadState>(() => (isFirebaseConfigured ? 'loading' : 'ready'));
   const [ageGateOpen, setAgeGateOpen] = useState(() => !isAdultBirthDate(userPrefs.birthDate));
   const [ageRestricted, setAgeRestricted] = useState(() => getStorageItem('queerspace_age_restricted') === 'true');
   const [ageReviewSubmitted, setAgeReviewSubmitted] = useState(() => getStorageItem('queerspace_age_review_requested') === 'true');
@@ -296,8 +305,10 @@ export default function App() {
       void requestDurableStorage();
       ensureAnonymousAuth()
         .then((user) => {
+          if (!user) setProfileLoad('ready');
           if (user) {
             loadAnonymousProfile().then((res) => {
+              setProfileLoad(res.cloudError ? 'failed' : 'ready');
               // An adult birthday that only lives on this device goes to the cloud now, on its own. The server decides who may
               // open profiles from that one field, so it must not wait for a profile save that may never succeed.
               if (!res.cloudHasBirthDate && isAdultBirthDate(res.prefs.birthDate) && getStorageItem('queerspace_age_restricted') !== 'true') {
@@ -326,6 +337,7 @@ export default function App() {
         })
         .catch((err) => {
           console.warn('Firebase anonymous auth setup notice:', err);
+          setProfileLoad('ready');
         });
     }
   }, []);
@@ -435,6 +447,35 @@ export default function App() {
     showToast(feedback.savedToCloud || !cloudChanged ? 'Profile updated.' : feedback.userMessage);
   };
 
+  /**
+   * The required first profile. Unlike a normal edit it does not count as saved until the cloud has it (when there is a cloud to
+   * save to): a failure leaves the member on the setup screen with a message, and a name the server has not confirmed is never used.
+   * Returns a message on failure, nothing on success.
+   */
+  const handleSetupProfile = async (profile: ProfileFields): Promise<string | void> => {
+    if (isFirebaseConfigured) {
+      const untouchedSuggestion = profile.displayName === userPrefs.displayName;
+      const check = await nameGate.ensure(profile.displayName, untouchedSuggestion);
+      if (!check.ok) return check.message;
+      if (check.replaced) showToast(`${profile.displayName} was taken, so you're ${check.name}.`);
+      profile = { ...profile, displayName: check.name };
+    }
+    const next = { ...applyProfile(userPrefs, profile), profileComplete: true };
+    const { feedback, cloudChanged } = await persistPrefs(next);
+    if (isFirebaseConfigured && auth?.currentUser && cloudChanged && !feedback.savedToCloud) {
+      // Saved nowhere that counts: undo the device copy too, so a refresh lands back here instead of in the app.
+      const undone = { ...next, profileComplete: false };
+      setStorageItem(STORAGE_KEYS.USER_PREFS.current, JSON.stringify(undone));
+      setUserPrefs(undone);
+      return feedback.userMessage || 'We couldn’t save your profile. Check your connection and try again.';
+    }
+    setUserPrefs(next);
+    clearProfileCache();
+    setCurrentView('home');
+    window.scrollTo({ top: 0 });
+    showToast('Welcome to QUEERSPACE 💜');
+  };
+
   /** Saves only the profile background (from Profile settings, Appearance), through the same profile save as everything else. */
   const handleSaveBackground = async (background: ProfileBackground | null) => {
     const next = { ...userPrefs, background };
@@ -506,6 +547,11 @@ export default function App() {
     if (view === 'signals') { setSignalAlert(false); setAcceptedAlert(null); setRequestAlert(false); }
     if (view === 'setup') handleOpenSetup('quick');
     else setCurrentView(view);
+    window.scrollTo({ top: 0 });
+  };
+
+  const openAtlas = () => {
+    setCurrentView('atlas');
     window.scrollTo({ top: 0 });
   };
 
@@ -615,11 +661,30 @@ export default function App() {
     setCurrentView('home');
   };
 
+  // Every eligible member must have a saved profile before anything else is shown. The app is not rendered behind this: it is
+  // a guard on the whole tree, so a direct link (/signals, /atlas), a refresh or a stored view cannot get around it.
+  const profileSetupRequired = !ageGateOpen && !ageRestricted && userPrefs.profileComplete !== true;
+
   const showChrome = currentView !== 'chat';
   // The Signals tab count: waiting invitations, accepted notes and connection requests (as before), plus unread incoming messages.
   // The conversation that is open on screen is left out, so it never flashes a count while it is being read.
   const openSignalsPair = currentView === 'signals' && signalsChatVisible ? signalsResumePairId : null;
   const signalsBadge = signalsInbox.pendingIds.length + signalsInbox.acceptedUnread.length + signalsInbox.requestIds.length + totalUnread(signalsInbox.unread, openSignalsPair);
+
+  if (profileSetupRequired) {
+    return (
+      <div className="min-h-[100dvh] bg-ink text-fg relative">
+        <FloatingCatsBackground />
+        {toastMessage && (
+          <div role="status" aria-live="polite" className="fixed z-[70] left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] w-[calc(100%-2rem)] max-w-sm flex items-start gap-2.5 bg-raised/95 backdrop-blur-xl text-fg px-4 py-3 rounded-2xl shadow-2xl shadow-black/50 border border-line text-sm anim-pop">
+            <CheckCircle2 className="w-[18px] h-[18px] text-berry shrink-0 mt-px" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+        <ProfileSetupGate prefs={userPrefs} load={profileLoad} onSave={handleSetupProfile} />
+      </div>
+    );
+  }
 
   return (
     <ProfileNavProvider value={profileNav}>
@@ -714,7 +779,6 @@ export default function App() {
           currentView={currentView}
           isSoundMuted={isSoundMuted}
           onToggleSound={handleToggleSound}
-          onOpenSafetyModal={() => setActiveInfoModal('guidelines')}
           onOpenProfile={openOwnProfile}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenWhatsNew={() => setWhatsNewOpen(true)}
@@ -739,6 +803,7 @@ export default function App() {
               onOpenPublicRoom={() => handleNavigate('public')}
               onOpenCommunity={() => handleNavigate('community')}
               onOpenUnsaid={() => handleNavigate('unsaid')}
+              onOpenAtlas={openAtlas}
             />
             <SafetySection onOpenGuidelinesModal={() => setActiveInfoModal('guidelines')} />
             <InstallPrompt />
@@ -789,6 +854,12 @@ export default function App() {
         {currentView === 'signals' && <SignalsView inbox={signalsInbox} isSoundMuted={isSoundMuted} initialPairId={signalsResumePairId} onConversationState={({ openPairId, visible }) => { setSignalsResumePairId(openPairId); setSignalsChatVisible(visible); }} requestedPairId={signalsOpenPairId} onRequestedPairHandled={() => setSignalsOpenPairId(null)} initialSection={signalsStartSection} onInitialSectionHandled={() => setSignalsStartSection('inbox')} onBlockMember={handleBlockMember} nsfwPreference={nsfwPreference} onOpenSettings={() => setSettingsOpen(true)} />}
 
         {currentView === 'about' && <AboutDeveloperPage onBack={closeAbout} />}
+
+        {currentView === 'atlas' && (
+          <Suspense fallback={<div role="status" className="flex flex-1 items-center justify-center text-sm text-muted">Opening ATLAS…</div>}>
+            <AtlasPage memberName={userPrefs.displayName} />
+          </Suspense>
+        )}
       </main>
 
       {showChrome && currentView !== 'public' && (
