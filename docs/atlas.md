@@ -11,8 +11,9 @@ Community / My memories switch sits on the map itself. **Recent Memories** is a 
 shows the newest (at most three) community memories from the last 24 hours as a shortcut that flies the map to one and opens it. It is
 only a preview: every memory stays on the map, and it creates, hides or limits nothing.
 
-ATLAS is the first featured card on Home. It is **not** a bottom-navigation item (the six items are unchanged). It lives at `/atlas`
-and is loaded lazily, so the map library is only downloaded when someone opens it.
+ATLAS is the first featured card on Home and the sixth item of the bottom navigation (Home, Seek, Galaxy, Echoes, Cosmos, Atlas; it
+replaced Signals there, and Signals is opened from the Inbox icon in the header). It lives at `/atlas` and is loaded lazily, so the map
+library is only downloaded when someone opens it.
 
 ## How it works
 
@@ -87,13 +88,22 @@ Set these in Vercel (Settings → Environment Variables). They are build-time an
 
 ## Release checklist
 
-1. Choose a tile provider whose terms cover your traffic and set `VITE_ATLAS_TILE_URL` (and attribution) in Vercel. **No provider has been chosen yet.**
-2. Deploy **Firestore rules and indexes first** (`npm run deploy:firebase -- --project <id>`): the new rules deny direct access to
-   `atlasMemories` and `atlasModerationLog`, and three composite indexes are required: `atlasMemories (ownerId, createdAt desc)`,
-   `atlasMemories (visibility, lat)` and `atlasMemories (visibility, createdAt desc)` (for Recent Memories).
-   Check with `npm run check:firebase -- --project <id>`.
-3. Confirm R2 storage is configured (the same bucket that serves Signals photos), or memories can only be saved without a picture.
-4. Then deploy the app.
+1. **Vercel environment variables** (Settings → Environment Variables, Production):
+   - `VITE_ATLAS_TILE_URL` (**required**, build-time): an OSM-based tile provider's https template with `{z}/{x}/{y}`, using a
+     domain-restricted public key. Without it production shows "map isn't available". **No provider has been chosen yet.**
+   - `VITE_ATLAS_TILE_ATTRIBUTION` (if the provider requires a credit) and `VITE_ATLAS_TILE_TONE` (`dark` for dark tiles).
+   - Server-side, for memory photos (the same bucket Signals photos use): `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`,
+     `R2_SECRET_ACCESS_KEY`. Without them a memory can be saved only without a picture (the app says so).
+   - Nothing else is new. The existing Firebase variables, `FIREBASE_SERVICE_ACCOUNT_JSON` and the Vercel function count (10 of 10) are unchanged.
+2. **Firebase, before the app** (`npm run deploy:firebase -- --project <id>`, then `npm run check:firebase -- --project <id>`):
+   - Rules: deny all client access to `atlasMemories` and `atlasModerationLog`; and `users/{uid}/private/settings` updates may stamp a missing
+     `createdAt` once (older records), never change one.
+   - Three composite indexes on `atlasMemories`: `(ownerId, createdAt desc)`, `(visibility, lat)`, `(visibility, createdAt desc)`. Wait until
+     they report "Enabled"; until then listing returns errors.
+3. **Cloudflare R2**: keep the bucket **private** (no public access, no public domain, no CORS needed). Photos are stored as `atlas/{memoryId}`
+   and served only through `/api/atlas?view=photo`, which applies the same permission checks as the memory. Give the access key
+   object read, write and delete on that bucket (deleting a memory or an admin removal deletes its photo).
+4. Then deploy the app. Smoke test: open `/atlas`, pin a memory (tap the map), open it as another member, and try Anonymous.
 
 ## Known gaps (not in this change)
 
