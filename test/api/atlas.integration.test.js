@@ -101,7 +101,7 @@ test('every new memory is public to adult members; records saved by an earlier v
   const pub = (await create(alice, { title: 'Public one' })).body.memory.id;
   assert.equal((await db.doc(`atlasMemories/${pub}`).get()).data().visibility, 'public', 'the server stored public');
   assert.deepEqual(new Set(ids(await list(alice, 'mine'))), new Set([priv, fr, pub]), 'the author sees all of their own under "mine"');
-  assert.deepEqual(ids(await list(alice, 'community')), [], 'community never repeats the member\'s own');
+  assert.deepEqual(ids(await list(alice, 'community')), [pub], 'Community shows the member\'s own PUBLIC memory too, and not their older private or connections-only ones');
   assert.deepEqual(new Set(ids(await list(friend))), new Set([fr, pub]), 'a connection still sees the older connections-only one');
   assert.deepEqual(ids(await list(stranger)), [pub], 'a stranger sees only the public one');
   const asStranger = JSON.stringify((await list(stranger)).body);
@@ -335,6 +335,63 @@ test('records from earlier versions (the old anonymous flag, aliases, typed name
   }
 });
 
+test('REGRESSION: a newly published memory appears in Community AND My memories for its author, and in Community for every other member; older private/connections-only records of the author stay out of Community', { skip }, async () => {
+  const { member, connect, create, list, ids, legacy, db } = await setup();
+  const { COSMIC_NAMES } = await import('../../api/_atlas.js');
+  const alice = await member('Alice');
+  const bob = await member('Bob');
+  const friend = await member('Friend');
+  await connect(alice, friend);
+  const view = { south: 10, west: 115, north: 20, east: 125 };
+  const named = await create(alice, { title: 'Published named' });
+  const hidden = await create(alice, { title: 'Published anonymous', displayIdentity: { mode: 'anonymous' } });
+  assert.equal(named.statusCode, 201);
+  assert.equal(named.body.memory.visibility, 'public', 'the backend made it public (the request did not ask for anything)');
+  assert.equal((await db.doc(`atlasMemories/${named.body.memory.id}`).get()).data().visibility, 'public');
+  const olderPrivate = await legacy(alice, 'private', { title: 'Older private' });
+  const olderFriends = await legacy(alice, 'friends', { title: 'Older connections-only' });
+  const [namedId, hiddenId] = [named.body.memory.id, hidden.body.memory.id];
+
+  // the author: My memories has everything of theirs; Community has every PUBLIC memory, including their own, and none of the narrower older ones
+  const mine = await list(alice, 'mine');
+  assert.deepEqual(new Set(ids(mine)), new Set([namedId, hiddenId, olderPrivate, olderFriends]), 'My memories: only the author\'s own, all of them');
+  for (const scope of [undefined, view]) {
+    const community = await list(alice, 'community', scope);
+    assert.equal(community.statusCode, 200);
+    assert.deepEqual(new Set(ids(community)), new Set([namedId, hiddenId]), `Community (${scope ? 'map view' : 'whole world'}) shows the author's own public memories`);
+    assert.equal(ids(community).includes(olderPrivate) || ids(community).includes(olderFriends), false, 'older private / connections-only records are never in Community');
+  }
+  const asAuthor = (await list(alice, 'community', view)).body.memories;
+  assert.equal(asAuthor.find((m) => m.id === namedId).mine, true, 'flagged as theirs, so they can edit it from Community too');
+  assert.equal(asAuthor.find((m) => m.id === hiddenId).mine, true);
+  assert.ok(COSMIC_NAMES.includes(asAuthor.find((m) => m.id === hiddenId).displayName), 'an anonymous memory shows its cosmic name there too');
+  assert.equal((await list(alice, 'recent')).body.memories.map((m) => m.id).sort().join(), [namedId, hiddenId].sort().join(), 'Recent follows Community: the newest public memories, including the author\'s');
+
+  // every other member sees them in Community (and Recent), the same cosmic name, nothing narrower
+  for (const viewer of [bob, friend]) {
+    const community = (await list(viewer, 'community', view)).body.memories;
+    assert.equal(community.some((m) => m.id === namedId), true, 'another member sees the published memory');
+    assert.equal(community.some((m) => m.id === hiddenId), true);
+    assert.equal(community.find((m) => m.id === hiddenId).displayName, asAuthor.find((m) => m.id === hiddenId).displayName, 'the same cosmic name for everyone');
+    assert.equal(community.find((m) => m.id === namedId).mine, false);
+    assert.equal(community.some((m) => m.id === olderPrivate), false, 'no private memory leaks to others');
+    const recentIds = ids(await list(viewer, 'recent'));
+    assert.equal(recentIds.includes(namedId) && recentIds.includes(hiddenId), true, 'Recent shows both published memories to everyone');
+    assert.equal(recentIds.includes(olderPrivate), false, 'and never the older private one');
+  }
+  assert.equal((await list(bob, 'community', view)).body.memories.some((m) => m.id === olderFriends), false, 'a stranger never sees an older connections-only record');
+  assert.equal((await list(friend, 'community', view)).body.memories.some((m) => m.id === olderFriends), true, 'only the author\'s connection does (unchanged)');
+
+  // nothing private is in what anyone receives: no owner id, no exact point, no real name on the anonymous one
+  const everything = JSON.stringify([asAuthor, (await list(bob, 'community', view)).body]);
+  for (const secret of ['ownerId', '14.5995123', '120.9842199']) assert.equal(everything.includes(secret), false, `${secret} is never in a response`);
+  const bobSees = (await list(bob, 'community', view)).body.memories.find((m) => m.id === hiddenId);
+  assert.equal(bobSees.author, null);
+  assert.equal(JSON.stringify(bobSees).includes(alice.uid) || JSON.stringify(bobSees).includes('Alice'), false);
+  // a view that does not contain the pin does not show it, for anyone
+  assert.equal(ids(await list(alice, 'community', { south: 40, west: -10, north: 55, east: 10 })).includes(namedId), false);
+});
+
 test('Recent Memories: only the newest three community memories from the last 24 hours; older ones stay on the map', { skip }, async () => {
   const { member, create, list, ids, db, Timestamp, legacy } = await setup();
   const alice = await member('Alice');
@@ -359,7 +416,7 @@ test('Recent Memories: only the newest three community memories from the last 24
   assert.equal(new Set(ids(all)).size, 5, 'the preview limit hides nothing from the map: all five public memories are there');
   assert.ok(ids(all).includes(older) && ids(all).includes(made[3]));
   assert.equal((await db.collection('atlasMemories').get()).size, 6, 'no records were created or removed');
-  assert.deepEqual(ids(await list(alice, 'recent')), [], 'a member\'s own memories are not community memories');
+  assert.deepEqual(ids(await list(alice, 'recent')), [made[0], made[1], made[2]], 'a member\'s own public memories are community memories too (never their older private one)');
   assert.equal((await list(viewer, 'recent', { south: 0, west: 0, north: 1, east: 1 })).statusCode, 400);
 });
 

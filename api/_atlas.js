@@ -315,9 +315,10 @@ export const inBounds = (data, bounds) => {
 const newestFirst = (a, b) => (b.data.createdAt?.toMillis?.() ?? 0) - (a.data.createdAt?.toMillis?.() ?? 0) || (a.id < b.id ? 1 : -1);
 
 /**
- * `mine`: the member's own memories, every visibility. `community`: other members' public memories in view, plus friends-only
- * memories from the member's connections. `recent`: the newest few community memories from the last 24 hours, wherever they are (the
- * preview only: the map still shows every memory in view). Every memory is checked with canView before it is returned.
+ * `mine`: only the member's own memories, whatever their visibility (older private and connections-only records included). `community`:
+ * every public memory in view from every member, INCLUDING the member's own, plus older friends-only records from their connections.
+ * `recent`: the newest few community memories from the last 24 hours, wherever they are (the preview only: the map still shows every
+ * memory in view). Every memory is checked with canView before it is returned.
  */
 export async function listMemories(db, uid, body) {
   if (!body || typeof body !== 'object' || Object.keys(body).some(key => !['action', 'scope', 'bounds'].includes(key))) throw fail(400, 'invalid_request');
@@ -351,7 +352,10 @@ export async function listMemories(db, uid, body) {
         if (seen.has(doc.id)) continue;
         seen.add(doc.id);
         const data = doc.data();
-        if (data.ownerId === uid || !inBounds(data, bounds)) continue;
+        // The viewer's own PUBLIC memories belong in Community like everyone else's (they were published to the community). Only public records
+        // and the connections' older friends-only records are ever fetched here, so the viewer's own older private or friends-only ones still
+        // appear under "My memories" alone.
+        if (!inBounds(data, bounds)) continue;
         if (body.scope === 'recent' && (toMs(data.createdAt) ?? 0) < since) continue;
         found.push({ id: doc.id, data });
       }
