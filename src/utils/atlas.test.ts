@@ -137,3 +137,17 @@ test('an optional labels-only layer: used when it is a real https template, igno
   const map = fs.readFileSync('src/components/AtlasMap.tsx', 'utf8');
   assert.match(map, /tiles\.labelsUrl && <TileLayer url=\{tiles\.labelsUrl\}[^>]*className="atlas-labels"/);
 });
+
+test('the map credit: the control stays on with the OpenStreetMap credit, only the Leaflet prefix and flag are dropped, and it is styled to be readable', () => {
+  const map = fs.readFileSync('src/components/AtlasMap.tsx', 'utf8');
+  assert.match(map, /attributionControl=\{false\}/, 'the default control is replaced by one we configure');
+  assert.match(map, /<AttributionControl position="bottomright" prefix=\{false\} \/>/, 'the credit control is still on, without the prefix');
+  assert.match(map, /<TileLayer url=\{tiles\.url\} attribution=\{tiles\.attribution\}/, 'the tile credit (OpenStreetMap + provider) is still passed to the layer');
+  const css = fs.readFileSync('src/index.css', 'utf8').replace(/\r\n/g, '\n');
+  assert.match(css, /\.atlas-map\.leaflet-container \.leaflet-control-attribution \{ background: rgb\(18 11 23[^}]*color: #cfc6d6/, 'dark strip with light text, specific enough to beat Leaflet\'s white default');
+});
+
+test('on a phone the credit is moved clear of the round New-memory button so neither credit is covered', () => {
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  assert.match(css, /@media \(max-width: 639px\) \{ \.atlas-map \.leaflet-bottom\.leaflet-right \{ right: 4\.5rem; \} \}/);
+});
