@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Circle, MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { AttributionControl, Circle, MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import type { MapBounds, PlaceGroup } from '../utils/atlas.ts';
 import type { TileConfig } from '../utils/atlasConfig.ts';
 import { wrapLongitude, type PickedPlace } from '../utils/atlasPick.ts';
@@ -122,8 +122,11 @@ export const AtlasMap: React.FC<AtlasMapProps> = ({ groups, selectedKey, tiles, 
       maxBoundsViscosity={0.8}
       worldCopyJump
       zoomControl
+      attributionControl={false}
       className="atlas-map h-full w-full"
     >
+      {/* The credit control stays on (the OpenStreetMap and provider credits are required); only Leaflet's own "Leaflet" prefix and flag are dropped. */}
+      <AttributionControl position="bottomright" prefix={false} />
       <TileLayer url={tiles.url} attribution={tiles.attribution} maxZoom={tiles.maxZoom} />
       {/* Street and town names on their own transparent layer, so they can be made brighter without recolouring the roads under them. */}
       {tiles.labelsUrl && <TileLayer url={tiles.labelsUrl} maxZoom={tiles.maxZoom} zIndex={2} className="atlas-labels" />}
