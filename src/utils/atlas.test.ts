@@ -106,3 +106,14 @@ test('no map key or secret is in the client source', () => {
     assert.doesNotMatch(source, /pk\.[A-Za-z0-9]{20,}/, file);
   }
 });
+
+test('production CSP lets the ATLAS map tiles load from CARTO (tiles are <img> requests), and still allows nothing broader', () => {
+  const vercel = fs.readFileSync('vercel.json', 'utf8');
+  const csp = JSON.parse(vercel).headers.flatMap((h: { headers: { key: string; value: string }[] }) => h.headers).find((h: { key: string }) => h.key === 'Content-Security-Policy').value as string;
+  const imgSrc = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith('img-src ')) ?? '';
+  assert.ok(imgSrc.split(' ').includes('https://basemaps.cartocdn.com'), 'the tile host itself');
+  assert.ok(imgSrc.split(' ').includes('https://*.basemaps.cartocdn.com'), 'and its subdomains');
+  assert.equal(imgSrc.includes(' https: ') || imgSrc.endsWith(' https:') || imgSrc.includes(' *'), false, 'no wildcard for every https host');
+  assert.ok(imgSrc.includes('https://*.giphy.com') && imgSrc.includes('https://cdn.buymeacoffee.com'), 'the existing image hosts are unchanged');
+  assert.match(csp, /default-src 'self'/, 'the default stays closed');
+});

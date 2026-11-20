@@ -90,8 +90,12 @@ Set these in Vercel (Settings → Environment Variables). They are build-time an
 
 1. **Vercel environment variables** (Settings → Environment Variables, Production):
    - `VITE_ATLAS_TILE_URL` (**required**, build-time): an OSM-based tile provider's https template with `{z}/{x}/{y}`, using a
-     domain-restricted public key. Without it production shows "map isn't available". **No provider has been chosen yet.**
-   - `VITE_ATLAS_TILE_ATTRIBUTION` (if the provider requires a credit) and `VITE_ATLAS_TILE_TONE` (`dark` for dark tiles).
+     key in the URL. Without it production shows "map isn't available". The chosen provider is **CARTO Dark Matter**:
+     `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=<your CARTO basemaps key>` with `VITE_ATLAS_TILE_TONE=dark`.
+     The key is visible in the browser's tile requests (that is normal for tile keys); keep it out of git and logs. The production
+     Content-Security-Policy (`img-src` in `vercel.json`) already allows `basemaps.cartocdn.com`; any other provider needs its host added there,
+     or the browser blocks every tile.
+   - `VITE_ATLAS_TILE_ATTRIBUTION` (CARTO asks for `&copy; CARTO`; the OpenStreetMap credit is always shown on top of it) and `VITE_ATLAS_TILE_TONE` (`dark` for dark tiles).
    - Server-side, for memory photos (the same bucket Signals photos use): `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`,
      `R2_SECRET_ACCESS_KEY`. Without them a memory can be saved only without a picture (the app says so).
    - Nothing else is new. The existing Firebase variables, `FIREBASE_SERVICE_ACCOUNT_JSON` and the Vercel function count (10 of 10) are unchanged.
