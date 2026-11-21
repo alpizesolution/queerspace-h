@@ -284,10 +284,11 @@ test('the form has no visibility choice at all: no Only me, Connections or Every
   const panel = await screen.findByTestId('pin-panel');
   assert.equal(within(panel).queryByText(/Who can see it/i), null);
   for (const gone of [/Only me/, /Connections/, /Everyone/]) assert.equal(within(panel).queryByRole('radio', { name: gone }), null, String(gone));
-  assert.match(within(panel).getByTestId('atlas-public-note').textContent ?? '', /visible to all QUEERSPACE members/);
+  assert.match(within(panel).getByTestId('atlas-public-note').textContent ?? '', /^Your account stays private either way\.$/);
+  assert.doesNotMatch(within(panel).getByTestId('atlas-public-note').textContent ?? '', /visible|members/i, 'one subtle line, nothing more');
 });
 
-test('the identity choice is always there with two options: Use my pseudonym (the default, showing the member\'s name) or Anonymous; it changes what will be shown and what is sent', async () => {
+test('the Post as choice is always there with two options: My pseudonym (the default, showing the member\'s name underneath) or Anonymous (nothing underneath); it changes what will be shown and what is sent', async () => {
   render(<AtlasPage memberName="Violet Lark" />);
   await screen.findByRole('button', { name: 'star:Title c1' });
   fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
@@ -296,17 +297,16 @@ test('the identity choice is always there with two options: Use my pseudonym (th
   fireEvent.click(screen.getByRole('button', { name: 'Pick Manila' }));
   const identity = screen.getByTestId('atlas-identity');
   const options = within(identity).getAllByRole('radio');
-  assert.deepEqual(options.map((o) => within(o).getByText(/^(Use my pseudonym|Anonymous)$/).textContent), ['Use my pseudonym', 'Anonymous'], 'exactly these two, nothing to type');
+  assert.deepEqual(options.map((o) => within(o).getByText(/^(My pseudonym|Anonymous)$/).textContent), ['My pseudonym', 'Anonymous'], 'exactly these two, nothing to type');
   assert.equal(within(identity).queryByRole('textbox'), null, 'no name can be typed');
-  assert.equal(within(identity).getByRole('radio', { name: /Use my pseudonym/ }).getAttribute('aria-checked'), 'true', 'the default');
+  assert.equal(within(identity).getByRole('radio', { name: /My pseudonym/ }).getAttribute('aria-checked'), 'true', 'the default');
   assert.match(screen.getByTestId('atlas-identity-preview').textContent ?? '', /Violet Lark/);
-  assert.match(within(identity).getByRole('radio', { name: /Use my pseudonym/ }).textContent ?? '', /Shown as Violet Lark/);
+  assert.match(screen.getByTestId('atlas-identity').textContent ?? '', /Shown as Violet Lark/, 'the pseudonym is shown underneath the selector');
   fireEvent.click(within(identity).getByRole('radio', { name: /Anonymous/ }));
   assert.equal(within(identity).getByRole('radio', { name: /Anonymous/ }).getAttribute('aria-checked'), 'true');
-  assert.equal(within(identity).getByRole('radio', { name: /Use my pseudonym/ }).getAttribute('aria-checked'), 'false');
-  assert.match(screen.getByTestId('atlas-identity-preview').textContent ?? '', /a random cosmic name \(picked when you publish\)/);
-  assert.match(within(identity).getByRole('radio', { name: /Anonymous/ }).textContent ?? '', /random cosmic name, like Nova, Moonbeam or Polaris/);
-  assert.doesNotMatch(screen.getByTestId('atlas-identity-preview').textContent ?? '', /Violet Lark/);
+  assert.equal(within(identity).getByRole('radio', { name: /My pseudonym/ }).getAttribute('aria-checked'), 'false');
+  assert.equal(screen.queryByTestId('atlas-identity-preview'), null, 'nothing is shown underneath for a new anonymous memory (the server picks the cosmic name)');
+  assert.doesNotMatch(screen.getByTestId('atlas-identity').textContent ?? '', /Violet Lark/);
   fireEvent.click(screen.getByRole('button', { name: 'Pin this memory' }));
   await waitFor(() => assert.ok(posts().some((b) => b.action === 'create')));
   const created = posts().find((b) => b.action === 'create') as Mem;
@@ -336,10 +336,9 @@ test('editing a memory starts from the author\'s saved choice, can switch it, an
   fireEvent.click(within(await screen.findByTestId('memory-panel')).getByRole('button', { name: 'Edit' }));
   await screen.findByRole('button', { name: 'Save changes' });
   assert.equal(within(screen.getByTestId('atlas-identity')).getByRole('radio', { name: /Anonymous/ }).getAttribute('aria-checked'), 'true');
-  assert.match(screen.getByTestId('atlas-identity-preview').textContent ?? '', /Nova/, 'an anonymous memory keeps the cosmic name it has');
-  assert.doesNotMatch(screen.getByTestId('atlas-identity-preview').textContent ?? '', /picked when you/);
+  assert.match(screen.getByTestId('atlas-identity-preview').textContent ?? '', /Shown as Nova/, 'an anonymous memory keeps the cosmic name it has');
   assert.equal(screen.queryByRole('radio', { name: /Only me|Connections|Everyone/ }), null);
-  fireEvent.click(within(screen.getByTestId('atlas-identity')).getByRole('radio', { name: /Use my pseudonym/ }));
+  fireEvent.click(within(screen.getByTestId('atlas-identity')).getByRole('radio', { name: /My pseudonym/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => assert.ok(posts().some((b) => b.action === 'update')));
   const updated = posts().find((b) => b.action === 'update') as Mem;
@@ -493,8 +492,8 @@ test('editing an anonymous memory keeps its cosmic name; switching to the pseudo
   fireEvent.click(within(await screen.findByTestId('memory-panel')).getByRole('button', { name: 'Edit' }));
   await screen.findByRole('button', { name: 'Save changes' });
   const identity = screen.getByTestId('atlas-identity');
-  assert.match(within(identity).getByRole('radio', { name: /Anonymous/ }).textContent ?? '', /Stays Nova/);
-  fireEvent.click(within(identity).getByRole('radio', { name: /Use my pseudonym/ }));
+  assert.match(screen.getByTestId('atlas-identity-preview').textContent ?? '', /Shown as Nova/);
+  fireEvent.click(within(identity).getByRole('radio', { name: /My pseudonym/ }));
   assert.match(screen.getByTestId('atlas-identity-preview').textContent ?? '', /Violet Lark/, 'switching shows the member\'s own pseudonym');
   fireEvent.click(within(identity).getByRole('radio', { name: /Anonymous/ }));
   assert.match(screen.getByTestId('atlas-identity-preview').textContent ?? '', /Nova/, 'back to anonymous before saving: nothing was changed, so the name is kept');
@@ -506,7 +505,7 @@ test('editing an anonymous memory keeps its cosmic name; switching to the pseudo
   assert.equal('anonymousAlias' in updated || 'alias' in updated || 'displayName' in updated, false, 'the app never sends a name: the server keeps the one it stored');
 });
 
-test('switching a pseudonym memory to Anonymous says a new cosmic name will be picked on save', async () => {
+test('switching a pseudonym memory to Anonymous drops the shown-as line (a new cosmic name is picked on save)', async () => {
   mine = [memory('m1', { mine: true, author: null, visibility: 'public', title: 'My pier', displayIdentity: 'profile', displayName: 'You', identity: { mode: 'profile' } })];
   render(<AtlasPage memberName="Violet Lark" />);
   fireEvent.click(await screen.findByRole('tab', { name: 'My memories' }));
@@ -514,8 +513,8 @@ test('switching a pseudonym memory to Anonymous says a new cosmic name will be p
   fireEvent.click(within(await screen.findByTestId('memory-panel')).getByRole('button', { name: 'Edit' }));
   await screen.findByRole('button', { name: 'Save changes' });
   fireEvent.click(within(screen.getByTestId('atlas-identity')).getByRole('radio', { name: /Anonymous/ }));
-  assert.match(screen.getByTestId('atlas-identity-preview').textContent ?? '', /a new random cosmic name \(picked when you save\)/);
-  assert.doesNotMatch(screen.getByTestId('atlas-identity-preview').textContent ?? '', /Violet Lark/);
+  assert.equal(screen.queryByTestId('atlas-identity-preview'), null);
+  assert.doesNotMatch(screen.getByTestId('atlas-identity').textContent ?? '', /Violet Lark/);
 });
 
 test('the ATLAS layout does not move when a text field is focused: its height uses the steady tab-bar space, so the form sheet cannot jump away from a finger that is about to tap Save', () => {
@@ -719,4 +718,43 @@ test('tapping or clicking outside the card dismisses it; presses inside (reactio
   assert.equal(closed.length, 1, 'a tap outside dismisses');
   fireEvent.keyDown(document, { key: 'Escape' });
   assert.equal(closed.length, 2, 'Escape dismisses');
+});
+
+test('the composer is minimal: title, story with the photo and date in its corner, a compact Post as selector; no separate date or picture sections, no big cards', async () => {
+  render(<AtlasPage memberName="Violet Lark" />);
+  await screen.findByRole('button', { name: 'star:Title c1' });
+  fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
+  const panel = await screen.findByTestId('pin-panel');
+  const text = panel.textContent ?? '';
+  assert.doesNotMatch(text, /Who should it say|Picture \(optional\)|\(optional\)|Every memory on ATLAS/);
+  const story = within(panel).getByLabelText('Story');
+  const editor = story.parentElement as HTMLElement;
+  const photoBtn = within(editor).getByRole('button', { name: 'Add a picture' });
+  const date = within(editor).getByLabelText('Date of the memory') as HTMLInputElement;
+  assert.ok(editor.contains(photoBtn) && editor.contains(date), 'photo and date live inside the story editor');
+  assert.equal(date.type, 'date');
+  assert.equal(within(editor).getByText(/^0\/\d+$/).textContent, '0/1000', 'a subtle counter');
+  assert.equal(within(panel).getAllByRole('radio').length, 2);
+  assert.equal(within(panel).getByTestId('atlas-identity').querySelector('legend')?.textContent, 'Post as');
+});
+
+test('changing Post as keeps what was typed (title, story, date); tapping the date opens the native picker; the shown date follows the field', async () => {
+  render(<AtlasPage memberName="Violet Lark" />);
+  await screen.findByRole('button', { name: 'star:Title c1' });
+  fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
+  const panel = await screen.findByTestId('pin-panel');
+  fireEvent.change(within(panel).getByLabelText('Title'), { target: { value: 'Kept title' } });
+  fireEvent.change(within(panel).getByLabelText('Story'), { target: { value: 'Kept story' } });
+  const date = within(panel).getByLabelText('Date of the memory') as HTMLInputElement;
+  let opened = 0;
+  (date as unknown as { showPicker: () => void }).showPicker = () => { opened += 1; };
+  fireEvent.click(date);
+  assert.equal(opened, 1, 'a tap on the date opens the existing date picker');
+  fireEvent.change(date, { target: { value: '2024-06-01' } });
+  assert.match(within(panel).getByTestId('atlas-date-text').textContent ?? '', /Jun(e)? 1, 2024/);
+  fireEvent.click(within(panel).getByRole('radio', { name: /Anonymous/ }));
+  fireEvent.click(within(panel).getByRole('radio', { name: /My pseudonym/ }));
+  assert.equal((within(panel).getByLabelText('Title') as HTMLInputElement).value, 'Kept title');
+  assert.equal((within(panel).getByLabelText('Story') as HTMLTextAreaElement).value, 'Kept story');
+  assert.equal((within(panel).getByLabelText('Date of the memory') as HTMLInputElement).value, '2024-06-01');
 });
