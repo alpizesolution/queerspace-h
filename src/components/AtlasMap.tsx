@@ -9,7 +9,7 @@ import { isCartoDarkLabels } from '../utils/atlasSeaLabel.ts';
 import { attachWpsLabel } from '../utils/atlasSeaLabelLayer.ts';
 import { canvasSupported, MaskedTileLayer } from '../utils/maskedTileLayer.ts';
 
-/** A memory as a small glowing golden star with a thin dark outline (so it reads on the dark map). Only a count is ever written into the markup, never member text. */
+/** A memory as a small pink-to-purple star with a thin dark outline (so it reads on the dark map), no ring or halo. Only a count is ever written into the markup, never member text. */
 const iconCache = new Map<string, L.DivIcon>();
 export function starIcon(count: number, state: 'idle' | 'selected' | 'mine' = 'idle'): L.DivIcon {
   const key = `${count}|${state}`;
@@ -18,7 +18,7 @@ export function starIcon(count: number, state: 'idle' | 'selected' | 'mine' = 'i
   const badge = count > 1 ? `<span class="atlas-star__count">${count > 9 ? '9+' : count}</span>` : '';
   const icon = L.divIcon({
     className: `atlas-star atlas-star--${state}`,
-    html: `<span class="atlas-star__halo"></span><span class="atlas-star__edge"></span><span class="atlas-star__core"></span>${badge}`,
+    html: `<span class="atlas-star__edge"></span><span class="atlas-star__core"></span>${badge}`,
     iconSize: [36, 36],
     iconAnchor: [18, 18],
   });
@@ -27,7 +27,7 @@ export function starIcon(count: number, state: 'idle' | 'selected' | 'mine' = 'i
 }
 
 /** The temporary marker for the place being chosen. Its own class keeps it tappable while the saved stars are not (see .atlas-picking). */
-const pickIcon = L.divIcon({ className: 'atlas-star atlas-star--selected atlas-pick', html: '<span class="atlas-star__halo"></span><span class="atlas-star__edge"></span><span class="atlas-star__core"></span>', iconSize: [36, 36], iconAnchor: [18, 18] });
+const pickIcon = L.divIcon({ className: 'atlas-star atlas-star--selected atlas-pick', html: '<span class="atlas-star__edge"></span><span class="atlas-star__core"></span>', iconSize: [36, 36], iconAnchor: [18, 18] });
 
 /** Choosing a place on THIS map: a tap anywhere sets the spot, and the marker (with the ~1 km area it will be saved within) can be dragged. */
 const PickLayer: React.FC<{ place: PickedPlace | null; onPick: (lat: number, lng: number) => void }> = ({ place, onPick }) => {

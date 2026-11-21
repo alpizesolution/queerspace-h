@@ -554,6 +554,8 @@ html:not(.bmc-widget-visible) div:has(> #bmc-iframe) {
    ATLAS: a shared map of memories. Stars are individual memories; the map itself is darkened to sit in the app's night sky.
    ============================================================================================================================ */
 .atlas-map.leaflet-container { background: #0f0a16; font-family: inherit; outline: none; }
+/* Leaflet's panes and controls use z-index up to 1000. Containing them here keeps every map label, marker, control and credit BELOW the memory card (z-900, a sibling), never over it. */
+.atlas-map.leaflet-container { isolation: isolate; z-index: 0; }
 /* Standard (light) OpenStreetMap-style tiles are inverted into a deep violet night map; a provider that already serves a dark
    style sets VITE_ATLAS_TILE_TONE=dark and is shown as it is. */
 /* The labels-only layer (VITE_ATLAS_LABELS_URL) is brightened on its own: a dark basemap's labels are dim grey, and this makes them crisp
@@ -583,25 +585,22 @@ html:not(.bmc-widget-visible) div:has(> #bmc-iframe) {
 .atlas-picking .atlas-map { cursor: crosshair !important; }
 .atlas-picking .atlas-star:not(.atlas-pick) { pointer-events: none !important; }
 .atlas-picking .atlas-pick { pointer-events: auto !important; cursor: grab; }
-/* Memory stars: warm golden yellow, a thin warm-black outline (a slightly larger copy of the star behind it) and a soft golden glow, so they stand out
-   from the dark map and from white text. No CSS filter per marker (many can be on screen): the outline is a shape, the glow is a gradient. */
-.atlas-star__halo { position: absolute; inset: 3px; border-radius: 9999px; background: radial-gradient(circle, rgb(255 205 90 / 0.5) 0%, rgb(240 160 40 / 0.2) 52%, transparent 72%); animation: atlas-twinkle 3.4s ease-in-out infinite; }
+/* A memory star: small, no ring or halo. A thin dark outline keeps it readable on the map; the fill is a pink-to-purple gradient that slowly drifts between the two. */
 .atlas-star__edge,
 .atlas-star__core { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); transition: transform 0.18s ease; }
-.atlas-star__edge { width: 23px; height: 23px; background: #1b1008; }
-.atlas-star__core { width: 17px; height: 17px; background: radial-gradient(circle at 50% 45%, #fff3b5 0%, #ffd34f 42%, #f2a41a 100%); }
+.atlas-star__edge { width: 17px; height: 17px; background: #140b1c; }
+.atlas-star__core { width: 13px; height: 13px; background: linear-gradient(135deg, #ff7ac8 0%, #b878ff 50%, #ff7ac8 100%); background-size: 220% 220%; animation: atlas-hue 4.6s ease-in-out infinite; }
 .atlas-star:hover .atlas-star__edge,
 .atlas-star:hover .atlas-star__core,
 .atlas-star:focus-visible .atlas-star__edge,
 .atlas-star:focus-visible .atlas-star__core { transform: translate(-50%, -50%) scale(1.25); }
-/* A memory of the viewer's own: the same gold star, with a rose glow so it can be told apart. */
-.atlas-star--mine .atlas-star__halo { background: radial-gradient(circle, rgb(255 150 175 / 0.55) 0%, rgb(220 100 140 / 0.22) 52%, transparent 72%); }
-/* The selected star (and the pin being placed): larger, a stronger golden glow and a clear ring. */
+/* Your own stars lean rosier; the star being read grows and gets a soft glow that follows the star's own shape (no circle). */
+.atlas-star--mine .atlas-star__core { background-image: linear-gradient(135deg, #ff8fb8 0%, #d77cff 50%, #ff8fb8 100%); }
+.atlas-star--selected { filter: drop-shadow(0 0 4px rgb(255 140 225 / 0.85)); }
 .atlas-star--selected .atlas-star__edge,
-.atlas-star--selected .atlas-star__core { transform: translate(-50%, -50%) scale(1.45); }
-.atlas-star--selected .atlas-star__halo { inset: -4px; background: radial-gradient(circle, rgb(255 214 100 / 0.85) 0%, rgb(245 170 40 / 0.4) 48%, transparent 72%); animation-duration: 2s; box-shadow: 0 0 0 2px rgb(255 224 130 / 0.9), 0 0 16px 2px rgb(255 200 70 / 0.65); }
-.atlas-star__count { position: absolute; right: 1px; top: 1px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 9999px; background: var(--color-berry); color: #120b17; font: 700 10px/15px var(--font-sans); text-align: center; box-shadow: 0 0 0 2px #120b17; }
-.atlas-dot { width: 12px; height: 12px; flex: none; background: radial-gradient(circle at 50% 45%, #fff3b5, #f2a41a); clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); filter: drop-shadow(0 0 1px #1b1008) drop-shadow(0 0 4px rgb(255 205 90 / 0.7)); }
+.atlas-star--selected .atlas-star__core { transform: translate(-50%, -50%) scale(1.5); }
+.atlas-star__count { position: absolute; right: 5px; top: 5px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 9999px; background: var(--color-berry); color: #120b17; font: 700 9.5px/14px var(--font-sans); text-align: center; box-shadow: 0 0 0 2px #120b17; }
+.atlas-dot { width: 12px; height: 12px; flex: none; background: linear-gradient(135deg, #ff7ac8, #b878ff); clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); }
 .atlas-chip { border: 1px solid var(--color-line); background: rgb(36 24 41 / 0.92); color: var(--color-fg); border-radius: 9999px; padding: 0.4rem 0.85rem; font-size: calc(12.5px * var(--fs, 1)); line-height: 1.3; backdrop-filter: blur(8px); box-shadow: 0 4px 14px rgb(0 0 0 / 0.35); }
 
 .atlas-feature { background: radial-gradient(120% 160% at 0% 0%, rgb(142 84 126 / 0.34), transparent 58%), linear-gradient(135deg, #1d1228 0%, #140c1b 100%); }
@@ -613,11 +612,11 @@ html:not(.bmc-widget-visible) div:has(> #bmc-iframe) {
     radial-gradient(1px 1px at 63% 74%, #e9ddff, transparent 60%),
     radial-gradient(1.5px 1.5px at 55% 22%, #c8b5e6, transparent 60%); }
 
-@keyframes atlas-twinkle { 0%, 100% { opacity: 0.65; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1.08); } }
+@keyframes atlas-hue { 0%, 100% { background-position: 0% 0%; opacity: 0.88; } 50% { background-position: 100% 100%; opacity: 1; } }
 @keyframes atlas-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
   .atlas-sealabel { transition: none; }
-  .atlas-star__halo { animation: none; }
+  .atlas-star__core { animation: none; }
   .atlas-star__core,
   .atlas-star__edge { transition: none; }
   [class*='animate-[atlas-rise'] { animation: none !important; }

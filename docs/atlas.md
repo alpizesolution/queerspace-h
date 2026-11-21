@@ -43,7 +43,7 @@ library is only downloaded when someone opens it.
 
 ## The memory card, views and reactions
 
-- **Layout (compact, `AtlasMemoryPanel.tsx`):** the date (short form, `Jun 1, 2024`) sits in the top-right corner beside close. Then the photo (if any),
+- **Layout (compact, `AtlasMemoryPanel.tsx`):** the photo (if any), then the date (short form, `Jun 1, 2024`) directly under the words. There is no close button: a tap or click outside the card (or Escape) dismisses it; presses inside it, drags that pan the map, stars, the Recent strip and dialogs do not. The map is its own stacking context, so no map label, marker, control or credit can sit over the card. Stars are small pink-to-purple stars with a slow gradient drift (no ring or halo). Then
   the title and the words, which are the focus. The place name is shown only if the author gave one (the app no longer asks for one, so most cards
   have no location line); nothing says "approximate", and the exact spot is never known (the stored point is already rounded to ~1 km). There is no
   "Shared" label (every new memory is public; an older connections-only record shows a tiny people icon beside its author). No divider lines.
