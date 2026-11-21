@@ -38,7 +38,7 @@ interface Props {
 export const AtlasRecent: React.FC<Props> = ({ memories, status, open, onToggle, onPick, onRetry }) => {
   const panelId = useId();
   return (
-    <section aria-label="Recent memories" className="shrink-0">
+    <section aria-label="Recent memories" data-atlas-keep className="shrink-0">
       <button
         type="button"
         onClick={onToggle}

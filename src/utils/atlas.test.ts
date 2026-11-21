@@ -142,23 +142,26 @@ test('an optional labels-only layer: used when it is a real https template, igno
   assert.ok(bright >= 1.3 && bright <= 1.7, `label brightness ${bright} should be readable but not pure white`);
 });
 
-test('memory stars: golden with a dark outline and glow, a clearer selected state, same size and anchor, no per-marker filter', () => {
+test('memory stars: small pink-to-purple star with a dark outline, no ring or halo, an animated gradient, a clear selected state, 36px tappable box', () => {
   const css = fs.readFileSync('src/index.css', 'utf8').replace(/\r\n/g, '\n');
-  // every declaration block whose selector list ends with (or is) this selector, joined (the edge and core share a grouped rule)
   const rule = (sel: string) => [...css.matchAll(new RegExp(`^${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`, 'gm'))].map((m) => m[1]).join(' ');
   const core = rule('.atlas-star__core');
-  assert.match(core, /width: 17px; height: 17px/, 'marker size is unchanged');
-  assert.match(core, /#ffd34f/i, 'warm golden yellow');
-  assert.doesNotMatch(core, /#fff 0%|e9ddff/i, 'no longer white / lavender');
+  assert.match(core, /width: 13px; height: 13px/, 'smaller than the old 17px star');
+  assert.match(core, /#ff7ac8/i, 'pink');
+  assert.match(core, /#b878ff/i, 'purple');
+  assert.match(core, /animation: atlas-hue/, 'a gentle pink to purple drift');
   assert.doesNotMatch(core, /filter:/, 'no CSS filter on each marker (performance)');
-  assert.match(rule('.atlas-star__edge'), /background: #1b1008/, 'a dark outline');
-  assert.match(rule('.atlas-star__halo'), /rgb\(255 205 90/, 'a soft golden glow');
-  const selected = rule('.atlas-star--selected .atlas-star__halo');
-  assert.match(selected, /box-shadow:[^;]*2px/, 'the selected star has a clear ring');
-  assert.match(selected, /rgb\(255 214 100 \/ 0\.85\)/, 'and a stronger glow than an idle star');
+  assert.match(rule('.atlas-star__edge'), /width: 17px; height: 17px/, 'a thin dark outline, not a big ring');
+  assert.doesNotMatch(css, /atlas-star__halo/, 'the glowing circular halo is gone');
+  assert.doesNotMatch(css, /#ffd34f|#f2a41a/i, 'no golden fill left on the markers');
+  assert.match(rule('.atlas-star--selected'), /drop-shadow/, 'the selected star has a glow that follows its shape');
+  assert.match(css, /@keyframes atlas-hue/);
+  assert.match(css, /prefers-reduced-motion[\s\S]*\.atlas-star__core \{ animation: none; \}/, 'still when motion is reduced');
+  assert.match(css, /\.atlas-map\.leaflet-container \{ isolation: isolate; z-index: 0; \}/, 'Leaflet panes and controls cannot stack over the memory card');
   const map = fs.readFileSync('src/components/AtlasMap.tsx', 'utf8');
+  assert.doesNotMatch(map, /atlas-star__halo/);
   assert.equal((map.match(/atlas-star__edge/g) ?? []).length, 2, 'normal markers and the pin marker both carry the outline');
-  assert.equal((map.match(/iconSize: \[36, 36\],\s*iconAnchor: \[18, 18\]/g) ?? []).length, 2, 'size and anchor are unchanged');
+  assert.equal((map.match(/iconSize: \[36, 36\],\s*iconAnchor: \[18, 18\]/g) ?? []).length, 2, 'the tappable box and anchor are unchanged');
 });
 
 test('the map credit: the control stays on with the OpenStreetMap credit, only the Leaflet prefix and flag are dropped, and it is styled to be readable', () => {

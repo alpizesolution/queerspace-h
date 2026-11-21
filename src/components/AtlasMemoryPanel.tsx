@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, MapPin, Pencil, Trash2, Users, X, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MapPin, Pencil, Trash2, Users, Lock } from 'lucide-react';
 import { MemberAvatar, MemberName } from './ProfileNav.tsx';
 import { AtlasPhoto } from './AtlasPhoto.tsx';
 import { AtlasEngagement } from './AtlasEngagement.tsx';
@@ -19,10 +19,10 @@ interface Props {
 const AuthorStar: React.FC = () => <span aria-hidden="true" className="atlas-dot !h-2.5 !w-2.5 shrink-0" />;
 
 /**
- * The memory card for one star, kept compact: the date sits in the top corner, then the photo (if any), the title and words, the place name
+ * The memory card for one star, kept compact: the photo (if any), the title and words with the date right under them, the place name
  * (only if the author gave one; the exact spot is never known), and one slim row with who wrote it on the left and how many members have
  * opened it and reacted (a hug or a heart) on the right. A star with several memories lets you step through them. The author's own memories
- * add edit and delete, and how their name shows.
+ * add edit and delete, and how their name shows. There is no close button: tapping outside the card (or Escape) dismisses it.
  */
 export const MemoryPanel: React.FC<Props> = ({ group, onClose, onEdit, onDelete, photoVersions, busyId }) => {
   const [index, setIndex] = useState(0);
@@ -42,6 +42,36 @@ export const MemoryPanel: React.FC<Props> = ({ group, onClose, onEdit, onDelete,
     return () => { live = false; };
   }, [memoryId]);
 
+  // No close button: a tap or click anywhere outside the card dismisses it (touch and mouse alike), and so does Escape. A press that
+  // starts inside the card, a drag that pans the map, a star (it opens that memory), the Recent strip and any dialog are not dismissals.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    let timer: number | undefined;
+    let down: { x: number; y: number; inside: boolean } | null = null;
+    const keeps = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest('[data-testid="memory-panel"], .atlas-star, [data-atlas-keep], [role="dialog"], [role="alertdialog"], [role="status"]'));
+    const onDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY, inside: keeps(event.target) }; };
+    const onClick = (event: MouseEvent) => {
+      const start = down;
+      down = null;
+      if (keeps(event.target) || (start && (start.inside || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8))) return;
+      closeRef.current();
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !document.querySelector('[role="dialog"], [role="alertdialog"]')) closeRef.current(); };
+    // Listening starts a tick later so the very click that opened the card is not mistaken for an outside tap.
+    timer = window.setTimeout(() => {
+      document.addEventListener('pointerdown', onDown, true);
+      document.addEventListener('click', onClick);
+      document.addEventListener('keydown', onKey);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
   if (!memory) return null;
   const date = formatMemoryDateShort(memory.date);
   const busy = busyId === memory.id;
@@ -52,21 +82,17 @@ export const MemoryPanel: React.FC<Props> = ({ group, onClose, onEdit, onDelete,
   return (
     <article aria-label={`Memory: ${memory.title}`} data-testid="memory-panel" className="relative flex max-h-full min-h-0 flex-col overflow-hidden rounded-t-3xl border border-line bg-surface/95 shadow-2xl shadow-black/50 backdrop-blur-xl desk:rounded-3xl">
       <span aria-hidden="true" className="absolute left-1/2 top-1.5 h-1 w-9 -translate-x-1/2 rounded-full bg-line-strong desk:hidden" />
-      <header className="flex shrink-0 items-center gap-1 px-3 pb-0.5 pt-3.5 desk:pt-2.5">
-        {count > 1 && (
+      {count > 1 && (
+        <header className="flex shrink-0 items-center px-3 pb-0.5 pt-3.5 desk:pt-2.5">
           <div className="flex items-center text-[length:calc(12px_*_var(--fs,1))] text-muted" role="group" aria-label="Memories at this star">
             <button type="button" onClick={() => setIndex((at + count - 1) % count)} aria-label="Previous memory" className="icon-btn h-8 w-8"><ChevronLeft className="h-4 w-4" /></button>
             <span aria-live="polite" className="tabular-nums">{at + 1}/{count}</span>
             <button type="button" onClick={() => setIndex((at + 1) % count)} aria-label="Next memory" className="icon-btn h-8 w-8"><ChevronRight className="h-4 w-4" /></button>
           </div>
-        )}
-        <div className="ml-auto flex items-center gap-1">
-          {date && <time dateTime={memory.date ?? undefined} data-testid="memory-date" className="text-[length:calc(11.5px_*_var(--fs,1))] tabular-nums text-muted">{date}</time>}
-          <button type="button" onClick={onClose} aria-label="Close memory" className="icon-btn h-8 w-8"><X className="h-4 w-4" /></button>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4 pb-3">
+      <div className={`min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4 pb-3 ${count > 1 ? '' : 'pt-5 desk:pt-3.5'}`}>
         {memory.hasPhoto && <AtlasPhoto memoryId={memory.id} alt={`Photo for ${memory.title}`} version={photoVersions[memory.id] ?? 0} />}
         <div>
           <h2 className="font-serif text-lg font-semibold leading-snug tracking-tight text-fg [overflow-wrap:anywhere]">{memory.title}</h2>
@@ -75,6 +101,7 @@ export const MemoryPanel: React.FC<Props> = ({ group, onClose, onEdit, onDelete,
           )}
         </div>
         {memory.text && <p className="whitespace-pre-wrap text-[length:calc(14px_*_var(--fs,1))] leading-relaxed text-fg/90 [overflow-wrap:anywhere]">{memory.text}</p>}
+        {date && <time dateTime={memory.date ?? undefined} data-testid="memory-date" className="block text-[length:calc(11.5px_*_var(--fs,1))] tabular-nums text-muted">{date}</time>}
 
         {memory.mine ? (
           <div className="space-y-2 pt-0.5">

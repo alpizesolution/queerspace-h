@@ -547,13 +547,15 @@ const panelFor = (memories: Mem[], busy: string | null = null) => render(
   <MemoryPanel group={{ key: 'k', lat: 14.6, lng: 120.98, memories } as never} onClose={() => {}} onEdit={() => {}} onDelete={() => {}} photoVersions={{}} busyId={busy} />,
 );
 
-test('the compact card: date in the top corner beside close, title and words as the focus, place name plain, no "Shared", no dividers, no exact spot', async () => {
+test('the compact card: date right under the words, no close button, title and words as the focus, place name plain, no "Shared", no dividers, no exact spot', async () => {
   panelFor([memory('k1', { date: '2024-06-01', placeLabel: 'Manila Bay', lat: 14.6, lng: 120.98 })]);
   const card = screen.getByTestId('memory-panel');
-  const header = card.querySelector('header') as HTMLElement;
   const date = within(card).getByTestId('memory-date');
-  assert.ok(header.contains(date), 'the date is in the header, the top row');
-  assert.ok(header.contains(within(card).getByRole('button', { name: 'Close memory' })), 'next to the close button, on the right');
+  const words = within(card).getByText('Words k1');
+  assert.ok(words.compareDocumentPosition(date) & Node.DOCUMENT_POSITION_FOLLOWING, 'the date comes after the memory text');
+  assert.equal(date.previousElementSibling, words, 'directly below it');
+  assert.equal(card.querySelector('header'), null, 'no top row for a single memory');
+  assert.equal(within(card).queryByRole('button', { name: 'Close memory' }), null, 'no close button');
   assert.match(date.textContent ?? '', /Jun(e)? 1, 2024/, 'a short date');
   assert.equal(date.getAttribute('datetime'), '2024-06-01');
   assert.ok(within(card).getByRole('heading', { name: 'Title k1' }));
@@ -692,7 +694,29 @@ test('on a phone the round "New memory" button steps aside while a memory card i
   const card = await screen.findByTestId('memory-panel');
   assert.equal(buttons().some((b) => /fixed/.test(b.className)), false, 'gone while a card is open');
   assert.equal(buttons().length, before - 1);
-  fireEvent.click(within(card).getByRole('button', { name: 'Close memory' }));
+  await new Promise((r) => setTimeout(r, 10));
+  fireEvent.click(document.body);
   await waitFor(() => assert.equal(screen.queryByTestId('memory-panel'), null));
   assert.ok(buttons().some((b) => /fixed/.test(b.className)), 'back once it is closed');
+});
+
+test('tapping or clicking outside the card dismisses it; presses inside (reactions, links) and drags do not; Escape works too', async () => {
+  const closed: string[] = [];
+  render(<div><button type="button">outside</button><MemoryPanel group={{ key: 'k', lat: 1, lng: 1, memories: [memory('d1')] } as never} onClose={() => closed.push('x')} onEdit={() => {}} onDelete={() => {}} photoVersions={{}} busyId={null} /></div>);
+  const card = screen.getByTestId('memory-panel');
+  await new Promise((r) => setTimeout(r, 10));
+  fireEvent.click(within(card).getByRole('heading'));
+  fireEvent.click(within(card).getByTestId('reaction-hug'));
+  assert.equal(closed.length, 0, 'clicks inside the card never dismiss it');
+  fireEvent.pointerDown(screen.getByText('outside'), { clientX: 10, clientY: 10 });
+  fireEvent.click(screen.getByText('outside'), { clientX: 60, clientY: 10 });
+  assert.equal(closed.length, 0, 'a drag (the map being panned) is not a dismissal');
+  fireEvent.pointerDown(within(card).getByRole('heading'), { clientX: 5, clientY: 5 });
+  fireEvent.click(screen.getByText('outside'), { clientX: 5, clientY: 5 });
+  assert.equal(closed.length, 0, 'a press that began inside the card is not a dismissal');
+  fireEvent.pointerDown(screen.getByText('outside'), { clientX: 10, clientY: 10 });
+  fireEvent.click(screen.getByText('outside'), { clientX: 12, clientY: 11 });
+  assert.equal(closed.length, 1, 'a tap outside dismisses');
+  fireEvent.keyDown(document, { key: 'Escape' });
+  assert.equal(closed.length, 2, 'Escape dismisses');
 });
