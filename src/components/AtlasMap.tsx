@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { AttributionControl, Circle, MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
-import type { MapBounds, PlaceGroup } from '../utils/atlas.ts';
+import { memoryLabel, type MapBounds, type PlaceGroup } from '../utils/atlas.ts';
 import type { TileConfig } from '../utils/atlasConfig.ts';
 import { wrapLongitude, type PickedPlace } from '../utils/atlasPick.ts';
 import { isCartoDarkLabels } from '../utils/atlasSeaLabel.ts';
@@ -165,7 +165,7 @@ export const AtlasMap: React.FC<AtlasMapProps> = ({ groups, selectedKey, tiles, 
             key={group.key}
             position={[group.lat, group.lng]}
             icon={starIcon(group.memories.length, state)}
-            title={group.memories.length > 1 ? `${group.memories.length} memories here` : group.memories[0]?.title}
+            title={group.memories.length > 1 ? `${group.memories.length} memories here` : group.memories[0] ? memoryLabel(group.memories[0]) : undefined}
             keyboard
             eventHandlers={{ click: () => onSelect(group) }}
           />

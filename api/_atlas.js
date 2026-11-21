@@ -1,4 +1,4 @@
-// ATLAS: a shared map of memories. Members pin a memory (a title, a few words, a date, an optional photo) to a place, and it
+// ATLAS: a shared map of memories. Members pin a memory (a few words (and an optional title), a date, an optional photo) to a place, and it
 // appears as a star on the map for whoever may see it.
 //
 // Everything goes through the server. `atlasMemories` has NO client rule (clients are denied everything), so who may see a memory
@@ -103,7 +103,7 @@ const total = value => (Number.isInteger(value) && value > 0 ? value : 0);
 const FIELDS = ['title', 'text', 'date', 'lat', 'lng', 'placeLabel', 'visibility', 'displayIdentity'];
 
 /**
- * Checks what a member sent. `required` (a new memory) needs a title, a date, a place and a visibility; an edit may send any of them.
+ * Checks what a member sent. `required` (a new memory) needs a title or some words, a date, a place and a visibility; an edit may send any of them.
  * Anything unexpected is refused, so a request cannot smuggle in an owner, a timestamp or exact coordinates under another name.
  */
 export function parseMemoryInput(body, { required, allowed = [], nowMs = Date.now() } = {}) {
@@ -112,15 +112,17 @@ export function parseMemoryInput(body, { required, allowed = [], nowMs = Date.no
   if (Object.keys(body).some(key => !known.has(key))) throw fail(400, 'invalid_memory');
   const out = {};
   const has = key => body[key] !== undefined;
-  if (required || has('title')) {
+  // A title is optional: the app no longer asks for one. A new memory needs a title or some words (see below); older memories keep theirs.
+  if (has('title')) {
     const title = text(body.title, TITLE_MAX + 1);
-    if (!title || title.length > TITLE_MAX) throw fail(400, 'invalid_title');
+    if (title.length > TITLE_MAX) throw fail(400, 'invalid_title');
     out.title = title;
-  }
+  } else if (required) out.title = '';
   if (has('text')) {
     if (typeof body.text !== 'string' || body.text.trim().length > TEXT_MAX) throw fail(400, 'invalid_text');
     out.text = body.text.trim();
   } else if (required) out.text = '';
+  if (required && !out.title && !out.text) throw fail(400, 'invalid_text');
   if (required || has('date')) {
     if (!isMemoryDate(body.date, nowMs)) throw fail(400, 'invalid_date');
     out.date = body.date;
@@ -437,6 +439,8 @@ export async function updateMemory(db, uid, body, getStore = currentMediaStore) 
   const { ref, data: before } = await ownMemory(db, uid, body.id);
   // What other members will read is checked against the community rules, as when it was first written.
   const merged = { ...before, ...fields };
+  // Whatever the edit changes, the memory still needs a title or some words.
+  if (!text(merged.title, TITLE_MAX) && !text(merged.text, TEXT_MAX)) throw fail(400, 'invalid_text');
   if (merged.visibility !== 'private' && ['title', 'text', 'placeLabel'].some(key => typeof merged[key] === 'string' && isBlockedText(merged[key]))) throw fail(400, 'content_not_allowed');
   const patch = { ...fields, updatedAt: FieldValue.serverTimestamp() };
   if (fields.displayIdentity) {

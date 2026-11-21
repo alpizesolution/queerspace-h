@@ -2,7 +2,7 @@
 
 > Every place has a story. Every story leaves a mark.
 
-Members pin a memory (title, a few words, a date, an optional photo) to a place. Each memory is a glowing star on a real
+Members pin a memory (a few words, a date, an optional photo; older memories also have a title) to a place. Each memory is a glowing star on a real
 interactive map (Leaflet + OpenStreetMap data). It opens into a card, and members can browse community memories or manage their own.
 
 The page is **map-first**: a compact heading (name and tagline together), then the map, which fills all the remaining space on phones
@@ -30,7 +30,7 @@ library is only downloaded when someone opens it.
 | field | notes |
 |---|---|
 | `ownerId` | the author. Never returned to other members. |
-| `title` (≤ 80), `text` (≤ 1000), `placeLabel` (≤ 80) | trimmed; memories are held to the community word rules. The app no longer asks for a place name: the location is the pin chosen on the map, so `placeLabel` is `''` for new memories (older ones keep theirs, and an edit leaves it alone). The server still validates one if sent. |
+| `title` (≤ 80, optional: the app no longer asks for one, so new memories store `''`; a new memory needs a title or some words, and an edit cannot leave both empty), `text` (≤ 1000), `placeLabel` (≤ 80) | trimmed; memories are held to the community word rules. The app no longer asks for a place name: the location is the pin chosen on the map, so `placeLabel` is `''` for new memories (older ones keep theirs, and an edit leaves it alone). The server still validates one if sent. |
 | `date` | `YYYY-MM-DD`, a real day, not in the future |
 | `lat`, `lng` | **already rounded to a 0.01° (~1 km) grid** |
 | `visibility` | always `public` for a new memory (set by the server, never by the app). `private` and `friends` exist only on records saved by an earlier version, which keep their narrower audience. |
@@ -44,7 +44,7 @@ library is only downloaded when someone opens it.
 ## The memory card, views and reactions
 
 - **Layout (compact, `AtlasMemoryPanel.tsx`):** the photo (if any), then the date (short form, `Jun 1, 2024`) directly under the words. There is no close button: a tap or click outside the card (or Escape) dismisses it; presses inside it, drags that pan the map, stars, the Recent strip and dialogs do not. The map is its own stacking context, so no map label, marker, control or credit can sit over the card. Stars are small pink-to-purple stars with a slow gradient drift (no ring or halo). Then
-  the title and the words, which are the focus. The place name is shown only if the author gave one (the app no longer asks for one, so most cards
+  the words (and the title, if an older memory has one), which are the focus. A memory with no title shows its words as the main text and is named by its first words in labels and Recent Memories. The place name is shown only if the author gave one (the app no longer asks for one, so most cards
   have no location line); nothing says "approximate", and the exact spot is never known (the stored point is already rounded to ~1 km). There is no
   "Shared" label (every new memory is public; an older connections-only record shows a tiny people icon beside its author). No divider lines.
   One slim row at the bottom: **who wrote it** on the left (a small 20 px avatar and name for a profile memory; a small 10 px star beside the cosmic

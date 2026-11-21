@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useState } from 'react';
 import { ChevronDown, RefreshCw } from 'lucide-react';
 import { fetchMemoryPhoto } from '../services/atlasService.ts';
-import type { AtlasMemory } from '../utils/atlas.ts';
+import { memoryLabel, type AtlasMemory } from '../utils/atlas.ts';
 
 export type RecentStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -69,7 +69,7 @@ export const AtlasRecent: React.FC<Props> = ({ memories, status, open, onToggle,
                   <button type="button" onClick={() => onPick(memory)} className="flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-2xl border border-line bg-raised/60 px-2.5 py-2 text-left transition-colors hover:border-line-strong hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lavender/60">
                     <Thumb memory={memory} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg">{memory.title}</span>
+                      <span className="block truncate text-[length:calc(14px_*_var(--fs,1))] font-semibold text-fg">{memoryLabel(memory)}</span>
                       <span className="block truncate text-[length:calc(12px_*_var(--fs,1))] text-subtle">{memory.placeLabel || 'Approximate area'}</span>
                     </span>
                   </button>

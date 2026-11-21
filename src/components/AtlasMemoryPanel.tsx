@@ -4,7 +4,7 @@ import { MemberAvatar, MemberName } from './ProfileNav.tsx';
 import { AtlasPhoto } from './AtlasPhoto.tsx';
 import { AtlasEngagement } from './AtlasEngagement.tsx';
 import { openMemory } from '../services/atlasService.ts';
-import { ANONYMOUS_NAME, AUDIENCE_TEXT, engagementOf, formatMemoryDateShort, type AtlasMemory, type Engagement, type PlaceGroup } from '../utils/atlas.ts';
+import { ANONYMOUS_NAME, AUDIENCE_TEXT, engagementOf, formatMemoryDateShort, memoryLabel, type AtlasMemory, type Engagement, type PlaceGroup } from '../utils/atlas.ts';
 
 interface Props {
   group: PlaceGroup;
@@ -80,7 +80,7 @@ export const MemoryPanel: React.FC<Props> = ({ group, onClose, onEdit, onDelete,
   const engagementStrip = <AtlasEngagement memoryId={memory.id} mine={memory.mine} value={engagement} onChange={setEngagement} />;
 
   return (
-    <article aria-label={`Memory: ${memory.title}`} data-testid="memory-panel" className="relative flex max-h-full min-h-0 flex-col overflow-hidden rounded-t-3xl border border-line bg-surface/95 shadow-2xl shadow-black/50 backdrop-blur-xl desk:rounded-3xl">
+    <article aria-label={`Memory: ${memoryLabel(memory)}`} data-testid="memory-panel" className="relative flex max-h-full min-h-0 flex-col overflow-hidden rounded-t-3xl border border-line bg-surface/95 shadow-2xl shadow-black/50 backdrop-blur-xl desk:rounded-3xl">
       <span aria-hidden="true" className="absolute left-1/2 top-1.5 h-1 w-9 -translate-x-1/2 rounded-full bg-line-strong desk:hidden" />
       {count > 1 && (
         <header className="flex shrink-0 items-center px-3 pb-0.5 pt-3.5 desk:pt-2.5">
@@ -93,14 +93,14 @@ export const MemoryPanel: React.FC<Props> = ({ group, onClose, onEdit, onDelete,
       )}
 
       <div className={`min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4 pb-3 ${count > 1 ? '' : 'pt-5 desk:pt-3.5'}`}>
-        {memory.hasPhoto && <AtlasPhoto memoryId={memory.id} alt={`Photo for ${memory.title}`} version={photoVersions[memory.id] ?? 0} />}
+        {memory.hasPhoto && <AtlasPhoto memoryId={memory.id} alt={`Photo for ${memoryLabel(memory)}`} version={photoVersions[memory.id] ?? 0} />}
         <div>
-          <h2 className="font-serif text-lg font-semibold leading-snug tracking-tight text-fg [overflow-wrap:anywhere]">{memory.title}</h2>
+          {memory.title && <h2 className="font-serif text-lg font-semibold leading-snug tracking-tight text-fg [overflow-wrap:anywhere]">{memory.title}</h2>}
           {memory.placeLabel && (
             <p data-testid="memory-place" className="mt-0.5 flex items-center gap-1 text-[length:calc(12px_*_var(--fs,1))] text-muted"><MapPin className="h-3 w-3 shrink-0 text-lavender" aria-hidden="true" /><span className="min-w-0 truncate">{memory.placeLabel}</span></p>
           )}
         </div>
-        {memory.text && <p className="whitespace-pre-wrap text-[length:calc(14px_*_var(--fs,1))] leading-relaxed text-fg/90 [overflow-wrap:anywhere]">{memory.text}</p>}
+        {memory.text && <p data-testid="memory-text" className={`whitespace-pre-wrap [overflow-wrap:anywhere] ${memory.title ? 'text-[length:calc(14px_*_var(--fs,1))] leading-relaxed text-fg/90' : 'font-serif text-[length:calc(16px_*_var(--fs,1))] leading-relaxed text-fg'}`}>{memory.text}</p>}
         {date && <time dateTime={memory.date ?? undefined} data-testid="memory-date" className="block text-[length:calc(11.5px_*_var(--fs,1))] tabular-nums text-muted">{date}</time>}
 
         {memory.mine ? (

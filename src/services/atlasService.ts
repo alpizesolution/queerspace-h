@@ -9,7 +9,8 @@ import type { AtlasFailure, AtlasMemory, DisplayIdentity, Engagement, MapBounds,
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export interface MemoryDraft {
-  title: string;
+  /** Optional: the composer no longer asks for one (older memories keep theirs). */
+  title?: string;
   text: string;
   date: string;
   lat: number;

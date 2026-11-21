@@ -205,3 +205,12 @@ test('the two reactions are a hug and a heart, in that order', async () => {
   const { REACTIONS } = await import('./atlas.ts');
   assert.deepEqual(REACTIONS.map((r) => [r.kind, r.emoji, r.label]), [['hug', '🤗', 'Hug'], ['heart', '❤️', 'Heart']]);
 });
+
+test('memoryLabel names a memory by its title, else by its first words, else plainly', async () => {
+  const { memoryLabel } = await import('./atlas.ts');
+  assert.equal(memoryLabel({ title: 'Pier', text: 'Words' }), 'Pier');
+  assert.equal(memoryLabel({ title: '', text: '  We   watched  it  ' }), 'We watched it');
+  assert.equal(memoryLabel({ title: '', text: '' }), 'A memory');
+  const long = memoryLabel({ title: '', text: 'word '.repeat(40) });
+  assert.ok(long.endsWith('…') && long.length <= 62, long);
+});

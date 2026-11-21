@@ -3,7 +3,7 @@ import { CalendarDays, ChevronDown, ChevronUp, ImagePlus, LoaderCircle, Trash2, 
 import { isValidPick, type PickedPlace } from '../utils/atlasPick.ts';
 import { createMemory, encodePhoto, forgetMemoryPhoto, updateMemory, type MemoryDraft } from '../services/atlasService.ts';
 import { sanitizeMessageText } from '../utils/matching-logic.ts';
-import { atlasProblemText, formatMemoryDateShort, TEXT_MAX, TITLE_MAX, todayInputValue, type AtlasMemory, type IdentityMode } from '../utils/atlas.ts';
+import { atlasProblemText, formatMemoryDateShort, TEXT_MAX, todayInputValue, type AtlasMemory, type IdentityMode } from '../utils/atlas.ts';
 import { SUPPORT_IMAGE_TYPES } from '../services/supportImageService.ts';
 
 interface Props {
@@ -18,13 +18,12 @@ interface Props {
 }
 
 /**
- * Pin a memory (or edit one): a title, the story with the photo and date tucked into its corner, and how the author is shown (My pseudonym or Anonymous). The place is NOT chosen here: it is tapped on the
+ * Pin a memory (or edit one): the story (there is no title) with the photo and date tucked into its corner, and how the author is shown (My pseudonym or Anonymous). The place is NOT chosen here: it is tapped on the
  * main ATLAS map, which stays visible beside (desktop) or above (phone) this panel and keeps its zoom and position. This is a panel on
  * the page, not a dialog over the map, so the map can be zoomed, panned and tapped while the form is open.
  */
 export const MemoryComposer: React.FC<Props> = ({ editing = null, memberName, place, onClose, onSaved }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const [title, setTitle] = useState(editing?.title ?? '');
   const [text, setText] = useState(editing?.text ?? '');
   const [date, setDate] = useState(editing?.date ?? todayInputValue());
   // How the author appears: their own pseudonym unless they choose Anonymous. Every memory is public to members, so there is no audience choice.
@@ -63,16 +62,17 @@ export const MemoryComposer: React.FC<Props> = ({ editing = null, memberName, pl
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
-    const cleanTitle = title.trim();
-    if (!cleanTitle) { setProblem('Give your memory a title.'); return; }
+    const cleanText = text.trim();
+    // There is no title field: the story is the memory. (An older memory that has a title may be saved without words.)
+    if (!cleanText && !editing?.title) { setProblem('Write a few words about this memory.'); return; }
     if (!date || date > today) { setProblem('Choose the date of the memory (not in the future).'); return; }
     if (!isValidPick(place)) { setProblem('Choose where it happened by tapping the map.'); return; }
     // Every memory is read by other members, so the community rules apply to all of them.
-    const flagged = [cleanTitle, text.trim()].some((value) => value && sanitizeMessageText(value).isBlocked);
+    const flagged = [cleanText].some((value) => value && sanitizeMessageText(value).isBlocked);
     if (flagged) { setProblem(atlasProblemText('content')); return; }
     setSaving(true);
     setProblem(null);
-    const draft: MemoryDraft = { title: cleanTitle, text: text.trim(), date, lat: place.lat, lng: place.lng, displayIdentity: { mode: identityMode } };
+    const draft: MemoryDraft = { text: cleanText, date, lat: place.lat, lng: place.lng, displayIdentity: { mode: identityMode } };
     const result = editing
       ? await updateMemory(editing.id, { ...draft, ...(photo ? { photo: photo.encoded } : {}), ...(removePhoto && !photo ? { removePhoto: true } : {}) })
       : await createMemory(draft, photo?.encoded ?? null, memoryId.current);
@@ -102,14 +102,9 @@ export const MemoryComposer: React.FC<Props> = ({ editing = null, memberName, pl
       </header>
       <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3 ${collapsed ? 'hidden' : ''}`}>
       <form id="atlas-memory-form" onSubmit={submit} className="space-y-2.5" noValidate>
-        <div>
-          <label htmlFor="atlas-title" className="sr-only">Title</label>
-          <input id="atlas-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={TITLE_MAX} placeholder="Title" className="h-10 w-full border-0 border-b border-line bg-transparent px-0.5 font-serif text-lg font-semibold text-fg placeholder:font-normal placeholder:text-subtle focus:border-lavender/60 focus:outline-none" />
-        </div>
-
         <div className="rounded-2xl border border-line bg-ink/60 transition-colors focus-within:border-lavender/50">
           <label htmlFor="atlas-text" className="sr-only">Story</label>
-          <textarea id="atlas-text" value={text} onChange={(e) => setText(e.target.value)} maxLength={TEXT_MAX} rows={3} placeholder="What made this place matter?" className="block min-h-[4.5rem] desk:min-h-[7.5rem] w-full resize-none rounded-t-2xl bg-transparent px-3.5 pb-1 pt-2.5 text-base leading-relaxed text-fg placeholder:text-subtle focus:outline-none sm:text-sm" />
+          <textarea id="atlas-text" value={text} onChange={(e) => setText(e.target.value)} maxLength={TEXT_MAX} rows={4} placeholder="What made this place matter?" className="block min-h-[6rem] desk:min-h-[9rem] w-full resize-none rounded-t-2xl bg-transparent px-3.5 pb-1 pt-2.5 text-base leading-relaxed text-fg placeholder:text-subtle focus:outline-none sm:text-sm" />
           {hasPicture && (
             <div className="flex items-center gap-2.5 px-3 pb-1">
               {showsPhoto && <img src={showsPhoto} alt="Chosen picture preview" className="h-12 w-12 rounded-lg border border-line object-cover" />}

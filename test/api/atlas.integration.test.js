@@ -502,7 +502,8 @@ test('bad input is refused: dates, places, fields that are not allowed, long tex
   assert.equal(await tryIt({ lat: 91 }), 400);
   assert.equal(await tryIt({ lng: -181 }), 400);
   assert.equal(await tryIt({ lat: '14.5' }), 400);
-  assert.equal(await tryIt({ title: '   ' }), 400);
+  assert.equal(await tryIt({ title: '   ', text: '' }), 400, 'no title and no words');
+  assert.equal(await tryIt({ title: '   ' }), 201, 'a blank title is fine when there are words');
   assert.equal(await tryIt({ title: 'x'.repeat(81) }), 400);
   assert.equal(await tryIt({ text: 'x'.repeat(1001) }), 400);
   assert.equal(await tryIt({ visibility: 'everyone' }), 400);
@@ -769,4 +770,21 @@ test('engagement is rate limited per member', { skip }, async () => {
   let limited = 0;
   for (let i = 0; i < ENGAGEMENT_PER_MINUTE + 5; i++) if ((await view(bob, id)).statusCode === 429) limited++;
   assert.ok(limited >= 5, `the ${ENGAGEMENT_PER_MINUTE + 1}th request in a minute is refused (${limited} refused)`);
+});
+
+test('a memory needs a title or some words, not both: a words-only memory has an empty title, and an edit cannot empty it', { skip }, async () => {
+  const { member, call, create } = await setup();
+  const alice = await member('Alice');
+  const words = { action: 'create', text: 'We watched the skyline turn violet.', date: '2024-06-01', lat: 14.5995123, lng: 120.9842199 };
+  const made = await call(alice, 'POST', words);
+  assert.equal(made.statusCode, 201);
+  assert.equal(made.body.memory.title, '');
+  assert.equal(made.body.memory.text, 'We watched the skyline turn violet.');
+  assert.equal((await call(alice, 'POST', { ...words, text: '   ' })).body.error, 'invalid_text', 'neither title nor words is refused');
+  assert.equal((await call(alice, 'POST', { ...words, title: 'x'.repeat(81) })).body.error, 'invalid_title');
+  const id = made.body.memory.id;
+  assert.equal((await call(alice, 'POST', { action: 'update', id, text: '' })).body.error, 'invalid_text', 'an edit cannot leave it with nothing to say');
+  assert.equal((await call(alice, 'POST', { action: 'update', id, text: 'Rewritten.' })).statusCode, 200);
+  const old = (await create(alice, { title: 'Old style' })).body.memory.id;
+  assert.equal((await call(alice, 'POST', { action: 'update', id: old, text: '' })).statusCode, 200, 'a memory that has a title may lose its words');
 });
