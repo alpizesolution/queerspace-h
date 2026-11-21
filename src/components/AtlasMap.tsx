@@ -5,6 +5,9 @@ import { AttributionControl, Circle, MapContainer, Marker, TileLayer, useMap, us
 import type { MapBounds, PlaceGroup } from '../utils/atlas.ts';
 import type { TileConfig } from '../utils/atlasConfig.ts';
 import { wrapLongitude, type PickedPlace } from '../utils/atlasPick.ts';
+import { isCartoDarkLabels } from '../utils/atlasSeaLabel.ts';
+import { attachWpsLabel } from '../utils/atlasSeaLabelLayer.ts';
+import { canvasSupported, MaskedTileLayer } from '../utils/maskedTileLayer.ts';
 
 /** A memory as a small glowing golden star with a thin dark outline (so it reads on the dark map). Only a count is ever written into the markup, never member text. */
 const iconCache = new Map<string, L.DivIcon>();
@@ -43,6 +46,25 @@ const PickLayer: React.FC<{ place: PickedPlace | null; onPick: (lat: number, lng
       />
     </>
   );
+};
+
+/**
+ * The labels-only layer. With CARTO's dark labels it also (1) erases the unwanted "South China Sea" stamp and CARTO's West Philippine Sea
+ * label where a tile edge clips it, and (2) shows our own West Philippine Sea label where CARTO's is missing or clipped. Any other
+ * provider gets a plain tile layer: the erase rectangles were measured on CARTO's tiles only. See utils/atlasSeaLabel.ts.
+ */
+const LabelsLayer: React.FC<{ url: string; maxZoom: number }> = ({ url, maxZoom }) => {
+  const map = useMap();
+  useEffect(() => {
+    const carto = isCartoDarkLabels(url);
+    const canMask = carto && canvasSupported();
+    const options: L.TileLayerOptions = { maxZoom, zIndex: 2, className: 'atlas-labels' };
+    const layer = canMask ? new MaskedTileLayer(url, options) : L.tileLayer(url, options);
+    layer.addTo(map);
+    const detach = carto ? attachWpsLabel(map, layer, canMask) : () => {};
+    return () => { detach(); layer.remove(); };
+  }, [map, url, maxZoom]);
+  return null;
 };
 
 /** Counts failed tiles so a dead or blocked tile provider is reported instead of leaving a silent grey map. */
@@ -129,7 +151,7 @@ export const AtlasMap: React.FC<AtlasMapProps> = ({ groups, selectedKey, tiles, 
       <AttributionControl position="bottomright" prefix={false} />
       <TileLayer url={tiles.url} attribution={tiles.attribution} maxZoom={tiles.maxZoom} />
       {/* Street and town names on their own transparent layer, so they can be made brighter without recolouring the roads under them. */}
-      {tiles.labelsUrl && <TileLayer url={tiles.labelsUrl} maxZoom={tiles.maxZoom} zIndex={2} className="atlas-labels" />}
+      {tiles.labelsUrl && <LabelsLayer url={tiles.labelsUrl} maxZoom={tiles.maxZoom} />}
       <KeepSize />
       <ViewReporter onViewChange={onViewChange} />
       <FlyTo target={flyTo} />

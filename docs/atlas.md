@@ -93,6 +93,34 @@ Set these in Vercel (Settings → Environment Variables). They are build-time an
     free CARTO allowance (about 1 million tile requests a month) covers about half as many map views.
   - A transparent layer shows the previous zoom level's labels, scaled up, until the new tiles arrive (normal Leaflet behaviour); on a slow
     connection that can look like a brief blurry double image after zooming.
+- **Sea labels (only with CARTO's `dark_only_labels` tiles; `src/utils/atlasSeaLabel.ts`).** CARTO draws OpenStreetMap's sea names as pixels in the
+  label tiles, so they cannot be switched off by a setting. What was measured on the real tiles (zoom 2-18):
+
+  | Label | Where | Size (1x) | Notes |
+  |---|---|---|---|
+  | "South China Sea" stamp (南海 Biển Đông / South China Sea) | 15.0°N 115.0°E, zoom 5-18 | 72 x 56 px | Never clipped; nothing else within 64 px of it |
+  | CARTO's "West Philippine Sea" | 119.0°E 16.0°N, zoom 7-18 | 72 x 40 px | Absent at zoom 5-6. **Clipped by a tile edge at zoom 12 (47 px wide) and 13 (58 px wide)** |
+
+  - **The stamp is erased** (an 80 x 64 px window around its anchor) at zoom 5 and up. `MaskedTileLayer` draws only the tiles that touch the window to a
+    canvas and clears the window, so the hole is transparent and nothing has to match the map colour underneath. Every other tile is the ordinary image.
+    Measured against CARTO's unmodified tiles, the only pixels that change are inside that window.
+  - **CARTO's own West Philippine Sea label is kept** wherever it is whole (zoom 7-11 and 14-18), pixel for pixel. Where it is missing (zoom 5-6) or
+    clipped (zoom 12-13, erased first so there is never a second copy) the map shows **our own label**: real text in its own pane (above the
+    tiles, below the circles and stars, never interactive), at the same point CARTO anchors its own, sized and coloured to match (about 70 x 38 px).
+  - **Hand-over without duplicates or flashes:** Leaflet keeps the previous zoom's tiles on screen until the new ones have loaded, so the label is
+    switched when the *new tiles have loaded* (`createSeaLabelGate`), not when the zoom ends: zooming in to a level where CARTO draws the label, ours
+    leaves as CARTO's tiles arrive; zooming out to a level where it is missing, ours appears only after the old tiles are gone (250 ms). Rapid zooms
+    cancel earlier plans, and a dead tile server never leaves it in the wrong state (1.5 s limit). Measured: at most a 440 ms crossfade overlap and a
+    400 ms moment with neither label.
+  - **Cross-origin and fallbacks:** tile images are loaded without CORS and only *drawn* (nothing is read back, so a "tainted" canvas is fine and the
+    CSP needs nothing beyond the existing `img-src` for the tile host). `@2x` tiles work: the window is scaled to the image's real size. No canvas
+    support: plain tiles (CARTO's stamp stays) and our label is shown at zoom 5-6 only, never over CARTO's clipped label. A tile that fails to load
+    raises the usual `tileerror`. Masked tiles get the same `mix-blend-mode` as image tiles (`index.css`), or their text would look different.
+  - **Limits:** the windows are CARTO-specific and measured, not derived: if CARTO re-renders its labels they may need re-measuring (the geometry and
+    the zoom rules are unit-tested; the real tiles are checked in a browser run). Not covered: the OpenStreetMap-only development fallback (its
+    labels are baked into the base tiles), zoom 4 and below (CARTO shows no sea label there; the map does not add one), and no other sea name is
+    added or changed. Our font is the app's, matched in size and colour, not CARTO's Montserrat. `MaskedTileLayer` calls Leaflet's `_pruneTiles` after
+    loading, because Leaflet otherwise leaves the old zoom's tiles under masked tiles (two sets of labels) when all tiles finish together.
 - Without `VITE_ATLAS_TILE_URL`, a **production** build shows "The map isn't available right now" instead of quietly using
   `tile.openstreetmap.org`, which is not a production tile service. Local development falls back to it.
   Move to a provider with proper terms before heavy use.
