@@ -110,6 +110,17 @@ export function formatMemoryDate(date: string | null): string {
 }
 
 /** "Jun 1, 2024": the short form for the corner of a card. */
+/** What to call a memory in a label or a list: its title, or (new memories have none) the first words of its story. */
+export function memoryLabel(memory: { title?: string; text?: string }): string {
+  const title = (memory.title ?? '').trim();
+  if (title) return title;
+  const words = (memory.text ?? '').trim().replace(/\s+/g, ' ');
+  if (!words) return 'A memory';
+  if (words.length <= 60) return words;
+  const cut = words.slice(0, 60);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), 30))}…`;
+}
+
 export function formatMemoryDateShort(date: string | null): string {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return '';
   const at = new Date(`${date}T00:00:00Z`);

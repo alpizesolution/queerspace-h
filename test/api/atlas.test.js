@@ -57,7 +57,11 @@ test('dates: real calendar days, not in the future, not before 1900', () => {
 });
 
 test('input: required fields, limits, and no fields the app is not meant to send', () => {
-  assert.equal(code(() => parseMemoryInput(body({ title: '' }), { required: true })), 'invalid_title');
+  assert.equal(code(() => parseMemoryInput(body({ title: '', text: '' }), { required: true })), 'invalid_text', 'a new memory needs a title or some words');
+  assert.equal(code(() => parseMemoryInput(body({ title: undefined, text: '   ' }), { required: true })), 'invalid_text');
+  assert.equal(parseMemoryInput(body({ title: undefined }), { required: true }).title, '', 'no title is fine when there are words');
+  assert.equal(parseMemoryInput(body({ title: '', text: 'Just words.' }), { required: true }).text, 'Just words.');
+  assert.equal(parseMemoryInput(body({ title: 'Only a title', text: '' }), { required: true }).title, 'Only a title', 'an old-style title-only memory is still accepted');
   assert.equal(code(() => parseMemoryInput(body({ title: 'x'.repeat(81) }), { required: true })), 'invalid_title');
   assert.equal(code(() => parseMemoryInput(body({ visibility: 'world' }), { required: true })), 'invalid_visibility');
   assert.equal(code(() => parseMemoryInput(body({ lat: NaN }), { required: true })), 'invalid_location');

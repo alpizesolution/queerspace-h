@@ -133,7 +133,7 @@ test('My memories: lists only the member\'s own; the owner can edit and delete (
   await waitFor(() => assert.equal(screen.queryByRole('button', { name: 'star:My pier' }), null));
 });
 
-test('pinning a memory needs a title, a place and a valid date; then it sends the words and the chosen point, with one stable id', async () => {
+test('pinning a memory needs some words, a place and a valid date (there is no title field); then it sends the words and the chosen point, with one stable id', async () => {
   render(<AtlasPage />);
   await screen.findByRole('button', { name: 'star:Title c1' });
   fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
@@ -143,8 +143,8 @@ test('pinning a memory needs a title, a place and a valid date; then it sends th
   fireEvent.click(screen.getByRole('button', { name: 'Pick Manila' }));
   assert.equal((screen.getByRole('button', { name: 'Pin this memory' }) as HTMLButtonElement).disabled, false, 'a spot on the map enables saving');
   fireEvent.click(screen.getByRole('button', { name: 'Pin this memory' }));
-  assert.ok(await screen.findByText('Give your memory a title.'));
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Our first sunrise' } });
+  assert.ok(await screen.findByText('Write a few words about this memory.'));
+  fireEvent.change(screen.getByLabelText('Story'), { target: { value: 'Our first sunrise' } });
   fireEvent.change(screen.getByLabelText('Date of the memory'), { target: { value: '2999-01-01' } });
   fireEvent.click(screen.getByRole('button', { name: 'Pin this memory' }));
   assert.ok(await screen.findByText(/not in the future/));
@@ -152,7 +152,8 @@ test('pinning a memory needs a title, a place and a valid date; then it sends th
   fireEvent.click(screen.getByRole('button', { name: 'Pin this memory' }));
   await waitFor(() => assert.ok(posts().some((b) => b.action === 'create')));
   const created = posts().find((b) => b.action === 'create') as Mem;
-  assert.equal(created.title, 'Our first sunrise');
+  assert.equal(created.text, 'Our first sunrise');
+  assert.equal('title' in created, false, 'no title is sent');
   assert.equal(created.date, '2024-06-01');
   assert.equal('visibility' in created, false, 'the app never sends a visibility: the server makes every memory public');
   assert.deepEqual(created.displayIdentity, { mode: 'profile' }, 'the default is the member\'s own pseudonym');
@@ -167,12 +168,12 @@ test('words that break the community rules are stopped before any memory is sent
   await screen.findByRole('button', { name: 'star:Title c1' });
   fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
   await screen.findByRole('button', { name: 'Pin this memory' });
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'kys' } });
+  fireEvent.change(screen.getByLabelText('Story'), { target: { value: 'kys' } });
   fireEvent.click(screen.getByRole('button', { name: 'Pick Manila' }));
   fireEvent.click(screen.getByRole('button', { name: 'Pin this memory' }));
   assert.ok(await screen.findByText(/community guidelines/));
   assert.equal(posts().some((b) => b.action === 'create'), false);
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'A kind title' } });
+  fireEvent.change(screen.getByLabelText('Story'), { target: { value: 'A kind title' } });
   fireEvent.click(screen.getByRole('button', { name: 'Pin this memory' }));
   await waitFor(() => assert.ok(posts().some((b) => b.action === 'create')));
 });
@@ -293,7 +294,7 @@ test('the Post as choice is always there with two options: My pseudonym (the def
   await screen.findByRole('button', { name: 'star:Title c1' });
   fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
   await screen.findByRole('button', { name: 'Pin this memory' });
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Moon walk' } });
+  fireEvent.change(screen.getByLabelText('Story'), { target: { value: 'Moon walk' } });
   fireEvent.click(screen.getByRole('button', { name: 'Pick Manila' }));
   const identity = screen.getByTestId('atlas-identity');
   const options = within(identity).getAllByRole('radio');
@@ -320,7 +321,7 @@ test('the server refusing the author choice is explained plainly and keeps the s
   await screen.findByRole('button', { name: 'star:Title c1' });
   fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
   await screen.findByRole('button', { name: 'Pin this memory' });
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Rooftop' } });
+  fireEvent.change(screen.getByLabelText('Story'), { target: { value: 'Rooftop' } });
   fireEvent.click(screen.getByRole('button', { name: 'Pick Manila' }));
   fireEvent.click(within(screen.getByTestId('atlas-identity')).getByRole('radio', { name: /Anonymous/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Pin this memory' }));
@@ -387,7 +388,7 @@ test('cancelling discards the temporary spot and the form, leaves every existing
   await screen.findByRole('button', { name: 'star:Title c1' });
   fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
   await screen.findByTestId('pin-panel');
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Draft I will throw away' } });
+  fireEvent.change(screen.getByLabelText('Story'), { target: { value: 'Draft I will throw away' } });
   fireEvent.click(screen.getByRole('button', { name: 'Pick Manila' }));
   fireEvent.click(screen.getByTestId('pin-cancel'));
   await waitFor(() => assert.equal(screen.queryByTestId('pin-panel'), null));
@@ -397,7 +398,7 @@ test('cancelling discards the temporary spot and the form, leaves every existing
   assert.equal(posts().filter((b) => b.action === 'create' || b.action === 'update' || b.action === 'delete').length, 0, 'nothing was written');
   fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
   await screen.findByTestId('pin-panel');
-  assert.equal((screen.getByLabelText('Title') as HTMLInputElement).value, '', 'a new pin starts clean');
+  assert.equal((screen.getByLabelText('Story') as HTMLInputElement).value, '', 'a new pin starts clean');
   assert.equal(screen.getByTestId('picked').textContent, 'none');
   // Escape cancels too.
   fireEvent.keyDown(window, { key: 'Escape' });
@@ -409,7 +410,7 @@ test('the spot chosen on the map is what is saved, with no place name sent, and 
   await screen.findByRole('button', { name: 'star:Title c1' });
   fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
   await screen.findByTestId('pin-panel');
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'By the bay' } });
+  fireEvent.change(screen.getByLabelText('Story'), { target: { value: 'By the bay' } });
   fireEvent.click(screen.getByRole('button', { name: 'Pick Manila' }));
   fireEvent.click(screen.getByRole('button', { name: 'Pick Osaka' }));
   fireEvent.click(screen.getByRole('button', { name: 'Pin this memory' }));
@@ -466,7 +467,7 @@ test('saving an edit without moving the pin sends the memory\'s own (already rou
   fireEvent.click(await screen.findByRole('button', { name: 'star:My pier' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
   await screen.findByTestId('pin-panel');
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'My pier, renamed' } });
+  fireEvent.change(screen.getByLabelText('Story'), { target: { value: 'My pier, renamed' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => assert.ok(posts().some((b) => b.action === 'update')));
   const updated = posts().find((b) => b.action === 'update') as Mem;
@@ -497,7 +498,7 @@ test('editing an anonymous memory keeps its cosmic name; switching to the pseudo
   assert.match(screen.getByTestId('atlas-identity-preview').textContent ?? '', /Violet Lark/, 'switching shows the member\'s own pseudonym');
   fireEvent.click(within(identity).getByRole('radio', { name: /Anonymous/ }));
   assert.match(screen.getByTestId('atlas-identity-preview').textContent ?? '', /Nova/, 'back to anonymous before saving: nothing was changed, so the name is kept');
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'My pier, renamed' } });
+  fireEvent.change(screen.getByLabelText('Story'), { target: { value: 'My pier, renamed' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => assert.ok(posts().some((b) => b.action === 'update')));
   const updated = posts().find((b) => b.action === 'update') as Mem;
@@ -720,13 +721,15 @@ test('tapping or clicking outside the card dismisses it; presses inside (reactio
   assert.equal(closed.length, 2, 'Escape dismisses');
 });
 
-test('the composer is minimal: title, story with the photo and date in its corner, a compact Post as selector; no separate date or picture sections, no big cards', async () => {
+test('the composer is minimal: no title field, a story with the photo and date in its corner, a compact Post as selector; no separate date or picture sections, no big cards', async () => {
   render(<AtlasPage memberName="Violet Lark" />);
   await screen.findByRole('button', { name: 'star:Title c1' });
   fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
   const panel = await screen.findByTestId('pin-panel');
   const text = panel.textContent ?? '';
   assert.doesNotMatch(text, /Who should it say|Picture \(optional\)|\(optional\)|Every memory on ATLAS/);
+  assert.equal(within(panel).queryByLabelText('Title'), null, 'there is no title field');
+  assert.equal(within(panel).queryByPlaceholderText('Title'), null);
   const story = within(panel).getByLabelText('Story');
   const editor = story.parentElement as HTMLElement;
   const photoBtn = within(editor).getByRole('button', { name: 'Add a picture' });
@@ -738,12 +741,11 @@ test('the composer is minimal: title, story with the photo and date in its corne
   assert.equal(within(panel).getByTestId('atlas-identity').querySelector('legend')?.textContent, 'Post as');
 });
 
-test('changing Post as keeps what was typed (title, story, date); tapping the date opens the native picker; the shown date follows the field', async () => {
+test('changing Post as keeps what was typed (story, date); tapping the date opens the native picker; the shown date follows the field', async () => {
   render(<AtlasPage memberName="Violet Lark" />);
   await screen.findByRole('button', { name: 'star:Title c1' });
   fireEvent.click(screen.getAllByRole('button', { name: /New memory/ })[0]);
   const panel = await screen.findByTestId('pin-panel');
-  fireEvent.change(within(panel).getByLabelText('Title'), { target: { value: 'Kept title' } });
   fireEvent.change(within(panel).getByLabelText('Story'), { target: { value: 'Kept story' } });
   const date = within(panel).getByLabelText('Date of the memory') as HTMLInputElement;
   let opened = 0;
@@ -754,7 +756,15 @@ test('changing Post as keeps what was typed (title, story, date); tapping the da
   assert.match(within(panel).getByTestId('atlas-date-text').textContent ?? '', /Jun(e)? 1, 2024/);
   fireEvent.click(within(panel).getByRole('radio', { name: /Anonymous/ }));
   fireEvent.click(within(panel).getByRole('radio', { name: /My pseudonym/ }));
-  assert.equal((within(panel).getByLabelText('Title') as HTMLInputElement).value, 'Kept title');
   assert.equal((within(panel).getByLabelText('Story') as HTMLTextAreaElement).value, 'Kept story');
   assert.equal((within(panel).getByLabelText('Date of the memory') as HTMLInputElement).value, '2024-06-01');
+});
+
+test('a memory with no title shows its words as the main text (no empty heading), and is named by its first words in labels and Recent', async () => {
+  const card = render(<MemoryPanel group={{ key: 'k', lat: 1, lng: 1, memories: [memory('nt1', { title: '', text: 'We watched the whole skyline turn violet from the roof.' })] } as never} onClose={() => {}} onEdit={() => {}} onDelete={() => {}} photoVersions={{}} busyId={null} />);
+  const panelEl = screen.getByTestId('memory-panel');
+  assert.equal(within(panelEl).queryByRole('heading'), null, 'no empty heading');
+  assert.match(within(panelEl).getByTestId('memory-text').className, /font-serif/, 'the words lead');
+  assert.equal(panelEl.getAttribute('aria-label'), 'Memory: We watched the whole skyline turn violet from the roof.');
+  card.unmount();
 });
