@@ -135,7 +135,8 @@ test('an optional labels-only layer: used when it is a real https template, igno
   const filters = [...css.matchAll(/([^{}\n]*tile-pane[^{}\n]*)\{[^}]*filter:/g)].map((m) => m[1].trim());
   assert.deepEqual(filters, ["[data-atlas-tone='light'] .leaflet-tile-pane"], 'only a LIGHT provider is recoloured; a dark one is shown as it is');
   const map = fs.readFileSync('src/components/AtlasMap.tsx', 'utf8');
-  assert.match(map, /tiles\.labelsUrl && <TileLayer url=\{tiles\.labelsUrl\}[^>]*className="atlas-labels"/);
+  assert.match(map, /tiles\.labelsUrl && <LabelsLayer url=\{tiles\.labelsUrl\} maxZoom=\{tiles\.maxZoom\} \/>/, 'the labels layer is drawn from VITE_ATLAS_LABELS_URL');
+  assert.match(map, /\{ maxZoom, zIndex: 2, className: 'atlas-labels' \}/, 'above the base tiles and brightened by .atlas-labels');
   // labels are light but not stark white
   const bright = Number(css.match(/\.atlas-labels \{ filter: brightness\(([\d.]+)\)/)![1]);
   assert.ok(bright >= 1.3 && bright <= 1.7, `label brightness ${bright} should be readable but not pure white`);

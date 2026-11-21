@@ -559,6 +559,13 @@ html:not(.bmc-widget-visible) div:has(> #bmc-iframe) {
 /* The labels-only layer (VITE_ATLAS_LABELS_URL) is brightened on its own: a dark basemap's labels are dim grey, and this makes them crisp
    soft light text (readable, not stark white) while the roads and buildings below it are shown exactly as the provider draws them (no filter on the base). */
 .atlas-labels { filter: brightness(1.55) contrast(1.1); }
+/* Tiles the sea-label code draws to a canvas (see utils/maskedTileLayer.ts) must blend exactly like the plain image tiles next to them:
+   Leaflet's own stylesheet gives `img.leaflet-tile` this blend mode but not a canvas, so without it those tiles' text would look different. */
+.atlas-map canvas.leaflet-tile { mix-blend-mode: plus-lighter; }
+/* Our own "West Philippine Sea" label (utils/atlasSeaLabelLayer.ts), drawn to match CARTO's grey italic sea names (about 70px wide, three lines; measured against the real tiles) once the labels filter
+   above has brightened them. It fades in and out so the swap with CARTO's own label at zoom 6/7 and 13/14 is not a flash. */
+.atlas-sealabel { background: none; border: 0; pointer-events: none; opacity: 0; transition: opacity 0.22s ease; text-align: center; font-style: italic; font-weight: 700; font-size: 13px; line-height: 13.3px; letter-spacing: 0.06em; color: rgb(124 124 124); white-space: nowrap; display: flex; align-items: center; justify-content: center; }
+.atlas-sealabel.is-on { opacity: 1; }
 [data-atlas-tone='light'] .leaflet-tile-pane { filter: invert(1) hue-rotate(205deg) saturate(0.55) brightness(0.8) contrast(1.05); }
 .atlas-map .leaflet-top.leaflet-left { left: auto; right: 0; }
 .atlas-map .leaflet-bar { border: 1px solid var(--color-line); box-shadow: 0 4px 14px rgb(0 0 0 / 0.4); }
@@ -609,6 +616,7 @@ html:not(.bmc-widget-visible) div:has(> #bmc-iframe) {
 @keyframes atlas-twinkle { 0%, 100% { opacity: 0.65; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1.08); } }
 @keyframes atlas-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
+  .atlas-sealabel { transition: none; }
   .atlas-star__halo { animation: none; }
   .atlas-star__core,
   .atlas-star__edge { transition: none; }
