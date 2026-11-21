@@ -50,8 +50,44 @@ export interface AtlasMemory {
   /** The author's own choices, present only on their own memories (so an edit can start from them). */
   identity: DisplayIdentity | null;
   hasPhoto: boolean;
+  /** Totals only. Nobody is ever told who viewed or reacted. Older servers (and older stored records) may not send them. */
+  views?: number;
+  hugs?: number;
+  hearts?: number;
   createdAt: number | null;
   author: AtlasAuthor | null;
+}
+
+export type ReactionKind = 'hug' | 'heart';
+export const REACTIONS: { kind: ReactionKind; emoji: string; label: string }[] = [
+  { kind: 'hug', emoji: '\u{1F917}', label: 'Hug' },
+  { kind: 'heart', emoji: '\u2764\uFE0F', label: 'Heart' },
+];
+
+/** What a card shows under a memory: the totals, and the viewing member's own reaction (one at most). */
+export interface Engagement { views: number; hugs: number; hearts: number; mine: ReactionKind | null }
+
+const whole = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0);
+
+/** The totals a list response already carries (the member's own reaction is only known once the card is opened). */
+export const engagementOf = (memory: Pick<AtlasMemory, 'views' | 'hugs' | 'hearts'>, mine: ReactionKind | null = null): Engagement =>
+  ({ views: whole(memory.views), hugs: whole(memory.hugs), hearts: whole(memory.hearts), mine });
+
+/** The totals after the member chooses `next` (null takes their reaction back): one reaction at most, switching moves it, never below zero. */
+export function applyReaction(current: Engagement, next: ReactionKind | null): Engagement {
+  if (current.mine === next) return current;
+  const out = { ...current, mine: next };
+  if (current.mine) out[current.mine === 'hug' ? 'hugs' : 'hearts'] = Math.max(0, out[current.mine === 'hug' ? 'hugs' : 'hearts'] - 1);
+  if (next) out[next === 'hug' ? 'hugs' : 'hearts'] += 1;
+  return out;
+}
+
+/** 0 to 999 as they are, then 1.2k, 12k, 1.2M: short enough for a small chip. */
+export function formatCount(value: number): string {
+  const n = whole(value);
+  if (n < 1000) return String(n);
+  const short = (x: number, unit: string) => `${x >= 10 ? Math.floor(x) : Math.floor(x * 10) / 10}${unit}`.replace('.0', '');
+  return n < 1_000_000 ? short(n / 1000, 'k') : short(n / 1_000_000, 'M');
 }
 
 export interface MapBounds { south: number; west: number; north: number; east: number }
@@ -71,6 +107,13 @@ export function formatMemoryDate(date: string | null): string {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return '';
   const at = new Date(`${date}T00:00:00Z`);
   return Number.isNaN(at.getTime()) ? '' : at.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+}
+
+/** "Jun 1, 2024": the short form for the corner of a card. */
+export function formatMemoryDateShort(date: string | null): string {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return '';
+  const at = new Date(`${date}T00:00:00Z`);
+  return Number.isNaN(at.getTime()) ? '' : at.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 /**

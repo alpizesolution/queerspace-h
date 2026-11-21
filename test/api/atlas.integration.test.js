@@ -76,7 +76,7 @@ test('creating a memory stores and returns only the rounded point, never the exa
   assert.equal(stored.ownerId, alice.uid);
   const everything = JSON.stringify([stored, res.body, (await list(alice, 'mine')).body]);
   for (const exact of ['14.5995', '120.9842', '14.5995123', '120.9842199']) assert.equal(everything.includes(exact), false, `${exact} must never appear`);
-  assert.equal(JSON.stringify(Object.keys(res.body.memory).sort()), JSON.stringify(['author', 'createdAt', 'date', 'displayIdentity', 'displayName', 'hasPhoto', 'id', 'identity', 'lat', 'lng', 'mine', 'placeLabel', 'text', 'title', 'visibility']));
+  assert.equal(JSON.stringify(Object.keys(res.body.memory).sort()), JSON.stringify(['author', 'createdAt', 'date', 'displayIdentity', 'displayName', 'hasPhoto', 'hearts', 'hugs', 'id', 'identity', 'lat', 'lng', 'mine', 'placeLabel', 'text', 'title', 'views', 'visibility']));
 });
 
 test('only adult members who are not suspended can use ATLAS', { skip }, async () => {
@@ -625,4 +625,148 @@ test('a photo without storage set up fails cleanly and creates nothing', { skip 
   Object.assign(process.env, saved);
   assert.equal(res.statusCode, 503);
   assert.equal((await db.collection('atlasMemories').get()).size, 0);
+});
+
+// ------------------------------------------------------------------------------------------------ views and reactions
+
+const engage = (call) => ({
+  view: (user, id) => call(user, 'POST', { action: 'view', id }),
+  react: (user, id, kind) => call(user, 'POST', { action: 'react', id, kind }),
+});
+
+test("views: a member's first open counts once, however often they open it; the author's own opens are not counted; nobody is named", { skip }, async () => {
+  const { member, create, call, db, list } = await setup();
+  const { view } = engage(call);
+  const alice = await member('Alice');
+  const bob = await member('Bob');
+  const cy = await member('Cy');
+  const id = (await create(alice)).body.memory.id;
+  assert.deepEqual((await view(bob, id)).body.engagement, { views: 1, hugs: 0, hearts: 0, mine: null });
+  for (let i = 0; i < 5; i++) assert.equal((await view(bob, id)).body.engagement.views, 1, 'opening it again is not another view');
+  assert.equal((await view(cy, id)).body.engagement.views, 2, 'another member is another view');
+  assert.equal((await view(alice, id)).body.engagement.views, 2, 'the author opening their own memory adds nothing');
+  // opened at the same moment by one member (two devices, a double tap): still one view
+  const dave = await member('Dave');
+  const results = await Promise.all([1, 2, 3, 4, 5, 6].map(() => view(dave, id)));
+  assert.ok(results.every((r) => r.statusCode === 200));
+  assert.equal((await db.doc(`atlasMemories/${id}`).get()).data().viewCount, 3, 'stored total: Bob, Cy, Dave');
+  assert.equal((await db.collection(`atlasMemories/${id}/views`).get()).size, 3, 'one record per viewing member');
+  // the total shows up in the list, and nothing says who
+  const listed = (await list(bob)).body.memories.find((m) => m.id === id);
+  assert.equal(listed.views, 3);
+  const everything = JSON.stringify([listed, results[0].body]);
+  for (const secret of [bob.uid, cy.uid, dave.uid, 'ownerId', 'Bob', 'Cy', 'Dave']) assert.equal(everything.includes(secret), false, `${secret} is never in a response`);
+});
+
+test('reactions: one hug OR heart per member; choosing the other switches, the same one again changes nothing, null takes it back; totals follow', { skip }, async () => {
+  const { member, create, call, db, list } = await setup();
+  const { view, react } = engage(call);
+  const alice = await member('Alice');
+  const bob = await member('Bob');
+  const cy = await member('Cy');
+  const id = (await create(alice)).body.memory.id;
+  assert.deepEqual((await react(bob, id, 'hug')).body.engagement, { views: 0, hugs: 1, hearts: 0, mine: 'hug' });
+  assert.deepEqual((await react(bob, id, 'hug')).body.engagement, { views: 0, hugs: 1, hearts: 0, mine: 'hug' }, 'the same reaction twice is still one');
+  assert.deepEqual((await react(bob, id, 'heart')).body.engagement, { views: 0, hugs: 0, hearts: 1, mine: 'heart' }, 'choosing the other switches it');
+  assert.deepEqual((await react(cy, id, 'heart')).body.engagement, { views: 0, hugs: 0, hearts: 2, mine: 'heart' });
+  assert.deepEqual((await react(cy, id, null)).body.engagement, { views: 0, hugs: 0, hearts: 1, mine: null }, 'taking it back');
+  assert.deepEqual((await react(cy, id, null)).body.engagement, { views: 0, hugs: 0, hearts: 1, mine: null }, 'taking back nothing is fine');
+  // each member sees their own reaction when they open the card, and everyone sees the totals in the list
+  assert.equal((await view(bob, id)).body.engagement.mine, 'heart');
+  assert.equal((await view(cy, id)).body.engagement.mine, null);
+  const listed = (await list(cy)).body.memories.find((m) => m.id === id);
+  assert.deepEqual([listed.hugs, listed.hearts], [0, 1]);
+  assert.equal(JSON.stringify(listed).includes('"mine":"'), false, 'the list carries no reaction of anyone');
+  // storage: exactly one record per reacting member, and the totals equal the records
+  const records = await db.collection(`atlasMemories/${id}/reactions`).get();
+  assert.deepEqual(records.docs.map((d) => [d.id, d.data().kind]), [[bob.uid, 'heart']]);
+  const stored = (await db.doc(`atlasMemories/${id}`).get()).data();
+  assert.deepEqual([stored.hugCount, stored.heartCount], [0, 1]);
+});
+
+test('reactions: a burst of taps by one member (double taps, two devices) never leaves two reactions or a wrong total', { skip }, async () => {
+  const { member, create, call, db } = await setup();
+  const { react } = engage(call);
+  const alice = await member('Alice');
+  const bob = await member('Bob');
+  const id = (await create(alice)).body.memory.id;
+  const burst = await Promise.all(['hug', 'heart', 'hug', 'heart', 'hug', 'heart', 'hug', 'heart'].map((kind) => react(bob, id, kind)));
+  assert.ok(burst.every((r) => r.statusCode === 200), JSON.stringify(burst.map((r) => r.statusCode)));
+  const records = await db.collection(`atlasMemories/${id}/reactions`).get();
+  assert.equal(records.size, 1, 'one record for the member');
+  const stored = (await db.doc(`atlasMemories/${id}`).get()).data();
+  const kind = records.docs[0].data().kind;
+  assert.equal(stored.hugCount + stored.heartCount, 1, 'the totals add up to that one reaction');
+  assert.equal(stored[kind === 'hug' ? 'hugCount' : 'heartCount'], 1);
+  // many members at once: the total is exact
+  const crowd = await Promise.all(Array.from({ length: 8 }, (_, i) => member(`Fan${i}`)));
+  await Promise.all(crowd.map((m, i) => react(m, id, i % 2 ? 'hug' : 'heart')));
+  const after = (await db.doc(`atlasMemories/${id}`).get()).data();
+  assert.equal(after.hugCount + after.heartCount, 9);
+  assert.equal((await db.collection(`atlasMemories/${id}/reactions`).get()).size, 9);
+});
+
+test('engagement permissions: only who may see a memory can view or react; not on your own; bad requests are refused; nothing changes without sign-in', { skip }, async () => {
+  const { member, create, call, db, connect, legacy } = await setup();
+  const { view, react } = engage(call);
+  const alice = await member('Alice');
+  const bob = await member('Bob');
+  const friend = await member('Friend');
+  const blocker = await member('Blocker', { blocked: [alice.uid] });
+  const minor = await member('Minor', { adult: false });
+  await connect(alice, friend);
+  const id = (await create(alice)).body.memory.id;
+  const own = await react(alice, id, 'heart');
+  assert.equal(own.statusCode, 403, 'not on your own memory');
+  assert.equal(own.body.error, 'own_memory');
+  for (const kind of ['love', 'HUG', '', undefined, 1, ['hug']]) assert.equal((await react(bob, id, kind)).statusCode, 400, `kind ${JSON.stringify(kind)}`);
+  for (const body of [{ action: 'react', id, kind: 'hug', extra: 1 }, { action: 'view', id, extra: 1 }, { action: 'react', kind: 'hug' }, { action: 'view', id: '../x' }, { action: 'view', id: 7 }]) {
+    assert.equal((await call(bob, 'POST', body)).statusCode, 400, JSON.stringify(body));
+  }
+  assert.equal((await view(bob, 'no-such-memory')).statusCode, 404);
+  assert.equal((await react(bob, 'no-such-memory', 'hug')).statusCode, 404);
+  assert.equal((await view(null, id)).statusCode, 401, 'sign in required');
+  assert.equal((await view(minor, id)).statusCode, 403, 'adults only, like everything in ATLAS');
+  assert.equal((await react(blocker, id, 'hug')).statusCode, 404, 'a member who blocked the author gets the same "not found"');
+  // older private / connections-only records keep their narrower audience for views and reactions too
+  const priv = await legacy(alice, 'private');
+  const friends = await legacy(alice, 'friends');
+  for (const target of [priv, friends]) {
+    assert.equal((await view(bob, target)).statusCode, 404);
+    assert.equal((await react(bob, target, 'hug')).statusCode, 404);
+  }
+  assert.equal((await view(friend, friends)).statusCode, 200, 'a connection of the author can');
+  assert.equal((await react(friend, friends, 'heart')).statusCode, 200);
+  assert.equal((await db.collection(`atlasMemories/${priv}/views`).get()).size, 0, 'nothing was recorded for a memory they may not see');
+  assert.equal((await db.collection(`atlasMemories/${priv}/reactions`).get()).size, 0);
+});
+
+test('engagement: totals survive an edit, the response carries no ids, and deleting the memory deletes its reactions and views', { skip }, async () => {
+  const { member, create, call, db } = await setup();
+  const { view, react } = engage(call);
+  const alice = await member('Alice');
+  const bob = await member('Bob');
+  const id = (await create(alice)).body.memory.id;
+  await view(bob, id); await react(bob, id, 'hug');
+  const edited = await call(alice, 'POST', { action: 'update', id, title: 'A better title' });
+  assert.equal(edited.statusCode, 200);
+  assert.deepEqual([edited.body.memory.views, edited.body.memory.hugs, edited.body.memory.hearts], [1, 1, 0], 'an edit leaves the totals alone');
+  assert.equal(JSON.stringify(edited.body).includes(bob.uid), false);
+  assert.equal((await call(alice, 'POST', { action: 'delete', id })).statusCode, 200);
+  assert.equal((await db.doc(`atlasMemories/${id}`).get()).exists, false);
+  assert.equal((await db.collection(`atlasMemories/${id}/views`).get()).size, 0, 'no orphaned view records');
+  assert.equal((await db.collection(`atlasMemories/${id}/reactions`).get()).size, 0, 'no orphaned reactions');
+  assert.equal((await view(bob, id)).statusCode, 404);
+});
+
+test('engagement is rate limited per member', { skip }, async () => {
+  const { member, create, call } = await setup();
+  const { view } = engage(call);
+  const { ENGAGEMENT_PER_MINUTE } = await import('../../api/_atlas.js');
+  const alice = await member('Alice');
+  const bob = await member('Bob');
+  const id = (await create(alice)).body.memory.id;
+  let limited = 0;
+  for (let i = 0; i < ENGAGEMENT_PER_MINUTE + 5; i++) if ((await view(bob, id)).statusCode === 429) limited++;
+  assert.ok(limited >= 5, `the ${ENGAGEMENT_PER_MINUTE + 1}th request in a minute is refused (${limited} refused)`);
 });
