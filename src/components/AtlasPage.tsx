@@ -255,7 +255,7 @@ export const AtlasPage: React.FC<{ memberName?: string }> = ({ memberName }) => 
         <div className="atlas-stage relative h-full min-h-[200px] overflow-hidden rounded-3xl border border-line bg-surface" style={{ isolation: 'isolate' }}>
           {mapArea}
           {/* Phones: the memory opens as a bottom sheet over the map, clear of the tab bar. */}
-          {panel && !isDesk && <div className={`absolute inset-x-0 bottom-0 z-[900] flex flex-col animate-[atlas-rise_0.25s_ease-out] ${pinPanel ? 'max-h-[62%]' : 'max-h-[64%]'}`}>{panel}</div>}
+          {panel && !isDesk && <div className={`absolute inset-x-0 bottom-0 z-[900] flex flex-col animate-[atlas-rise_0.25s_ease-out] ${pinPanel ? 'max-h-[66%]' : 'max-h-[64%]'}`}>{panel}</div>}
         </div>
         {/* Desktop: a side panel while a star is selected, so the map stays visible. */}
         {isDesk && panel && <aside className="min-h-0 overflow-hidden" aria-label={pinPanel ? 'Pin a memory' : 'Memory details'}>{panel}</aside>}
