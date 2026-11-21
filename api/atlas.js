@@ -1,8 +1,8 @@
 // ATLAS endpoint: a shared map of memories. All the rules live in api/_atlas.js; this only authenticates, routes and answers.
-//   POST { action: 'list' | 'create' | 'update' | 'delete', ... }     GET ?view=photo&id=<memoryId>
+//   POST { action: 'list' | 'create' | 'update' | 'delete' | 'view' | 'react', ... }     GET ?view=photo&id=<memoryId>
 // Every response is private to the signed-in member and never cached.
 import { HttpError, authenticate, send, sendError } from './_lib.js';
-import { createMemory, deleteMemory, listMemories, memoryPhoto, updateMemory } from './_atlas.js';
+import { createMemory, deleteMemory, listMemories, memoryPhoto, openMemory, reactToMemory, updateMemory } from './_atlas.js';
 
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
@@ -25,6 +25,8 @@ export default async function handler(req, res) {
       case 'create': return send(res, 201, await createMemory(db, uid, body));
       case 'update': return send(res, 200, await updateMemory(db, uid, body));
       case 'delete': return send(res, 200, await deleteMemory(db, uid, body, undefined, decoded));
+      case 'view': return send(res, 200, await openMemory(db, uid, body));
+      case 'react': return send(res, 200, await reactToMemory(db, uid, body));
       default: throw new HttpError(400, 'invalid_action');
     }
   } catch (error) {

@@ -21,7 +21,8 @@ library is only downloaded when someone opens it.
   future endpoint needs to be folded into an existing function (`test/api/function-limit.test.js` enforces the limit).
 - **Clients never read or write memories directly.** `atlasMemories` has no client rule in `firestore.rules` (all access denied, tested), so
   every read and write goes through the server, which decides who may see what.
-- **Actions** (`POST /api/atlas`): `list` (`scope: 'mine' | 'community' | 'recent'`, optional map `bounds` except for `recent`), `create`, `update`, `delete`.
+- **Actions** (`POST /api/atlas`): `list` (`scope: 'mine' | 'community' | 'recent'`, optional map `bounds` except for `recent`), `create`, `update`, `delete`,
+  `view` and `react` (see "The memory card, views and reactions").
   `GET /api/atlas?view=photo&id=…` returns a photo to someone who may see the memory.
 
 ### Data (`atlasMemories/{id}`)
@@ -37,6 +38,35 @@ library is only downloaded when someone opens it.
 | `anonymousAlias` | only on an anonymous memory: the random cosmic name the server picked for it (one of the 16 in `COSMIC_NAMES`). Never sent by the app, and not tied to the member. |
 | `photo` | `{ type, width, height }` when there is one; the bytes are in private R2 at `atlas/{id}` |
 | `createdAt`, `updatedAt` | server timestamps |
+| `viewCount`, `hugCount`, `heartCount` | totals only (whole numbers, never negative; missing on older records, read as 0). Changed by the server alone, in a transaction with the record that causes the change. |
+| `views/{uid}`, `reactions/{uid}` (subcollections) | who has viewed (`{ at }`) and each member's one reaction (`{ kind: 'hug' \| 'heart', at }`). The document id IS the member, so a second one cannot exist. Server-only (no client rule, tested); removed with the memory. Never returned to anyone. |
+
+## The memory card, views and reactions
+
+- **Layout (compact, `AtlasMemoryPanel.tsx`):** the date (short form, `Jun 1, 2024`) sits in the top-right corner beside close. Then the photo (if any),
+  the title and the words, which are the focus. The place name is shown only if the author gave one (the app no longer asks for one, so most cards
+  have no location line); nothing says "approximate", and the exact spot is never known (the stored point is already rounded to ~1 km). There is no
+  "Shared" label (every new memory is public; an older connections-only record shows a tiny people icon beside its author). No divider lines.
+  One slim row at the bottom: **who wrote it** on the left (a small 20 px avatar and name for a profile memory; a small 10 px star beside the cosmic
+  name for an anonymous one, which stays visible, never a link) and **views and reactions** on the right. The author's own card adds
+  "Shown as ..." in that row (an anonymous memory says its cosmic name; hover shows "Your account stays private"), an audience line only for an older
+  narrower record, and Edit and Delete. On a phone the round "New memory" button is hidden while a card is open, because it sat over the
+  reaction buttons and Delete.
+- **Views:** opening a card sends `view`. The server counts a member's FIRST open as one view (the `views/{uid}` record), so reopening, a second device
+  or a loop changes nothing; the author's own opens are not counted. The response is the totals plus that member's own reaction. The card shows an
+  eye and a compact count (`1.2k`).
+- **Reactions:** a member has ONE reaction at most, a hug (🤗) or a heart (❤️). `react` takes `kind: 'hug' | 'heart' | null` (null takes it back): the
+  same kind twice changes nothing, the other kind switches, and the reaction record and the totals change together in one transaction, so a burst of
+  taps from one member can never leave two reactions or a wrong total (tested with concurrent requests). The card updates at once and is confirmed or
+  put back by the server ("Not saved"); a second tap while one is saving is ignored. The author sees the totals but gets no buttons: **you cannot react
+  to your own memory** (`403 own_memory`). Reactions are new: nothing existed for memories before, and Echoes reactions, chat reactions and the Cosmos
+  "stardust" are separate and untouched.
+- **Who may do it:** exactly the members who may see the memory (the same check as the photo and the list). Everyone else gets the same `404 not_found`,
+  including a member who blocked the author, an older private or connections-only record, and a memory that does not exist. Adults only, like all of ATLAS.
+  `view` and `react` share one limit of 120 a minute per member.
+- **Privacy:** the list and the card carry totals only. Nobody is told who viewed or reacted (no id, name or avatar in any response; tested), and the
+  owner id is still never sent. Deleting a memory deletes its view and reaction records. Deleting a member's account does not yet remove their
+  reactions from other people's memories (see Known gaps).
 
 ## Privacy and safety
 
@@ -153,4 +183,5 @@ Set these in Vercel (Settings → Environment Variables). They are build-time an
 - No member reporting flow or admin screen for memories yet: administrators can remove a memory through the API (logged), and shared
   memories get the word filter, but there is no in-app report button or moderation list.
 - Deleting a member's account does not yet remove their memories; orphaned photos have no scheduled sweep.
+- Views are per member, not per visit, and a deleted account's views and reactions stay in the totals of other people's memories (and the record that names it).
 - Dependencies were added with npm (`--no-package-lock`); `bun.lock` needs refreshing with `bun install`.

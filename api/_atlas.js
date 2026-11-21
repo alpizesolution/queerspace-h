@@ -24,6 +24,12 @@
 //
 // Photos live in the private R2 bucket under `atlas/{memoryId}` and are served only through `memoryPhoto`, which applies the same
 // visibility check. There is no public link.
+//
+// Views and reactions: opening a memory counts ONE view per member, and a member may leave ONE reaction on it (a hug or a heart; they can
+// switch or take it back). Both live in server-only subcollections whose document id IS the member (`views/{uid}`, `reactions/{uid}`), so a
+// second view or a second reaction by the same member cannot exist, and the memory document keeps only the totals (viewCount, hugCount,
+// heartCount). Nobody is ever told who viewed or reacted; the author's own opens are not counted and they cannot react to their own memory.
+// Only members who may see the memory can view or react to it (the same check as everything else: anyone else gets the same "not found").
 // Underscore-prefixed files in api/ are not deployed as separate functions.
 import { createHash, randomInt } from 'node:crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
@@ -52,6 +58,9 @@ const RECENT_QUERY_LIMIT = 20;
 export const MAX_PHOTO_BYTES = 3_000_000;
 export const MEMORIES_PER_HOUR = 20;
 export const PHOTO_VIEWS_PER_MINUTE = 240;
+export const REACTION_KINDS = ['hug', 'heart'];
+/** Views and reactions a member can send per minute, across all memories: well above reading and tapping, low enough to stop a script. */
+export const ENGAGEMENT_PER_MINUTE = 120;
 export const LIST_LIMIT = 200;
 const PUBLIC_QUERY_LIMIT = 300;
 const FRIENDS_QUERY_LIMIT = 100;
@@ -88,6 +97,8 @@ export function isMemoryDate(value, nowMs = Date.now()) {
 }
 
 const text = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+/** A stored counter as a safe whole number (never negative, never fractional), whatever an older or damaged record holds. */
+const total = value => (Number.isInteger(value) && value > 0 ? value : 0);
 
 const FIELDS = ['title', 'text', 'date', 'lat', 'lng', 'placeLabel', 'visibility', 'displayIdentity'];
 
@@ -290,6 +301,10 @@ export function shapeMemory(id, data, viewerUid, author) {
     // The author's own choice, so an edit can start from it. Other members never receive this.
     identity: mine ? identity : null,
     hasPhoto: Boolean(data.photo?.type),
+    // Totals only (see the note on views and reactions above): never who. The viewer's own reaction comes from openMemory / reactToMemory.
+    views: total(data.viewCount),
+    hugs: total(data.hugCount),
+    hearts: total(data.heartCount),
     createdAt: toMs(data.createdAt),
     // A profile memory shows the member's own choices (never their account id, and only what the profile already shares); an anonymous one has no author at all.
     author: mine || !author || identity.mode !== 'profile' ? null : { id: data.ownerId, displayName: author.displayName, avatar: author.avatar, pronouns: author.pronouns },
@@ -466,7 +481,8 @@ export async function deleteMemory(db, uid, body, getStore = currentMediaStore, 
     await db.collection('atlasModerationLog').add({ action: 'delete', memoryId: snap.id, ownerId: snap.data().ownerId, adminId: uid, at: FieldValue.serverTimestamp() });
   }
   const { ref, data } = target;
-  await ref.delete();
+  // The reaction and view records are subcollections, which a plain delete would leave behind.
+  await db.recursiveDelete(ref);
   if (data.photo) await getStore()?.delete(photoKey(ref.id)).catch(() => {});
   return { deleted: true };
 }
@@ -491,5 +507,82 @@ export async function memoryPhoto(db, uid, id, getStore = currentMediaStore) {
   let bytes;
   try { bytes = await store.get(photoKey(id)); } catch { throw fail(404, 'not_found'); }
   return { image: bytes.toString('base64'), contentType: inspectImage(bytes).type };
+}
+
+// ------------------------------------------------------------------------------------------------------- views and reactions
+
+/** What everyone sees under a memory, plus the asking member's own reaction (null if none). */
+export const engagementOf = (data, mine = null) => ({ views: total(data.viewCount), hugs: total(data.hugCount), hearts: total(data.heartCount), mine });
+
+const reactionKind = snap => (snap.exists && REACTION_KINDS.includes(snap.data().kind) ? snap.data().kind : null);
+
+/** A memory the member may see (their own, or one the usual visibility rules allow), or the same "not found" for everything else. */
+async function viewableMemory(db, uid, id) {
+  if (!safeId(id)) throw fail(400, 'invalid_request');
+  await withContentionRetry(() => rateLimit(db, uid, 'atlas-engage', ENGAGEMENT_PER_MINUTE, 60_000));
+  const settings = await requireMember(db, uid);
+  const ref = db.doc(`atlasMemories/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw fail(404, 'not_found');
+  const data = snap.data();
+  if (data.ownerId !== uid) {
+    const ctx = await viewerContext(db, uid, settings);
+    const authors = await loadAuthors(db, uid, [data.ownerId]);
+    if (!canView(data, ctx, authors.get(data.ownerId))) throw fail(404, 'not_found');
+  }
+  return { ref, data };
+}
+
+/**
+ * A member opened a memory's card: counts their FIRST open as one view (the record is `views/{uid}`, so opening it again, from another
+ * device or in a loop, changes nothing) and returns the totals with the member's own reaction. The author's own opens are not counted.
+ */
+export async function openMemory(db, uid, body) {
+  if (!body || typeof body !== 'object' || Object.keys(body).some(key => !['action', 'id'].includes(key))) throw fail(400, 'invalid_request');
+  const { ref, data } = await viewableMemory(db, uid, body.id);
+  if (data.ownerId === uid) return { engagement: engagementOf(data) };
+  const viewRef = ref.collection('views').doc(uid);
+  const reactionRef = ref.collection('reactions').doc(uid);
+  const engagement = await db.runTransaction(async tx => {
+    const [memorySnap, viewSnap, reactionSnap] = await tx.getAll(ref, viewRef, reactionRef);
+    if (!memorySnap.exists) throw fail(404, 'not_found');
+    let current = memorySnap.data();
+    if (!viewSnap.exists) {
+      const viewCount = total(current.viewCount) + 1;
+      tx.set(viewRef, { at: FieldValue.serverTimestamp() });
+      tx.update(ref, { viewCount });
+      current = { ...current, viewCount };
+    }
+    return engagementOf(current, reactionKind(reactionSnap));
+  });
+  return { engagement };
+}
+
+/**
+ * Sets the member's one reaction to a memory: `kind` is 'hug', 'heart' or null (take it back). Sending the same thing twice changes
+ * nothing, and choosing the other kind switches. The reaction record and the totals change together or not at all. Not on your own memory.
+ */
+export async function reactToMemory(db, uid, body) {
+  if (!body || typeof body !== 'object' || Object.keys(body).some(key => !['action', 'id', 'kind'].includes(key))) throw fail(400, 'invalid_request');
+  if (body.kind !== null && !REACTION_KINDS.includes(body.kind)) throw fail(400, 'invalid_reaction');
+  const { ref, data } = await viewableMemory(db, uid, body.id);
+  if (data.ownerId === uid) throw fail(403, 'own_memory');
+  const reactionRef = ref.collection('reactions').doc(uid);
+  const after = body.kind;
+  const engagement = await db.runTransaction(async tx => {
+    const [memorySnap, reactionSnap] = await tx.getAll(ref, reactionRef);
+    if (!memorySnap.exists) throw fail(404, 'not_found');
+    const current = memorySnap.data();
+    const before = reactionKind(reactionSnap);
+    const totals = { hug: total(current.hugCount), heart: total(current.heartCount) };
+    if (before !== after) {
+      if (before) totals[before] = Math.max(0, totals[before] - 1);
+      if (after) totals[after] += 1;
+      if (after) tx.set(reactionRef, { kind: after, at: FieldValue.serverTimestamp() }); else tx.delete(reactionRef);
+      tx.update(ref, { hugCount: totals.hug, heartCount: totals.heart });
+    }
+    return engagementOf({ ...current, hugCount: totals.hug, heartCount: totals.heart }, after);
+  });
+  return { engagement };
 }
 

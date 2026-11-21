@@ -174,3 +174,31 @@ test('on a phone the credit is moved clear of the round New-memory button so nei
   const css = fs.readFileSync('src/index.css', 'utf8');
   assert.match(css, /@media \(max-width: 639px\) \{ \.atlas-map \.leaflet-bottom\.leaflet-right \{ right: 4\.5rem; \} \}/);
 });
+
+test('applyReaction: one reaction at most; switching moves it; taking it back removes it; never below zero; the same choice changes nothing', async () => {
+  const { applyReaction, engagementOf } = await import('./atlas.ts');
+  const none = { views: 3, hugs: 2, hearts: 1, mine: null as 'hug' | 'heart' | null };
+  assert.deepEqual(applyReaction(none, 'hug'), { views: 3, hugs: 3, hearts: 1, mine: 'hug' });
+  assert.deepEqual(applyReaction(none, 'heart'), { views: 3, hugs: 2, hearts: 2, mine: 'heart' });
+  const hugged = applyReaction(none, 'hug');
+  assert.deepEqual(applyReaction(hugged, 'heart'), { views: 3, hugs: 2, hearts: 2, mine: 'heart' }, 'switching');
+  assert.deepEqual(applyReaction(hugged, null), none, 'taking it back restores the totals');
+  assert.equal(applyReaction(hugged, 'hug'), hugged, 'choosing the same one is not a second reaction');
+  assert.deepEqual(applyReaction({ views: 0, hugs: 0, hearts: 0, mine: 'hug' }, null), { views: 0, hugs: 0, hearts: 0, mine: null }, 'a stale zero never goes negative');
+  assert.deepEqual(engagementOf({ views: 4.9, hugs: -2, hearts: undefined }), { views: 4, hugs: 0, hearts: 0, mine: null }, 'damaged or missing totals become safe whole numbers');
+  assert.deepEqual(engagementOf({ views: Number.NaN, hugs: Infinity, hearts: 'x' as unknown as number }), { views: 0, hugs: 0, hearts: 0, mine: null });
+});
+
+test('formatCount keeps the chip short, formatMemoryDateShort keeps the corner short', async () => {
+  const { formatCount, formatMemoryDateShort } = await import('./atlas.ts');
+  const cases: [number, string][] = [[0, '0'], [7, '7'], [999, '999'], [1000, '1k'], [1234, '1.2k'], [9999, '9.9k'], [12_345, '12k'], [999_999, '999k'], [1_500_000, '1.5M'], [-4, '0'], [Number.NaN, '0']];
+  for (const [input, expected] of cases) assert.equal(formatCount(input), expected, String(input));
+  assert.match(formatMemoryDateShort('2024-06-01'), /Jun(e)? 1, 2024/);
+  assert.equal(formatMemoryDateShort('2024-06-01').includes('June'), false, 'short month, not long');
+  for (const bad of [null, '', '2024-6-1', 'soon', '2024-13-45']) assert.equal(formatMemoryDateShort(bad as string | null), '', String(bad));
+});
+
+test('the two reactions are a hug and a heart, in that order', async () => {
+  const { REACTIONS } = await import('./atlas.ts');
+  assert.deepEqual(REACTIONS.map((r) => [r.kind, r.emoji, r.label]), [['hug', '🤗', 'Hug'], ['heart', '❤️', 'Heart']]);
+});

@@ -261,7 +261,8 @@ export const AtlasPage: React.FC<{ memberName?: string }> = ({ memberName }) => 
         {isDesk && panel && <aside className="min-h-0 overflow-hidden" aria-label={pinPanel ? 'Pin a memory' : 'Memory details'}>{panel}</aside>}
       </div>
 
-      {!pin && <FloatingAddButton onClick={() => startPin(null)} label="New memory" />}
+      {/* Not while a memory card is open: on a phone the round button would sit over the card's reaction buttons (and Delete). Close the card to add one. */}
+      {!pin && !selected && <FloatingAddButton onClick={() => startPin(null)} label="New memory" />}
 
       {pin && !tiles && (
         <Sheet title="Pin a memory" onClose={() => setPin(null)} size="sm"><p className="text-sm text-muted">The map isn’t available right now, so memories can’t be pinned yet.</p></Sheet>

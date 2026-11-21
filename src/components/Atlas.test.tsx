@@ -40,6 +40,10 @@ let community: Mem[] = [];
 let recentList: Mem[] = [];
 let mine: Mem[] = [];
 let respond: (body: Mem) => { status: number; json: Mem } | null = () => null;
+let engagement: Record<string, { views: number; hugs: number; hearts: number; mine: string | null }> = {};
+let viewed = new Set<string>();
+let reactGate: Promise<void> | null = null;
+let reactStatus = 200;
 
 beforeEach(() => {
   calls = [];
@@ -47,6 +51,7 @@ beforeEach(() => {
   recentList = [];
   mine = [memory('m1', { mine: true, author: null, visibility: 'private', title: 'My pier' })];
   respond = () => null;
+  engagement = {}; viewed = new Set(); reactGate = null; reactStatus = 200;
   (window as unknown as { matchMedia: unknown }).matchMedia = (q: string) => ({ matches: q.includes('min-width: 1024px'), addEventListener() {}, removeEventListener() {} });
   globalThis.fetch = (async (url: string, init?: { method?: string; body?: string }) => {
     const body = init?.body ? (JSON.parse(init.body) as Mem) : undefined;
@@ -56,6 +61,20 @@ beforeEach(() => {
     if (body?.action === 'list') return { ok: true, status: 200, json: async () => ({ memories: body.scope === 'mine' ? mine : body.scope === 'recent' ? recentList : community, truncated: false }) };
     if (body?.action === 'create') { const m = memory(String(body.id), { ...body, mine: true, author: null }); mine = [m, ...mine]; return { ok: true, status: 201, json: async () => ({ memory: { ...m, lat: 14.6, lng: 120.98 }, replayed: false }) }; }
     if (body?.action === 'update') { mine = mine.map((m) => (m.id === body.id ? { ...m, ...body } : m)); return { ok: true, status: 200, json: async () => ({ memory: mine.find((m) => m.id === body.id) }) }; }
+    if (body?.action === 'view') {
+      const e = (engagement[String(body.id)] ??= { views: 0, hugs: 0, hearts: 0, mine: null });
+      if (!viewed.has(String(body.id))) { viewed.add(String(body.id)); e.views += 1; }
+      return { ok: true, status: 200, json: async () => ({ engagement: { ...e } }) };
+    }
+    if (body?.action === 'react') {
+      if (reactGate) await reactGate;
+      if (reactStatus !== 200) return { ok: false, status: reactStatus, json: async () => ({ error: 'nope' }) };
+      const e = (engagement[String(body.id)] ??= { views: 0, hugs: 0, hearts: 0, mine: null });
+      if (e.mine === 'hug') e.hugs -= 1; if (e.mine === 'heart') e.hearts -= 1;
+      e.mine = (body.kind as string | null) ?? null;
+      if (e.mine === 'hug') e.hugs += 1; if (e.mine === 'heart') e.hearts += 1;
+      return { ok: true, status: 200, json: async () => ({ engagement: { ...e } }) };
+    }
     if (body?.action === 'delete') { mine = mine.filter((m) => m.id !== body.id); return { ok: true, status: 200, json: async () => ({ deleted: true }) }; }
     return { ok: true, status: 200, json: async () => ({}) };
   }) as unknown as typeof fetch;
@@ -76,7 +95,8 @@ test('the community map asks the server for memories in view, shows each as a st
   assert.ok(within(card).getByText('Title c1'));
   assert.ok(within(card).getByText('Words c1'));
   assert.ok(within(card).getByText(/Manila Bay/));
-  assert.ok(within(card).getByText(/approximate/i), 'the place is shown as approximate');
+  assert.equal(within(card).queryByText(/approximate/i), null, 'no "Approximate area" / "approximate" wording on the card');
+  assert.equal(within(card).queryByText(/^Shared$/), null, 'no "Shared" label');
   assert.ok(within(card).getByText('Willow'));
   assert.equal(within(card).queryByRole('button', { name: 'Edit' }), null, 'no edit or delete on someone else\'s memory');
   assert.equal(within(card).queryByRole('button', { name: 'Delete' }), null);
@@ -87,7 +107,7 @@ test('an anonymous memory shows its cosmic name and no profile; several memories
   render(<AtlasPage />);
   fireEvent.click(await screen.findByRole('button', { name: /^star:/ }));
   const card = await screen.findByTestId('memory-panel');
-  assert.ok(within(card).getByText(/1 of 2 here/));
+  assert.ok(within(card).getByText('1/2'), 'a compact pager');
   assert.ok(within(card).getByText('Second here'), 'newest first');
   assert.ok(within(card).getByText('Willow'), 'a memory that uses the author\'s pseudonym names them');
   fireEvent.click(within(card).getByRole('button', { name: 'Next memory' }));
@@ -176,9 +196,9 @@ test('loading, empty, error and not-allowed states are shown plainly, and the er
 test('the author\'s own card says who can see it and how their name shows, with nothing to change it; an older narrower memory says so', () => {
   const pub = { key: 'k', lat: 14.6, lng: 120.98, memories: [memory('x1', { mine: true, author: null, visibility: 'public', displayIdentity: 'anonymous', displayName: 'Polaris', identity: { mode: 'anonymous' } }) as never] };
   const first = render(<MemoryPanel group={pub as never} onClose={() => {}} onEdit={() => {}} onDelete={() => {}} photoVersions={{}} busyId={null} />);
-  assert.match(screen.getByTestId('memory-audience').textContent ?? '', /Visible to all QUEERSPACE members/);
-  assert.match(screen.getByTestId('memory-identity').textContent ?? '', /Shown as Polaris \(anonymous\)/, 'the author sees the very name others see');
-  assert.match(screen.getByTestId('memory-identity').textContent ?? '', /account stays private/);
+  assert.equal(screen.queryByTestId('memory-audience'), null, 'a public memory needs no audience label');
+  assert.match(screen.getByTestId('memory-identity').textContent ?? '', /Shown as Polaris/, 'the author sees the very name others see');
+  assert.equal(screen.getByTestId('memory-identity').getAttribute('title'), 'Your account stays private');
   assert.equal(screen.queryByRole('radio'), null);
   first.unmount();
   const own = { key: 'k', lat: 14.6, lng: 120.98, memories: [memory('x2', { mine: true, author: null, visibility: 'public', identity: { mode: 'profile' } }) as never] };
@@ -519,4 +539,160 @@ test('REGRESSION: the Community map shows the member\'s own public memory as a s
   const card = await screen.findByTestId('memory-panel');
   assert.ok(within(card).getByRole('button', { name: 'Edit' }), 'it is theirs, so they can edit it from Community');
   assert.match(within(card).getByTestId('memory-identity').textContent ?? '', /Shown as Nova/);
+});
+
+// ----------------------------------------------------------------------------------------------- the compact card and its engagement
+
+const panelFor = (memories: Mem[], busy: string | null = null) => render(
+  <MemoryPanel group={{ key: 'k', lat: 14.6, lng: 120.98, memories } as never} onClose={() => {}} onEdit={() => {}} onDelete={() => {}} photoVersions={{}} busyId={busy} />,
+);
+
+test('the compact card: date in the top corner beside close, title and words as the focus, place name plain, no "Shared", no dividers, no exact spot', async () => {
+  panelFor([memory('k1', { date: '2024-06-01', placeLabel: 'Manila Bay', lat: 14.6, lng: 120.98 })]);
+  const card = screen.getByTestId('memory-panel');
+  const header = card.querySelector('header') as HTMLElement;
+  const date = within(card).getByTestId('memory-date');
+  assert.ok(header.contains(date), 'the date is in the header, the top row');
+  assert.ok(header.contains(within(card).getByRole('button', { name: 'Close memory' })), 'next to the close button, on the right');
+  assert.match(date.textContent ?? '', /Jun(e)? 1, 2024/, 'a short date');
+  assert.equal(date.getAttribute('datetime'), '2024-06-01');
+  assert.ok(within(card).getByRole('heading', { name: 'Title k1' }));
+  assert.ok(within(card).getByText('Words k1'));
+  assert.equal(within(card).getByTestId('memory-place').textContent, 'Manila Bay');
+  const everything = card.textContent ?? '';
+  assert.doesNotMatch(everything, /approximate/i, 'no "Approximate area" and no "approximate"');
+  assert.doesNotMatch(everything, /\bShared\b/, 'no "Shared" label');
+  assert.doesNotMatch(everything, /14\.6|120\.98|lat|lng/i, 'no coordinates anywhere on the card');
+  assert.equal(card.querySelectorAll('[class*="border-t"], hr').length, 0, 'no divider lines inside the card');
+  assert.doesNotMatch(card.innerHTML, /(?:^|[\s"])(pb-4|space-y-3|py-4|pt-3|border-t)(?=[\s"])/, 'the roomy paddings of the old card are gone');
+  await waitFor(() => assert.ok(calls.some((c) => c.body?.action === 'view')));
+});
+
+test('a memory with no place name shows no place line at all (nothing to say, nothing invented); a memory with no date shows no date', () => {
+  panelFor([memory('k2', { placeLabel: '', date: null })]);
+  const card = screen.getByTestId('memory-panel');
+  assert.equal(within(card).queryByTestId('memory-place'), null);
+  assert.equal(within(card).queryByTestId('memory-date'), null);
+  assert.doesNotMatch(card.textContent ?? '', /approximate|area/i);
+});
+
+test('the author row is compact: a small star beside an anonymous cosmic name (no avatar, no profile link); a profile author is a small avatar and name', () => {
+  const first = panelFor([memory('k3', { displayIdentity: 'anonymous', displayName: 'Supernova', author: null })]);
+  const card = screen.getByTestId('memory-panel');
+  assert.equal(within(card).getByTestId('memory-author-name').textContent, 'Supernova', 'the cosmic name stays visible');
+  const star = card.querySelector('footer .atlas-dot') as HTMLElement;
+  assert.ok(star, 'a small star sits beside the name');
+  assert.match(star.className, /!h-2\.5 !w-2\.5/, 'about 10px, much smaller than before');
+  assert.equal(card.querySelectorAll('footer img, footer a, footer button[aria-label*="profile" i]').length, 0, 'nothing that points at the account');
+  assert.equal(card.querySelector('footer .h-9.w-9'), null, 'the old 36px badge is gone');
+  first.unmount();
+  panelFor([memory('k4', {})]);
+  const named = screen.getByTestId('memory-panel');
+  assert.ok(within(named).getByText('Willow'));
+  assert.equal(named.querySelector('footer .h-9.w-9'), null);
+});
+
+test('opening a card counts a view once, shows the totals with an eye, and stepping back to a memory already opened does not ask again', async () => {
+  engagement = { k5: { views: 4, hugs: 2, hearts: 1, mine: null } };
+  panelFor([memory('k5', { createdAt: 9 }), memory('k6', { createdAt: 5 })]);
+  const card = screen.getByTestId('memory-panel');
+  await waitFor(() => assert.equal(within(card).getByTestId('memory-views').getAttribute('aria-label'), '5 views'), { timeout: 4000 });
+  assert.equal(within(card).getByTestId('memory-views').textContent, '5');
+  assert.equal(within(card).getByTestId('reaction-hug').textContent?.includes('2'), true);
+  assert.equal(within(card).getByTestId('reaction-heart').textContent?.includes('1'), true);
+  assert.equal(posts().filter((b) => b.action === 'view').length, 1);
+  fireEvent.click(within(card).getByRole('button', { name: 'Next memory' }));
+  await waitFor(() => assert.equal(posts().filter((b) => b.action === 'view').length, 2));
+  fireEvent.click(within(card).getByRole('button', { name: 'Previous memory' }));
+  await waitFor(() => assert.equal(within(card).getByTestId('memory-views').getAttribute('aria-label'), '5 views'));
+  assert.equal(posts().filter((b) => b.action === 'view').length, 2, 'memory k5 was already opened here');
+  assert.deepEqual(posts().filter((b) => b.action === 'view').map((b) => b.id), ['k5', 'k6']);
+});
+
+test('reactions: one hug OR heart; the choice shows at once; the other switches it; the same again takes it back; totals follow', async () => {
+  engagement = { k7: { views: 1, hugs: 0, hearts: 0, mine: null } };
+  panelFor([memory('k7')]);
+  const card = screen.getByTestId('memory-panel');
+  await waitFor(() => assert.equal(within(card).getByTestId('memory-views').textContent, '2'));
+  const hug = within(card).getByTestId('reaction-hug');
+  const heart = within(card).getByTestId('reaction-heart');
+  assert.equal(hug.getAttribute('aria-pressed'), 'false');
+  fireEvent.click(hug);
+  assert.equal(hug.getAttribute('aria-pressed'), 'true', 'the choice shows immediately');
+  assert.match(hug.textContent ?? '', /1/);
+  await waitFor(() => assert.deepEqual(posts().filter((b) => b.action === 'react').map((b) => b.kind), ['hug']));
+  await waitFor(() => assert.equal(hug.getAttribute('aria-label'), 'Hug, 1'));
+  fireEvent.click(heart);
+  assert.equal(heart.getAttribute('aria-pressed'), 'true');
+  assert.equal(hug.getAttribute('aria-pressed'), 'false', 'only one reaction at a time');
+  assert.match(hug.textContent ?? '', /0/);
+  await waitFor(() => assert.equal(heart.getAttribute('aria-label'), 'Heart, 1'));
+  fireEvent.click(heart);
+  assert.equal(heart.getAttribute('aria-pressed'), 'false', 'tapping the chosen one takes it back');
+  await waitFor(() => assert.deepEqual(posts().filter((b) => b.action === 'react').map((b) => b.kind), ['hug', 'heart', null]));
+  await waitFor(() => assert.equal(heart.getAttribute('aria-label'), 'Heart, 0'));
+  assert.equal(within(card).getByRole('group', { name: 'Reactions' }).querySelectorAll('button').length, 2, 'just the two buttons');
+});
+
+test('reactions: a second tap while one is being saved is ignored (no duplicates); a failed save puts the count back and says so', async () => {
+  let release: () => void = () => {};
+  reactGate = new Promise<void>((resolve) => { release = resolve; });
+  panelFor([memory('k8')]);
+  const card = screen.getByTestId('memory-panel');
+  const hug = within(card).getByTestId('reaction-hug');
+  const heart = within(card).getByTestId('reaction-heart');
+  fireEvent.click(hug); fireEvent.click(hug); fireEvent.click(heart); fireEvent.click(hug);
+  release();
+  await waitFor(() => assert.equal(hug.getAttribute('aria-label'), 'Hug, 1'));
+  assert.equal(posts().filter((b) => b.action === 'react').length, 1, 'one request for a burst of taps');
+  assert.equal(heart.getAttribute('aria-label'), 'Heart, 0');
+  // the server refuses: the count goes back and the member is told
+  reactGate = null; reactStatus = 429;
+  fireEvent.click(heart);
+  assert.equal(heart.getAttribute('aria-pressed'), 'true', 'optimistic first');
+  await waitFor(() => assert.ok(within(card).getByText('Not saved')));
+  assert.equal(heart.getAttribute('aria-pressed'), 'false', 'put back');
+  assert.equal(hug.getAttribute('aria-pressed'), 'true', 'the earlier hug is untouched');
+  assert.equal(heart.getAttribute('aria-label'), 'Heart, 0');
+});
+
+test('the author sees the totals but cannot react to their own memory (no buttons, nothing sent); the owner controls and identity stay', async () => {
+  engagement = { m9: { views: 12, hugs: 3, hearts: 0, mine: null } };
+  panelFor([memory('m9', { mine: true, author: null, identity: { mode: 'profile' } })]);
+  const card = screen.getByTestId('memory-panel');
+  await waitFor(() => assert.equal(within(card).getByTestId('memory-views').textContent, '13'));
+  assert.equal(within(card).queryAllByRole('button', { name: /^(Hug|Heart)/ }).length, 0, 'no reaction buttons on your own memory');
+  assert.match(within(card).getByTestId('reaction-hug').getAttribute('aria-label') ?? '', /3 hugs/);
+  assert.equal(within(card).queryByTestId('reaction-heart'), null, 'a zero total is not shown to the author');
+  assert.ok(within(card).getByRole('button', { name: 'Edit' }));
+  assert.ok(within(card).getByRole('button', { name: 'Delete' }));
+  assert.match(within(card).getByTestId('memory-identity').textContent ?? '', /Shown as your pseudonym/);
+  assert.equal(posts().some((b) => b.action === 'react'), false);
+});
+
+test('engagement strip: counts are compact, an unreachable server leaves the totals from the list, and no member is ever named', async () => {
+  respond = (body) => (body.action === 'view' ? { status: 503, json: {} } : null);
+  panelFor([memory('k10', { views: 1200, hugs: 15000, hearts: 7 })]);
+  const card = screen.getByTestId('memory-panel');
+  await waitFor(() => assert.ok(calls.some((c) => c.body?.action === 'view')));
+  assert.equal(within(card).getByTestId('memory-views').textContent, '1.2k');
+  assert.equal(within(card).getByTestId('reaction-hug').textContent?.includes('15k'), true);
+  assert.equal(within(card).getByTestId('reaction-heart').textContent?.includes('7'), true);
+  assert.equal(within(card).getByTestId('memory-views').getAttribute('aria-label'), '1200 views');
+  assert.equal(within(card).queryByText(/viewed by|reacted by/i), null);
+});
+
+test('on a phone the round "New memory" button steps aside while a memory card is open (it would cover the reactions), and returns when the card closes', async () => {
+  render(<AtlasPage />);
+  const star = await screen.findByRole('button', { name: 'star:Title c1' });
+  const buttons = () => screen.getAllByRole('button', { name: /New memory/ });
+  const before = buttons().length;
+  assert.ok(buttons().some((b) => /fixed/.test(b.className)), 'the floating button is there with no card open');
+  fireEvent.click(star);
+  const card = await screen.findByTestId('memory-panel');
+  assert.equal(buttons().some((b) => /fixed/.test(b.className)), false, 'gone while a card is open');
+  assert.equal(buttons().length, before - 1);
+  fireEvent.click(within(card).getByRole('button', { name: 'Close memory' }));
+  await waitFor(() => assert.equal(screen.queryByTestId('memory-panel'), null));
+  assert.ok(buttons().some((b) => /fixed/.test(b.className)), 'back once it is closed');
 });

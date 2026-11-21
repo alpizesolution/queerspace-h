@@ -1,6 +1,6 @@
 import { auth } from '../lib/firebase.ts';
 import { prepareSupportImage, SUPPORT_IMAGE_TYPES } from './supportImageService.ts';
-import type { AtlasFailure, AtlasMemory, DisplayIdentity, MapBounds } from '../utils/atlas.ts';
+import type { AtlasFailure, AtlasMemory, DisplayIdentity, Engagement, MapBounds, ReactionKind } from '../utils/atlas.ts';
 
 /**
  * ATLAS client. Everything goes through /api/atlas (api/_atlas.js), which decides who may see or change each memory; the app never
@@ -62,6 +62,23 @@ async function send<T>(body: Record<string, unknown>, pick: (data: Record<string
 }
 
 const asMemory = (data: Record<string, unknown>): AtlasMemory | null => (data.memory && typeof data.memory === 'object' ? (data.memory as AtlasMemory) : null);
+
+const asEngagement = (data: Record<string, unknown>): Engagement | null => {
+  const e = data.engagement as Partial<Engagement> | undefined;
+  if (!e || typeof e !== 'object') return null;
+  const n = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0);
+  return { views: n(e.views), hugs: n(e.hugs), hearts: n(e.hearts), mine: e.mine === 'hug' || e.mine === 'heart' ? e.mine : null };
+};
+
+/** The member opened a memory's card: counts their first open as one view and returns the totals with their own reaction. */
+export function openMemory(id: string) {
+  return send({ action: 'view', id }, asEngagement);
+}
+
+/** The member's one reaction to a memory: 'hug', 'heart', or null to take it back. */
+export function reactToMemory(id: string, kind: ReactionKind | null) {
+  return send({ action: 'react', id, kind }, asEngagement);
+}
 
 /** `recent` is the Recent Memories preview: the newest few community memories from the last 24 hours (the map still shows every memory). */
 export function listMemories(scope: 'mine' | 'community' | 'recent', bounds?: MapBounds) {

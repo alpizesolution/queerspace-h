@@ -1719,6 +1719,22 @@ test('ATLAS-01: Nobody CAN read or write atlas memories directly: not the author
     await assertFails(db.doc('atlasMemories/m2').set({ ownerId: 'ivy', title: 'x', visibility: 'public', lat: 1, lng: 2 }));
   }
   await assertFails(testEnv.unauthenticatedContext().firestore().doc('atlasMemories/m1').get());
+  // Who viewed and who reacted (views/{uid}, reactions/{uid}) is server-only as well: no client can read it, forge a view or a reaction, or
+  // change a total, because the rules match only the memory document itself.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc('atlasMemories/m1/reactions/eve').set({ kind: 'hug', at: new Date() });
+    await ctx.firestore().doc('atlasMemories/m1/views/eve').set({ at: new Date() });
+  });
+  for (const db of [ivy, eve, adminDb()]) {
+    await assertFails(db.doc('atlasMemories/m1/reactions/eve').get());
+    await assertFails(db.collection('atlasMemories/m1/reactions').get());
+    await assertFails(db.doc('atlasMemories/m1/reactions/eve').set({ kind: 'heart', at: new Date() }));
+    await assertFails(db.doc('atlasMemories/m1/reactions/ivy').set({ kind: 'heart', at: new Date() }));
+    await assertFails(db.doc('atlasMemories/m1/reactions/eve').delete());
+    await assertFails(db.doc('atlasMemories/m1/views/eve').get());
+    await assertFails(db.doc('atlasMemories/m1/views/ivy').set({ at: new Date() }));
+    await assertFails(db.collection('atlasMemories/m1/views').get());
+  }
   // The moderation audit trail keeps the real owner id, so it is server-only too.
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await ctx.firestore().doc('atlasModerationLog/e1').set({ action: 'delete', memoryId: 'm1', ownerId: 'ivy', adminId: 'cha', at: new Date() });
